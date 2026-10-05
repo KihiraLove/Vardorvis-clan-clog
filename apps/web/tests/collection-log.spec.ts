@@ -181,6 +181,16 @@ test('touch menus remain inside a narrow viewport and outside taps dismiss', asy
 test('live errors do not show fixture credit; refresh adds and revokes real API credits', async ({
   page,
 }) => {
+  page.on('pageerror', (error) =>
+    console.error('Live page error:', error.message),
+  );
+  page.on('requestfailed', (request) =>
+    console.error(
+      'Live request failed:',
+      request.url(),
+      request.failure()?.errorText,
+    ),
+  );
   let status = 503;
   let credits: unknown[] = [];
   let conditionals = 0;
@@ -209,12 +219,17 @@ test('live errors do not show fixture credit; refresh adds and revokes real API 
   await expect(page.getByLabel('Review scenario')).toHaveCount(0);
   status = 200;
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
-  await expect(
-    page.getByRole('heading', {
-      name: `Collection Log - 0/${catalog.items.length}`,
-      exact: true,
-    }),
-  ).toBeVisible();
+  try {
+    await expect(
+      page.getByRole('heading', {
+        name: `Collection Log - 0/${catalog.items.length}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+  } catch (failure) {
+    console.error('Live retry page:', await page.locator('main').innerText());
+    throw failure;
+  }
   const itemId = catalog.items.find((item) => item.name === 'Virtus mask')!.id;
   credits = [
     {
