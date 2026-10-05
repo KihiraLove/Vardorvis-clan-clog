@@ -1,0 +1,47 @@
+# Dependency updates
+
+## Update policy
+
+Dependabot checks npm workspaces, GitHub Actions and the root Dockerfile every Monday at 09:00 UTC. All three already used a weekly interval; the configuration now makes the day/time explicit and waits 14 days after a release before proposing routine version updates. npm and Actions minor/patch updates are grouped separately.
+
+Use published stable releases with upstream support for our runtime and tooling. Avoid alpha, beta, RC, preview, nightly and development channels. A stable release can still be incompatible: confirm official release metadata, migration notes and lockfile peer dependencies before approving. The YAML controls cadence, cooldown and major-update eligibility; stable/support checks remain part of human review.
+
+Routine npm and Docker major updates are ignored. Migrate these manually on a feature branch with a migration plan; update the relevant manifests, lockfile, `.nvmrc`, Dockerfile and documentation together. Keep Node 24 LTS and matching Node 24 types until a deliberate runtime upgrade. Review support windows when planning a major migration so an ignored major does not become permanent.
+
+GitHub Actions major updates remain enabled as individual PRs. This permits supported runner runtimes and security fixes to be reviewed without suppressing them. Preserve full commit SHA pins, verify they match official stable tags, review every intervening major, and require fresh CI plus coverage of the affected workflow. No automatic merging is introduced.
+
+The weekly schedule/cooldown applies to **version updates**. Security alerts/updates are a separate GitHub mechanism; the cooldown does not apply to security updates. This change does not disable them or promise they run only weekly. Triage a security fix promptly, including a manual major migration when necessary. Settings for enabling alerts/security updates are managed separately in GitHub.
+
+Docker tags such as `node:24-bookworm-slim` and `nginxinc/nginx-unprivileged:stable-alpine` are mutable. Dependabot cannot produce a new PR for every rebuild behind an unchanged unpinned tag. A fresh image build can therefore receive base-image changes outside the 14-day proposal delay. Review image refreshes and smoke test them before deployment; digest pinning is a separate future hardening change.
+
+## Review snapshot: 2026-10-05
+
+Reviewed all nine open Dependabot PR diffs, official release metadata/tag commits and their latest PR CI runs. The review baseline is `main` at `1fa3cb476407c34babaa99692cfad1abe37e2798`. These PRs were created against the earlier foundation commit; require refreshed checks against current main before merging. All remain open for manual review. No dependency upgrades or main changes are included in this policy PR.
+
+| PR                                                               | Proposed target         | Evidence                                                                                                                               | Recommendation                                                                                                                                                                   |
+| ---------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [#17](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/17) | Node 26 images          | CI passes, but Node 26 is Current; Node 24 is LTS. Root engines require `>=24 <25` and `.nvmrc` selects 24.                            | Request changes. Keep both build/runtime images on 24. Revisit as one coordinated LTS migration.                                                                                 |
+| [#18](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/18) | login-action 4.6.0      | Official stable release, 2026-07-29; SHA matches tag. CI passes; GHCR login is skipped on PRs.                                         | Hold for a scoped registry authentication test and refreshed CI. Node 24 action runtime is desirable.                                                                            |
+| [#19](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/19) | build-push-action 7.4.0 | Official stable release, 2026-09-15; SHA matches tag. CI passes; the publishing action is skipped.                                     | Hold for an action-based amd64/arm64 build, cache/provenance verification and scoped publish test.                                                                               |
+| [#20](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/20) | checkout 7.0.1          | Official stable release, 2026-07-20; SHA matches tag. CI exercises checkout successfully.                                              | Suitable candidate after refreshed CI. Review v6 credential handling and v7 fork-PR protections; current `pull_request` trigger and `persist-credentials: false` are compatible. |
+| [#21](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/21) | setup-node 7.0.0        | Official stable release, 2026-07-14; SHA matches tag. CI exercises Node setup, install and validation successfully.                    | Suitable candidate after refreshed CI. Explicit `cache: npm` and `node-version-file: .nvmrc` remain compatible; no removed `always-auth` input is used.                          |
+| [#22](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/22) | setup-qemu-action 4.4.0 | Official stable release, 2026-09-15; SHA matches tag. CI passes; QEMU is only used in the skipped publishing job.                      | Hold for an emulated arm64 build; ordinary host Compose smoke does not validate QEMU.                                                                                            |
+| [#23](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/23) | @types/node 26.6.4      | CI passes, but declarations target Node 26 while the runtime/engines target 24.                                                        | Request changes. Stay on 24.x to avoid accepting APIs absent from production.                                                                                                    |
+| [#24](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/24) | TypeScript 7.0.2        | Official stable release, 2026-08-20. Both CI jobs fail at install with `ERESOLVE`: typescript-eslint 8.71.0 requires `>=4.8.4 <6.1.0`. | Request changes. Keep 5.9.3; coordinate a supported compiler/linter migration. Do not bypass peers with force/legacy-peer-deps.                                                  |
+| [#25](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/25) | Vite 8.3.2              | Official stable release, 2026-10-01; only four days old. CI passes on the scaffold. Vite 8 replaces Rollup/esbuild with Rolldown/Oxc.  | Defer. Keep Vite 7 while frontend #33 is under review; migrate separately after the release delay with browser regression and production asset checks.                           |
+
+For #18, #19 and #22, green PR checks validate ordinary Docker CLI/Compose builds, **not** the changed Actions in `images.yml`. Use a branch-only test workflow and a temporary image tag for publishing validation; do not deploy a review build. These majors switch their declared action runtime to Node 24 and require a compatible Actions runner (at least 2.327.1 for the Docker actions). GitHub retired the Node 20 action runtime on 2026-09-23, so keep these migrations visible and prioritize their missing checks.
+
+## Primary references
+
+- [Dependabot options: schedule, cooldown, groups and ignore](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference)
+- [Node release/support status](https://nodejs.org/en/about/previous-releases)
+- [typescript-eslint supported compiler versions](https://typescript-eslint.io/users/dependency-versions/)
+- [TypeScript 7.0.2 release](https://github.com/microsoft/TypeScript/releases/tag/v7.0.2)
+- [Vite 8.3.2 release](https://github.com/vitejs/vite/releases/tag/v8.3.2) and [Vite 8 migration](https://vite.dev/guide/migration)
+- [login-action 4.6.0](https://github.com/docker/login-action/releases/tag/v4.6.0) and [v4 migration notes](https://github.com/docker/login-action/releases/tag/v4.0.0)
+- [build-push-action 7.4.0](https://github.com/docker/build-push-action/releases/tag/v7.4.0) and [v7 migration notes](https://github.com/docker/build-push-action/releases/tag/v7.0.0)
+- [checkout 7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1) and [versioned migration notes](https://github.com/actions/checkout/blob/v7.0.1/README.md)
+- [setup-node 7.0.0](https://github.com/actions/setup-node/releases/tag/v7.0.0) and [versioned migration notes](https://github.com/actions/setup-node/blob/v7.0.0/README.md)
+- [setup-qemu-action 4.4.0](https://github.com/docker/setup-qemu-action/releases/tag/v4.4.0) and [v4 migration notes](https://github.com/docker/setup-qemu-action/releases/tag/v4.0.0)
+- [GitHub Node 20 action-runtime retirement](https://github.blog/changelog/2026-09-23-node-20-is-no-longer-available-in-github-actions/)
