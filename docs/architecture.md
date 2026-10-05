@@ -1,6 +1,6 @@
 # Architecture
 
-One TypeScript/npm-workspace repository and one PostgreSQL database keep the initial deployment small. The Discord bot is an adapter, not a second source of business rules or direct database writer. The API is the only planned submission/review writer.
+One TypeScript/npm-workspace repository and one PostgreSQL database keep the initial deployment small. The Discord bot is an adapter, not a second source of business rules or direct database writer. The API is the only planned submission/review/XP-import writer.
 
 ```mermaid
 flowchart TD
@@ -51,6 +51,18 @@ The foundation SQL enforces basic foreign keys/status checks/idempotency uniquen
 Create a reproducible import tool with a reviewed snapshot, source revisions, item mapping, category/page ordering, icon manifest and attribution. Use primary source data from the game/community-maintained source, and compare against reference client screenshots. The OSRS Wiki collection-log page is a candidate taxonomy source; its contents have not been imported or verified in this foundation.
 
 Diff every import. Retain canonical IDs, carry approved credits forward, add new items as uncollected, deactivate removed entries rather than deleting history, and reject dangling or ambiguous mappings. Validate complete coverage against the selected revision. Sharing an item between pages is different from merging similarly named items.
+
+## Planned hardcore and competition XP extensions
+
+Hardcore remains a property of an approved collection credit. Add `submissions.hardcore` with a default-false value in a new forward migration, expose it in approved public credits, and derive `hardcoreCollected` by canonical item ID. Do not change the deployed initial migration or store separate flags in page slots. Review corrections and revocations use the existing versioned transaction/audit rules.
+
+The XP gained page is a separate site route. Add a WOM adapter behind authenticated admin import endpoints; public clients read stored projections and never fetch WOM on each page load. The adapter parses an allowed competition URL, extracts its ID, and calls the fixed official API host. It uses current `metrics` and per-participation `deltas[].values.gained`, with a bulk per-skill preview for overall competitions where needed.
+
+Planned tables/projections: imported competition identity/source metadata; WOM player identity/name snapshots; unique contributions keyed by `(competition_id, player_id, skill)`; import batches/audit records; and per-skill/member total projections. SQL XP totals use exact integer storage. Reconcile a complete validated snapshot in one transaction so an import retry or concurrent refresh cannot append the same gains twice. Separate XP import audit records from the existing submission-specific audit foreign key.
+
+The baseline for a new skill is zero. Preserve any existing recorded site XP when migrating a later deployment. The skill total is that baseline plus all active stored competition/player contributions; refresh replaces a competition's contribution and changes totals by `new - previous`. All participant rows remain visible, including known-zero/unavailable source rows. Import reconciliation/history handles corrected gains, participant removals and changed metrics without silently rewriting prior credits.
+
+The full [feature design](planned-features.md) defines mixed hardcore credits, exact XP arithmetic, metric handling, public/admin routes, failure behavior and verification. These are planned extensions; the initial SQL and foundation runtime do not implement them yet.
 
 ## Operational policy
 

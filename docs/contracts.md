@@ -47,9 +47,37 @@ Guild registration and gateway handling are not implemented yet. Add a separate 
 
 The second requested command is an open product decision. An optional explicit collection-date input is also an open decision; current date handling is documented in [requirements](requirements.md).
 
+## Planned hardcore extension
+
+Bot intake and admin review accept `hardcore: boolean`, default false. Public approved credits include that value, and the canonical item projection exposes `hardcoreCollected` derived from approved hardcore credits only. Include the flag in idempotency comparisons, optimistic version checks and audit before/after values. It never grants credit by itself.
+
+The planned command adds optional `[hardcore:<true|false>]`. The original checked-in command builder above remains unchanged until #26 is implemented. See [feature behavior](planned-features.md) for red borders, the skull and exact text suffix.
+
+## Planned competition XP API
+
+| Method/path                             | Authorization        | Purpose                                                                                    |
+| --------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------ |
+| `GET /api/v1/xp/skills`                 | Public               | Exact cumulative site XP totals per skill and projection revision                          |
+| `GET /api/v1/xp/skills/:skill/members`  | Public               | Per-member cumulative gained XP, keyed by WOM player ID                                    |
+| `GET /api/v1/xp/competitions`           | Public               | Imported competition metadata, skills, source links and last successful refresh            |
+| `GET /api/v1/xp/competitions/:id`       | Public               | Every imported competitor's gains by skill; includes zero/unavailable rows                 |
+| `POST /api/v1/admin/xp/imports/preview` | Admin session + CSRF | Fetch/validate a supplied competition link and show skill/participant/contribution changes |
+| `POST /api/v1/admin/xp/imports`         | Admin session + CSRF | Apply the validated preview with request idempotency and expected stored revision          |
+| `GET /api/v1/admin/xp/imports`          | Admin session        | Import history, reconciliation decisions and errors                                        |
+
+Preview input is `competitionUrl`. Extract a canonical WOM competition ID; ignore URL fragments/query variants for identity and use the fixed official API origin. The response includes a short-lived preview/snapshot token, expected import revision, competition/skill details, complete competitor rows, and per-skill before/after/change values. Applying a preview records the authenticated actor, reconciles the unique stored competition/player/skill contributions atomically, and returns unchanged/applied with the resulting revision. An unchanged refresh has zero XP change. Reused request keys with different payloads or stale revisions return 409.
+
+Use integer decimal strings for XP totals/contributions in the public/admin JSON contract to preserve exact accumulation. Missing source XP is `null` with an explicit availability state; zero is a valid gain. Client rendering distinguishes competition gained XP, member cumulative gained XP and site cumulative skill XP. No endpoint treats weighted scores, boss kills, activity points, EHP/EHB or aggregate overall values as skill XP.
+
+Only the foundation endpoints listed at the top are implemented. These new routes and fields are planned in #26, #27 and #28.
+
 ## Sources checked for platform constraints
 
 - [Discord application command structures, choice limits and autocomplete](https://docs.discord.com/developers/interactions/application-commands)
 - [Discord interaction delivery and responses](https://docs.discord.com/developers/interactions/receiving-and-responding)
 - [GitHub Container Registry authentication and package visibility](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 - [Docker multi-platform GitHub Actions builds](https://docs.docker.com/build/ci/github-actions/multi-platform/)
+
+- [Wise Old Man competition endpoint and metrics preview](https://docs.wiseoldman.net/api/competitions/competition-endpoints)
+- [Wise Old Man metrics and per-participant delta entities](https://docs.wiseoldman.net/api/competitions/competition-type-definitions)
+- [Wise Old Man supported skill/metric definitions](https://docs.wiseoldman.net/api/global-type-definitions)

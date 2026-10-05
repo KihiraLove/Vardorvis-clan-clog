@@ -12,9 +12,32 @@
 - Global progress counts unique canonical items. Page progress counts the page's own slots. An item shared by two pages can increment both page counters but only once in the global total.
 - After an approval/revocation, an open public page refreshes within 30 seconds. Initial implementation uses ETag-aware polling; reassess push updates only if needed.
 
+## Hardcore item flag
+
+- A collection credit has a `hardcore` flag, default false, reviewed/correctable by an admin. The canonical item flag is on while at least one approved hardcore credit remains; it applies to all page occurrences.
+- When on, the item has a red border. Its custom OSRS-style mini menu also has a red border and a skull icon inside.
+- Each hardcore collector line ends with exactly `on hardcore worlds`: `Collected by KihiraVD on 16/10/26 on hardcore worlds`.
+- For mixed ordinary/hardcore credits, list all approved collectors; append the suffix only to hardcore credit lines. Ordinary lines retain their original wording. Menu/item styling is red while any approved hardcore credit exists.
+- Pending, rejected and revoked claims never create the hardcore item flag. Correcting/revoking the final hardcore credit removes red borders/skull; ordinary approved credits can keep the item collected.
+- The flag is an evidence-backed collection condition, independent of the collector's current account type. It does not create another item identity or extra collection count.
+- The planned bot extension is optional `hardcore` boolean input; an admin can also set/correct the claim during review. The current checked-in command builder has not been changed by this planning update.
+
+## XP gained tab and page
+
+- Add a site-navigation `XP gained` tab leading to a separate `/xp` page. Preserve the collection log's original five tabs inside its recreated window.
+- Track imported competition XP for clan participants by skill. Show the skill name/icon, cumulative site skill XP, each member's accumulated XP, and each imported competition's complete participant gains, including zero/unavailable rows.
+- An allowlisted admin supplies a Wise Old Man competition link to import/refresh results. The selected competition provides the participant roster; do not silently omit competitors or require a separate automatic clan sync.
+- Use competition gained XP for the appropriate skill, adding every valid competitor contribution to the site's existing total. This total is competition-accumulated XP, not each account's lifetime HiScores XP.
+- First import adds the full gains; refreshing the same competition applies only differences from the stored contribution. The same unchanged competition/link cannot add XP twice. Further competitions add their gains to the existing matching skill totals.
+- Support individual skill and multi-skill results. Expand overall competitions into explicit per-skill gains when supported by the official metrics-preview endpoint; never count an aggregate score/overall total alongside the individual skill contributions. Reject competitions containing no supported XP skill.
+- Retain stable WOM player IDs, name snapshots, competition source/date/history and the last successful import time. Failed, partial or rate-limited refreshes preserve published totals; missing source values are labelled unavailable, not invented as XP.
+- Public visitors read stored results only. Import/refresh is an admin action, with an authenticated preview/apply flow and audited snapshot reconciliation. Distinct overlapping competitions are shown as overlapping; the displayed ledger counts their reported contributions rather than claiming deduplicated lifetime XP.
+
+Both additions are planned in #26, #27 and #28; detailed data rules and arithmetic examples are in [planned features](planned-features.md).
+
 ## Submission and review
 
-Every submission records raw item input, resolved canonical item when known, collector display name, collection date, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
+Every submission records raw item input, resolved canonical item when known, collector display name, collection date, hardcore claim, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
 
 The admin page is protected by Discord OAuth and an explicit user-ID allowlist. It lists pending submissions with item/match state, collector, date, external proof link and submission time. An admin can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited; a public anonymous request cannot perform them.
 

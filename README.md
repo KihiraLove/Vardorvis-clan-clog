@@ -1,6 +1,6 @@
 # Vardorvis Clan Collection Log
 
-Monorepo for a public OSRS collection log, an admin submission queue, and a Discord submission bot. The public log starts entirely uncollected. Approved evidence credits the canonical item everywhere it appears.
+Monorepo for a public OSRS collection log, an admin submission queue, a Discord submission bot, and a separate clan XP gained page. The public log starts entirely uncollected. Approved evidence credits the canonical item everywhere it appears.
 
 ## Current state
 
@@ -8,7 +8,7 @@ This commit delivers the **project foundation and development plan**, not the fi
 
 Implemented: npm workspaces, React/Vite starter, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
 
-Planned: complete item/page catalog and assets, pixel-matched OSRS UI, collection tooltips, Discord submission persistence, Discord admin OAuth, review UI/API, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
+Planned: complete item/page catalog and assets, pixel-matched OSRS UI, collection tooltips, Discord submission persistence, Discord admin OAuth, review UI/API, hardcore credit styling, admin-imported Wise Old Man competition XP, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
 ## Workspace
 
@@ -45,6 +45,7 @@ For host-run development, see [environment setup](docs/environment.md). The Post
 - [Architecture and data model](docs/architecture.md)
 - [API and Discord contracts](docs/contracts.md)
 - [Development roadmap and issue index](docs/plan.md)
+- [Planned hardcore and XP gained features](docs/planned-features.md)
 - [Environment setup](docs/environment.md)
 - [CI/CD, self-hosting, backups and rollback](docs/deployment.md)
 - [Testing and completion gates](docs/testing.md)
