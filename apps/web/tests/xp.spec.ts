@@ -111,11 +111,18 @@ test('touch selects skills and exact tooltips fit a 320px viewport', async ({
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
   await page.screenshot({
-    path: test.info().outputPath('xp-mobile.png'),
-    fullPage: true,
+    path: test.info().outputPath('xp-mobile-tooltip.png'),
   });
   await page.getByRole('heading', { name: 'XP gained', exact: true }).tap();
   await expect(tooltip).toHaveCount(0);
+  await page.evaluate(async () => {
+    window.scrollTo(0, 0);
+    await document.fonts.ready;
+  });
+  await page.screenshot({
+    path: test.info().outputPath('xp-mobile.png'),
+    fullPage: true,
+  });
   await context.close();
 });
 
@@ -180,7 +187,10 @@ test('admin preview/apply, unchanged refresh, incremental gains and multi-skill 
   );
   await page.getByText('Import history (4)', { exact: true }).click();
   await expect(page.locator('.xp-history li')).toHaveCount(4);
-  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(async () => {
+    window.scrollTo(0, 0);
+    await document.fonts.ready;
+  });
   await page.screenshot({
     path: test.info().outputPath('xp-admin.png'),
     fullPage: true,

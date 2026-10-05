@@ -996,7 +996,7 @@ main {
 }
 @media (max-width: 740px) {
   .xp-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .skill-panel {
     width: 310px;
