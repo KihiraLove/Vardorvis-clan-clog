@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -13,7 +13,7 @@ RUN npm run build
 FROM build AS production-dependencies
 RUN npm prune --omit=dev --no-audit --no-fund
 
-FROM node:24-bookworm-slim AS service-base
+FROM node:26-bookworm-slim AS service-base
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
