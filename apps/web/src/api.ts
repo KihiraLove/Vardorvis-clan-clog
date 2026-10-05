@@ -23,7 +23,8 @@ export class PublicLogClient {
   private collections: Cached<Collections> | undefined;
   private readonly request: typeof fetch;
   constructor(request: typeof fetch = fetch) {
-    this.request = request;
+    // Native browser fetch requires the global receiver, not this adapter instance.
+    this.request = request.bind(globalThis);
   }
 
   private async read<T>(

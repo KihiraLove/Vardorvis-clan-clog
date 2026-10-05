@@ -17,7 +17,12 @@ const signal = () => new AbortController().signal;
 
 test('conditional polling reuses 304 data and reconciles changed credits', async () => {
   let phase = 0;
-  const request: typeof fetch = async (path, options) => {
+  const request: typeof fetch = async function (this: unknown, path, options) {
+    assert.equal(
+      this,
+      globalThis,
+      'native fetch must receive the browser/global context',
+    );
     const isCatalog = String(path).endsWith('/catalog');
     const headers = options?.headers as Record<string, string>;
     if (phase === 0)
