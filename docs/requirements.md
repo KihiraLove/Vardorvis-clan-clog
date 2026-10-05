@@ -33,7 +33,18 @@
 - Retain stable WOM player IDs, name snapshots, competition source/date/history and the last successful import time. Failed, partial or rate-limited refreshes preserve published totals; missing source values are labelled unavailable, not invented as XP.
 - Public visitors read stored results only. Import/refresh is an admin action, with an authenticated preview/apply flow and audited snapshot reconciliation. Distinct overlapping competitions are shown as overlapping; the displayed ledger counts their reported contributions rather than claiming deduplicated lifetime XP.
 
-Both additions are planned in #26, #27 and #28; detailed data rules and arithmetic examples are in [planned features](planned-features.md).
+## Admin catalog maintenance
+
+- An allowlisted admin can add an item with exactly these required inputs: icon, nonblank name, and one or more existing collection-log pages. A game item ID is optional; adding an item must not require finding its external OSRS ID first.
+- Create one stable canonical item and link it to every selected page. All occurrences start uncollected and non-hardcore; later approved collection credits and hardcore state are shared across those pages.
+- Upload and preview a validated icon, preserving transparency and pixel clarity. Persist it outside the image/container layer so image upgrades and restarts retain it.
+- Append a new item to the end of each selected page. The admin can rearrange a page's items using drag-and-drop or accessible move/position controls, then explicitly save the order.
+- Save order independently per page. Reordering must preserve item identity, other page orders, collector/date history and hardcore state. Stale or conflicting edits return a visible conflict rather than overwriting another admin's changes.
+- New items become available on public pages, in Discord autocomplete and in manual submission matching after the catalog refresh, without rebuilding the website.
+- Preserve manual items, icons, memberships and saved order through catalog source updates. If a source later contains an admin-created item, explicitly reconcile it to the existing canonical identity; never merge automatically by name or discard existing credits.
+- Authenticate and audit creation/order writes. Backup/restore must include the uploaded icons as well as the database. Creating new pages is outside this addition.
+
+These features are planned in #26, #27, #28, #30 and #31; detailed data rules and arithmetic examples are in [planned features](planned-features.md).
 
 ## Submission and review
 
