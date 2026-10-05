@@ -21,5 +21,13 @@ if ! docker compose up -d --wait --wait-timeout 120; then
   exit 1
 fi
 if [[ -f .current-release ]]; then cp .current-release .previous-release; fi
+env_update="$(mktemp .env.release.XXXXXX)"
+awk -v tag="$IMAGE_TAG" '
+  BEGIN { found = 0 }
+  /^IMAGE_TAG=/ { print "IMAGE_TAG=" tag; found = 1; next }
+  { print }
+  END { if (!found) print "IMAGE_TAG=" tag }
+' .env > "$env_update"
+mv "$env_update" .env
 printf '%s\n' "$IMAGE_TAG" > .current-release
 echo "Healthy release: $IMAGE_TAG"

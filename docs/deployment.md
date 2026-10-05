@@ -51,6 +51,8 @@ If Traefik itself runs in Docker, its own loopback cannot reach the host loopbac
 
 Install a dedicated runner with access to the local Docker service and GHCR pull credentials. Create the `home-production` environment, restrict who can dispatch deployments, and configure approval controls if supported by your plan. Run the workflow on main with the SHA from a successful CI run. The deploy script takes a database backup when a database is already running, pulls the selected images, waits for health and records current/previous successful release tags.
 
+After health checks pass, the helper atomically updates only `IMAGE_TAG` in the host `.env`, preserving other configuration. Later manual Compose commands then use the same successful release. If deploying a manually installed initial release before the helper is used, record its tag in `.current-release` so the next deployment can retain it as `.previous-release`.
+
 The workflow is opt-in: it cannot deploy until you install the runner and files. It needs no inbound SSH or open Docker socket. Automatic unattended deployment after publishing is deferred until restore/rollback and real feature health checks are proven.
 
 ## Backups and rollback
