@@ -15,6 +15,19 @@ The integration test explicitly skips without `TEST_DATABASE_URL`; GitHub CI alw
 
 Container CI checks all Docker targets, production routing, migrations and health. Images are published only after validation and container smoke tests pass on main. ARM images are built by QEMU; hardware deployment/health on the actual home server still needs a release acceptance check.
 
+## First frontend checks
+
+The web workspace adds seven Node tests for public payload validation, uncollected defaults, shared-item totals, mixed hardcore credits/revocation, exact dates, conditional reads and preserving caches on partial failures. They run in `npm run validate`.
+
+```bash
+npx playwright install chromium
+npm run test:e2e -w @clog/web
+```
+
+Five Chromium browser scenarios cover native 500 × 314 geometry, the five tabs and keyboard navigation, all sample page icons, search/reopening, shared ordinary/hardcore state, exact menu text, Escape, mobile tap/outside dismissal and viewport bounds, plus mocked public read failure/approval/revocation. The dedicated `frontend-browser` CI job installs Chromium and uploads traces/screenshots on failure. It joins `validate` and `docker-smoke` as a prerequisite for main image publishing.
+
+These checks verify the frontend slice against stored/mock public responses, not a real Discord/admin approval pipeline. Screenshots in the [frontend review guide](frontend-review.md) are review captures, not approved pixel comparison baselines. Full catalog/reference sign-off remains in #1/#3 and live end-to-end verification in #7/#9/#12.
+
 ## Feature checks to add with implementation
 
 - Catalog: source-revision coverage, categories/pages/slots, deterministic import, icon existence, duplicates and variants, safe additive updates with existing credits.

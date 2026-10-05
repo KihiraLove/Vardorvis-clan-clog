@@ -64,9 +64,29 @@ jobs:
         if: always()
         run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
 
+  frontend-browser:
+    name: frontend-browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build -w @clog/domain
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -w @clog/web
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: frontend-browser-review
+          path: apps/web/test-results/
+          retention-days: 7
+
   publish:
     name: publish
-    needs: [validate, docker-smoke]
+    needs: [validate, docker-smoke, frontend-browser]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read

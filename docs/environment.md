@@ -78,3 +78,11 @@ Create one application in the Discord Developer Portal; set the future OAuth cal
 CI and private GHCR publishing use the built-in `GITHUB_TOKEN`; no PAT is needed for Actions publishing. Ensure repository Actions are enabled and workflow package writes are allowed. For pulling on your home server, create a classic PAT with `read:packages` and access to these private packages; authenticate interactively using `docker login ghcr.io -u KihiraLove` or `--password-stdin`.
 
 Create the `home-production` environment and a dedicated self-hosted runner labelled `clog-production` only when ready to deploy. Environment reviewer controls vary by GitHub plan/private-repository support; manual dispatch and successful-main-SHA verification remain required regardless. No runner, credentials, environment or DNS record is provisioned by this repository setup.
+
+## Frontend review and browser tests
+
+The frontend has no new environment secrets or build-time API origin. It requests same-origin `/api/v1/catalog` and `/api/v1/collections`; Vite uses the existing local API proxy. The current foundation API does not implement those reads yet.
+
+For an independent visual review, run `npm run build -w @clog/domain`, then `npm run dev:web` and open `http://127.0.0.1:5173/?preview=1`. Preview starts all uncollected and is clearly labelled. Its explicit sample scenarios never write to the backend and are not a live catalog fallback.
+
+Install Chromium with `npx playwright install chromium` (Linux CI installs dependencies with `--with-deps`), then run `npm run test:e2e -w @clog/web`. See the [frontend review guide](frontend-review.md) for the captured visuals and review scope.

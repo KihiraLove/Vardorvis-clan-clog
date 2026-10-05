@@ -33,6 +33,48 @@ Intake returns 201 for a new durable pending submission, or 200 with the same re
 
 Review writes carry `expectedVersion`; conflicts return 409. Standard errors are `{ "error": { "code": "...", "message": "..." } }`. Use 400/422 for invalid fields, 401 for missing credentials, 403 for forbidden actors/guilds, 404 for absent resources and 429 for rate limits. Never include secrets or raw server errors.
 
+## Frontend public-read payload
+
+The first frontend consumes this proposed JSON shape for #2; the foundation API does not serve it yet. Both responses have independent opaque ETags. A conditional unchanged response is 304; otherwise send a complete 200 snapshot. The client polls every 25 seconds while visible, refreshes on returning to the tab, and keeps the last successful data if a request fails. Catalog and collections must reference mutually valid canonical IDs; an inconsistent pair is rejected and neither local cache advances.
+
+```json
+{
+  "revision": "catalog-42",
+  "items": [
+    {
+      "id": 1,
+      "name": "Virtus mask",
+      "iconPath": "/api/v1/catalog/icons/asset-1"
+    }
+  ],
+  "pages": [
+    {
+      "id": "vardorvis",
+      "name": "Vardorvis",
+      "category": "bosses",
+      "itemIds": [1]
+    }
+  ]
+}
+```
+
+```json
+{
+  "revision": "collections-42",
+  "credits": [
+    {
+      "submissionId": "approved-submission-id",
+      "itemId": 1,
+      "collectorName": "KihiraVD",
+      "collectedOn": "2026-10-05",
+      "hardcore": true
+    }
+  ]
+}
+```
+
+Categories are `bosses`, `raids`, `clues`, `minigames`, `other`. Array order defines page and slot order; do not sort it in the browser. Icons use same-origin absolute paths. External game IDs are not required for frontend/manual item identity. Public credit rows represent approvals only; optional `status` must be `approved` to be displayed, and absent `hardcore` defaults false. The endpoint must omit proof URLs, Discord actors, pending/rejected/revoked claims and private audit data. The browser validates IDs, relationships, dates and flags before rendering, but server authorization/projection remains authoritative.
+
 ## Discord definition
 
 The checked-in [command builder](../apps/bot/src/command.ts) defines this schema:
