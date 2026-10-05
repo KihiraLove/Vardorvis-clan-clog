@@ -22,6 +22,9 @@ Container CI checks all Docker targets, production routing, migrations and healt
 - Intake: invalid evidence, wrong guild/credential, optional-name fallback, exact/ambiguous item matching, idempotent interaction retry, concurrent retries and API timeouts without false success receipts.
 - Review: anonymous/non-admin denial, session/CSRF checks, missing item prevents approval, stale versions, double approval races, correction/rejection/revocation audit transactions and final-credit revocation.
 - End to end: Discord adapter submission → pending review → approval → public item highlighted on every relevant page with collector/date → revocation removes only that credit.
+- Hardcore: default-false claims, approved-only canonical flags on shared pages, red item/menu borders, in-menu skull and exact suffix, mixed credit lines, flag correction and final-hardcore revocation while normal collection remains.
+- XP: first competition adds all competitor skill gains to existing totals; repeated unchanged imports add zero; ongoing refreshes apply only differences; new competitions accumulate by skill; name changes retain WOM identity; zero/unavailable rows, multi-skill/overall expansion, exact large totals, concurrent/retried imports, corrected source data and failed refreshes preserve/reconcile correctly.
+- XP UI/admin: separate site tab preserves the original log tabs; every competitor is visible; public read/admin-only preview/apply and contribution history work on desktop, keyboard and mobile.
 - Operations: cold install, image/configuration updates, health failure, durable database restart, backup/restore rehearsal, compatible image rollback and tested ARM/AMD64 targets.
 
 The visual and end-to-end checks require the actual assets/features; a green foundation CI run alone does not mean the website or bot is complete.
