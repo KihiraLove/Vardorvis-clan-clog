@@ -1,0 +1,43 @@
+# Product requirements
+
+## Public collection log
+
+- Recreate the OSRS collection-log layout 1:1 at its reference desktop size: window frame, five top-level tabs, page navigation, scrollbars, item grid and ordering, labels, counters, font, spacing and icon treatment. Preserve the original proportions when adapting to small screens.
+- A catalog import creates item/page definitions only. Every item starts uncollected; missing credits mean uncollected.
+- Pending/rejected submissions never change the public log. Approved submissions visibly change the item's original dim/uncollected appearance into its collected appearance. Include an accessible state label in addition to color.
+- Each item's status is shared across all pages where the same item appears. Distinct legitimate item variants stay distinct unless an explicit canonical mapping says otherwise.
+- A custom OSRS-style mini menu appears on pointer hover and keyboard focus. On touch it opens on tap and closes on outside tap/Escape. It stays inside the viewport and does not obscure the triggering item unnecessarily.
+- Display `Collected by KihiraVD on 16/10/26` using the actual collector/date. Multiple approved collectors are retained and listed in collection-date order. This is a documented initial policy, not a requirement to replace earlier collectors.
+- Use a versioned, complete catalog snapshot with source revisions and locally served icons/assets. Do not hard-code a timeless total item count or depend on a live external site to render the log.
+- Global progress counts unique canonical items. Page progress counts the page's own slots. An item shared by two pages can increment both page counters but only once in the global total.
+- After an approval/revocation, an open public page refreshes within 30 seconds. Initial implementation uses ETag-aware polling; reassess push updates only if needed.
+
+## Submission and review
+
+Every submission records raw item input, resolved canonical item when known, collector display name, collection date, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
+
+The admin page is protected by Discord OAuth and an explicit user-ID allowlist. It lists pending submissions with item/match state, collector, date, external proof link and submission time. An admin can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited; a public anonymous request cannot perform them.
+
+Proof links must use HTTPS on the allowed Imgur/Gyazo hosts. Link validity is separate from evidence validity: an admin still inspects the evidence. V1 stores links, without server-side image downloading or permanent archival. A missing external image must be visible as a review limitation; it does not grant automatic approval.
+
+## Discord
+
+The specified command is `/cc-clog submit item:<item/name> proof:<imgur-or-gyazo-link> [submitter-name:<collector>]`.
+
+- Item and proof are mandatory. Collector name is optional and defaults to the actor's current Discord guild display name, falling back to username; save a snapshot rather than a live reference.
+- Item autocomplete searches the complete canonical catalog and returns up to 25 ranked candidates. Selection submits a canonical ID. Free text is accepted; an unambiguous normalized exact name/alias resolves, while fuzzy/ambiguous matches remain suggestions for manual review.
+- Restrict submissions to the configured clan guild; do not accept DMs or other guilds. No privileged message-content intent is needed for slash commands.
+- Acknowledge/defer promptly and send an ephemeral receipt only after durable persistence. Retry the same Discord interaction ID without creating duplicate submissions. Report API failures accurately.
+- Do not overwrite all application commands on every container restart. Provide a separate, explicit guild-command registration script when the bot feature is implemented.
+
+The user mentioned two commands but named only this one. The second command remains unspecified; no extra command is assumed.
+
+## Date policy
+
+`collected_on` is a calendar date; `submitted_at` is a UTC timestamp. Initially, use the submission's UTC calendar date when no collection date is supplied and label the source `submission_default`. The admin can correct it before approval. This avoids pretending delayed submissions describe their actual drop date.
+
+The command currently defines only the three requested fields. A future optional `collected-on` field can accept ISO `YYYY-MM-DD` if confirmed. Public rendering is always `DD/MM/YY`; never parse user input as an ambiguous locale date. Reject future collection dates at the submission/review boundary.
+
+## Deployment scope
+
+Self-host one web, API and bot container with PostgreSQL. CI produces separate private GHCR images for `linux/amd64` and `linux/arm64`. PRs validate without publish/deployment credentials. Home deployment is opt-in and chooses an already validated main commit. Bot, admin credentials, complete catalog and feature implementation remain required before a public V1 launch.

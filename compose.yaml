@@ -1,0 +1,67 @@
+name: vardorvis-clog
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clog
+      POSTGRES_USER: clog
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U clog -d clog']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt: ['no-new-privileges:true']
+
+  migrate:
+    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-api:${IMAGE_TAG:?Set IMAGE_TAG to a published sha tag}
+    command: ['node', 'packages/database/dist/migrate.js']
+    restart: 'no'
+    environment:
+      DATABASE_URL: postgresql://clog:${POSTGRES_PASSWORD}@db:5432/clog
+    depends_on:
+      db: { condition: service_healthy }
+    security_opt: ['no-new-privileges:true']
+
+  api:
+    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-api:${IMAGE_TAG:?Set IMAGE_TAG}
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: postgresql://clog:${POSTGRES_PASSWORD}@db:5432/clog
+      HOST: 0.0.0.0
+      PORT: '3000'
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    security_opt: ['no-new-privileges:true']
+
+  web:
+    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-web:${IMAGE_TAG:?Set IMAGE_TAG}
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${WEB_PORT:-8088}:8080'
+    depends_on:
+      api: { condition: service_healthy }
+    security_opt: ['no-new-privileges:true']
+
+  bot:
+    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-bot:${IMAGE_TAG:?Set IMAGE_TAG}
+    profiles: ['bot']
+    restart: unless-stopped
+    init: true
+    environment:
+      API_BASE_URL: http://api:3000
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+    depends_on:
+      api: { condition: service_healthy }
+    security_opt: ['no-new-privileges:true']
+
+volumes:
+  postgres-data:

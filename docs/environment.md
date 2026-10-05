@@ -1,0 +1,80 @@
+# Environment setup
+
+## Local prerequisites
+
+Node 24 LTS, npm, Git, and Docker Engine/Desktop with a recent Compose v2 supporting `up --wait`. The initial database is PostgreSQL 17. Native Node development and container development use the same migration files.
+
+```bash
+cp .env.example .env
+openssl rand -hex 32
+# Paste the generated value into POSTGRES_PASSWORD and host DATABASE_URL.
+chmod 600 .env
+npm ci
+npm run build
+```
+
+The example contains placeholders, never working production secrets. `.env` is ignored by Git and excluded from Docker contexts. Use hex passwords because Compose interpolates the password into a PostgreSQL URI. If using another password format, URL-encode it explicitly and adapt the URI configuration; do not put an unescaped password into the URL.
+
+## Configuration inventory
+
+| Variable                                      | Where          | Current/future purpose                                                           |
+| --------------------------------------------- | -------------- | -------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`                           | Compose        | Required database owner password; generate locally                               |
+| `IMAGE_PREFIX`                                | Compose        | Default `ghcr.io/kihiralove/vardorvis-clan-clog`; service suffix is appended     |
+| `IMAGE_TAG`                                   | Compose        | Production `sha-<full main commit SHA>`; placeholder allowed with local override |
+| `WEB_PORT`                                    | Compose        | Loopback host port, default 8088                                                 |
+| `DATABASE_URL`                                | Host Node      | Host PostgreSQL URI; Compose builds its own URI using `db`                       |
+| `HOST` / `PORT`                               | API            | Defaults `0.0.0.0` and 3000 in containers                                        |
+| `TEST_DATABASE_URL`                           | Tests only     | Dedicated disposable database for integration tests                              |
+| `PUBLIC_ORIGIN`                               | Future API     | Exact external HTTPS origin; not active in foundation                            |
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Future API     | OAuth application credentials                                                    |
+| `DISCORD_OAUTH_REDIRECT_URI`                  | Future API     | Exact callback URL registered with Discord                                       |
+| `ADMIN_DISCORD_USER_IDS`                      | Future API     | Comma-separated admin user IDs, not names or roles                               |
+| `SESSION_SECRET`                              | Future API     | At least 32 random bytes for session protection                                  |
+| `BOT_API_TOKEN`                               | Future bot/API | Dedicated service token; generate independently of session secret                |
+| `DISCORD_BOT_TOKEN`                           | Future bot     | Discord bot credential                                                           |
+| `DISCORD_APPLICATION_ID`                      | Future bot     | Application ID for explicit guild-command registration                           |
+| `DISCORD_GUILD_ID`                            | Future bot/API | Only clan guild allowed to submit                                                |
+| `API_BASE_URL`                                | Future bot     | Internal service URL, set to `http://api:3000` by Compose                        |
+
+Reserved OAuth/bot variables are documentation for later work. The foundation API currently reads database/listen settings only; auth implementation must add the relevant variables to the API service environment and validate them on startup. `apps/web` receives no secrets and will use relative `/api/v1` URLs.
+
+## All-container development
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
+curl --fail http://localhost:8088/api/v1/status
+docker compose -f compose.yaml -f compose.dev.yaml logs --tail 100
+```
+
+The starter UI is available at `http://localhost:8088`; PostgreSQL is exposed only on loopback for development. Migrations run before API startup. The bot profile is omitted by default because it is a scaffold. `--profile bot` can be used for infrastructure smoke testing; it still does not connect to Discord.
+
+## Host-run development
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d db
+node --env-file=.env packages/database/dist/migrate.js
+npm run dev:api
+# Separate terminal:
+npm run dev:web
+```
+
+Vite proxies `/api` to `127.0.0.1:3000`; no CORS bypass is needed. `dev:api` watches compiled files, so run `npx tsc -p apps/api/tsconfig.json --watch` in another terminal while editing API TypeScript, or rerun `npm run build`. A changed shared package must be rebuilt too.
+
+For database integration tests, create a separate database rather than pointing tests at your live clan data:
+
+```bash
+docker compose exec -T db createdb -U clog clog_test
+TEST_DATABASE_URL='postgresql://clog:YOUR_HEX_PASSWORD@127.0.0.1:5432/clog_test' npm test
+```
+
+## Discord setup when the feature is ready
+
+Create one application in the Discord Developer Portal; set the future OAuth callback URL, create a bot and invite it only to the clan guild with `bot` and `applications.commands` scopes. Use the Guilds intent and no message-content privileged intent. Copy application/guild/user IDs as strings. Admin access comes from the application allowlist, not an arbitrary Discord nickname. Keep command registration separate from login/startup and validate in a test guild first.
+
+## GitHub setup
+
+CI and private GHCR publishing use the built-in `GITHUB_TOKEN`; no PAT is needed for Actions publishing. Ensure repository Actions are enabled and workflow package writes are allowed. For pulling on your home server, create a classic PAT with `read:packages` and access to these private packages; authenticate interactively using `docker login ghcr.io -u KihiraLove` or `--password-stdin`.
+
+Create the `home-production` environment and a dedicated self-hosted runner labelled `clog-production` only when ready to deploy. Environment reviewer controls vary by GitHub plan/private-repository support; manual dispatch and successful-main-SHA verification remain required regardless. No runner, credentials, environment or DNS record is provisioned by this repository setup.

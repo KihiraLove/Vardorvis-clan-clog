@@ -1,0 +1,33 @@
+{
+  "name": "vardorvis-clan-clog",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "npm run build -w @clog/domain && npm run build -w @clog/database && npm run build -w @clog/api && npm run build -w @clog/bot && npm run build -w @clog/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint apps packages --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspaces --if-present",
+    "check:docs": "node scripts/check-docs.mjs",
+    "validate": "npm run format:check && npm run lint && npm run build && npm run typecheck && npm test && npm run check:docs",
+    "db:migrate": "npm run migrate -w @clog/database",
+    "dev:web": "npm run dev -w @clog/web",
+    "dev:api": "npm run dev -w @clog/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.5.2",
+    "eslint": "^10.12.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.44.1"
+  }
+}

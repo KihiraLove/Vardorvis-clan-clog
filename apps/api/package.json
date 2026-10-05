@@ -1,0 +1,21 @@
+{
+  "name": "@clog/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/*.test.js",
+    "dev": "node --env-file=../../.env --watch dist/server.js",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@clog/domain": "0.1.0",
+    "fastify": "^5.6.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5"
+  }
+}
