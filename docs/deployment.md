@@ -55,6 +55,12 @@ After health checks pass, the helper atomically updates only `IMAGE_TAG` in the 
 
 The workflow is opt-in: it cannot deploy until you install the runner and files. It needs no inbound SSH or open Docker socket. Automatic unattended deployment after publishing is deferred until restore/rollback and real feature health checks are proven.
 
+## Planned uploaded icon storage
+
+Admin-created item icons (#30/#31) need a dedicated persistent API-mounted asset volume, for example at `/data/catalog-icons`, with generated asset paths served through the API. The current foundation Compose files and deployment helper do not yet configure or back up this volume. Add its configuration and permissions when implementing the feature; never place uploaded icons only inside an image or disposable container filesystem.
+
+The database stores icon references, canonical manual item IDs, page memberships and saved order metadata. Back up that database together with the matching published icon files, using a consistent snapshot or a controlled write pause. Restore both to an isolated deployment and verify every referenced icon, manual item, page order and existing collection/hardcore credit before release acceptance. Source catalog refreshes and image replacements must leave manual overrides and uploaded files intact. The deployment/recovery tasks (#11/#13) must extend the helper accordingly; the database-only command below covers the shipped foundation.
+
 ## Backups and rollback
 
 ```bash

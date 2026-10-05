@@ -25,6 +25,8 @@ Open decisions: the unnamed second Discord command; whether to add optional `col
 - The separate XP gained route accumulates competition-reported skill gains, using the selected competition's entire participant roster. Stable WOM player IDs preserve membership rows across name changes.
 - Store each competition/player/skill contribution once and reconcile refreshes by the difference, preserving existing site totals. Distinct competitions contribute independently; overlapping periods are exposed rather than mislabelled as unique lifetime XP.
 - Use current WOM `metrics`/`deltas`, raw skill gains and an explicit per-skill bulk preview for overall competitions; no weighted score or non-XP metric enters skill totals.
-- These decisions are planned in #26, #27, #28 and [the detailed feature design](../planned-features.md). No runtime feature or schema extension is shipped by the documentation update.
+- Admin item creation requires only icon, name and existing page(s); external OSRS game IDs are optional. Allocate stable internal canonical IDs and preserve them when manually reconciling later source data. Shared-page credits remain one item history.
+- Save item order independently per page through versioned atomic writes. Preserve manual item/icon/membership/order overrides during source imports and keep uploaded icons in durable storage backed up with the database.
+- These decisions are planned in #26, #27, #28, #30, #31 and [the detailed feature design](../planned-features.md). No runtime feature or schema extension is shipped by the documentation update.
 
 No cloud hosting provider or external paid service is required. No automatic launch, Discord message sending, domain changes or live host changes occur during repository setup.

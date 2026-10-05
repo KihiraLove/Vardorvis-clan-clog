@@ -1,6 +1,6 @@
-# Planned hardcore and XP gained features
+# Planned hardcore, XP and admin catalog features
 
-Status: planned, 2026-10-05. This document extends the foundation plan; it does not implement runtime routes, database fields, the bot extension or new pages. Tracking issues: [HC-01 #26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26), [XP-01 #27](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/27), [XP-02 #28](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/28); the [V1 epic #15](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/15) includes them.
+Status: planned, 2026-10-05. This document extends the foundation plan; it does not implement runtime routes, database fields, the bot extension or new pages. Tracking issues: [HC-01 #26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26), [XP-01 #27](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/27), [XP-02 #28](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/28), [CAT-02 #30](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/30), [ADMIN-02 #31](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/31); the [V1 epic #15](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/15) includes them.
 
 ## Hardcore collection credits
 
@@ -82,11 +82,45 @@ Admin flow: paste competition link → preview the complete competition/skill/me
 
 Public reads use stored results, with pagination/numeric sorting without dropping competitors. A WOM outage therefore does not empty the XP page. Its empty state shows zero tracked skill XP before imports and explains that an admin imports competitions.
 
+## Admin-created items and page ordering
+
+Admins can maintain the catalog when OSRS receives new items. The Add item form has three required inputs:
+
+| Input   | Behavior                                                                          |
+| ------- | --------------------------------------------------------------------------------- |
+| Icon    | Upload and preview a validated raster icon; retain transparency and pixel clarity |
+| Name    | Required nonblank display name                                                    |
+| Page(s) | Select one or more existing collection-log pages                                  |
+
+An external OSRS game item ID is optional. Do not add it as a required field. Create one canonical item and all selected page memberships in a transaction, appending to each selected page initially. It starts uncollected and non-hardcore everywhere. Future submissions resolve to its internal ID, and later collection/hardcore credits propagate to all occurrences as they do for imported items. The feature does not create new pages.
+
+The page editor shows every item in saved order and supports drag-and-drop, keyboard-accessible move up/down or position controls, and an explicit Save order action. Moving an item on one page changes only that page's slots: it cannot change other page orders, canonical IDs, collector/date history or hardcore evidence. An admin can leave the initial append order or save a deliberate arrangement.
+
+### Identity and source updates
+
+Separate stable internal item identity from external OSRS game aliases. Manual entries can have no external ID; imported/manual allocation must share a collision-safe namespace, preserving existing IDs. The current foundation domain validator requires a nonempty game-ID list, so #30 includes changing that validation rather than inventing a required ID for the form.
+
+Track source/manual provenance and override metadata for item icons, memberships and page order. Source refreshes retain admin-created entries and their durable icon references. Explicit page order takes precedence over source ordering; new source entries append deterministically without rearranging saved members. If an official source later includes a manual entry, require explicit reconciliation to the existing canonical ID and retain its credits. Do not silently create a second copy or merge equal names: similar names can represent different items.
+
+### Transactional order and refreshed reads
+
+The reorder API receives the full ordered canonical ID list and an expected page revision. It checks an exact permutation of current membership, locks/checks that revision, and applies all slots atomically. Handle the initial unique slot constraint safely during swaps. Both creation/membership updates and order saves advance page revisions; competing or stale requests return 409 and the UI reloads current data rather than silently overwriting it.
+
+Publish a new catalog revision/ETag after successful writes, invalidate bot search caches and include manual entries in public reads, autocomplete and admin matching. No static site rebuild is needed for a new item to appear. Authenticate all writes and record the session actor in catalog audit records separate from the submission-specific audit table. Add metadata/revision/asset/audit fields through new forward-only migrations.
+
+### Durable icons and recovery
+
+Validate bounded PNG/WebP uploads by decoding their content, use generated asset IDs and preview staged assets before item creation. Store published icons in a dedicated volume outside the Docker image/container layer and serve referenced assets through same-origin API URLs. Abandoned uploads are cleaned up; a failed item transaction must not publish a partial catalog entry. Do not fetch arbitrary submitted icon URLs.
+
+Image updates and restarts must preserve this volume. Back up and restore the database and icon files together, including manual identities, page memberships and order overrides. The current foundation Compose/deploy helper has no uploaded-icon volume or backup integration; #30/#11/#13 must implement and rehearse this before launch. [Deployment planning](deployment.md) records the operational requirement.
+
 ## Acceptance checks
 
 Hardcore: uncollected/default state; pending/rejected claims; approved red item/menu/skull and exact suffix; shared-page propagation; ordinary/hardcore coexistence; corrected flag; revocation of the last hardcore versus last ordinary credit; accessible hover/focus/touch visuals.
 
 XP: all competitor rows; new competition → correct skill/member totals; unchanged retry → zero change; larger ongoing results → only incremental change; second competition → additive totals; renamed players → stable identity; multi-skill and overall mapping; unavailable/zero data; corrected gains/removed participants; large exact totals; concurrent/retried/stale imports; malformed URL/non-XP competition; unauthorized admin calls; source failure → prior published data retained.
+
+Admin catalog: icon/name/page validation with no required game ID; shared-page creation with uncollected defaults; durable icon serving; autocomplete/manual matching; drag/keyboard order saves; malformed permutations and stale/concurrent revisions; safe slot swaps; unchanged credits and other pages; explicit source/manual reconciliation; manual item/icon/order survival across imports, image updates, restarts and coordinated restores.
 
 ## Source references
 

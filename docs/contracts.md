@@ -69,7 +69,23 @@ Preview input is `competitionUrl`. Extract a canonical WOM competition ID; ignor
 
 Use integer decimal strings for XP totals/contributions in the public/admin JSON contract to preserve exact accumulation. Missing source XP is `null` with an explicit availability state; zero is a valid gain. Client rendering distinguishes competition gained XP, member cumulative gained XP and site cumulative skill XP. No endpoint treats weighted scores, boss kills, activity points, EHP/EHB or aggregate overall values as skill XP.
 
-Only the foundation endpoints listed at the top are implemented. These new routes and fields are planned in #26, #27 and #28.
+## Planned admin catalog API
+
+| Method/path                                     | Authorization        | Purpose                                                                            |
+| ----------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| `POST /api/v1/admin/catalog/icons`              | Admin session + CSRF | Validate a multipart raster upload; return a staged generated asset ID and preview |
+| `POST /api/v1/admin/catalog/items`              | Admin session + CSRF | Create one canonical item and its selected page memberships                        |
+| `GET /api/v1/admin/catalog/pages/:pageId/items` | Admin session        | Current complete ordered membership and page revision                              |
+| `PUT /api/v1/admin/catalog/pages/:pageId/order` | Admin session + CSRF | Save an exact membership permutation with expected page revision                   |
+| `GET /api/v1/catalog/icons/:assetId`            | Public               | Serve published referenced icon content through same-origin URLs                   |
+
+Item creation requires `name`, `iconAssetId` from a validated upload, and a nonempty unique `pageIds` list of existing pages. External game IDs are optional. Allocate the canonical ID server-side; record the actor from the session. Verify the staged icon is usable, create the item and all memberships atomically, append to each page, advance affected page/catalog revisions and publish the icon reference only after success. Invalid/unknown fields or pages fail the entire operation. Item creation cannot accept collection credits, review status or an effective hardcore flag.
+
+Reorder input is `orderedItemIds` plus `expectedVersion` for that page. Require every current member exactly once, with no missing, duplicate or foreign item. Membership changes and competing reorder saves invalidate the expected revision and return 409. Apply slots atomically without transient unique-slot collisions. Return the resulting order/version; preserve canonical IDs, other pages and approved credits. Unauthorized writes are rejected using the same session/CSRF rules as review.
+
+Creation/order writes invalidate the public catalog revision and bot autocomplete cache. Reads include manual items without game IDs. Uploaded assets live outside the Docker image and survive restarts/upgrades. Catalog action auditing and manual override/source reconciliation are distinct from submission review auditing.
+
+Only the foundation endpoints listed at the top are implemented. These routes and fields are planned in #26, #27, #28, #30 and #31.
 
 ## Sources checked for platform constraints
 
