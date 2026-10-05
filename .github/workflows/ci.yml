@@ -1,0 +1,76 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: clog
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: clog_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U clog -d clog_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://clog:ci-only-password@127.0.0.1:5432/clog_test
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run validate
+
+  docker-smoke:
+    name: docker-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      POSTGRES_PASSWORD: ci-only-password
+      IMAGE_TAG: ci
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with: { persist-credentials: false }
+      - name: Validate Compose
+        run: docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+      - name: Build all service images
+        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot build
+      - name: Start and smoke test
+        run: |
+          docker compose -f compose.yaml -f compose.dev.yaml --profile bot up -d --wait --wait-timeout 120
+          curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8088/healthz
+          curl --fail http://127.0.0.1:8088/api/v1/status
+          docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot logs --no-color --tail 100
+      - name: Clean up
+        if: always()
+        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
+
+  publish:
+    name: publish
+    needs: [validate, docker-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images.yml
+    with:
+      commit: ${{ github.sha }}

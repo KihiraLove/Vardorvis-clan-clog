@@ -1,0 +1,21 @@
+name: Development task
+description: An implementable collection-log work item
+title: '[Task] '
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: Describe the observable behavior this should deliver.
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Include relevant failure cases and tests.
+    validations: { required: true }
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Link blocking issues and decisions.

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { collectionLogCommand } from './command.js';
+
+test('submission command keeps required item/proof before optional name and uses autocomplete', () => {
+  const command = collectionLogCommand.toJSON();
+  assert.equal(command.name, 'cc-clog');
+  const submit = command.options?.[0];
+  assert.equal(submit?.name, 'submit');
+  assert.ok(submit && 'options' in submit);
+  assert.deepEqual(
+    submit.options?.map((option) => option.name),
+    ['item', 'proof', 'submitter-name'],
+  );
+  const item = submit.options?.[0];
+  assert.ok(item && 'autocomplete' in item && item.autocomplete);
+});

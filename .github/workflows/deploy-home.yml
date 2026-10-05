@@ -1,0 +1,44 @@
+name: Deploy home
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: Full 40-character SHA from a successful main CI run
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: home-production
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+    steps:
+      - name: Verify release came from successful main CI
+        id: verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_SHA: ${{ inputs.image_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "Expected a full commit SHA"; exit 1; }
+          gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?event=push&head_sha=$RELEASE_SHA&per_page=100" > "$RUNNER_TEMP/runs.json"
+          jq -e --arg sha "$RELEASE_SHA" '.workflow_runs | any(.head_sha == $sha and .head_branch == "main" and .conclusion == "success")' "$RUNNER_TEMP/runs.json" >/dev/null
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+  deploy:
+    needs: verify
+    environment: home-production
+    runs-on: [self-hosted, Linux, clog-production]
+    timeout-minutes: 15
+    steps:
+      - name: Deploy installed release
+        env:
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+        run: /srv/vardorvis-clan-clog/deploy.sh "$RELEASE_SHA"

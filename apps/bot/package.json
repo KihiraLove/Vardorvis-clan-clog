@@ -1,0 +1,16 @@
+{
+  "name": "@clog/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/*.test.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@clog/domain": "0.1.0",
+    "discord.js": "^14.22.1"
+  }
+}
