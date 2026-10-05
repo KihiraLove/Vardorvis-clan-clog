@@ -44,4 +44,6 @@ npm run test:e2e -w @clog/web
 
 The browser suite covers navigation/geometry, all sample icons, shared/HC state, hover/focus/touch/Escape, viewport bounds and mocked live refresh/failure/revocation. CI also runs PostgreSQL and Docker smoke checks, plus the new Chromium job. Browser failure artifacts contain only fixture/mocked public data.
 
-Remaining acceptance: a complete reviewed catalog/assets (#1), implemented public snapshots (#2), final in-game screenshot/pixel approval (#3), real review-to-public behavior and hardware/mobile acceptance (#7/#9/#12), and backend/admin/bot hardcore persistence (#26). Admin review/catalog maintenance and XP pages remain later frontend work (#8/#28/#31). No issue is closed and no auto-closing PR keywords are used.
+The separate [XP frontend](xp-frontend-review.md) now adds the skill tab, member/competition results and admin competition import interface in the same draft PR. XP-02 #28 is assigned to KihiraLove and stays open for review; live imports/authentication still require #27/#4.
+
+Remaining acceptance: a complete reviewed catalog/assets (#1), implemented public snapshots (#2), final in-game screenshot/pixel approval (#3), real review-to-public behavior and hardware/mobile acceptance (#7/#9/#12), and backend/admin/bot hardcore persistence (#26). Admin submission review and catalog maintenance remain later frontend work (#8/#31). No issue is closed and no auto-closing PR keywords are used.

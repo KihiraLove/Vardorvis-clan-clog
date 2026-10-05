@@ -20,6 +20,7 @@ Only the three foundation endpoints below currently exist. All other routes in t
 | `POST /api/v1/bot/submissions`                 | Bot credential + configured guild | Idempotent intake and resolution suggestions                    |
 | `GET /api/v1/auth/discord`                     | Browser                           | Start OAuth with state and approved redirect                    |
 | `GET /api/v1/auth/discord/callback`            | OAuth state/code                  | Create allowlisted admin session                                |
+| `GET /api/v1/auth/session`                     | Browser session                   | Report admin access and a session-bound CSRF token              |
 | `POST /api/v1/auth/logout`                     | Session + CSRF                    | Destroy session                                                 |
 | `GET /api/v1/admin/submissions?status=pending` | Admin session                     | Paginated queue including unmatched submissions                 |
 | `PATCH /api/v1/admin/submissions/:id`          | Admin session + CSRF              | Resolve/edit item, collector or date with expected version      |
@@ -110,6 +111,80 @@ The planned command adds optional `[hardcore:<true|false>]`. The original checke
 Preview input is `competitionUrl`. Extract a canonical WOM competition ID; ignore URL fragments/query variants for identity and use the fixed official API origin. The response includes a short-lived preview/snapshot token, expected import revision, competition/skill details, complete competitor rows, and per-skill before/after/change values. Applying a preview records the authenticated actor, reconciles the unique stored competition/player/skill contributions atomically, and returns unchanged/applied with the resulting revision. An unchanged refresh has zero XP change. Reused request keys with different payloads or stale revisions return 409.
 
 Use integer decimal strings for XP totals/contributions in the public/admin JSON contract to preserve exact accumulation. Missing source XP is `null` with an explicit availability state; zero is a valid gain. Client rendering distinguishes competition gained XP, member cumulative gained XP and site cumulative skill XP. No endpoint treats weighted scores, boss kills, activity points, EHP/EHB or aggregate overall values as skill XP.
+
+## Frontend XP payloads
+
+The XP frontend in #28 consumes the following proposed shapes; the backend in #27/#4 must still implement them. [xp-model.ts](../apps/web/src/xp-model.ts) defines the decoded view types and [xp-api.ts](../apps/web/src/xp-api.ts) implements the transport validation.
+
+```ts
+type SkillId =
+  | 'attack'
+  | 'hitpoints'
+  | 'mining'
+  | 'strength'
+  | 'agility'
+  | 'smithing'
+  | 'defence'
+  | 'herblore'
+  | 'fishing'
+  | 'ranged'
+  | 'thieving'
+  | 'cooking'
+  | 'prayer'
+  | 'crafting'
+  | 'firemaking'
+  | 'magic'
+  | 'fletching'
+  | 'woodcutting'
+  | 'runecrafting'
+  | 'slayer'
+  | 'farming'
+  | 'construction'
+  | 'hunter'
+  | 'sailing';
+type Xp = string; // unsigned canonical decimal integer, at most 100 digits
+type Revision = string; // nonempty opaque global XP projection revision
+interface Competition {
+  id: number; // positive safe integer WOM competition ID
+  title: string;
+  sourceUrl: string; // canonical https://wiseoldman.net/competitions/<id>
+  skills: SkillId[]; // nonempty, unique; overall must be expanded by the backend
+  startsAt: string; // ISO timestamp in UTC, ending in Z
+  endsAt: string; // later than startsAt
+  importedAt: string; // last successful refresh in UTC
+}
+interface Participant {
+  playerId: number; // positive safe integer stable WOM player ID, unique in rows
+  displayName: string;
+  gains: Partial<Record<SkillId, Xp | null>>; // exactly every competition skill
+}
+interface Change {
+  skill: SkillId;
+  before: Xp;
+  after: Xp;
+  change: string; // signed canonical integer: after - before; no leading "+"
+}
+```
+
+| Endpoint                                | Complete 200 payload                                                                                                                                     |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/xp/skills`                 | `{ revision, updatedAt: string \| null, skills: Array<{ skill: SkillId, xp: Xp }> }`; exactly all 24 skills, zeros before imports                        |
+| `GET /api/v1/xp/skills/:skill/members`  | `{ revision, skill: SkillId, members: Array<{ playerId, displayName, xp: Xp \| null }> }`; all members with contributions for this skill                 |
+| `GET /api/v1/xp/competitions`           | `{ revision, competitions: Competition[] }`; all imported competitions                                                                                   |
+| `GET /api/v1/xp/competitions/:id`       | `{ revision, competition: Competition, participants: Participant[] }`; metadata identical to the list entry, all competitors                             |
+| `POST /api/v1/admin/xp/imports/preview` | `{ previewToken, expectedRevision, expiresAt, competition, participants, changes: Change[], warnings: string[] }`; exactly one change per selected skill |
+| `POST /api/v1/admin/xp/imports`         | `{ outcome: "applied" \| "unchanged", revision }`                                                                                                        |
+| `GET /api/v1/admin/xp/imports`          | `{ imports: Array<{ id, competitionId, title, actorName, importedAt, outcome, changes: Change[] }> }`; newest first, IDs unique                          |
+
+All public wrappers use the same global projection revision, and each route has its own opaque ETag. Send complete snapshots or 304 to conditional GETs. The frontend advances its caches only when totals, list, selected members and selected competition agree. Serving one revision-consistent transaction/projection per refresh is required; concurrent updates may produce a rejected mixed read which is retried. Public responses must exclude session/Discord identities, CSRF tokens and private import audit entries. Member names remain display values; identity is the WOM player ID.
+
+Missing gains use `null` as their explicit unavailable state; never coerce them to valid zero XP. Member cumulative amounts sum known stored contributions, with `null` when none are usable. Total skill XP sums known contributions and remains an unsigned exact integer. No fractional values, negative source sentinel values, duplicate skill/player IDs, missing selected metrics or unknown metrics are accepted. UTC timestamps include seconds and optional 1–3 fractional digits. Display dates are UTC; labels truncate to two million decimals and tooltips show the original exact amount.
+
+`GET /api/v1/auth/session` returns `{ authenticated: true, displayName, csrfToken }` for an allowlisted admin, or `{ authenticated: false }`/401 for no usable admin session. The browser retains the token in component memory only and sends cookies with `credentials: same-origin`. Return no reusable token to an unauthorized account. Keep session cookies HttpOnly/Secure/SameSite and enforce authorization/CSRF on the server.
+
+Preview body: `{ "competitionUrl": "https://wiseoldman.net/competitions/1001" }`. The browser strips queries/fragments, rejects non-HTTPS/spoofed/credentialed URLs and verifies returned source ID equals the requested ID. The server must repeat input validation, use its fixed WOM API origin, and bind the short-lived token to the authorized actor, validated source snapshot and expected projection revision.
+
+Apply body: `{ "previewToken": "...", "expectedRevision": "..." }`. Both POSTs send `Content-Type: application/json` and `X-CSRF-Token`; apply also sends `Idempotency-Key`. Do not accept caller-supplied gains or actor names. Retry the identical token/key after an uncertain network result; conflicting keys/stale tokens return 409. An unchanged refresh adds no XP and still records its refresh outcome. Corrections may have a negative change while before/after totals remain unsigned; the UI requires acknowledgment before applying those previews. Server reconciliation, transaction safety, authorization and source validation remain authoritative.
 
 ## Planned admin catalog API
 

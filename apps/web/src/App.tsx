@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { XpPage } from './XpPage.tsx';
+import { LiveXpClient } from './xp-api.ts';
+import { PreviewXpClient } from './preview/xp.ts';
 import { CollectionLog } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
 import {
@@ -54,26 +57,54 @@ function PreviewLog({ live }: { live: () => void }) {
   );
 }
 export function App() {
-  const [preview, setPreview] = useState(
-    new URLSearchParams(window.location.search).get('preview') === '1',
-  );
+  const location = () => ({
+    path: window.location.pathname,
+    preview: new URLSearchParams(window.location.search).get('preview') === '1',
+  });
+  const [route, setRoute] = useState(location);
+  useEffect(() => {
+    const change = () => setRoute(location());
+    window.addEventListener('popstate', change);
+    return () => window.removeEventListener('popstate', change);
+  }, []);
   const mode = (next: boolean) => {
     const url = new URL(window.location.href);
     if (next) url.searchParams.set('preview', '1');
     else url.searchParams.delete('preview');
     window.history.replaceState(null, '', url);
-    setPreview(next);
+    setRoute(location());
   };
+  const navigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    window.history.pushState(null, '', event.currentTarget.href);
+    setRoute(location());
+    window.scrollTo(0, 0);
+  };
+  const href = (path: string) => path + (route.preview ? '?preview=1' : '');
+  const xp = route.path === '/xp' || route.path === '/admin/xp';
+  const client = useMemo(
+    () => (route.preview ? new PreviewXpClient() : new LiveXpClient()),
+    [route.preview],
+  );
   return (
     <>
-      <a className="skip-link" href="#collection-log">
-        Skip to collection log
+      <a className="skip-link" href={xp ? '#xp-main' : '#collection-log'}>
+        Skip to {xp ? 'XP tracker' : 'collection log'}
       </a>
       <div className="site-shell">
         <header className="site-header">
           <a
             className="clan-brand"
-            href="/"
+            href={href('/')}
+            onClick={navigate}
             aria-label="Vardorvis clan collection log"
           >
             <span className="brand-mark" aria-hidden="true">
@@ -84,14 +115,52 @@ export function App() {
               <span className="clan-subtitle">Clan collection log</span>
             </div>
           </a>
+          <nav className="site-nav" aria-label="Site navigation">
+            <a
+              href={href('/')}
+              onClick={navigate}
+              aria-current={!xp ? 'page' : undefined}
+            >
+              Collection log
+            </a>
+            <a
+              href={href('/xp')}
+              onClick={navigate}
+              aria-current={route.path === '/xp' ? 'page' : undefined}
+            >
+              XP gained
+            </a>
+            <a
+              href={href('/admin/xp')}
+              onClick={navigate}
+              aria-current={route.path === '/admin/xp' ? 'page' : undefined}
+            >
+              Admin
+            </a>
+          </nav>
           <span
-            className={`mode-label${preview ? ' mode-label--preview' : ''}`}
+            className={
+              'mode-label' + (route.preview ? ' mode-label--preview' : '')
+            }
           >
-            {preview ? 'Review preview' : 'Public collection log'}
+            {route.preview
+              ? 'Review preview'
+              : xp
+                ? 'Public XP tracker'
+                : 'Public collection log'}
           </span>
         </header>
-        <main id="collection-log">
-          {preview ? (
+        <main id={xp ? 'xp-main' : 'collection-log'}>
+          {xp ? (
+            <XpPage
+              key={route.preview ? 'preview-xp' : 'live-xp'}
+              client={client}
+              admin={route.path === '/admin/xp'}
+              preview={route.preview}
+              onMode={mode}
+              onNavigate={navigate}
+            />
+          ) : route.preview ? (
             <PreviewLog live={() => mode(false)} />
           ) : (
             <LiveLog preview={() => mode(true)} />

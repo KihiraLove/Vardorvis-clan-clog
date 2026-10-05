@@ -4,9 +4,9 @@ Monorepo for a public OSRS collection log, an admin submission queue, a Discord 
 
 ## Current state
 
-This branch adds the **first collection-log frontend** to the project foundation. The full catalog, backend feature routes and release approval remain pending.
+This branch adds the **collection-log and clan XP frontends** to the project foundation. The full catalog, backend feature routes and release approval remain pending.
 
-Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and hardcore presentation, accessible item menus, an ETag-aware public API adapter, explicit sample preview mode, and frontend browser tests; npm workspaces, React/Vite starter, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
+Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and hardcore presentation, accessible item menus; a separate RuneScape-style skill XP page with million labels, exact tooltips, member/competition results and an admin preview/apply/history interface; ETag-aware public API adapters, explicit sample preview modes, and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
 
 Planned: complete item/page catalog and assets, final reference-approved pixel matching, Discord submission persistence, Discord admin OAuth, review UI/API, end-to-end hardcore claim persistence/review, admin-imported Wise Old Man competition XP, admin item creation with durable icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
@@ -48,6 +48,8 @@ npm run dev:web
 ```
 
 Open `http://127.0.0.1:5173/?preview=1`. The labelled sample catalog starts all uncollected; the review selector can show ordinary or mixed hardcore example credits without changing clan data. Use the [frontend review guide](docs/frontend-review.md) for screenshots, browser checks and the remaining work in UI-01 #3 / UI-02 #9. These issues stay open for manual review.
+
+Open `http://127.0.0.1:5173/xp?preview=1` for the zero-initialized skill XP tracker. Show sample XP, hover/focus/tap for exact values, and use Admin to preview/apply competition fixtures or refresh incremental gains. See the [XP review guide](docs/xp-frontend-review.md). XP-02 #28 is also assigned to KihiraLove and remains open. Live XP imports and authenticated sessions still need #27/#4; preview never changes clan data.
 
 ## Documentation
 

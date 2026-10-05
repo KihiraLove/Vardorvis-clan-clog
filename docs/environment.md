@@ -86,3 +86,5 @@ The frontend has no new environment secrets or build-time API origin. It request
 For an independent visual review, run `npm run build -w @clog/domain`, then `npm run dev:web` and open `http://127.0.0.1:5173/?preview=1`. Preview starts all uncollected and is clearly labelled. Its explicit sample scenarios never write to the backend and are not a live catalog fallback.
 
 Install Chromium with `npx playwright install chromium` (Linux CI installs dependencies with `--with-deps`), then run `npm run test:e2e -w @clog/web`. See the [frontend review guide](frontend-review.md) for the captured visuals and review scope.
+
+The XP page adds no environment secrets or build-time origins. Open `http://127.0.0.1:5173/xp?preview=1` for independent public/admin UI review; sample imports stay in memory. Live mode uses same-origin XP endpoints and the planned session/CSRF endpoint, with WOM requests performed by the future backend. Live imports/authentication remain unavailable until #27/#4. See the [XP review guide](xp-frontend-review.md).

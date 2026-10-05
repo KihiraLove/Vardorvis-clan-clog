@@ -606,3 +606,434 @@ main {
     line-height: 1.6;
   }
 }
+
+.site-header {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.site-nav a {
+  color: #bdb293;
+  font-size: 12px;
+  text-decoration: none;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+}
+.site-nav a:hover,
+.site-nav a[aria-current='page'] {
+  color: #f1ce80;
+  border-color: #6d5a35;
+  background: #302a1d;
+}
+.xp-page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin: 28px 0;
+}
+.xp-page h1 {
+  font:
+    38px/1 RuneScape,
+    serif;
+  color: #f1d18d;
+  text-shadow: 1px 2px #000;
+  margin: 10px 0;
+}
+.xp-page p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #ada48e;
+}
+.xp-eyebrow {
+  color: #d6b064 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 10px !important;
+}
+.xp-layout {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.skill-panel {
+  background: #4c4435 url('/ui/panel.svg');
+  border: 3px solid #25231d;
+  outline: 1px solid #72654e;
+  box-shadow:
+    inset 0 0 0 2px #746750,
+    0 10px 25px #0005;
+  padding: 12px 10px 8px;
+}
+.skill-panel__title {
+  font:
+    24px/1 RuneScape,
+    serif;
+  color: #ff981f;
+  text-shadow: 1px 2px #000;
+  text-align: center;
+  padding: 5px 0 13px;
+  border-bottom: 1px solid #25231d;
+}
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 10px 0;
+}
+.skill-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 5px 3px;
+  border: 1px solid #252018;
+  box-shadow:
+    inset 0 1px #766b53,
+    inset 0 -1px #302a1e;
+  background: #514938;
+  color: #fff000;
+  text-shadow: 1px 2px #000;
+}
+.skill-cell:hover,
+.skill-cell[aria-pressed='true'] {
+  background: #615239;
+  border-color: #b39b5c;
+}
+.skill-cell img {
+  width: 24px;
+  height: 27px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+.xp-amount__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.skill-cell__name {
+  font:
+    12px/1 RuneScape,
+    serif;
+  color: #dccba7;
+}
+.xp-amount__number {
+  font:
+    18px/1 RuneScape,
+    serif;
+  color: #fff000;
+  overflow-wrap: anywhere;
+}
+.xp-amount {
+  display: inline-block;
+  cursor: help;
+  padding: 3px 0;
+}
+.xp-amount .xp-amount__number {
+  font-size: 23px;
+}
+.skill-panel__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font:
+    18px/1 RuneScape,
+    serif;
+  color: #ff981f;
+  border-top: 1px solid #28241b;
+  padding: 11px 4px 2px;
+  text-shadow: 1px 2px #000;
+}
+.skill-panel__hint {
+  color: #c2b597 !important;
+  font-size: 10px !important;
+  text-align: center;
+  margin-bottom: 2px;
+}
+.xp-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  background: #383329;
+  border: 2px solid #050505;
+  box-shadow:
+    0 0 0 1px #756b53,
+    3px 4px 0 #0006;
+  padding: 9px 11px;
+  color: #fff000;
+  font:
+    21px/1.3 RuneScape,
+    serif;
+  text-shadow: 1px 1px #000;
+  overflow-wrap: anywhere;
+}
+.xp-tooltip strong,
+.xp-tooltip span,
+.xp-tooltip small {
+  display: block;
+}
+.xp-tooltip strong {
+  color: #ff981f;
+  font-size: 19px;
+  margin-bottom: 3px;
+}
+.xp-tooltip small {
+  color: #c7baa1;
+  font-size: 15px;
+  margin-top: 4px;
+}
+.xp-panel {
+  min-width: 0;
+  border: 1px solid #514835;
+  background: #29261e;
+  padding: 19px;
+  margin-bottom: 18px;
+  box-shadow: inset 0 0 0 3px #201e18;
+}
+.xp-panel h2 {
+  margin: 0;
+  font:
+    28px/1 RuneScape,
+    serif;
+  color: #edc377;
+  text-shadow: 1px 1px #000;
+}
+.xp-panel h3 {
+  font:
+    23px/1.15 RuneScape,
+    serif;
+  color: #edc377;
+  margin: 16px 0 8px;
+}
+.xp-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.xp-section-heading > span {
+  font-size: 11px;
+  color: #b5a988;
+}
+.xp-panel a,
+.xp-bottom-note a {
+  color: #d9b777;
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
+.xp-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: end;
+  margin: 18px 0 12px;
+}
+.xp-table-controls label,
+.xp-competition-select,
+.xp-admin form label {
+  display: block;
+  font-size: 11px;
+  color: #bcb196;
+}
+.xp-table-controls input,
+.xp-competition-select select,
+.xp-import-field input {
+  display: block;
+  color: #e0d7c0;
+  background: #1e1c16;
+  border: 1px solid #62563e;
+  padding: 8px 9px;
+  margin-top: 6px;
+  max-width: 100%;
+  width: 100%;
+}
+.xp-table-controls > span {
+  font-size: 10px;
+  color: #9b927f;
+}
+.xp-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.xp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.xp-table caption {
+  text-align: left;
+  color: #cfb481;
+  padding: 12px 0;
+  font-size: 12px;
+}
+.xp-table th,
+.xp-table td {
+  text-align: left;
+  padding: 11px 7px;
+  border-bottom: 1px solid #453d2d;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.xp-table th {
+  font-weight: 400;
+  color: #ddd0ad;
+}
+.xp-table tbody th {
+  min-width: 95px;
+}
+.xp-table thead th {
+  color: #bcaa83;
+  font-size: 11px;
+}
+.xp-table thead button {
+  color: inherit;
+  background: none;
+  border: 0;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+.xp-table td {
+  font-variant-numeric: tabular-nums;
+}
+.xp-empty {
+  padding: 18px 8px;
+  border: 1px dashed #5b4d33;
+  color: #b3a488 !important;
+}
+.xp-unavailable {
+  font-size: 11px;
+  color: #9d9686;
+}
+.xp-note,
+.xp-freshness {
+  font-size: 10px !important;
+}
+.xp-status {
+  padding: 12px 15px;
+  background: #282219;
+  border: 1px solid #665239;
+}
+.xp-status .site-button {
+  margin: 0 8px 5px 0;
+}
+.xp-error {
+  color: #f1a18c !important;
+}
+.xp-success {
+  color: #a7d291 !important;
+}
+.xp-bottom-note {
+  border-top: 1px solid #3e3526;
+  margin-top: 25px;
+  padding: 14px 0;
+}
+.xp-import-field {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  margin-top: 4px;
+}
+.xp-import-field input {
+  min-width: 0;
+}
+.xp-import-field button {
+  flex-shrink: 0;
+}
+.xp-import-preview {
+  padding-top: 14px;
+  margin-top: 16px;
+  border-top: 1px solid #584a32;
+}
+.xp-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 0;
+  font-size: 12px;
+  color: #e3ba91;
+}
+.xp-history {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid #4c402c;
+  font-size: 12px;
+}
+.xp-history summary {
+  color: #dabb80;
+  cursor: pointer;
+}
+.xp-history ol {
+  padding-left: 20px;
+}
+.xp-history li {
+  padding: 12px 0;
+  border-bottom: 1px solid #4c402c;
+}
+.xp-history li strong {
+  color: #dcca9e;
+}
+.xp-history li p {
+  margin: 5px 0;
+}
+.site-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+@media (max-width: 740px) {
+  .xp-layout {
+    grid-template-columns: 1fr;
+  }
+  .skill-panel {
+    width: 310px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+  .site-nav {
+    order: 3;
+    width: 100%;
+  }
+  .site-header {
+    gap: 10px;
+  }
+  .xp-page-heading {
+    align-items: start;
+  }
+  .xp-panel {
+    padding: 15px;
+  }
+  .xp-import-field {
+    flex-wrap: wrap;
+  }
+  .xp-import-field button {
+    width: 100%;
+  }
+}
+@media (max-width: 360px) {
+  .skill-cell {
+    gap: 2px;
+  }
+  .skill-cell img {
+    width: 20px;
+  }
+  .xp-amount__number {
+    font-size: 16px;
+  }
+  .site-nav a {
+    padding: 8px;
+  }
+}
