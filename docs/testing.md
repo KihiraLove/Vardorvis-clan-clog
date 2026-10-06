@@ -28,9 +28,13 @@ Five Chromium browser scenarios cover native 500 × 314 geometry, the five tabs 
 
 These checks verify the frontend slice against stored/mock public responses, not a real Discord/admin approval pipeline. Screenshots in the [frontend review guide](frontend-review.md) are review captures, not approved pixel comparison baselines. Full catalog/reference sign-off remains in #1/#3 and live end-to-end verification in #7/#9/#12.
 
-## Feature checks to add with implementation
+## XP and admin frontend checks
 
 The XP frontend adds eleven Node tests and six Chromium scenarios, described in the [XP review guide](xp-frontend-review.md). They cover exact integer/million formatting, all 24 skill icons, zero/unavailable gains, sample initial/unchanged/incremental/multi-skill imports, CSRF/idempotency request shapes, access denial, correction acknowledgment, stale previews, conditional caches, mixed revisions, failure recovery and preview/live isolation. CI saves desktop/mobile/admin captures with the existing review artifact. These are mock/preview frontend checks; backend reconciliation and authenticated live end-to-end acceptance remain pending.
+
+The submission/catalog frontend adds sixteen Node tests and nine Chromium scenarios, described in the [admin review guide](admin-frontend-review.md). They verify typed private payloads, exact matching, proof validation, reason/version/CSRF requirements, shared approved-only credits, manual multi-page item identity, icon validation, full permutations, drag/keyboard/touch ordering, stale conflicts, uncertain creation retries and private access/logout. Desktop and 320-pixel mobile captures use the same CI review artifact. Frontend totals are 34 Node tests and 20 Chromium scenarios. Real backend transactions, OAuth, durable assets, source updates and restore checks remain pending.
+
+## Feature checks to add with backend implementation
 
 - Catalog: source-revision coverage, categories/pages/slots, deterministic import, icon existence, duplicates and variants, safe additive updates with existing credits.
 - Admin catalog: required icon/name/pages with no game-ID prerequisite; malformed/oversized icons and unavailable storage; one canonical item on multiple pages; uncollected/non-hardcore defaults; new item visible in public/bot/manual matching; full permutation checks, collision-safe atomic swaps, keyboard/drag controls, stale edits and concurrent item creation; reordering preserves other pages and collection/hardcore credits; source refresh/reconciliation preserves manual items/icons/order/identity; database plus icon-volume restore and image upgrades retain the catalog.

@@ -1,22 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { AdminPage, AdminNavigation } from './AdminPage.tsx';
+import { LiveAdminClient } from './admin-api.ts';
+import { PreviewAdminClient } from './preview/admin.ts';
 import { XpPage } from './XpPage.tsx';
 import { LiveXpClient } from './xp-api.ts';
 import { PreviewXpClient } from './preview/xp.ts';
 import { CollectionLog } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
-import {
-  previewCatalog,
-  previewCollections,
-  scenarios,
-  type Scenario,
-} from './preview/scenarios.ts';
+import { scenarios, type Scenario } from './preview/scenarios.ts';
 
 function LiveLog({ preview }: { preview: () => void }) {
   const state = usePublicLog();
   return <CollectionLog {...state} onPreview={preview} />;
 }
-function PreviewLog({ live }: { live: () => void }) {
-  const [scenario, setScenario] = useState<Scenario>('uncollected');
+function PreviewLog({
+  live,
+  client,
+}: {
+  live: () => void;
+  client: PreviewAdminClient;
+}) {
+  const [scenario, setScenario] = useState<Scenario | 'reviewed'>('reviewed');
+  const revision = useSyncExternalStore(client.subscribe, client.getRevision);
+  const data = useMemo(
+    () => client.publicLog(scenario),
+    [client, revision, scenario],
+  );
   return (
     <>
       <div className="preview-banner">
@@ -24,7 +33,7 @@ function PreviewLog({ live }: { live: () => void }) {
           <strong>Frontend preview</strong>
           <p>
             Sample pages, not the live clan log. Collection examples below are
-            for review only.
+            for review only. Admin decisions use the in-memory preview ledger.
           </p>
         </div>
         <button type="button" className="site-button" onClick={live}>
@@ -36,8 +45,11 @@ function PreviewLog({ live }: { live: () => void }) {
         <select
           id="preview-scenario"
           value={scenario}
-          onChange={(event) => setScenario(event.target.value as Scenario)}
+          onChange={(event) =>
+            setScenario(event.target.value as Scenario | 'reviewed')
+          }
         >
+          <option value="reviewed">Admin review results</option>
           {scenarios.map((entry) => (
             <option value={entry.id} key={entry.id}>
               {entry.name}
@@ -46,13 +58,7 @@ function PreviewLog({ live }: { live: () => void }) {
         </select>
         <span>No clan data is changed.</span>
       </div>
-      <CollectionLog
-        preview
-        data={{
-          catalog: previewCatalog,
-          collections: previewCollections(scenario),
-        }}
-      />
+      <CollectionLog preview data={data} />
     </>
   );
 }
@@ -89,15 +95,33 @@ export function App() {
     window.scrollTo(0, 0);
   };
   const href = (path: string) => path + (route.preview ? '?preview=1' : '');
+  const admin = route.path === '/admin' || route.path.startsWith('/admin/');
   const xp = route.path === '/xp' || route.path === '/admin/xp';
-  const client = useMemo(
-    () => (route.preview ? new PreviewXpClient() : new LiveXpClient()),
+  const adminClient = useMemo(
+    () => (route.preview ? new PreviewAdminClient() : new LiveAdminClient()),
     [route.preview],
+  );
+  useEffect(
+    () => () => {
+      if (adminClient instanceof PreviewAdminClient) adminClient.dispose();
+    },
+    [adminClient],
+  );
+  const client = useMemo(
+    () =>
+      route.preview
+        ? new PreviewXpClient((signal) => adminClient.session(signal))
+        : new LiveXpClient(),
+    [route.preview, adminClient],
   );
   return (
     <>
-      <a className="skip-link" href={xp ? '#xp-main' : '#collection-log'}>
-        Skip to {xp ? 'XP tracker' : 'collection log'}
+      <a
+        className="skip-link"
+        href={admin ? '#admin-main' : xp ? '#xp-main' : '#collection-log'}
+      >
+        Skip to{' '}
+        {admin ? 'clan administration' : xp ? 'XP tracker' : 'collection log'}
       </a>
       <div className="site-shell">
         <header className="site-header">
@@ -119,7 +143,7 @@ export function App() {
             <a
               href={href('/')}
               onClick={navigate}
-              aria-current={!xp ? 'page' : undefined}
+              aria-current={!xp && !admin ? 'page' : undefined}
             >
               Collection log
             </a>
@@ -131,9 +155,9 @@ export function App() {
               XP gained
             </a>
             <a
-              href={href('/admin/xp')}
+              href={href('/admin')}
               onClick={navigate}
-              aria-current={route.path === '/admin/xp' ? 'page' : undefined}
+              aria-current={admin ? 'page' : undefined}
             >
               Admin
             </a>
@@ -145,12 +169,21 @@ export function App() {
           >
             {route.preview
               ? 'Review preview'
-              : xp
-                ? 'Public XP tracker'
-                : 'Public collection log'}
+              : admin
+                ? 'Clan administration'
+                : xp
+                  ? 'Public XP tracker'
+                  : 'Public collection log'}
           </span>
         </header>
-        <main id={xp ? 'xp-main' : 'collection-log'}>
+        <main id={admin ? 'admin-main' : xp ? 'xp-main' : 'collection-log'}>
+          {admin && xp && (
+            <AdminNavigation
+              preview={route.preview}
+              path={route.path}
+              onNavigate={navigate}
+            />
+          )}
           {xp ? (
             <XpPage
               key={route.preview ? 'preview-xp' : 'live-xp'}
@@ -160,8 +193,17 @@ export function App() {
               onMode={mode}
               onNavigate={navigate}
             />
-          ) : route.preview ? (
-            <PreviewLog live={() => mode(false)} />
+          ) : admin ? (
+            <AdminPage
+              key={route.preview ? 'preview-admin' : 'live-admin'}
+              client={adminClient}
+              preview={route.preview}
+              path={route.path}
+              onMode={mode}
+              onNavigate={navigate}
+            />
+          ) : route.preview && adminClient instanceof PreviewAdminClient ? (
+            <PreviewLog live={() => mode(false)} client={adminClient} />
           ) : (
             <LiveLog preview={() => mode(true)} />
           )}

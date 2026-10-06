@@ -23,6 +23,7 @@ Only the three foundation endpoints below currently exist. All other routes in t
 | `GET /api/v1/auth/session`                     | Browser session                   | Report admin access and a session-bound CSRF token              |
 | `POST /api/v1/auth/logout`                     | Session + CSRF                    | Destroy session                                                 |
 | `GET /api/v1/admin/submissions?status=pending` | Admin session                     | Paginated queue including unmatched submissions                 |
+| `GET /api/v1/admin/submissions/:id`            | Admin session                     | Current claim and private before/after audit history            |
 | `PATCH /api/v1/admin/submissions/:id`          | Admin session + CSRF              | Resolve/edit item, collector or date with expected version      |
 | `POST /api/v1/admin/submissions/:id/approve`   | Admin session + CSRF              | Atomic approval and audit event                                 |
 | `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF              | Reject with reason                                              |
@@ -33,6 +34,43 @@ Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, 
 Intake returns 201 for a new durable pending submission, or 200 with the same receipt for an exact interaction retry. A reused interaction ID with a different payload is a 409 conflict. Return `resolution: resolved|needs_match` and canonical candidates. No fuzzy suggestion grants credit.
 
 Review writes carry `expectedVersion`; conflicts return 409. Standard errors are `{ "error": { "code": "...", "message": "..." } }`. Use 400/422 for invalid fields, 401 for missing credentials, 403 for forbidden actors/guilds, 404 for absent resources and 429 for rate limits. Never include secrets or raw server errors.
+
+## Frontend admin review payloads
+
+The #8/#31 frontend and [review guide](admin-frontend-review.md) use these proposed shapes. The foundation API does not implement them yet. All private reads use `Cache-Control: no-store`; enforce an allowlisted session on every route. Browser requests use same-origin cookies and no-store caching. Writes additionally send `X-CSRF-Token`; the server repeats all validation and derives actor identity from the session.
+
+```ts
+interface Submission {
+  id: string; // opaque stable identity, encoded as a URL segment
+  version: number; // positive safe integer, advances on every mutation
+  itemId: number | null; // canonical ID; null means unmatched
+  rawItemText: string;
+  collectorName: string; // 1–80 characters after trimming
+  collectedOn: string; // real YYYY-MM-DD calendar date
+  dateSource: 'submission' | 'claim' | 'admin';
+  submittedAt: string; // UTC ISO timestamp, ending in Z
+  proofUrl: string;
+  hardcore: boolean;
+  status: 'pending' | 'approved' | 'rejected' | 'revoked';
+}
+interface ReviewAudit {
+  id: string;
+  actorName: string;
+  at: string; // UTC ISO timestamp
+  action: 'edit' | 'approve' | 'reject' | 'revoke';
+  reason: string | null;
+  before: Submission;
+  after: Submission;
+}
+```
+
+Queue GET accepts `status=pending|reviewed`, `limit=20`, optional opaque `cursor` and optional `unmatched=true` with pending. Pending includes matched and unmatched claims; Reviewed includes approved/rejected/revoked. Return `{ revision, submissions: Submission[], nextCursor: string | null }`, ordered deterministically without duplicate rows. A stale cursor returns 409; reload from the first page. Detail GET returns `{ submission: Submission, audit: ReviewAudit[] }`, newest audit events first. Reject inconsistent canonical references; expose no private fields through public collections.
+
+Correction PATCH carries `{ expectedVersion, itemId, collectorName, collectedOn, hardcore, reason }`; `itemId` must be a specific existing canonical item, and `reason` is trimmed and at most 1,000 characters. Only pending/approved claims can be edited. Approved corrections require a reason. Preserve the raw evidence/receipt timestamp; changing the collection date sets `dateSource: admin`.
+
+Approve POST carries `{ expectedVersion }`; reject/revoke carry `{ expectedVersion, reason }` with a nonblank reason. Only pending matched claims with a validated HTTPS Imgur/Gyazo proof link may approve; reject permits pending unmatched/invalid-evidence claims; revoke requires approved state. These actions return the complete saved `Submission` with a higher version. Store state and audit atomically. Stale/double decisions return 409. Public credit is derived only from current approvals, so corrections/revocations update every shared occurrence. The proof checkbox is a UI acknowledgment, not an authorization field or a substitute for real inspection.
+
+The browser blocks unsafe proof URLs but can display/reject a stored malformed claim. It never fetches or embeds submitted proof automatically. A write receipt is acknowledged even if a following audit read fails; another mutation waits for a usable current record. Conflicts reload and require explicit review/retry, never an automatic overwrite.
 
 ## Frontend public-read payload
 
@@ -190,19 +228,27 @@ Apply body: `{ "previewToken": "...", "expectedRevision": "..." }`. Both POSTs s
 
 | Method/path                                     | Authorization        | Purpose                                                                            |
 | ----------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| `GET /api/v1/admin/catalog`                     | Admin session        | Complete canonical items/pages, provenance, override metadata and page versions    |
 | `POST /api/v1/admin/catalog/icons`              | Admin session + CSRF | Validate a multipart raster upload; return a staged generated asset ID and preview |
 | `POST /api/v1/admin/catalog/items`              | Admin session + CSRF | Create one canonical item and its selected page memberships                        |
-| `GET /api/v1/admin/catalog/pages/:pageId/items` | Admin session        | Current complete ordered membership and page revision                              |
 | `PUT /api/v1/admin/catalog/pages/:pageId/order` | Admin session + CSRF | Save an exact membership permutation with expected page revision                   |
 | `GET /api/v1/catalog/icons/:assetId`            | Public               | Serve published referenced icon content through same-origin URLs                   |
 
 Item creation requires `name`, `iconAssetId` from a validated upload, and a nonempty unique `pageIds` list of existing pages. External game IDs are optional. Allocate the canonical ID server-side; record the actor from the session. Verify the staged icon is usable, create the item and all memberships atomically, append to each page, advance affected page/catalog revisions and publish the icon reference only after success. Invalid/unknown fields or pages fail the entire operation. Item creation cannot accept collection credits, review status or an effective hardcore flag.
 
+The #31 frontend reads the complete private catalog rather than a separate per-page items route. It returns the public catalog shape plus `sourceRevision: string | null`, item `origin: source|manual` and unique `overrides: Array<name|icon|pages>`, and page `version: string` and `orderOrigin: source|manual`. The source revision and all revisions are opaque nonempty strings. Public snapshots omit private provenance/version fields; runtime UI preserves supplied slot order.
+
+Upload POST is multipart with one `icon` file, and returns `{ assetId, iconPath, expiresAt }`. Accept decoded PNG/WebP only, nonempty and at most 2 MiB, each dimension 1–512 pixels; independently verify MIME/signature, bound decoder resources, retain transparency and generate asset identities instead of using file names as paths. Return a same-origin absolute preview path and UTC expiry, bound to the admin session. Preview uses a 15-minute staging expiry. Never accept arbitrary icon URLs or browser-only blob paths on the live API.
+
+Creation POST sends `{ name, iconAssetId, pageIds }`, with `X-CSRF-Token` and `Idempotency-Key`. Name is trimmed and 1–200 characters; page IDs are unique existing memberships. Return 201 for creation or 200 for an exact retry with `{ item, pageIds, catalogRevision }`; `item` includes manual provenance and override metadata. Save the request fingerprint/receipt atomically so retrying the same key cannot allocate another identity or duplicate memberships, even if its staged asset was already promoted. A reused key with different fields returns 409. Preview keeps uncertain requests and keys in form memory until a receipt is received.
+
 Reorder input is `orderedItemIds` plus `expectedVersion` for that page. Require every current member exactly once, with no missing, duplicate or foreign item. Membership changes and competing reorder saves invalidate the expected revision and return 409. Apply slots atomically without transient unique-slot collisions. Return the resulting order/version; preserve canonical IDs, other pages and approved credits. Unauthorized writes are rejected using the same session/CSRF rules as review.
+
+The order receipt is `{ page, catalogRevision }`; `page` has complete public page fields plus its new `version` and `orderOrigin: manual`, and exactly the requested ordered IDs. `expectedVersion` is the saved opaque page version. A conflict reloads the complete private catalog; clients must review the latest membership/order before saving another permutation. Failed saves must not publish a partial order.
 
 Creation/order writes invalidate the public catalog revision and bot autocomplete cache. Reads include manual items without game IDs. Uploaded assets live outside the Docker image and survive restarts/upgrades. Catalog action auditing and manual override/source reconciliation are distinct from submission review auditing.
 
-Only the foundation endpoints listed at the top are implemented. These routes and fields are planned in #26, #27, #28, #30 and #31.
+Only the foundation endpoints listed at the top are implemented. Frontend consumers are in #8/#28/#31; live routes and persistence remain #4/#7/#26/#27/#30.
 
 ## Sources checked for platform constraints
 

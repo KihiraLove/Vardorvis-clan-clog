@@ -18,7 +18,7 @@ Choose **Show sample XP** to review Attack `18.34m`, Fishing `4.40m` and Sailing
 
 ## Admin preview and refresh
 
-Navigate with **Admin** or the bottom import link, keeping preview mode enabled:
+Navigate through **Admin → XP imports** or the bottom import link, keeping preview mode enabled:
 
 1. At `/admin/xp?preview=1`, enter `https://wiseoldman.net/competitions/1001` (Attack) or `https://wiseoldman.net/competitions/1002` (Fishing/Sailing).
 2. Preview the complete competitor rows and each skill's recorded-before, after-refresh and change values. Previewing adds no credit.
@@ -45,3 +45,5 @@ npm run test:e2e -w @clog/web
 Node tests cover exact formatting, input/payload validation, conditional snapshots, revision consistency, aborted reads, CSRF/idempotency request shapes and sample-ledger reconciliation. Six additional Chromium scenarios cover skills/icons, keyboard/hover/touch, a 320-pixel mobile viewport, member/competitor search, initial/unchanged/incremental/multi-skill imports, live failures/recovery, authorization, negative corrections and stale previews. Existing collection-log scenarios remain in the same suite.
 
 CI uploads `xp-desktop.png`, `xp-mobile.png` and `xp-admin.png` in the `frontend-browser-review` artifact, alongside collection-log captures and any failure traces. These are review captures, not approved pixel baselines. Real WOM imports, database concurrency/corrections, rename reconciliation, OAuth/CSRF enforcement and live end-to-end acceptance remain backend/integration work. No task is closed automatically.
+
+The shared admin navigation now links Submissions, Catalog items and XP imports. Preview sign-out in the submission/catalog area also denies the XP import form for that SPA session; reloading starts a fresh signed-in sample session. See the [admin review guide](admin-frontend-review.md) for the related frontend work in #8/#31.

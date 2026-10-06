@@ -1,4 +1,4 @@
-import rawCatalog from './catalog.json';
+import rawCatalog from './catalog.json' with { type: 'json' };
 import { parseCatalog, type Collections, type Credit } from '../model.ts';
 
 export const previewCatalog = parseCatalog(rawCatalog);

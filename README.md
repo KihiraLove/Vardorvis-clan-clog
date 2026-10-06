@@ -4,11 +4,11 @@ Monorepo for a public OSRS collection log, an admin submission queue, a Discord 
 
 ## Current state
 
-This branch adds the **collection-log and clan XP frontends** to the project foundation. The full catalog, backend feature routes and release approval remain pending.
+This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. The full catalog, backend feature routes and release approval remain pending.
 
-Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and hardcore presentation, accessible item menus; a separate RuneScape-style skill XP page with million labels, exact tooltips, member/competition results and an admin preview/apply/history interface; ETag-aware public API adapters, explicit sample preview modes, and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
+Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and hardcore presentation, accessible item menus; a separate RuneScape-style skill XP page with million labels, exact tooltips, member/competition results and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
 
-Planned: complete item/page catalog and assets, final reference-approved pixel matching, Discord submission persistence, Discord admin OAuth, review UI/API, end-to-end hardcore claim persistence/review, admin-imported Wise Old Man competition XP, admin item creation with durable icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
+Planned: complete item/page catalog and assets, final reference-approved pixel matching, Discord submission persistence, Discord admin OAuth, transactional review API, end-to-end hardcore claim persistence/review, Wise Old Man import persistence, durable admin-created items/icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
 ## Workspace
 
@@ -51,6 +51,8 @@ Open `http://127.0.0.1:5173/?preview=1`. The labelled sample catalog starts all 
 
 Open `http://127.0.0.1:5173/xp?preview=1` for the zero-initialized skill XP tracker. Show sample XP, hover/focus/tap for exact values, and use Admin to preview/apply competition fixtures or refresh incremental gains. See the [XP review guide](docs/xp-frontend-review.md). XP-02 #28 is also assigned to KihiraLove and remains open. Live XP imports and authenticated sessions still need #27/#4; preview never changes clan data.
 
+Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` for submission review, item creation and page ordering. Site navigation shares the in-memory preview ledger, so approvals and new items appear in the public preview. Reload resets it. The [admin review guide](docs/admin-frontend-review.md) covers the steps and backend boundaries. ADMIN-01 #8 and ADMIN-02 #31 are assigned to KihiraLove and remain open for manual review in the same draft PR #33.
+
 ## Documentation
 
 - [Requirements and product behavior](docs/requirements.md)
@@ -61,6 +63,7 @@ Open `http://127.0.0.1:5173/xp?preview=1` for the zero-initialized skill XP trac
 - [Environment setup](docs/environment.md)
 - [CI/CD, self-hosting, backups and rollback](docs/deployment.md)
 - [Testing and completion gates](docs/testing.md)
+- [Admin frontend review](docs/admin-frontend-review.md)
 - [Architecture decisions](docs/decisions/001-foundation.md)
 - [Contribution workflow](CONTRIBUTING.md)
 

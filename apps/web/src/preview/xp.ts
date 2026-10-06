@@ -14,6 +14,13 @@ import {
 import { XpRequestError } from '../xp-api.ts';
 
 export class PreviewXpClient implements XpClient {
+  private readonly getSession:
+    ((signal: AbortSignal) => Promise<AdminSession | null>) | undefined;
+  constructor(
+    getSession?: (signal: AbortSignal) => Promise<AdminSession | null>,
+  ) {
+    this.getSession = getSession;
+  }
   private revision = 0;
   private sourceVersion = 0;
   private stored = new Map<number, CompetitionDetail>();
@@ -112,7 +119,10 @@ export class PreviewXpClient implements XpClient {
       detail,
     });
   }
-  async session(): Promise<AdminSession> {
+  async session(
+    signal = new AbortController().signal,
+  ): Promise<AdminSession | null> {
+    if (this.getSession) return this.getSession(signal);
     return { csrfToken: 'preview-only', displayName: 'Preview admin' };
   }
   async preview(

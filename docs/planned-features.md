@@ -84,6 +84,8 @@ Public reads use stored results, with pagination/numeric sorting without droppin
 
 ## Admin-created items and page ordering
 
+The frontend for #8/#31 is available for review in draft PR #33, with a shared in-memory preview and validated HTTP adapter. See [admin frontend review](admin-frontend-review.md). Live authorization, database transactions, durable icons and source reconciliation remain backend work in #4/#7/#30/#10; the operational requirements below are still launch gates.
+
 Admins can maintain the catalog when OSRS receives new items. The Add item form has three required inputs:
 
 | Input   | Behavior                                                                          |
