@@ -1,0 +1,150 @@
+{
+  "sourceRepository": "runelite/runelite",
+  "sourceCommit": "ddd0669ef4d7494fd420cb507e3c1fa62bab8023",
+  "assets": [
+    {
+      "file": "agility.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/agility.png",
+      "sourceBlob": "dab3b961fb487a596e7e4be7d1aaa35f9928e73e",
+      "sha256": "c4153604e77933977db50004caabbd91faeee11e18bdcf0e7a4ba0e982b48dc4"
+    },
+    {
+      "file": "attack.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/attack.png",
+      "sourceBlob": "aac38ea675ccdb01cce1bc70c6b9e0c2f1436f4e",
+      "sha256": "99b8e823a81a948c4c6cf9e373d1d9db450d49be3002149ae446f451e36be0e2"
+    },
+    {
+      "file": "construction.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/construction.png",
+      "sourceBlob": "5e9344305b28f747c4cabb46f58f47dd9b6921b1",
+      "sha256": "b1c762d4d2d33f5c9e204a96cda9ba1e2c579a3fda7d431ae4bba88c32f8ce9e"
+    },
+    {
+      "file": "cooking.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/cooking.png",
+      "sourceBlob": "5cb32bbd267647aaa0c52c4f09dbfafd48591f27",
+      "sha256": "4b25b7e634a1dd9c653f98888c53a9619c223b169857038dfebe16d9c04b9612"
+    },
+    {
+      "file": "crafting.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/crafting.png",
+      "sourceBlob": "287303e8e94d68de407b61347c092550b02929b3",
+      "sha256": "5ff0382c5a4ae94ae37b46d3d6a8b28f8782f373a136a702f8aff4103bd28cc1"
+    },
+    {
+      "file": "defence.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/defence.png",
+      "sourceBlob": "33b3cbec4a3b3c876d39699573b161b9b0a364af",
+      "sha256": "10882312763ce8f7aa392019c895dcbae574650848b2470e656337cecd9cef5a"
+    },
+    {
+      "file": "farming.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/farming.png",
+      "sourceBlob": "b62d91b7a82908c87cef142645d9e69561302b7e",
+      "sha256": "6806c14f208d3a4b46a82319dfcf523264053b78995d0f26a90dc92d8d9ccb9d"
+    },
+    {
+      "file": "firemaking.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/firemaking.png",
+      "sourceBlob": "913285c23d149328dbd4cb27771a8be5fbe18df9",
+      "sha256": "949c6132c61cd87563842e37263ede2834af21422f814e700947b5e6f2baf2fb"
+    },
+    {
+      "file": "fishing.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/fishing.png",
+      "sourceBlob": "2de4b8df514fdada4dffe24cd7d3a5d2139ca3c0",
+      "sha256": "32021e71d58cb511f38288d0e48b42499032a8a48313657391b383e1ae1efff9"
+    },
+    {
+      "file": "fletching.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/fletching.png",
+      "sourceBlob": "89e9917f0879f5a81eceb7bcf9fbdaba55283bc4",
+      "sha256": "65ec0ff21aa2d0824774255110ee588a31c0fe4f29327d6a3c7b630f75a83809"
+    },
+    {
+      "file": "herblore.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/herblore.png",
+      "sourceBlob": "15e0824dfd4b6a9f7faf5a05fb796e78f255b73c",
+      "sha256": "0e8cda9a077b65f0f93db035511c068081b508ce8f24837f41bca13ca55351e6"
+    },
+    {
+      "file": "hitpoints.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/hitpoints.png",
+      "sourceBlob": "a62bf032b43eb5d97079500c0098cf7907591904",
+      "sha256": "68120e43a4a9ac26e64a84fc229b17309431d88b11f5bd52a8e7337ef904fd42"
+    },
+    {
+      "file": "hunter.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/hunter.png",
+      "sourceBlob": "a230d1dae5a5637481de9127b3604889557aa593",
+      "sha256": "4329ae2927b3c997207c406e26371b4294be2c15b2cddd2f16e7b7e0e3d614ac"
+    },
+    {
+      "file": "magic.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/magic.png",
+      "sourceBlob": "9870c674e436843dcb085e1c065c99c5051d7ee7",
+      "sha256": "8971a2eb98a219e7b2e3df701b6c3d6b427eecef4ea5434dd76a0f67cce2212c"
+    },
+    {
+      "file": "mining.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/mining.png",
+      "sourceBlob": "0e1bf42dace16521cb2ed44372a1e11b0cb93847",
+      "sha256": "1630b253b45edcc2bc6d49ce9c191ee9d3dfda33b6f1279c007c5dc0cec66dbc"
+    },
+    {
+      "file": "prayer.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/prayer.png",
+      "sourceBlob": "4200088fdd994d11da1b7bc734b15d0ce8cf2a8b",
+      "sha256": "25c3c8b0ca0d640266e828be96b33f40a585b70c2dc27931429cd6d45a3895be"
+    },
+    {
+      "file": "ranged.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/ranged.png",
+      "sourceBlob": "62a70c7af11ad8228111604b4ed3858ec146feb8",
+      "sha256": "075456d1088ed45c359efd91421fbfdfd3ddfcf00fe34a4e57ca3164d601475b"
+    },
+    {
+      "file": "runecraft.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/runecraft.png",
+      "sourceBlob": "a619372c9d52011601a1d616e0f3ef5182eb0461",
+      "sha256": "346f9c5491af47571110b6d8c48cb85b56604ebe9a23025bc08c9d33023e3e76"
+    },
+    {
+      "file": "sailing.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/sailing.png",
+      "sourceBlob": "0915b4791cba301a0ae14796cd14dce856efb61c",
+      "sha256": "88d2a2137a92bcc5af49d0097aecbaa72758725162f24952a6bbf7bd1fe7fa72"
+    },
+    {
+      "file": "slayer.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/slayer.png",
+      "sourceBlob": "cd454c3956cea4b004a8a6bc43bdb3a09a9e0ac9",
+      "sha256": "b70566ce572dc24173f5bceb0f8076fa105b1105b5b17e259b68f849d251b4a1"
+    },
+    {
+      "file": "smithing.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/smithing.png",
+      "sourceBlob": "e5cd61653520c61a886d1ba98848bf6985542f3b",
+      "sha256": "d896406367d9dc431202f261dee96199b5b347f896e8735e249b9657966d3774"
+    },
+    {
+      "file": "strength.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/strength.png",
+      "sourceBlob": "f738fda92bd644f61fdcff88dc3a9d13869aae46",
+      "sha256": "ebf522dd3a73e62901c646a0d4cc1cfe60ae0eb849910dd3a6be175851d251fb"
+    },
+    {
+      "file": "thieving.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/thieving.png",
+      "sourceBlob": "af01b254af60bc165dfb8d83850e5723248cc760",
+      "sha256": "440dc43e971ef62914643be8b77ef04c50e3bdd5fa22f964070bd75ccd284ddd"
+    },
+    {
+      "file": "woodcutting.png",
+      "sourcePath": "runelite-client/src/main/resources/skill_icons/woodcutting.png",
+      "sourceBlob": "ec966d8eacbda194aafbe85f21ce7d24ef162070",
+      "sha256": "1c081a351d04d66d80820cc018c9702c1a41dd40d82146cc398932e831d9b2ae"
+    }
+  ]
+}

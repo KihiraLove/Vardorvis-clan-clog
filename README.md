@@ -4,11 +4,11 @@ Monorepo for a public OSRS collection log, an admin submission queue, a Discord 
 
 ## Current state
 
-This commit delivers the **project foundation and development plan**, not the finished collection log.
+This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. The full catalog, backend feature routes and release approval remain pending.
 
-Implemented: npm workspaces, React/Vite starter, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
+Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and hardcore presentation, accessible item menus; a separate RuneScape-style skill XP page with million labels, exact tooltips, member/competition results and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
 
-Planned: complete item/page catalog and assets, pixel-matched OSRS UI, collection tooltips, Discord submission persistence, Discord admin OAuth, review UI/API, hardcore credit styling, admin-imported Wise Old Man competition XP, admin item creation with durable icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
+Planned: complete item/page catalog and assets, final reference-approved pixel matching, Discord submission persistence, Discord admin OAuth, transactional review API, end-to-end hardcore claim persistence/review, Wise Old Man import persistence, durable admin-created items/icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
 ## Workspace
 
@@ -35,9 +35,23 @@ npm run validate
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 ```
 
-Open `http://localhost:8088`. The starter page describes the current foundation stage. The local override builds images rather than pulling GHCR. The placeholder `IMAGE_TAG` in `.env` is sufficient for local builds; a real published SHA tag is required for production.
+Open `http://localhost:8088`. The default page attempts the planned public catalog/collections API. The foundation API still lacks those endpoints, so it shows an unavailable state with an explicit frontend-preview option. The local override builds images rather than pulling GHCR. The placeholder `IMAGE_TAG` in `.env` is sufficient for local builds; a real published SHA tag is required for production.
 
 For host-run development, see [environment setup](docs/environment.md). The PostgreSQL integration test requires `TEST_DATABASE_URL`; it is mandatory in GitHub CI and explicitly skipped when absent locally.
+
+## Review the frontend without a database
+
+```bash
+npm ci
+npm run build -w @clog/domain
+npm run dev:web
+```
+
+Open `http://127.0.0.1:5173/?preview=1`. The labelled sample catalog starts all uncollected; the review selector can show ordinary or mixed hardcore example credits without changing clan data. Use the [frontend review guide](docs/frontend-review.md) for screenshots, browser checks and the remaining work in UI-01 #3 / UI-02 #9. These issues stay open for manual review.
+
+Open `http://127.0.0.1:5173/xp?preview=1` for the zero-initialized skill XP tracker. Show sample XP, hover/focus/tap for exact values, and use Admin to preview/apply competition fixtures or refresh incremental gains. See the [XP review guide](docs/xp-frontend-review.md). XP-02 #28 is also assigned to KihiraLove and remains open. Live XP imports and authenticated sessions still need #27/#4; preview never changes clan data.
+
+Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` for submission review, item creation and page ordering. Site navigation shares the in-memory preview ledger, so approvals and new items appear in the public preview. Reload resets it. The [admin review guide](docs/admin-frontend-review.md) covers the steps and backend boundaries. ADMIN-01 #8 and ADMIN-02 #31 are assigned to KihiraLove and remain open for manual review in the same draft PR #33.
 
 ## Documentation
 
@@ -49,6 +63,7 @@ For host-run development, see [environment setup](docs/environment.md). The Post
 - [Environment setup](docs/environment.md)
 - [CI/CD, self-hosting, backups and rollback](docs/deployment.md)
 - [Testing and completion gates](docs/testing.md)
+- [Admin frontend review](docs/admin-frontend-review.md)
 - [Architecture decisions](docs/decisions/001-foundation.md)
 - [Contribution workflow](CONTRIBUTING.md)
 

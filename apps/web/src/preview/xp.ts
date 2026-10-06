@@ -1,0 +1,225 @@
+import {
+  competitionUrl,
+  zeroTotals,
+  type AdminSession,
+  type ApplyResult,
+  type CompetitionDetail,
+  type ImportEntry,
+  type ImportPreview,
+  type Member,
+  type SkillId,
+  type XpClient,
+  type XpSnapshot,
+} from '../xp-model.ts';
+import { XpRequestError } from '../xp-api.ts';
+
+export class PreviewXpClient implements XpClient {
+  private readonly getSession:
+    ((signal: AbortSignal) => Promise<AdminSession | null>) | undefined;
+  constructor(
+    getSession?: (signal: AbortSignal) => Promise<AdminSession | null>,
+  ) {
+    this.getSession = getSession;
+  }
+  private revision = 0;
+  private sourceVersion = 0;
+  private stored = new Map<number, CompetitionDetail>();
+  private previews = new Map<string, ImportPreview>();
+  private receipts = new Map<string, { token: string; result: ApplyResult }>();
+  private imports: ImportEntry[] = [];
+  private source(id: number): CompetitionDetail {
+    const attack = id === 1001;
+    if (![1001, 1002].includes(id))
+      throw new Error(
+        'Use sample competition 1001 (Attack) or 1002 (Fishing and Sailing).',
+      );
+    return {
+      competition: {
+        id,
+        title: attack ? 'Vardorvis Attack week' : 'Vardorvis skilling weekend',
+        sourceUrl: 'https://wiseoldman.net/competitions/' + id,
+        skills: attack ? ['attack'] : ['fishing', 'sailing'],
+        startsAt: '2026-10-01T00:00:00Z',
+        endsAt: '2026-10-08T00:00:00Z',
+        importedAt: new Date().toISOString(),
+      },
+      participants: [
+        {
+          playerId: 1,
+          displayName: 'KihiraVD',
+          gains: attack
+            ? { attack: String(12345678 + this.sourceVersion * 1250000) }
+            : { fishing: '3200123', sailing: '4000000' },
+        },
+        {
+          playerId: 2,
+          displayName: 'Oakheart',
+          gains: attack
+            ? { attack: '6000000' }
+            : { fishing: '1200000', sailing: '2500000' },
+        },
+        {
+          playerId: 3,
+          displayName: 'Iron Fern',
+          gains: attack
+            ? { attack: '0' }
+            : { fishing: '0', sailing: '1000000' },
+        },
+        {
+          playerId: 4,
+          displayName: 'New recruit',
+          gains: attack ? { attack: null } : { fishing: null, sailing: null },
+        },
+      ],
+    };
+  }
+  private totals() {
+    const totals = zeroTotals();
+    for (const detail of this.stored.values())
+      for (const row of detail.participants)
+        for (const id of detail.competition.skills)
+          if (row.gains[id] !== null && row.gains[id] !== undefined)
+            totals[id] = String(BigInt(totals[id]) + BigInt(row.gains[id]!));
+    return totals;
+  }
+  async load(
+    skill: SkillId,
+    competitionId: number | undefined,
+    signal: AbortSignal,
+  ): Promise<XpSnapshot> {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const matching = [...this.stored.values()].filter((d) =>
+      d.competition.skills.includes(skill),
+    );
+    const members = new Map<number, Member>();
+    for (const detail of matching)
+      for (const row of detail.participants) {
+        const previous = members.get(row.playerId),
+          gained = row.gains[skill] ?? null;
+        members.set(row.playerId, {
+          playerId: row.playerId,
+          displayName: row.displayName,
+          xp:
+            gained === null
+              ? (previous?.xp ?? null)
+              : String(BigInt(previous?.xp ?? '0') + BigInt(gained)),
+        });
+      }
+    const detail =
+      matching.find((d) => d.competition.id === competitionId) ?? matching[0];
+    return structuredClone({
+      overview: {
+        revision: 'preview-' + this.revision,
+        updatedAt: this.imports[0]?.importedAt ?? null,
+        totals: this.totals(),
+        competitions: [...this.stored.values()].map((d) => d.competition),
+      },
+      skill,
+      members: [...members.values()],
+      detail,
+    });
+  }
+  async session(
+    signal = new AbortController().signal,
+  ): Promise<AdminSession | null> {
+    if (this.getSession) return this.getSession(signal);
+    return { csrfToken: 'preview-only', displayName: 'Preview admin' };
+  }
+  async preview(
+    url: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ): Promise<ImportPreview> {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const detail = this.source(competitionUrl(url).id),
+      before = this.totals();
+    const previous = this.stored.get(detail.competition.id);
+    const preview: ImportPreview = {
+      ...detail,
+      previewToken: crypto.randomUUID(),
+      expectedRevision: 'preview-' + this.revision,
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      changes: detail.competition.skills.map((skill) => {
+        const sum = (rows: CompetitionDetail['participants']) =>
+          rows.reduce((total, p) => total + BigInt(p.gains[skill] ?? '0'), 0n);
+        const change =
+          sum(detail.participants) - sum(previous?.participants ?? []);
+        return {
+          skill,
+          before: before[skill],
+          after: String(BigInt(before[skill]) + change),
+          change: String(change),
+        };
+      }),
+      warnings: ['Sample data only. No Wise Old Man or clan data is changed.'],
+    };
+    this.previews.set(preview.previewToken, preview);
+    return structuredClone(preview);
+  }
+  async apply(
+    preview: ImportPreview,
+    _csrf: string,
+    requestKey: string,
+    signal: AbortSignal,
+  ): Promise<ApplyResult> {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const receipt = this.receipts.get(requestKey);
+    if (receipt) {
+      if (receipt.token !== preview.previewToken) throw new XpRequestError(409);
+      return receipt.result;
+    }
+    const current = this.previews.get(preview.previewToken);
+    if (
+      !current ||
+      current.expectedRevision !== 'preview-' + this.revision ||
+      Date.parse(current.expiresAt) <= Date.now()
+    )
+      throw new XpRequestError(409);
+    const outcome =
+      current.changes.some((c) => BigInt(c.change) !== 0n) ||
+      !this.stored.has(current.competition.id)
+        ? 'applied'
+        : 'unchanged';
+    this.stored.set(
+      current.competition.id,
+      structuredClone({
+        competition: current.competition,
+        participants: current.participants,
+      }),
+    );
+    if (outcome === 'applied') this.revision++;
+    const result = { outcome, revision: 'preview-' + this.revision } as const;
+    this.receipts.set(requestKey, { token: current.previewToken, result });
+    this.imports.unshift({
+      id: crypto.randomUUID(),
+      competitionId: current.competition.id,
+      title: current.competition.title,
+      actorName: 'Preview admin',
+      importedAt: new Date().toISOString(),
+      outcome,
+      changes: current.changes,
+    });
+    return result;
+  }
+  async history(): Promise<ImportEntry[]> {
+    return structuredClone(this.imports);
+  }
+  advance() {
+    this.sourceVersion++;
+  }
+  async samples() {
+    for (const id of [1001, 1002]) {
+      const preview = await this.preview(
+        'https://wiseoldman.net/competitions/' + id,
+        'preview-only',
+        new AbortController().signal,
+      );
+      await this.apply(
+        preview,
+        'preview-only',
+        crypto.randomUUID(),
+        new AbortController().signal,
+      );
+    }
+  }
+}

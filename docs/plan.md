@@ -4,6 +4,8 @@ The repository foundation is delivered first: workspace/build scaffolds, initial
 
 Tracking epic: [#15](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/15). Every task has concrete acceptance criteria and explicit blocking issue links. All feature tasks are initially open; do not treat the scaffolds as completed features.
 
+Draft [PR #33](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/33) contains frontend work for #3/#9/#28 and now #8/#31. These tasks are assigned to KihiraLove and remain open for manual review. The public/XP/admin review guides describe explicit preview modes; dependency APIs, durable storage and release acceptance remain pending. Main is unchanged.
+
 ## Issue index
 
 | Issue                                                              | Workstream | Phase                 | Priority | Depends on                               |
