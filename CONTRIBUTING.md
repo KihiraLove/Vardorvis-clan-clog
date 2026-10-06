@@ -9,3 +9,5 @@ Shared item identities belong in the domain/database packages; do not add separa
 Never commit `.env`, bot/OAuth/session credentials, production database dumps or private proof data. New environment settings must update `.env.example`, environment docs, validation and Compose as appropriate. Browser bundles must never receive backend secrets.
 
 Never modify a migration already applied to a deployed database. Add a new migration, keep old-image compatibility where possible, and describe backup/recovery implications in the PR. Green foundation checks do not replace feature acceptance criteria.
+
+For dependency PRs, follow the [dependency update policy and review notes](docs/dependency-updates.md). Weekly proposals need stable upstream releases, compatible peers and CI that exercises the changed workflow.

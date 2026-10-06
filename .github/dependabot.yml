@@ -2,13 +2,48 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
-    schedule: { interval: weekly }
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Etc/UTC
+    cooldown:
+      default-days: 14
+    # Application/toolchain majors need a separate migration review.
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
     groups:
       npm-minor-patch:
+        patterns: ['*']
         update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Etc/UTC
+    cooldown:
+      default-days: 14
+    # Keep stable action majors visible for runner/security maintenance.
+    # They remain individual PRs requiring human review.
+    groups:
+      actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+
   - package-ecosystem: docker
     directory: /
-    schedule: { interval: weekly }
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Etc/UTC
+    cooldown:
+      default-days: 14
+    # Keep Node images on the supported LTS major.
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
