@@ -32,8 +32,8 @@ function IconPicker({
     setError(undefined);
     setSize(undefined);
     onValid(undefined);
+    setChecking(Boolean(file));
     if (!file) return;
-    setChecking(true);
     void (async () => {
       await validateIconFile(file);
       const bitmap = await createImageBitmap(file);

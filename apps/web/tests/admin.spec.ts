@@ -250,6 +250,7 @@ test('manual item creation shares one identity, keyboard and drag order affect o
     'created. Every selected page starts uncollected.',
   );
   const rows = page.locator('.page-order-list li');
+  await expect(rows.last()).toContainText('New clan drop');
   const id = Number(await rows.last().getAttribute('data-item-id'));
   const count = await rows.count();
   const added = page.locator(`.page-order-list li[data-item-id="${id}"]`);

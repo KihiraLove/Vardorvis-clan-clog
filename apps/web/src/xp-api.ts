@@ -64,7 +64,7 @@ export class LiveXpClient implements XpClient {
       ...options,
       signal,
       credentials: 'same-origin',
-      cache: 'no-cache',
+      cache: staged ? 'no-cache' : 'no-store',
       headers: {
         ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}),
         ...options.headers,

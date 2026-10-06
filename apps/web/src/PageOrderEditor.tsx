@@ -67,9 +67,10 @@ export function PageOrderEditor({
         Drag an item, use its move buttons, or focus a row and press Alt + ↑ /
         ↓. Save to publish the full arrangement.
       </p>
-      <label>
-        Collection-log page
+      <div className="order-page-picker">
+        <label htmlFor="order-page">Collection-log page</label>
         <select
+          id="order-page"
           disabled={action.busy || dirty}
           value={pageId}
           onChange={(event) => {
@@ -85,7 +86,7 @@ export function PageOrderEditor({
             </option>
           ))}
         </select>
-      </label>
+      </div>
       {saved && (
         <p className="admin-note">
           {saved.itemIds.length} items ·{' '}

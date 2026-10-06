@@ -168,6 +168,15 @@ test('page-order writes send the complete permutation/revision and reject mismat
 });
 
 test('missing/forbidden admin sessions and stale writes have explicit outcomes; logout accepts 204', async () => {
+  const fixture = await adminFixtures();
+  const authenticated = new LiveAdminClient(async (_path, options) => {
+    assert.equal(options?.cache, 'no-store');
+    return json(fixture.session);
+  });
+  assert.equal(
+    (await authenticated.session(signal()))?.displayName,
+    'KihiraVD',
+  );
   const unauthorized = new LiveAdminClient(
     async () => new Response(null, { status: 401 }),
   );

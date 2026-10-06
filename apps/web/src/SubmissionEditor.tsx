@@ -267,9 +267,10 @@ export function SubmissionEditor({
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
-            <label>
-              Canonical item
+            <div>
+              <label htmlFor="canonical-item">Canonical item</label>
               <select
+                id="canonical-item"
                 required
                 size={5}
                 value={draft.itemId || ''}
@@ -284,7 +285,7 @@ export function SubmissionEditor({
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
             <label>
               Collector name
               <input

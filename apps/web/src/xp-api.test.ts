@@ -124,6 +124,7 @@ test('preview requests canonicalize the source and carry CSRF; applies use the v
     'csrf',
   );
   for (const request of requests.slice(1)) {
+    assert.equal(request.options?.cache, 'no-store');
     assert.equal(
       (request.options!.headers as Record<string, string>)['Idempotency-Key'],
       'same-request',

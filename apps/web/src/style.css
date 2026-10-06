@@ -1263,7 +1263,7 @@ main {
   margin-bottom: 15px;
 }
 .admin-fieldset label,
-.page-order-editor > label {
+.order-page-picker label {
   display: block;
   margin: 12px 0;
   color: #c8bda2;

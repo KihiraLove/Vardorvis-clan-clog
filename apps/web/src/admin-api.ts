@@ -259,6 +259,7 @@ export class LiveAdminClient implements AdminClient {
     if (
       page.id !== pageId ||
       JSON.stringify(itemIds) !== JSON.stringify(ids) ||
+      page.orderOrigin !== 'manual' ||
       page.version === version
     )
       throw new Error('Unexpected saved page order.');
