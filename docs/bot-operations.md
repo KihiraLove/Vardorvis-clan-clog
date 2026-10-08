@@ -21,8 +21,9 @@ Do not register or overwrite commands during normal container startup.
 
 1. Invite the bot application to the selected guild with `bot` and `applications.commands` scopes.
 2. Set `DISCORD_APPLICATION_ID` to the Discord application's numeric ID and `DISCORD_TEST_GUILD_ID` to an isolated test guild ID.
-3. Build first, then explicitly run `npm run register:test -w @clog/bot` with those variables and the bot token in the environment. On Compose, use `docker compose --profile bot run --rm -e DISCORD_TEST_GUILD_ID=... bot node apps/bot/dist/register.js test`.
-4. Verify autocomplete and private receipts in the test guild. Once approved for the production clan guild, explicitly run `npm run register:guild -w @clog/bot` with `DISCORD_GUILD_ID` (or run the container with `node apps/bot/dist/register.js guild`).
+3. For a real test submission, run the **test instance** of the bot and intake API with `DISCORD_GUILD_ID` set to that same test guild. Merely registering a command in a different guild does not bypass the runtime guild restriction.
+4. Build first, then explicitly run `npm run register:test -w @clog/bot` with those variables and the bot token in the environment. On Compose, use `docker compose --profile bot run --rm -e DISCORD_TEST_GUILD_ID=... bot node apps/bot/dist/register.js test`.
+5. Verify autocomplete and private receipts in the test guild. Once approved for the production clan guild, explicitly run `npm run register:guild -w @clog/bot` with `DISCORD_GUILD_ID` (or run the container with `node apps/bot/dist/register.js guild`).
 
 The registration script uses the per-command Discord POST **upsert**, not a bulk guild-command PUT. It therefore does not remove other commands, and it does not run on container restart.
 
