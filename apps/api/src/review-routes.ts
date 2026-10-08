@@ -71,35 +71,3 @@ export function reviewRoutes(app:FastifyInstance,store:ReviewStore,authorize:Aut
    });
  }
 }
-},
-    hardcore:{type:'boolean'},reason,
-   }},
- };
- app.patch<{Params:{id:string};Body:ReviewCorrection&{expectedVersion:number}}>(
-  '/api/v1/admin/submissions/:id',{onRequest:guard(true),schema:editSchema},
-  async req=>{
-   const actor=await authorize(req,true);
-   return store.mutate(req.params.id,req.body.expectedVersion,{
-    itemId:req.body.itemId,collectorName:req.body.collectorName,
-    collectedOn:req.body.collectedOn,hardcore:req.body.hardcore,
-    reason:req.body.reason,
-   },actor.id,actor.displayName);
-  });
- for(const action of ['approve','reject','revoke'] as const){
-  app.post<{Params:{id:string};Body:{expectedVersion:number;reason?:string}}>(
-   '/api/v1/admin/submissions/:id/'+action,{
-    onRequest:guard(true),
-    schema:{body:{type:'object',additionalProperties:false,
-     required:action==='approve'?['expectedVersion']:['expectedVersion','reason'],
-     properties:{expectedVersion:version,...(action==='approve'?{}:{reason})}}},
-   },async req=>{
-    const actor=await authorize(req,true);
-    const command:ReviewAction={
-     expectedVersion:req.body.expectedVersion,
-     action,...(action==='approve'?{}:{reason:req.body.reason}),
-    };
-    return store.mutate(req.params.id,command.expectedVersion,
-     command,actor.id,actor.displayName);
-   });
- }
-}
