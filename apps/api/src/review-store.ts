@@ -1,10 +1,11 @@
 /** Transactional review: one current approved credit per item/world, private audits. */
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { validCollectionDate, validProofUrl } from './intake.js';
 import { ApiError, type BackendStore } from './types.js';
 import type {
   ReviewAction,
+  ManualSubmissionInput,
   ReviewAudit,
   ReviewCorrection,
   ReviewStore,
@@ -14,6 +15,7 @@ import type {
 type Row = {
   id: string;
   version: number;
+  source: 'discord' | 'manual';
   itemId: number | null;
   rawItemText: string;
   collectorName: string;
@@ -25,7 +27,7 @@ type Row = {
   status: ReviewSubmission['status'];
 };
 const selection =
-  'id::text,version,item_id AS "itemId",raw_item_text AS "rawItemText",' +
+  'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",' +
   'collector_name AS "collectorName",to_char(collected_on,\'YYYY-MM-DD\') AS "collectedOn",' +
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
   'proof_url AS "proofUrl",hardcore,status';
@@ -105,6 +107,89 @@ export class PgReviewStore implements ReviewStore {
         orderOrigin: 'source' as const,
       })),
     };
+  }
+  /** Insert trusted manual claims under the same credit uniqueness and audit transaction. */
+  async createManual(
+    fields: ManualSubmissionInput,
+    actorId: string,
+    actorName: string,
+  ): Promise<ReviewSubmission> {
+    if (
+      !Number.isSafeInteger(fields.itemId) ||
+      fields.itemId <= 0 ||
+      typeof fields.collectorName !== 'string' ||
+      !fields.collectorName.trim() ||
+      fields.collectorName.trim().length > 80 ||
+      typeof fields.hardcore !== 'boolean' ||
+      typeof fields.approve !== 'boolean' ||
+      typeof fields.proofUrl !== 'string' && fields.proofUrl !== undefined ||
+      (fields.proofUrl && !validProofUrl(fields.proofUrl)) ||
+      typeof fields.reason !== 'string' && fields.reason !== undefined ||
+      (fields.reason?.trim().length ?? 0) > 1000
+    )
+      throw new ApiError(422, 'Invalid manual submission fields.');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const validItem = await client.query<{ name: string }>(
+        'SELECT name FROM items WHERE id=$1 AND active',
+        [fields.itemId],
+      );
+      if (validItem.rowCount !== 1)
+        throw new ApiError(422, 'Select an active catalog item.');
+      const now = (
+        await client.query<{ today: string }>(
+          "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",
+        )
+      ).rows[0]!.today;
+      if (!validCollectionDate(fields.collectedOn, now))
+        throw new ApiError(422, 'Collection date is invalid or in the future.');
+      const id = randomUUID();
+      const row = (
+        await client.query<Row>(
+          'INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,' +
+            'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
+            'reviewed_by,review_reason) VALUES($1,\'manual\',$2,$3,$4,$5,\'admin\',' +
+            '$6,$7,$8,CASE WHEN $8=\'approved\' THEN now() ELSE NULL END,' +
+            'CASE WHEN $8=\'approved\' THEN $9 ELSE NULL END,$10) RETURNING ' +
+            selection,
+          [
+            id,
+            validItem.rows[0]!.name,
+            fields.itemId,
+            fields.collectorName.trim(),
+            fields.collectedOn,
+            fields.proofUrl?.trim() ?? '',
+            fields.hardcore,
+            fields.approve ? 'approved' : 'pending',
+            actorId,
+            fields.reason?.trim() || null,
+          ],
+        )
+      ).rows[0]!;
+      const created = view(row);
+      await client.query(
+        'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,' +
+          'reason,old_values,new_values) VALUES($1,$2,$3,\'create\',$4,$5,$6)',
+        [
+          id,
+          actorId,
+          actorName,
+          fields.reason?.trim() || null,
+          JSON.stringify(created),
+          JSON.stringify(created),
+        ],
+      );
+      await client.query('COMMIT');
+      return created;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      if (e && typeof e === 'object' && 'code' in e && e.code === '23505')
+        throw conflict();
+      throw e;
+    } finally {
+      client.release();
+    }
   }
   async queue(
     status: 'pending' | 'reviewed',
@@ -257,7 +342,7 @@ export class PgReviewStore implements ReviewStore {
             row.status !== 'pending' ||
             row.itemId === null ||
             !row.collectorName.trim() ||
-            !validProofUrl(row.proofUrl)
+            (row.source !== 'manual' && !validProofUrl(row.proofUrl))
           )
             throw new ApiError(
               422,

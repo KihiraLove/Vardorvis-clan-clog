@@ -2,6 +2,7 @@
 export interface ReviewSubmission {
   id: string;
   version: number;
+  source: 'discord' | 'manual';
   itemId: number | null;
   rawItemText: string;
   collectorName: string;
@@ -11,6 +12,15 @@ export interface ReviewSubmission {
   proofUrl: string;
   hardcore: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
+}
+export interface ManualSubmissionInput {
+  itemId: number;
+  collectorName: string;
+  collectedOn: string;
+  hardcore: boolean;
+  proofUrl?: string;
+  approve: boolean;
+  reason?: string;
 }
 export interface ReviewCorrection {
   itemId: number;
@@ -28,13 +38,14 @@ export interface ReviewAudit {
   id: string;
   actorName: string;
   at: string;
-  action: 'edit' | 'approve' | 'reject' | 'revoke';
+  action: 'create' | 'edit' | 'approve' | 'reject' | 'revoke';
   reason: string | null;
   before: ReviewSubmission;
   after: ReviewSubmission;
 }
 export interface ReviewStore {
   adminCatalog(): Promise<unknown>;
+  createManual(fields: ManualSubmissionInput, actorId: string, actorName: string): Promise<ReviewSubmission>;
   queue(
     status: 'pending' | 'reviewed',
     unmatched: boolean,
