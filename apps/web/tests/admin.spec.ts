@@ -675,3 +675,47 @@ test('live local admin session shows test indicator and no Discord sign-out', as
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
   await expect(page.locator('.submission-card')).toHaveCount(1);
 });
+
+test('admin preview can add a manual credit without a Discord claim', async ({ page }) => {
+  await page.goto('/admin?preview=1');
+  await page.getByRole('button', { name: 'Add manual submission' }).click();
+  await page.getByLabel('Search catalog items').fill('Virtus mask');
+  const catalog = await adminFixtures();
+  const maskId = catalog.catalog.items.find((item) => item.name === 'Virtus mask')!.id;
+  await page.getByLabel('Canonical item', { exact: true }).selectOption(String(maskId));
+  await page.getByLabel('Collector name', { exact: true }).fill('Manual tester');
+  await page.getByLabel('Collection date', { exact: true }).fill('2026-10-06');
+  await page.getByRole('button', { name: 'Create manual submission' }).click();
+  await expect(page.getByText('Manual submission created: approved.')).toBeVisible();
+  await expect(page.getByText('Manual tester', { exact: true }).first()).toBeVisible();
+});
+
+test('live admin shows a password form and submits a password without Discord OAuth', async ({ page }) => {
+  const fixture = await adminFixtures();
+  let authenticated = false;
+  let submittedPassword = '';
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/auth/session')
+      return route.fulfill({ json: authenticated ? fixture.session : { authenticated: false } });
+    if (path === '/api/v1/auth/login') {
+      submittedPassword = route.request().postDataJSON().password;
+      authenticated = true;
+      return route.fulfill({ json: { authenticated: true } });
+    }
+    if (path === '/api/v1/admin/settings')
+      return route.fulfill({ json: { revision: 'settings-1', hardcoreEnabled: false } });
+    if (path === '/api/v1/admin/catalog')
+      return route.fulfill({ json: fixture.catalog });
+    if (path === '/api/v1/admin/submissions')
+      return route.fulfill({ json: fixture.pending });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto('/admin');
+  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in with Discord' })).toHaveCount(0);
+  await page.getByLabel('Admin password').fill('browser-test-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Submissions' })).toBeVisible();
+  expect(submittedPassword).toBe('browser-test-password');
+});
