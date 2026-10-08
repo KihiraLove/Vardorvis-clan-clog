@@ -4,12 +4,17 @@ import Fastify from 'fastify';
 import type { AuthConfig, BotConfig } from './config.js';
 import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
+import { xpPublicRoutes } from './xp-routes.js';
+import { fetchWomCompetition } from './wom.js';
+import type { XpStore } from './xp-types.js';
 import { discordIdentify, type Identify } from './discord.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
   store?: BackendStore | undefined;
   auth?: AuthConfig | undefined;
   bot?: BotConfig | undefined;
+  xp?: XpStore | undefined;
+  fetchWom?: typeof fetchWomCompetition;
   identify?: Identify;
   trustProxy?: false | string[];
   logger?: boolean;
@@ -103,6 +108,7 @@ export function createApp(
     return readSettings();
   });
   const store = options.store;
+  if (options.xp) xpPublicRoutes(app, options.xp);
   for (const resource of ['catalog', 'collections'] as const) {
     app.get('/api/v1/' + resource, async (request, reply) => {
       if (!store)
@@ -150,6 +156,8 @@ export function createApp(
       store,
       options.auth,
       options.identify ?? discordIdentify(options.auth),
+      options.xp,
+      options.fetchWom ?? fetchWomCompetition,
     );
   else {
     app.get('/api/v1/auth/session', async () => ({ authenticated: false }));

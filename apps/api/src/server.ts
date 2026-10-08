@@ -3,6 +3,7 @@ import pg from 'pg';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { PgStore } from './store.js';
+import { PgXpStore } from './xp-store.js';
 const config = readConfig();
 if ((config.auth || config.bot) && !process.env.DATABASE_URL)
   throw new Error(
@@ -20,7 +21,7 @@ const store = pool ? new PgStore(pool) : undefined;
 const app = createApp(
   store ? () => store.ready() : undefined,
   store ? () => store.settings() : undefined,
-  { store, ...config },
+  { store, xp: pool ? new PgXpStore(pool) : undefined, ...config },
 );
 app.addHook('onClose', async () => {
   await pool?.end();
