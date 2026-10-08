@@ -9,6 +9,10 @@ export interface AuthConfig {
   secret: string;
   secure: boolean;
 }
+export interface BotConfig {
+  token: string;
+  guildId: string;
+}
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!['true', 'false', undefined, ''].includes(env.AUTH_ENABLED))
     throw new Error('AUTH_ENABLED must be true or false');
@@ -27,9 +31,24 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     )
       throw new Error('TRUSTED_PROXY_CIDRS must contain IP addresses or CIDRs');
   }
+  const botToken = env.BOT_API_TOKEN?.trim() ?? '';
+  const botGuildId = env.DISCORD_GUILD_ID?.trim() ?? '';
+  if (!!botToken !== !!botGuildId)
+    throw new Error('BOT_API_TOKEN and DISCORD_GUILD_ID must be set together');
+  if (
+    botToken &&
+    (!/^[a-fA-F0-9]{64,}$/u.test(botToken) || !/^\d{17,20}$/u.test(botGuildId))
+  )
+    throw new Error(
+      'Bot token must be 32+ random bytes as hex and guild ID must be a Discord snowflake',
+    );
+  const bot: BotConfig | undefined = botToken
+    ? { token: botToken, guildId: botGuildId }
+    : undefined;
   if (env.AUTH_ENABLED !== 'true')
     return {
       auth: undefined,
+      bot,
       trustProxy: trusted.length ? trusted : (false as const),
     };
   const required = (name: string) => {
@@ -70,6 +89,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
     );
   return {
+    bot,
     auth: {
       origin: origin.origin,
       clientId,

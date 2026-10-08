@@ -1,13 +1,15 @@
 /** Public projections plus optional configured Discord auth; unavailable services fail closed. */
 import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
-import type { AuthConfig } from './config.js';
+import type { AuthConfig, BotConfig } from './config.js';
+import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
 import { discordIdentify, type Identify } from './discord.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
   store?: BackendStore | undefined;
   auth?: AuthConfig | undefined;
+  bot?: BotConfig | undefined;
   identify?: Identify;
   trustProxy?: false | string[];
   logger?: boolean;
@@ -50,7 +52,8 @@ export function createApp(
     reply.header('X-Content-Type-Options', 'nosniff');
     if (
       request.url.startsWith('/api/v1/auth/') ||
-      request.url.startsWith('/api/v1/admin/')
+      request.url.startsWith('/api/v1/admin/') ||
+      request.url.startsWith('/api/v1/bot/')
     )
       reply.header('Cache-Control', 'no-store');
   });
@@ -136,10 +139,11 @@ export function createApp(
     return {
       stage: store ? 'backend' : 'foundation',
       catalogReady,
-      submissionsEnabled: false,
+      submissionsEnabled: !!(store && options.bot),
       adminAuthEnabled: !!(store && options.auth),
     };
   });
+  if (store && options.bot) botRoutes(app, store, options.bot);
   if (store && options.auth)
     authRoutes(
       app,

@@ -21,7 +21,39 @@ export interface AdminIdentity {
 export interface StoredSession extends AdminIdentity {
   expiresAt: Date;
 }
+export interface BotSubmissionInput {
+  interactionId: string;
+  guildId: string;
+  actorDiscordId: string;
+  rawItemText: string;
+  itemId?: number;
+  collectorName: string;
+  proofUrl: string;
+  collectedOn?: string;
+  hardcore: boolean;
+}
+export interface BotReceipt {
+  submissionId: string;
+  interactionId: string;
+  status: 'pending';
+  submittedAt: string;
+  collectedOn: string;
+  dateSource: 'collector' | 'submission_default';
+  hardcore: boolean;
+  resolution: 'resolved' | 'needs_match';
+  itemId: number | null;
+  candidates: { id: number; name: string }[];
+  creditOccupied: boolean;
+}
 export interface BackendStore {
+  botItems(
+    query: string,
+    limit: number,
+  ): Promise<{ id: number; name: string }[]>;
+  submitClaim(
+    input: BotSubmissionInput,
+    payloadHash: string,
+  ): Promise<{ created: boolean; receipt: BotReceipt }>;
   ready(): Promise<void>;
   catalog(): Promise<CatalogData>;
   collections(): Promise<PublicCredit[]>;

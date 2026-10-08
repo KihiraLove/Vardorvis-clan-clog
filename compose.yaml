@@ -46,6 +46,8 @@ services:
       ADMIN_DISCORD_USER_IDS: ${ADMIN_DISCORD_USER_IDS:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
     security_opt: ['no-new-privileges:true']
