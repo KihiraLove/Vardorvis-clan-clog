@@ -8,6 +8,9 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthConfig } from './config.js';
 import type { Identify } from './discord.js';
+import { xpAdminRoutes } from './xp-routes.js';
+import type { XpStore } from './xp-types.js';
+import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -28,6 +31,8 @@ export function authRoutes(
   store: BackendStore,
   config: AuthConfig,
   identify: Identify,
+  xp?: XpStore,
+  fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
 ) {
   const sessionName = config.secure ? '__Host-clog-session' : 'clog-session';
   const stateName = config.secure ? '__Host-clog-oauth' : 'clog-oauth';
@@ -78,6 +83,7 @@ export function authRoutes(
         'Too many sign-in attempts. Try again in a minute.',
       );
   }
+  if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
   app.get('/api/v1/auth/discord', async (request, reply) => {
     await loginLimit(request);
     const state = nonce();

@@ -71,6 +71,14 @@ docker compose exec -T db createdb -U clog clog_test
 TEST_DATABASE_URL='postgresql://clog:YOUR_HEX_PASSWORD@127.0.0.1:5432/clog_test' npm test
 ```
 
+## Bot intake API
+
+[INTAKE-01](bot-intake.md) requires matching `BOT_API_TOKEN` and `DISCORD_GUILD_ID` settings for the API (and eventual bot adapter). Set a fresh 64+ hex-character secret from `openssl rand -hex 32`; both settings must be present together. Without them bot routes remain disabled. The API needs `DATABASE_URL` even when OAuth is off. The Discord gateway is implemented separately in [BOT-01 operations](bot-operations.md). The bot must also receive `DISCORD_BOT_TOKEN`; command registration is always a separate explicit operation.
+
+## XP tracker imports
+
+[XP-01](xp-import.md) uses the existing API PostgreSQL connection and OAuth admin session; no additional secrets are needed. After migration 005, `GET /api/v1/xp/tracker` serves zero until the first valid admin import via `/admin/xp`. The public page does not call WOM. See the import guide for safe source validation, previews and audit behavior.
+
 ## Discord setup
 
 Create one application in the Discord Developer Portal; register the exact OAuth callback URL, for the future bot workstream, create a bot and invite it only to the clan guild with `bot` and `applications.commands` scopes. Use the Guilds intent and no message-content privileged intent. Copy application/guild/user IDs as strings. Admin access comes from the application allowlist, not an arbitrary Discord nickname. Keep command registration separate from login/startup and validate in a test guild first.

@@ -47,6 +47,8 @@ services:
       ADMIN_DISCORD_USER_IDS: ${ADMIN_DISCORD_USER_IDS:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
     volumes:
       - catalog-icons:/data/catalog-icons
     depends_on:
@@ -63,7 +65,7 @@ services:
       api: { condition: service_healthy }
     security_opt: ['no-new-privileges:true']
 
-  # Opt in with --profile bot; integration credentials are reserved for future behavior.
+  # Opt in with --profile bot. Discord login occurs only when all credentials are set.
   bot:
     image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-bot:${IMAGE_TAG:?Set IMAGE_TAG}
     profiles: ['bot']
@@ -75,6 +77,7 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_TEST_GUILD_ID: ${DISCORD_TEST_GUILD_ID:-}
     depends_on:
       api: { condition: service_healthy }
     security_opt: ['no-new-privileges:true']

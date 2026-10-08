@@ -1,7 +1,6 @@
-/** Describe Discord's command payload; this module does not contact Discord. */
+/** Guild slash-command contract; registration is always an explicit operation. */
 import { SlashCommandBuilder } from 'discord.js';
 
-/** Contract only: registration and persistence will be delivered in the bot workstream. */
 export const collectionLogCommand = new SlashCommandBuilder()
   .setName('cc-clog')
   .setDescription('Clan collection log')
@@ -31,5 +30,12 @@ export const collectionLogCommand = new SlashCommandBuilder()
             'Collector name; defaults to your Discord display name',
           )
           .setMaxLength(80),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName('hardcore')
+          .setDescription(
+            'Claim the item was obtained on hardcore worlds (default: no)',
+          ),
       ),
   );

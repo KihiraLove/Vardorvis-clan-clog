@@ -42,7 +42,7 @@ The ignored `.data/` directory is suitable for local development. Use a backed-u
 
 ## Transactions, identities and revisions
 
-[004_admin_catalog.sql](../packages/database/migrations/004_admin_catalog.sql) is a forward-only migration. Earlier migrations are unchanged.
+[006_admin_catalog.sql](../packages/database/migrations/006_admin_catalog.sql) is a forward-only migration. Earlier migrations are unchanged.
 
 | Entity                                                   | Responsibility                                                                            |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -88,7 +88,7 @@ Restore both files from the **same completed backup** during a maintenance windo
 3. Restore `icons.tar.gz` into the corresponding icon volume, retaining numeric UID/GID ownership. The API runs as UID 1000 and needs read/write access. Restore into a new/recovered volume when possible; do not combine unrelated backups.
 4. Start a schema-compatible API/web release and verify health, public icon responses, catalog counts, manual page order and representative credits before reopening writes.
 
-Migration 004 is additive. An older API can still read its previous columns, but cannot serve the new manual-icon route. Operational rollback therefore needs this version's icon-serving capability or a coordinated database/volume restore; merely starting an older image can leave manual icons unavailable. No live deployment or restore is performed by this PR.
+Migration 006 is additive. An older API can still read its previous columns, but cannot serve the new manual-icon route. Operational rollback therefore needs this version's icon-serving capability or a coordinated database/volume restore; merely starting an older image can leave manual icons unavailable. No live deployment or restore is performed by this PR.
 
 ## Validation
 

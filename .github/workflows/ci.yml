@@ -72,6 +72,8 @@ jobs:
           curl --fail --output /tmp/collections.json http://127.0.0.1:8088/api/v1/collections
           jq -e '.credits == []' /tmp/collections.json
           curl --fail http://127.0.0.1:8088/api/v1/settings
+          curl --fail --output /tmp/xp.json http://127.0.0.1:8088/api/v1/xp/tracker
+          jq -e '(.revision == "xp-1") and (.events == []) and (.totals | .mining == "0")' /tmp/xp.json
           curl --fail http://127.0.0.1:8088/api/v1/auth/session
           docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       - name: Admin catalog, durable icons and coordinated backup

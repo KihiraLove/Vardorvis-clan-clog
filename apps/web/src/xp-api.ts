@@ -216,6 +216,7 @@ export class LiveXpClient implements XpClient {
     csrf: string,
     requestKey: string,
     signal: AbortSignal,
+    acknowledgeCorrections = false,
   ): Promise<ApplyResult> {
     const value = object(
       await this.json('/api/v1/admin/xp/imports', signal, {
@@ -228,6 +229,7 @@ export class LiveXpClient implements XpClient {
         body: JSON.stringify({
           previewToken: preview.previewToken,
           expectedRevision: preview.expectedRevision,
+          acknowledgeCorrections,
         }),
       }),
     );

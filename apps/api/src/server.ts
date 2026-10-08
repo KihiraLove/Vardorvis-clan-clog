@@ -5,9 +5,12 @@ import { readConfig } from './config.js';
 import { PgStore } from './store.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
+import { PgXpStore } from './xp-store.js';
 const config = readConfig();
-if (config.auth && !process.env.DATABASE_URL)
-  throw new Error('DATABASE_URL is required when auth is enabled');
+if ((config.auth || config.bot) && !process.env.DATABASE_URL)
+  throw new Error(
+    'DATABASE_URL is required when auth or bot intake is enabled',
+  );
 const pool = process.env.DATABASE_URL
   ? new pg.Pool({
       connectionString: process.env.DATABASE_URL,
@@ -27,7 +30,13 @@ const catalog = pool ? new PgCatalogStore(pool) : undefined;
 const app = createApp(
   store ? () => store.ready() : undefined,
   store ? () => store.settings() : undefined,
-  { store, catalog, icons, ...config },
+  {
+    store,
+    catalog,
+    icons,
+    xp: pool ? new PgXpStore(pool) : undefined,
+    ...config,
+  },
 );
 app.addHook('onClose', async () => {
   await pool?.end();

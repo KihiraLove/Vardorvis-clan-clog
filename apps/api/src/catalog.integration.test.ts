@@ -57,7 +57,14 @@ test(
     const app = createApp(
       () => store.ready(),
       () => store.settings(),
-      { store, catalog, icons, auth: config, logger: false },
+      {
+        store,
+        catalog,
+        icons,
+        auth: config,
+        bot: { token: 'b'.repeat(64), guildId: '234567890123456789' },
+        logger: false,
+      },
     );
     try {
       const migrations = new URL(
@@ -236,6 +243,31 @@ test(
           .id,
         created.item.id,
       );
+      const botHeaders = { authorization: 'Bearer ' + 'b'.repeat(64) };
+      const suggestions = await app.inject({
+        url: '/api/v1/bot/items?q=Manual',
+        headers: botHeaders,
+      });
+      assert.equal(suggestions.statusCode, 200, suggestions.body);
+      assert.equal(suggestions.json().items[0].id, created.item.id);
+      const claim = await app.inject({
+        method: 'POST',
+        url: '/api/v1/bot/submissions',
+        headers: botHeaders,
+        payload: {
+          interactionId: '345678901234567890',
+          guildId: '234567890123456789',
+          actorDiscordId: actor,
+          rawItemText: created.item.name,
+          collectorName: 'Fixture collector',
+          proofUrl: 'https://gyazo.com/fixture',
+          hardcore: false,
+        },
+      });
+      assert.equal(claim.statusCode, 201, claim.body);
+      assert.equal(claim.json().itemId, created.item.id);
+      assert.equal(claim.json().resolution, 'resolved');
+      assert.equal(claim.json().status, 'pending');
       const image = await app.inject(created.item.iconPath);
       assert.equal(image.statusCode, 200);
       assert.equal(image.headers['content-type'], 'image/png');

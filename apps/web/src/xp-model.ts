@@ -112,6 +112,7 @@ export interface XpClient {
     csrf: string,
     requestKey: string,
     signal: AbortSignal,
+    acknowledgeCorrections?: boolean,
   ): Promise<ApplyResult>;
   history(signal: AbortSignal): Promise<ImportEntry[]>;
 }

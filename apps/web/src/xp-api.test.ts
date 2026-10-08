@@ -133,6 +133,7 @@ test('preview requests canonicalize the source and carry CSRF; applies use the v
     assert.deepEqual(JSON.parse(request.options!.body as string), {
       previewToken: 'validated-token',
       expectedRevision: 'xp-one',
+      acknowledgeCorrections: false,
     });
   }
 });

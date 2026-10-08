@@ -102,6 +102,7 @@ export function XpAdmin({
           session.csrfToken,
           requestKey.current,
           controller.signal,
+          acknowledged,
         );
         if (controller.signal.aborted) return;
         setMessage(
