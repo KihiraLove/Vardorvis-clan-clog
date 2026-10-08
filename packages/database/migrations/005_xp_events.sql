@@ -41,6 +41,7 @@ CREATE TABLE xp_import_history (
   outcome text NOT NULL CHECK (outcome IN ('applied','unchanged')),
   changes jsonb NOT NULL,
   resulting_revision text NOT NULL,
+  acknowledged_corrections boolean NOT NULL DEFAULT false,
   UNIQUE(actor_discord_id,request_key)
 );
 CREATE INDEX xp_history_latest ON xp_import_history(imported_at DESC,id DESC);
