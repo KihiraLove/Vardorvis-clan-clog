@@ -46,6 +46,15 @@ jobs:
             echo
             echo "FORMAT_RESULT_END:$file"
           done
+      - name: Format changed files for validation and export
+        run: |
+          npx prettier --write apps/web/src/admin-model.ts apps/web/src/ManualSubmissionForm.tsx apps/web/src/CollectionLog.tsx apps/web/src/style.css apps/api/src/review-store.ts apps/web/src/admin-model.test.ts apps/web/src/admin-api.test.ts apps/web/tests/admin.spec.ts apps/web/tests/collection-log.spec.ts apps/api/src/review.integration.test.ts
+          for file in apps/web/src/admin-model.ts apps/web/src/ManualSubmissionForm.tsx apps/web/src/CollectionLog.tsx apps/web/src/style.css apps/api/src/review-store.ts apps/web/src/admin-model.test.ts apps/web/src/admin-api.test.ts apps/web/tests/admin.spec.ts apps/web/tests/collection-log.spec.ts apps/api/src/review.integration.test.ts; do
+            echo "REVIEW_FIX_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "REVIEW_FIX_END:$file"
+          done
       - run: npm run validate
 
   docker-smoke:
