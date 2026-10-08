@@ -39,7 +39,7 @@ export function reviewRoutes(app:FastifyInstance,store:ReviewStore,authorize:Aut
    properties:{
     expectedVersion:version,itemId:version,
     collectorName:{type:'string',minLength:1,maxLength:80},
-    collectedOn:{type:'string',pattern:'^[0-9]{4}-[0-9]{2}-[0-9]{2}},
+    collectedOn:{type:'string',pattern:'^[0-9]{4}-[0-9]{2}-[0-9]{2}$'},
     hardcore:{type:'boolean'},reason,
    }},
  };
