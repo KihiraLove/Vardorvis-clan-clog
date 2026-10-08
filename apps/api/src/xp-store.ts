@@ -38,6 +38,8 @@ export class PgXpStore implements XpStore {
    const expectedRevision=await this.state(client);
    const events=await this.events(client);
    const prior=events.find(x=>Number(x.competition_id)===snapshot.event.id)??null;
+   if(prior&&JSON.stringify(prior.skills)!==JSON.stringify(snapshot.event.skills))
+    throw new ApiError(422,'WOM competition skill scope changed; manual reconciliation is required.');
    const changes=diffTotals(sumTotals(events.map(event)),prior?event(prior):null,snapshot.event);
    const expiresAt=new Date(Date.now()+600000).toISOString();
    await client.query('INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at) VALUES($1,$2,$3,$4,$5)',
