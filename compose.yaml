@@ -37,6 +37,15 @@ services:
       DATABASE_URL: postgresql://clog:${POSTGRES_PASSWORD}@db:5432/clog
       HOST: 0.0.0.0
       PORT: '3000'
+      NODE_ENV: production
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      DISCORD_OAUTH_REDIRECT_URI: ${DISCORD_OAUTH_REDIRECT_URI:-}
+      ADMIN_DISCORD_USER_IDS: ${ADMIN_DISCORD_USER_IDS:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
     security_opt: ['no-new-privileges:true']

@@ -1,34 +1,24 @@
-/** Wire environment configuration, PostgreSQL readiness and graceful HTTP shutdown. */
+/** Runtime composition: validated auth config, durable store and graceful shutdown. */
 import pg from 'pg';
 import { createApp } from './app.js';
-
+import { readConfig } from './config.js';
+import { PgStore } from './store.js';
+const config = readConfig();
+if (config.auth && !process.env.DATABASE_URL)
+  throw new Error('DATABASE_URL is required when auth is enabled');
 const pool = process.env.DATABASE_URL
   ? new pg.Pool({
       connectionString: process.env.DATABASE_URL,
       connectionTimeoutMillis: 3000,
+      statement_timeout: 5000,
+      max: 10,
     })
   : undefined;
+const store = pool ? new PgStore(pool) : undefined;
 const app = createApp(
-  async () => {
-    if (!pool) throw new Error('Database not configured');
-    // Reading a migration-created view detects both connection and missing-schema failures.
-    await pool.query('SELECT item_id FROM item_collection_state LIMIT 1');
-  },
-  async () => {
-    if (!pool) throw new Error('Database not configured');
-    const result = await pool.query<{
-      hardcore_enabled: boolean;
-      version: number;
-    }>(
-      'SELECT hardcore_enabled, version FROM site_settings WHERE singleton = true',
-    );
-    const row = result.rows[0];
-    if (!row) throw new Error('Site settings missing');
-    return {
-      hardcoreEnabled: row.hardcore_enabled,
-      revision: 'settings-' + row.version,
-    };
-  },
+  store ? () => store.ready() : undefined,
+  store ? () => store.settings() : undefined,
+  { store, ...config },
 );
 app.addHook('onClose', async () => {
   await pool?.end();
