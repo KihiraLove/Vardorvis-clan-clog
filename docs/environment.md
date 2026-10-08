@@ -138,3 +138,39 @@ docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml d
 
 For production, omit `compose.local-admin.yaml`; the existing
 Discord OAuth allowlist and session checks remain mandatory.
+
+## Password-protected admin
+
+Discord OAuth is not used for site administration. The single shared password
+comes from the server-side `.env` and is never sent to the browser until the
+administrator explicitly enters it. Set these values:
+
+```dotenv
+AUTH_ENABLED=true
+ADMIN_PASSWORD=REPLACE_WITH_A_UNIQUE_STRONG_PASSWORD
+SESSION_SECRET=REPLACE_WITH_64_RANDOM_HEX_CHARACTERS
+PUBLIC_ORIGIN=http://127.0.0.1:8088
+```
+
+Use `openssl rand -hex 32` to generate `SESSION_SECRET`; use a separate
+strong password (12–256 characters, preferably a random password). `PUBLIC_ORIGIN`
+must match the exact URL you browse; HTTP is accepted only for loopback in
+development. Public sites must configure an HTTPS origin and TLS termination.
+The password is not stored in Git or in browser local storage.
+
+The API checks the password in constant time, limits login attempts, issues an
+HTTP-only expiring session cookie, and requires same-origin CSRF on writes.
+Open `/admin` and enter the password; the session also covers `/admin/xp`.
+A password change requires restarting the API and changing `SESSION_SECRET`
+to invalidate existing sessions. Bot Discord credentials remain separate;
+they are only for incoming drop submissions, not admin authentication.
+
+You can still enable the explicit **local-only** passwordless test mode with
+`compose.local-admin.yaml`, but production never enables that override.
+
+Manual drops: on `/admin` choose **Add manual submission**, select a catalog
+item, collector, collection date and world, optionally include an approved
+proof URL and reason. The default immediately approves the drop and updates
+public credits; untick it to create a pending claim for review. Duplicate
+approved credits per item/world are rejected, and manual provenance and every
+action are recorded in the admin audit history.
