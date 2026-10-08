@@ -11,6 +11,7 @@ import {
   type AdminPage,
   type AuditEntry,
   type Correction,
+  type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
   type QueueView,
@@ -110,6 +111,7 @@ export class PreviewAdminClient implements AdminClient {
       ...row,
       status: row.status as Submission['status'],
       version: 1,
+      source: 'discord',
       collectedOn: '2026-10-05',
       dateSource: 'submission',
       submittedAt: '2026-10-05T12:00:00Z',
@@ -131,6 +133,36 @@ export class PreviewAdminClient implements AdminClient {
   private access(signal: AbortSignal) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!this.signedIn) throw new AdminRequestError(401);
+  }
+  async login(_password: string, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    this.signedIn = true;
+    this.changed(false);
+  }
+  async addManual(fields: ManualSubmissionInput, _csrf: string, signal: AbortSignal) {
+    this.access(signal);
+    const item = this.data.items.find((row) => row.id === fields.itemId);
+    if (!item) throw new AdminRequestError(422);
+    if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
+    if (fields.proofUrl && !safeProof(fields.proofUrl))
+      throw new AdminRequestError(422);
+    const row: Submission = {
+      id: crypto.randomUUID(),
+      version: 1,
+      source: 'manual',
+      itemId: item.id,
+      rawItemText: item.name,
+      collectorName: fields.collectorName.trim(),
+      collectedOn: fields.collectedOn,
+      dateSource: 'admin',
+      submittedAt: new Date().toISOString(),
+      proofUrl: fields.proofUrl ?? '',
+      hardcore: fields.hardcore,
+      status: fields.approve ? 'approved' : 'pending',
+    };
+    this.rows.unshift(row);
+    this.record(row, row, 'create', fields.reason ?? '');
+    return structuredClone(row);
   }
   async session(signal: AbortSignal) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -321,7 +353,7 @@ export class PreviewAdminClient implements AdminClient {
         ? row.status !== 'approved'
         : row.status !== 'pending') ||
       (action === 'approve'
-        ? row.itemId === null || !safeProof(row.proofUrl)
+        ? row.itemId === null || (row.source !== 'manual' && !safeProof(row.proofUrl))
         : !reason.trim())
     )
       throw new AdminRequestError(422);

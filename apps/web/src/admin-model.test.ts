@@ -7,6 +7,7 @@ import {
   parseAdminCatalog,
   parseDetail,
   parseQueue,
+  parseSubmission,
   safeProof,
   validateCorrection,
   validateIconFile,
@@ -404,4 +405,29 @@ test('logout and aborted reads prevent private preview access; pagination cannot
   assert.equal(await client.session(signal()), null);
   await assert.rejects(client.catalog(signal()), { status: 401 });
   await assert.rejects(client.detail(row.id, signal()), { status: 401 });
+});
+
+test('proofless manual claims and audit snapshots parse without requiring XP text', async () => {
+  const client = new PreviewAdminClient();
+  const catalog = await client.catalog(signal());
+  const item = catalog.items[0]!;
+  const created = await client.addManual(
+    {
+      itemId: item.id,
+      collectorName: 'Manual reviewer',
+      collectedOn: '2026-10-06',
+      hardcore: false,
+      approve: true,
+    },
+    'preview-admin',
+    signal(),
+  );
+  assert.equal(created.proofUrl, '');
+  assert.deepEqual(parseSubmission(created), created);
+  const detail = await client.detail(created.id, signal());
+  assert.equal(parseDetail(detail).submission.proofUrl, '');
+  assert.throws(
+    () => parseSubmission({ ...created, proofUrl: null }),
+    /Invalid submission data/,
+  );
 });

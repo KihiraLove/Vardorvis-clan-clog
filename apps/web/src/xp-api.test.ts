@@ -176,3 +176,31 @@ test('wrong competition previews and non-admin sessions cannot be treated as an 
     { status: 403 },
   );
 });
+
+test('live admin session recognizes only an explicit boolean local test marker', async () => {
+  const live = new LiveXpClient(async () =>
+    json({
+      authenticated: true,
+      displayName: 'Local test admin',
+      csrfToken: 'token',
+      development: true,
+    }),
+  );
+  assert.equal((await live.session(signal()))?.development, true);
+  const production = new LiveXpClient(async () =>
+    json({ authenticated: true, displayName: 'Admin', csrfToken: 'token' }),
+  );
+  assert.equal((await production.session(signal()))?.development, undefined);
+  const malformed = new LiveXpClient(async () =>
+    json({
+      authenticated: true,
+      displayName: 'Admin',
+      csrfToken: 'token',
+      development: 'true',
+    }),
+  );
+  await assert.rejects(
+    malformed.session(signal()),
+    /Invalid admin session mode/,
+  );
+});

@@ -1,0 +1,69 @@
+/** REVIEW-01 private response types. Public credits never expose these fields. */
+export interface ReviewSubmission {
+  id: string;
+  version: number;
+  source: 'discord' | 'manual';
+  itemId: number | null;
+  rawItemText: string;
+  collectorName: string;
+  collectedOn: string;
+  dateSource: 'submission' | 'claim' | 'admin';
+  submittedAt: string;
+  proofUrl: string;
+  hardcore: boolean;
+  status: 'pending' | 'approved' | 'rejected' | 'revoked';
+}
+export interface ManualSubmissionInput {
+  itemId: number;
+  collectorName: string;
+  collectedOn: string;
+  hardcore: boolean;
+  proofUrl?: string;
+  approve: boolean;
+  reason?: string;
+}
+export interface ReviewCorrection {
+  itemId: number;
+  collectorName: string;
+  collectedOn: string;
+  hardcore: boolean;
+  reason: string;
+}
+export interface ReviewAction {
+  expectedVersion: number;
+  action: 'approve' | 'reject' | 'revoke';
+  reason?: string;
+}
+export interface ReviewAudit {
+  id: string;
+  actorName: string;
+  at: string;
+  action: 'create' | 'edit' | 'approve' | 'reject' | 'revoke';
+  reason: string | null;
+  before: ReviewSubmission;
+  after: ReviewSubmission;
+}
+export interface ReviewStore {
+  adminCatalog(): Promise<unknown>;
+  createManual(fields: ManualSubmissionInput, actorId: string, actorName: string): Promise<ReviewSubmission>;
+  queue(
+    status: 'pending' | 'reviewed',
+    unmatched: boolean,
+    limit: number,
+    cursor?: string,
+  ): Promise<{
+    revision: string;
+    submissions: ReviewSubmission[];
+    nextCursor: string | null;
+  }>;
+  detail(
+    id: string,
+  ): Promise<{ submission: ReviewSubmission; audit: ReviewAudit[] } | null>;
+  mutate(
+    id: string,
+    expectedVersion: number,
+    fields: ReviewCorrection | ReviewAction,
+    actorId: string,
+    actorName: string,
+  ): Promise<ReviewSubmission>;
+}

@@ -15,7 +15,7 @@ The repository is a TypeScript npm-workspace monorepo for an Old School RuneScap
 | Area                      | Implemented behavior                                                                                                               | Remaining production work                                                            |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Public collection log     | Five categories, 2× layout, collected-item menus, independent normal/HC progress, default-off release switch and explicit previews | Catalog import, complete assets, public catalog/credit routes                        |
-| Submission administration | Session-aware UI, paged review, corrections, proof checks, decisions, audit display and in-memory simulator                        | OAuth/session enforcement, intake, transactional review and durable audits           |
+| Submission administration | Session-aware UI, paged review, corrections, proof checks, decisions, audit display and in-memory simulator                        | Password/session enforcement, intake, transactional review and durable audits           |
 | Catalog administration    | Icon validation, creation UI, multiple page memberships, accessible ordering and simulated concurrency                             | Icon storage, allocation, versioning, source/manual overlay and backend routes       |
 | XP                        | Inline event sidebar, exact per-event/overall totals, preview/apply/history UI and two simulated competitions                      | WOM adapter, import reconciliation, database tables and endpoints                    |
 | Runtime                   | Health/status/readiness, public settings read, migrations, images, Compose and CI workflows                                        | Real feature acceptance, operational recovery rehearsal and production configuration |
@@ -35,7 +35,7 @@ flowchart TD
   Domain -. intended business-rule reuse .-> API
   Bot[Bot health server and command definition]
   Bot -. future authenticated intake .-> API
-  Discord[Discord] -. future gateway and OAuth .-> Bot
+  Discord[Discord] -. bot claim gateway .-> Bot
   WOM[Wise Old Man] -. future import adapter .-> API
 ```
 
@@ -250,7 +250,7 @@ The browser already calls these future contract families:
 | Client     | Planned paths                                                                                                            |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Public log | `GET /api/v1/catalog`, `GET /api/v1/collections`                                                                         |
-| Auth       | `GET /api/v1/auth/session`, sign-in link `/api/v1/auth/discord`, `POST /api/v1/auth/logout`                              |
+| Auth       | `GET /api/v1/auth/session`, password sign-in `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`                              |
 | Review     | `GET /api/v1/admin/submissions`, `GET/PATCH /api/v1/admin/submissions/:id`, `POST .../:id/approve`, `/reject`, `/revoke` |
 | Catalog    | `GET /api/v1/admin/catalog`, `POST .../catalog/icons`, `POST .../catalog/items`, `PUT .../catalog/pages/:id/order`       |
 | Public XP  | `GET /api/v1/xp/tracker` for the current UI; legacy detailed routes remain in the adapter                                |
@@ -273,7 +273,7 @@ See [contracts.md](contracts.md) for the broader intended API and Discord contra
 | `.prettierrc.json`, `.prettierignore`            | Single quotes and trailing commas; excludes dependencies, build output, coverage and lockfile                                                                     |
 | `.nvmrc`                                         | Node major 24 for local tooling and CI setup                                                                                                                      |
 | `.gitignore`, `.dockerignore`                    | Keep secrets, dependencies, generated output and backups out of version control/build context according to each file's rules                                      |
-| `.env.example`                                   | Documents DB password/URL, image prefix/tag and web port; OAuth, session and bot fields are reserved for future integrations                                      |
+| `.env.example`                                   | Documents DB password/URL, image prefix/tag and web port; Password/session and bot variables are configured for runtime integrations                                      |
 | `scripts/check-docs.mjs`                         | Recursively checks local Markdown link target existence, excluding `.git`, dependencies and dist; skips HTTP/mail links and strips anchors without verifying them |
 
 Build order is domain → database → API → bot → web. Compiled workspace exports must exist before dependents resolve them. Backend/domain/database unit tests execute compiled `dist/*.test.js`; web unit tests use Node 24's TypeScript execution on `src/*.test.ts`. The API dev script watches built `dist/server.js`; source changes still need TypeScript compilation.

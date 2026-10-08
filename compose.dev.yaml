@@ -4,6 +4,8 @@ services:
     image: clog-api:dev
     build: { context: ., target: api }
   api:
+    environment:
+      NODE_ENV: development
     image: clog-api:dev
     build: { context: ., target: api }
   web:

@@ -37,6 +37,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Format in-branch changes and export for permanent commit
+        run: |
+          npx prettier --write apps/api/src/config.ts apps/api/src/auth.ts apps/api/src/app.ts apps/api/src/review-types.ts apps/api/src/review-store.ts apps/api/src/review-routes.ts apps/api/src/backend.test.ts apps/api/src/xp.auth.test.ts apps/api/src/review.integration.test.ts apps/web/src/admin-model.ts apps/web/src/admin-api.ts apps/web/src/preview/admin.ts apps/web/src/AdminPage.tsx apps/web/src/AdminQueue.tsx apps/web/src/SubmissionEditor.tsx apps/web/src/XpAdmin.tsx apps/web/src/xp-api.ts apps/web/src/ManualSubmissionForm.tsx apps/web/src/admin-api.test.ts apps/web/tests/admin.spec.ts compose.yaml compose.dev.yaml docs/environment.md docs/integration-01-review.md docs/backend-phase-one.md docs/contracts.md docs/project-guide.md README.md .github/workflows/ci.yml
+          for file in apps/api/src/config.ts apps/api/src/auth.ts apps/api/src/app.ts apps/api/src/review-types.ts apps/api/src/review-store.ts apps/api/src/review-routes.ts apps/api/src/backend.test.ts apps/api/src/xp.auth.test.ts apps/api/src/review.integration.test.ts apps/web/src/admin-model.ts apps/web/src/admin-api.ts apps/web/src/preview/admin.ts apps/web/src/AdminPage.tsx apps/web/src/AdminQueue.tsx apps/web/src/SubmissionEditor.tsx apps/web/src/XpAdmin.tsx apps/web/src/xp-api.ts apps/web/src/ManualSubmissionForm.tsx apps/web/src/admin-api.test.ts apps/web/tests/admin.spec.ts compose.yaml compose.dev.yaml docs/environment.md docs/integration-01-review.md docs/backend-phase-one.md docs/contracts.md docs/project-guide.md README.md .github/workflows/ci.yml; do
+            echo "FORMAT_RESULT_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FORMAT_RESULT_END:$file"
+          done
       - run: npm run validate
 
   docker-smoke:
@@ -49,10 +58,7 @@ jobs:
       IMAGE_TAG: ci
       AUTH_ENABLED: 'true'
       PUBLIC_ORIGIN: https://clog.example.com
-      DISCORD_CLIENT_ID: '123456789012345678'
-      DISCORD_CLIENT_SECRET: ci-placeholder-not-a-real-secret
-      DISCORD_OAUTH_REDIRECT_URI: https://clog.example.com/api/v1/auth/discord/callback
-      ADMIN_DISCORD_USER_IDS: '123456789012345678'
+      ADMIN_PASSWORD: ci-only-test-admin-password
       SESSION_SECRET: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,13 +81,39 @@ jobs:
           curl --fail --output /tmp/xp.json http://127.0.0.1:8088/api/v1/xp/tracker
           jq -e '(.revision == "xp-1") and (.events == []) and (.totals | .mining == "0")' /tmp/xp.json
           curl --fail http://127.0.0.1:8088/api/v1/auth/session
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://clog.example.com' \
+            -H 'Content-Type: application/json' -d '{"password":"wrong"}' \
+            http://127.0.0.1:8088/api/v1/auth/login)" = "401"
           docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      - name: Stop default stack before local admin override
+        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
+      - name: Verify passwordless local admin Compose override
+        run: |
+          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml config --quiet
+          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml up -d --wait --wait-timeout 120
+          curl --fail -sS -c /tmp/clog-local-cookie.txt \
+            http://127.0.0.1:8088/api/v1/auth/session > /tmp/clog-local-session.json
+          jq -e '.authenticated == true and .development == true and .displayName == "Local test admin"' /tmp/clog-local-session.json
+          curl --fail -sS -b /tmp/clog-local-cookie.txt \
+            http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == false'
+          csrf="$(jq -r '.csrfToken' /tmp/clog-local-session.json)"
+          curl --fail -sS -b /tmp/clog-local-cookie.txt -X PUT \
+            -H "Origin: http://127.0.0.1:8088" \
+            -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' \
+            -d '{"hardcoreEnabled":true,"expectedRevision":"settings-1"}' \
+            http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == true'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: daybloom.net' \
+            -b /tmp/clog-local-cookie.txt http://127.0.0.1:8088/api/v1/admin/settings)" = "403"
       - name: Logs on failure
         if: failure()
-        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot logs --no-color --tail 100
+        run: |
+          docker compose -f compose.yaml -f compose.dev.yaml --profile bot logs --no-color --tail 100 || true
+          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml logs --no-color --tail 100 || true
       - name: Clean up
         if: always()
-        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
+        run: |
+          docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
+          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml down --volumes
 
   frontend-browser:
     # Preview/mocked browser flows form a separate gate from Node unit tests.

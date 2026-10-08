@@ -50,8 +50,35 @@ export function AdminPage({
   const [session, setSession] = useState<AdminSession | null>(),
     [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
+  const [password, setPassword] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string>();
   const accessLost = useCallback(() => setSession(null), []);
   const action = useAdminAction(accessLost);
+  const logIn = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (loggingIn) return;
+    setLoggingIn(true);
+    setLoginError(undefined);
+    const controller = new AbortController();
+    try {
+      await client.login(password, controller.signal);
+      const next = await client.session(controller.signal);
+      if (!next) throw new Error('Session not established.');
+      setSession(next);
+      setPassword('');
+    } catch (failure) {
+      setLoginError(
+        failure instanceof AdminRequestError && failure.status === 401
+          ? 'Incorrect password.'
+          : failure instanceof AdminRequestError && failure.status === 429
+            ? 'Too many attempts. Try again later.'
+            : 'Could not sign in. Check the password and server configuration.',
+      );
+    } finally {
+      setLoggingIn(false);
+    }
+  };
   useEffect(() => {
     let active = true;
     const controller = new AbortController(),
@@ -98,6 +125,12 @@ export function AdminPage({
           </button>
         </div>
       )}
+      {session?.development && (
+        <div className="preview-banner" role="status">
+          Local test admin — no Discord login required. Changes are saved to a
+          separate test database, not clan production.
+        </div>
+      )}
       <div className="admin-heading">
         <div>
           <p className="xp-eyebrow">Vardorvis clan</p>
@@ -106,18 +139,20 @@ export function AdminPage({
         {session && (
           <div className="admin-account">
             <span>{session.displayName}</span>
-            <button
-              className="site-button"
-              disabled={action.busy}
-              onClick={() => {
-                void action.execute(async (signal) => {
-                  await client.logout(session.csrfToken, signal);
-                  if (!signal.aborted) accessLost();
-                });
-              }}
-            >
-              Sign out
-            </button>
+            {!session.development && (
+              <button
+                className="site-button"
+                disabled={action.busy}
+                onClick={() => {
+                  void action.execute(async (signal) => {
+                    await client.logout(session.csrfToken, signal);
+                    if (!signal.aborted) accessLost();
+                  });
+                }}
+              >
+                Sign out
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -157,13 +192,22 @@ export function AdminPage({
       ) : session === null ? (
         <section className="admin-panel">
           <h2>Admin sign-in required</h2>
-          <p>
-            Only allowlisted clan admins can review submissions or maintain the
-            catalog.
-          </p>
-          <a className="site-button" href="/api/v1/auth/discord">
-            Sign in with Discord
-          </a>
+          <p>Enter the admin password configured in the server .env file.</p>
+          <form onSubmit={(event) => void logIn(event)}>
+            <label htmlFor="admin-password">Admin password</label>
+            <input
+              id="admin-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            <button className="site-button" type="submit" disabled={loggingIn}>
+              {loggingIn ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+          {loginError && <p role="alert" className="admin-error">{loginError}</p>}
           {preview && (
             <p className="admin-note">
               Reload to start a new signed-in preview session.

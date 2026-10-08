@@ -1,19 +1,14 @@
-/** OAuth state binding, server sessions and same-origin CSRF checks for private routes. */
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from 'node:crypto';
+/** Shared-password login, expiring sessions and same-origin CSRF for admin routes. */
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthConfig } from './config.js';
-import type { Identify } from './discord.js';
 import { xpAdminRoutes } from './xp-routes.js';
+import { reviewRoutes } from './review-routes.js';
+import type { ReviewStore } from './review-types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
-const hash = (value: string) =>
-  createHash('sha256').update(value).digest('hex');
+const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const nonce = () => randomBytes(32).toString('base64url');
 const same = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -30,37 +25,39 @@ export function authRoutes(
   app: FastifyInstance,
   store: BackendStore,
   config: AuthConfig,
-  identify: Identify,
   xp?: XpStore,
+  review?: ReviewStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
 ) {
   const sessionName = config.secure ? '__Host-clog-session' : 'clog-session';
-  const stateName = config.secure ? '__Host-clog-oauth' : 'clog-oauth';
-  const cookie = (name: string, value: string, seconds: number) =>
-    `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${config.secure ? '; Secure' : ''}`;
+  const cookie = (value: string, seconds: number) =>
+    `${sessionName}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${config.secure ? '; Secure' : ''}`;
   const key = (token: string) =>
-    createHmac('sha256', config.secret)
-      .update('session:' + token)
-      .digest('hex');
+    createHmac('sha256', config.secret).update('session:' + token).digest('hex');
   const csrf = (token: string) =>
-    createHmac('sha256', config.secret)
-      .update('csrf:' + token)
-      .digest('base64url');
+    createHmac('sha256', config.secret).update('csrf:' + token).digest('base64url');
+  function requireLocalHost(request: FastifyRequest) {
+    if (!config.devOnly) return;
+    const host = request.headers.host ?? '';
+    if (
+      !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/iu.test(host) ||
+      request.headers['x-forwarded-host'] !== undefined
+    )
+      throw new ApiError(403, 'Local admin mode accepts only loopback hostnames.');
+  }
   async function current(request: FastifyRequest) {
+    requireLocalHost(request);
     const token = cookieValue(request, sessionName);
     if (!token) return null;
     const session = await store.session(key(token));
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
-    if (!config.adminIds.has(session.id))
-      throw new ApiError(
-        403,
-        'Your account is not allowed to administer the clan.',
-      );
+    if (session.id !== (config.devOnly ? 'local-dev-admin' : 'password-admin'))
+      return null;
     return { token, ...session };
   }
   async function requireAdmin(request: FastifyRequest, write = false) {
     const session = await current(request);
-    if (!session) throw new ApiError(401, 'Sign in to administer the clan.');
+    if (!session) throw new ApiError(401, 'Enter the admin password to continue.');
     if (write) {
       const supplied = request.headers['x-csrf-token'];
       if (
@@ -69,101 +66,77 @@ export function authRoutes(
         !/^[\w-]{43}$/u.test(supplied) ||
         !same(csrf(session.token), supplied)
       )
-        throw new ApiError(
-          403,
-          'The request could not be verified. Reload and try again.',
-        );
+        throw new ApiError(403, 'The request could not be verified. Reload and try again.');
     }
     return session;
   }
-  async function loginLimit(request: FastifyRequest) {
-    if (!(await store.allowLogin(hash(request.ip))))
-      throw new ApiError(
-        429,
-        'Too many sign-in attempts. Try again in a minute.',
-      );
-  }
   if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
-  app.get('/api/v1/auth/discord', async (request, reply) => {
-    await loginLimit(request);
-    const state = nonce();
-    await store.createState(hash(state), new Date(Date.now() + 10 * 60 * 1000));
-    const url = new URL('https://discord.com/oauth2/authorize');
-    url.search = new URLSearchParams({
-      client_id: config.clientId,
-      response_type: 'code',
-      scope: 'identify',
-      redirect_uri: config.redirectUri,
-      state,
-    }).toString();
-    return reply
-      .header('Set-Cookie', cookie(stateName, state, 600))
-      .redirect(url.toString());
-  });
-  app.get('/api/v1/auth/discord/callback', async (request, reply) => {
-    await loginLimit(request);
-    reply.header('Set-Cookie', cookie(stateName, '', 0));
-    const query = request.query as Record<string, unknown>,
-      state = query.state,
-      code = query.code;
-    const browser = cookieValue(request, stateName);
-    if (
-      typeof state !== 'string' ||
-      !/^[\w-]{43}$/u.test(state) ||
-      !browser ||
-      !same(browser, state) ||
-      !(await store.consumeState(hash(state)))
-    )
-      throw new ApiError(
-        400,
-        'Sign-in expired or could not be verified. Start again.',
+  if (review) reviewRoutes(app, review, requireAdmin);
+  app.post<{ Body: { password: string } }>(
+    '/api/v1/auth/login',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['password'],
+          properties: { password: { type: 'string', minLength: 1, maxLength: 256 } },
+        },
+      },
+      onRequest: async (request) => {
+        if (config.devOnly) throw new ApiError(404, 'Password login is disabled for local test mode.');
+        if (request.headers.origin !== config.origin)
+          throw new ApiError(403, 'Login must originate from the configured site.');
+      },
+    },
+    async (request, reply) => {
+      // Shared database limiter applies to *all* attempts, not just invalid ones.
+      if (!(await store.allowLogin(hash(request.ip))))
+        throw new ApiError(429, 'Too many sign-in attempts. Try again in a minute.');
+      const digest = createHmac('sha256', Buffer.from(config.secret, 'hex'))
+        .update('admin-password:')
+        .update(request.body.password)
+        .digest();
+      if (!config.passwordDigest || !timingSafeEqual(digest, config.passwordDigest))
+        throw new ApiError(401, 'Incorrect admin password.');
+      const old = cookieValue(request, sessionName);
+      if (old) await store.deleteSession(key(old));
+      const token = nonce();
+      await store.createSession(
+        key(token),
+        { id: 'password-admin', displayName: 'Clan admin' },
+        new Date(Date.now() + 8 * 60 * 60 * 1000),
       );
-    if (
-      typeof code !== 'string' ||
-      !code ||
-      code.length > 2048 ||
-      query.error !== undefined
-    )
-      throw new ApiError(400, 'Discord sign-in was not completed.');
-    const identity = await identify(code);
-    if (!config.adminIds.has(identity.id))
-      throw new ApiError(
-        403,
-        'Your account is not allowed to administer the clan.',
-      );
-    const old = cookieValue(request, sessionName);
-    if (old) await store.deleteSession(key(old));
-    const token = nonce();
-    await store.createSession(
-      key(token),
-      identity,
-      new Date(Date.now() + 8 * 60 * 60 * 1000),
-    );
-    // Rotate on every successful sign-in and always return to the configured admin page.
-    return reply
-      .header('Set-Cookie', [
-        cookie(stateName, '', 0),
-        cookie(sessionName, token, 8 * 60 * 60),
-      ])
-      .redirect(config.origin + '/admin');
-  });
-  app.get('/api/v1/auth/session', async (request) => {
-    const session = await current(request);
+      return reply.header('Set-Cookie', cookie(token, 8 * 60 * 60)).send({
+        authenticated: true,
+        displayName: 'Clan admin',
+        csrfToken: csrf(token),
+      });
+    },
+  );
+  app.get('/api/v1/auth/session', async (request, reply) => {
+    let session = await current(request);
+    if (!session && config.devOnly) {
+      const token = nonce();
+      const identity = { id: 'local-dev-admin', displayName: 'Local test admin' };
+      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      await store.createSession(key(token), identity, expiresAt);
+      reply.header('Set-Cookie', cookie(token, 8 * 60 * 60));
+      session = { ...identity, token, expiresAt };
+    }
     return session
       ? {
           authenticated: true,
           displayName: session.displayName,
           csrfToken: csrf(session.token),
+          ...(config.devOnly ? { development: true } : {}),
         }
       : { authenticated: false };
   });
   app.post('/api/v1/auth/logout', async (request, reply) => {
     const session = await requireAdmin(request, true);
     await store.deleteSession(key(session.token));
-    return reply
-      .header('Set-Cookie', cookie(sessionName, '', 0))
-      .code(204)
-      .send();
+    return reply.header('Set-Cookie', cookie('', 0)).code(204).send();
   });
   app.get('/api/v1/admin/settings', async (request) => {
     await requireAdmin(request);

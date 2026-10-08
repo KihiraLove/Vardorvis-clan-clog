@@ -235,3 +235,83 @@ test('unsafe asset paths, incomplete metadata and wrong decision identities are 
     ).catalog(signal()),
   );
 });
+
+test('manual create and password sign-in use private routes, CSRF and validated receipt', async () => {
+  const f = await adminFixtures();
+  const row = f.detail.submission;
+  const requests: { url: string; options: RequestInit | undefined }[] = [];
+  const client = new LiveAdminClient(async (url, options) => {
+    requests.push({ url: String(url), options });
+    if (String(url).endsWith('/auth/login'))
+      return json({ authenticated: true });
+    return new Response(
+      JSON.stringify({
+        ...row,
+        source: 'manual',
+        status: 'approved',
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+  await client.login('test-only-password', signal());
+  const created = await client.addManual(
+    {
+      itemId: row.itemId!,
+      collectorName: row.collectorName,
+      collectedOn: row.collectedOn,
+      hardcore: row.hardcore,
+      proofUrl: '',
+      approve: true,
+    },
+    'csrf',
+    signal(),
+  );
+  assert.equal(created.source, 'manual');
+  assert.equal(requests[0]!.url, '/api/v1/auth/login');
+  assert.deepEqual(JSON.parse(requests[0]!.options!.body as string), {
+    password: 'test-only-password',
+  });
+  assert.equal(requests[1]!.url, '/api/v1/admin/submissions');
+  assert.equal(requests[1]!.options?.method, 'POST');
+  assert.equal(
+    (requests[1]!.options?.headers as Record<string, string>)['X-CSRF-Token'],
+    'csrf',
+  );
+});
+
+test('manual submission accepts a 201 response with no proof URL and preserves the empty field', async () => {
+  const fixture = await adminFixtures();
+  const row = fixture.detail.submission;
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(path, '/api/v1/admin/submissions');
+    assert.equal(options?.method, 'POST');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    return new Response(
+      JSON.stringify({
+        ...row,
+        source: 'manual',
+        itemId: row.itemId,
+        hardcore: false,
+        status: 'approved',
+        proofUrl: '',
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+  const receipt = await client.addManual(
+    {
+      itemId: row.itemId!,
+      collectorName: row.collectorName,
+      collectedOn: row.collectedOn,
+      hardcore: false,
+      approve: true,
+    },
+    'csrf',
+    signal(),
+  );
+  assert.equal(receipt.proofUrl, '');
+  assert.equal(receipt.source, 'manual');
+});

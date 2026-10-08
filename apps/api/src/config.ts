@@ -1,13 +1,13 @@
-/** Fail startup for partial/unsafe auth configuration; forwarding trust is explicit. */
+/** Read a shared admin password from .env. No Discord OAuth credentials are needed. */
 import { isIP } from 'node:net';
+import { createHmac, randomBytes } from 'node:crypto';
+
 export interface AuthConfig {
   origin: string;
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-  adminIds: Set<string>;
   secret: string;
+  passwordDigest: Buffer | null;
   secure: boolean;
+  devOnly?: true;
 }
 export interface BotConfig {
   token: string;
@@ -16,6 +16,8 @@ export interface BotConfig {
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!['true', 'false', undefined, ''].includes(env.AUTH_ENABLED))
     throw new Error('AUTH_ENABLED must be true or false');
+  if (!['true', 'false', undefined, ''].includes(env.DEV_ADMIN_MODE))
+    throw new Error('DEV_ADMIN_MODE must be true or false');
   const trusted = (env.TRUSTED_PROXY_CIDRS ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -45,60 +47,63 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const bot: BotConfig | undefined = botToken
     ? { token: botToken, guildId: botGuildId }
     : undefined;
-  if (env.AUTH_ENABLED !== 'true')
-    return {
-      auth: undefined,
-      bot,
-      trustProxy: trusted.length ? trusted : (false as const),
-    };
-  const required = (name: string) => {
-    const value = env[name]?.trim();
-    if (!value) throw new Error(name + ' is required when AUTH_ENABLED=true');
-    return value;
-  };
-  const origin = new URL(required('PUBLIC_ORIGIN'));
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
+  const devOnly = env.DEV_ADMIN_MODE === 'true';
+  if (!devOnly && env.AUTH_ENABLED !== 'true')
+    return { auth: undefined, bot, trustProxy: trusted.length ? trusted : (false as const) };
+  let origin: URL;
+  try {
+    origin = new URL(env.PUBLIC_ORIGIN ?? '');
+  } catch {
+    throw new Error('Admin auth requires a valid PUBLIC_ORIGIN');
+  }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
   if (
-    origin.username ||
-    origin.password ||
-    origin.search ||
-    origin.hash ||
+    origin.username || origin.password || origin.search || origin.hash ||
     origin.pathname !== '/' ||
     (origin.protocol !== 'https:' &&
-      !(origin.protocol === 'http:' && local && env.NODE_ENV !== 'production'))
+      !(origin.protocol === 'http:' && loopback && env.NODE_ENV === 'development'))
   )
-    throw new Error(
-      'PUBLIC_ORIGIN must be an HTTPS origin (HTTP loopback only in development)',
-    );
-  const redirectUri = required('DISCORD_OAUTH_REDIRECT_URI');
-  if (redirectUri !== origin.origin + '/api/v1/auth/discord/callback')
-    throw new Error(
-      'DISCORD_OAUTH_REDIRECT_URI must match the fixed PUBLIC_ORIGIN callback',
-    );
-  const clientId = required('DISCORD_CLIENT_ID'),
-    adminIds = new Set(
-      required('ADMIN_DISCORD_USER_IDS')
-        .split(',')
-        .map((s) => s.trim()),
-    );
-  if (![clientId, ...adminIds].every((s) => /^\d{17,20}$/u.test(s)))
-    throw new Error('Discord IDs must be 17–20 digit strings');
-  const secret = required('SESSION_SECRET');
+    throw new Error('PUBLIC_ORIGIN must use HTTPS (HTTP loopback only in development)');
+  if (devOnly) {
+    if (
+      env.NODE_ENV !== 'development' ||
+      env.AUTH_ENABLED === 'true' ||
+      trusted.length ||
+      !loopback ||
+      origin.protocol !== 'http:'
+    )
+      throw new Error('DEV_ADMIN_MODE requires development, disabled password auth, no trusted proxies and an HTTP loopback origin');
+    return {
+      auth: {
+        origin: origin.origin,
+        secret: randomBytes(32).toString('hex'),
+        passwordDigest: null,
+        secure: false,
+        devOnly: true as const,
+      } satisfies AuthConfig,
+      bot,
+      trustProxy: false as const,
+    };
+  }
+  const secret = env.SESSION_SECRET?.trim() ?? '';
   if (!/^[a-f\d]{64,}$/iu.test(secret))
-    throw new Error(
-      'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
-    );
+    throw new Error('SESSION_SECRET must contain at least 32 random bytes encoded as hex');
+  const password = env.ADMIN_PASSWORD ?? '';
+  if (password.length < 12 || password.length > 256 || password.trim() !== password)
+    throw new Error('ADMIN_PASSWORD must contain 12–256 characters without surrounding whitespace');
+  // Store only a keyed verifier in memory, never the plaintext credential.
+  const passwordDigest = createHmac('sha256', Buffer.from(secret, 'hex'))
+    .update('admin-password:')
+    .update(password)
+    .digest();
   return {
-    bot,
     auth: {
       origin: origin.origin,
-      clientId,
-      clientSecret: required('DISCORD_CLIENT_SECRET'),
-      redirectUri,
-      adminIds,
       secret,
+      passwordDigest,
       secure: origin.protocol === 'https:',
     } satisfies AuthConfig,
+    bot,
     trustProxy: trusted.length ? trusted : (false as const),
   };
 }
