@@ -11,8 +11,11 @@ test('submission command keeps required item/proof before optional name and uses
   assert.ok(submit && 'options' in submit);
   assert.deepEqual(
     submit.options?.map((option) => option.name),
-    ['item', 'proof', 'submitter-name'],
+    ['item', 'proof', 'submitter-name', 'hardcore'],
   );
   const item = submit.options?.[0];
   assert.ok(item && 'autocomplete' in item && item.autocomplete);
+  assert.equal(submit.options?.[1]?.required, true);
+  assert.equal(submit.options?.[2]?.required, false);
+  assert.equal(submit.options?.[3]?.required, false);
 });

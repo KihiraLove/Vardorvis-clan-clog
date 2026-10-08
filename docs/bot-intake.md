@@ -1,10 +1,10 @@
 # Discord bot intake (INTAKE-01)
 
-Issue [#5](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/5) implements only the API-facing intake slice. The Discord slash-command gateway and receipts sent to Discord are tracked in [BOT-01](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/6); review/approval endpoints are separate [REVIEW-01](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/7). No intake route creates an approved collection credit.
+Issue [#5](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/5) implements only the API-facing intake slice. The Discord slash-command gateway and receipts sent to Discord are implemented under [BOT-01](bot-operations.md); review/approval endpoints are separate [REVIEW-01](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/7). No intake route creates an approved collection credit.
 
 ## Enable the service
 
-On the **API** service configure both `BOT_API_TOKEN` (at least 32 random bytes as hex: `openssl rand -hex 32`) and `DISCORD_GUILD_ID` (a 17–20 digit Discord guild snowflake). Both must be set together; an incomplete/weak configuration fails startup. `DATABASE_URL` is required for intake even if OAuth administration is disabled. The Compose bot receives the same token and guild ID independently, but the bot's gateway integration is not yet implemented.
+On the **API** service configure both `BOT_API_TOKEN` (at least 32 random bytes as hex: `openssl rand -hex 32`) and `DISCORD_GUILD_ID` (a 17–20 digit Discord guild snowflake). Both must be set together; an incomplete/weak configuration fails startup. `DATABASE_URL` is required for intake even if OAuth administration is disabled. The Compose bot receives the same token and guild ID independently, and the bot uses it through the Discord gateway when configured.
 
 The bot credential uses `Authorization: Bearer <BOT_API_TOKEN>`. It is checked on **only** `/api/v1/bot/items` and `/api/v1/bot/submissions`, never as an admin session, and is not included in the web bundle. Do not expose the token to browser clients. Both routes return `Cache-Control: no-store`. Search and intake are unavailable (404) until the API has a store and both config values.
 

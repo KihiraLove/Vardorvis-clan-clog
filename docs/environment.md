@@ -71,7 +71,7 @@ TEST_DATABASE_URL='postgresql://clog:YOUR_HEX_PASSWORD@127.0.0.1:5432/clog_test'
 
 ## Bot intake API
 
-[INTAKE-01](bot-intake.md) requires matching `BOT_API_TOKEN` and `DISCORD_GUILD_ID` settings for the API (and eventual bot adapter). Set a fresh 64+ hex-character secret from `openssl rand -hex 32`; both settings must be present together. Without them bot routes remain disabled. The API needs `DATABASE_URL` even when OAuth is off. The Discord gateway is still tracked in BOT-01; configuring the API alone does not register Discord commands.
+[INTAKE-01](bot-intake.md) requires matching `BOT_API_TOKEN` and `DISCORD_GUILD_ID` settings for the API (and eventual bot adapter). Set a fresh 64+ hex-character secret from `openssl rand -hex 32`; both settings must be present together. Without them bot routes remain disabled. The API needs `DATABASE_URL` even when OAuth is off. The Discord gateway is implemented separately in [BOT-01 operations](bot-operations.md). The bot must also receive `DISCORD_BOT_TOKEN`; command registration is always a separate explicit operation.
 
 ## Discord setup
 
