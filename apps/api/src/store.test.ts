@@ -73,8 +73,8 @@ test(
       assert.deepEqual(reordered.json().pages[0].itemIds, [43, 42]);
       async function claim(id: string, mode: boolean, status: string) {
         await pool.query(
-          "INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore,status,reviewed_by,reviewed_at) VALUES($1,$1,'private-user','private-guild','raw-private',42,'Collector','2026-10-01','admin','https://imgur.com/private-evidence',$2,$3,'private-reviewer',now())",
-          [id, mode, status],
+          "INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore,status,reviewed_by,reviewed_at) VALUES($1,$4,'private-user','private-guild','raw-private',42,'Collector','2026-10-01','admin','https://imgur.com/private-evidence',$2,$3,'private-reviewer',now())",
+          [id, mode, status, id],
         );
       }
       const normal = randomUUID(),
