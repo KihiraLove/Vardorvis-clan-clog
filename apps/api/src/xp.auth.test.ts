@@ -8,7 +8,6 @@ import type { BackendStore, AdminIdentity, StoredSession } from './types.js';
 import { parseWomSnapshot } from './wom.js';
 import type { XpStore } from './xp-types.js';
 
-const admin = 'password-admin';
 const password = 'test-password-not-for-production';
 const auth: AuthConfig = {
   origin: 'https://clog.example.com',
