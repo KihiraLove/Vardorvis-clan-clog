@@ -1,6 +1,6 @@
 /** Database-backed REVIEW-01 / HC-01 integration, with no live Discord credentials. */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
@@ -9,14 +9,13 @@ import { PgStore } from './store.js';
 import { PgReviewStore } from './review-store.js';
 import type { AuthConfig } from './config.js';
 
-const adminId = '123456789012345678';
+const adminId = 'password-admin';
+const password = 'integration-test-password-only';
 const auth: AuthConfig = {
   origin: 'https://clog.example.com',
-  redirectUri: 'https://clog.example.com/api/v1/auth/discord/callback',
-  clientId: '234567890123456789',
-  clientSecret: 'fixture-only',
-  adminIds: new Set([adminId]),
-  secret: 't'.repeat(64),
+  secret: 'a'.repeat(64),
+  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
+    .update('admin-password:').update(password).digest(),
   secure: true,
 };
 test(
@@ -42,6 +41,7 @@ test(
         '004_bot_intake.sql',
         '005_xp_events.sql',
         '006_review_audit.sql',
+        '007_manual_submissions.sql',
       ])
         await pool.query(
           await readFile(
@@ -71,7 +71,6 @@ test(
           review,
           auth,
           logger: false,
-          identify: async () => ({ id: adminId, displayName: 'Reviewer' }),
         },
       );
       const create = async (
