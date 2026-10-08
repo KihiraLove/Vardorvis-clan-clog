@@ -6,6 +6,7 @@ import { PgStore } from './store.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
 import { PgXpStore } from './xp-store.js';
+import { PgReviewStore } from './review-store.js';
 const config = readConfig();
 if ((config.auth || config.bot) && !process.env.DATABASE_URL)
   throw new Error(
@@ -35,6 +36,7 @@ const app = createApp(
     catalog,
     icons,
     xp: pool ? new PgXpStore(pool) : undefined,
+    review: pool && store ? new PgReviewStore(pool, store) : undefined,
     ...config,
   },
 );

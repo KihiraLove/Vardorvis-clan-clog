@@ -4,7 +4,7 @@ Monorepo for a public OSRS collection log, an admin submission queue, a Discord 
 
 ## Current state
 
-The [first backend slice](docs/backend-phase-one.md) now serves PostgreSQL-backed catalog/collections, Discord admin login and persistent versioned hardcore settings. Enable auth only after configuring the Discord app, HTTPS origin, allowlist and session secret. The [complete catalog importer](docs/catalog-import.md) now bootstraps 1,717 items across 124 pages with verified local icons. The [admin catalog backend](docs/admin-catalog-backend.md) supports manual items, durable icons and page ordering. Submission review and WOM remain pending.
+The backend serves PostgreSQL-backed catalog/collections, password-protected admin login and persistent versioned hardcore settings. Configure an HTTPS origin, admin password and session secret to enable production auth. The [complete catalog importer](docs/catalog-import.md) bootstraps 1,717 items across 124 pages with verified local icons. The [admin catalog backend](docs/admin-catalog-backend.md) adds manual items, durable icons and page ordering alongside the [review backend](docs/integration-01-review.md), [Discord bot](docs/bot-operations.md) and [WOM event import](docs/xp-import.md).
 
 This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. Further backend feature routes and release approval remain pending.
 

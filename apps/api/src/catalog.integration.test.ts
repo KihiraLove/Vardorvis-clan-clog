@@ -1,6 +1,6 @@
 /** Real API + PostgreSQL + filesystem acceptance tests. CI always supplies TEST_DATABASE_URL. */
 import assert from 'node:assert/strict';
-import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,13 +17,14 @@ import {
 import { IconStorage, MAX_ICON_BYTES } from './icon-storage.js';
 import type { AuthConfig } from './config.js';
 
-const actor = '123456789012345678';
+const actor = 'password-admin';
+const password = 'catalog-fixture-password';
 const config: AuthConfig = {
   origin: 'https://daybloom.net',
-  redirectUri: 'https://daybloom.net/api/v1/auth/discord/callback',
-  clientId: actor,
-  clientSecret: 'fixture',
-  adminIds: new Set([actor]),
+  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
+    .update('admin-password:')
+    .update(password)
+    .digest(),
   secret: 'a'.repeat(64),
   secure: true,
 };
@@ -88,18 +89,17 @@ test(
       await pool.query(
         "INSERT INTO page_items(page_id,item_id,slot) VALUES('a',1000001,0),('a',1000002,1),('b',1000002,0)",
       );
-      const token = randomBytes(32).toString('base64url');
-      const hmac = (prefix: string) =>
-        createHmac('sha256', config.secret).update(prefix + token);
-      await store.createSession(
-        hmac('session:').digest('hex'),
-        { id: actor, displayName: 'Fixture admin' },
-        new Date(Date.now() + 3600000),
-      );
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        headers: { origin: config.origin },
+        payload: { password },
+      });
+      assert.equal(login.statusCode, 200, login.body);
       const headers = {
-        cookie: '__Host-clog-session=' + token,
+        cookie: String(login.headers['set-cookie']).split(';')[0]!,
         origin: config.origin,
-        'x-csrf-token': hmac('csrf:').digest('base64url'),
+        'x-csrf-token': login.json().csrfToken as string,
       };
       const adminCatalog = async () => {
         const result = await app.inject({
@@ -257,7 +257,7 @@ test(
         payload: {
           interactionId: '345678901234567890',
           guildId: '234567890123456789',
-          actorDiscordId: actor,
+          actorDiscordId: '123456789012345678',
           rawItemText: created.item.name,
           collectorName: 'Fixture collector',
           proofUrl: 'https://gyazo.com/fixture',
@@ -407,13 +407,21 @@ test(
         (await pool.query('SELECT count(*)::int AS n FROM items')).rows[0].n,
         count,
       );
-      config.adminIds.delete(actor);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/v1/auth/logout',
+            headers,
+          })
+        ).statusCode,
+        204,
+      );
       assert.equal(
         (await app.inject({ url: '/api/v1/admin/catalog', headers }))
           .statusCode,
-        403,
+        401,
       );
-      config.adminIds.add(actor);
     } finally {
       await app.close();
       await pool.end();

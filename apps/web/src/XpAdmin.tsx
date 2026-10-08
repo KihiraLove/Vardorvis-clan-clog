@@ -178,10 +178,10 @@ export function XpAdmin({
       <section className="xp-panel">
         <h2>Admin sign-in required</h2>
         <p>
-          Only allowlisted clan admins can import or refresh competition XP.
+          Sign in with the admin password to import or refresh competition XP.
         </p>
-        <a className="site-button" href="/api/v1/auth/discord">
-          Sign in with Discord
+        <a className="site-button" href="/admin">
+          Admin password sign-in
         </a>
         {error && <p role="alert">{error}</p>}
       </section>
@@ -197,6 +197,12 @@ export function XpAdmin({
         Add an event by its Wise Old Man link. Review its name, skill or
         all-skill scope, and gained XP before applying.
       </p>
+      {session.development && (
+        <p className="xp-note" role="status">
+          Local test admin — no Discord login. Imported XP is stored in the
+          separate disposable local database.
+        </p>
+      )}
       {previewMode && (
         <p className="xp-note">
           Review only: use sample competition 1001 or 1002. No live imports are

@@ -4,7 +4,7 @@ The existing `/admin/catalog` UI now uses authenticated storage for item creatio
 
 ## Routes and authorization
 
-All admin reads require the existing Discord allowlist/session. Every mutation also requires the configured same-origin `Origin` and session-bound `X-CSRF-Token`. Authentication runs before body parsing and validation. Actors come from the session, never a request field. Private responses use `Cache-Control: no-store`.
+All admin reads require the existing admin session (password login, or explicitly enabled local development mode). Every mutation also requires the configured same-origin `Origin` and session-bound `X-CSRF-Token`. Authentication runs before body parsing and validation. Actors come from the session, never a request field. Private responses use `Cache-Control: no-store`.
 
 | Route                                          | Contract                                                                                                                     |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@ All admin reads require the existing Discord allowlist/session. Every mutation a
 
 Names are trimmed, nonblank, at most 200 characters, and contain no control characters. Page IDs must be distinct and already exist. Item creation never creates a page. External IDs can be reconciled separately through the authenticated alias endpoint; the existing creation form retains its three required inputs.
 
-The search endpoint supplies autocomplete consumers with current canonical IDs, names and icon paths. The existing admin matching UI reads the same live catalog. The Discord gateway and submission-review service are still separate work; this change does not claim those unfinished services are connected.
+The search endpoint supplies autocomplete consumers with current canonical IDs, names and icon paths. The existing admin matching UI reads the same live catalog. The merged Discord gateway and submission-review service use that catalog, so manual items are immediately available for bot autocomplete and exact review matching.
 
 ## Storage and image handling
 
@@ -42,7 +42,7 @@ The ignored `.data/` directory is suitable for local development. Use a backed-u
 
 ## Transactions, identities and revisions
 
-[006_admin_catalog.sql](../packages/database/migrations/006_admin_catalog.sql) is a forward-only migration. Earlier migrations are unchanged.
+[008_admin_catalog.sql](../packages/database/migrations/008_admin_catalog.sql) is a forward-only migration. Earlier migrations are unchanged.
 
 | Entity                                                   | Responsibility                                                                            |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -88,7 +88,7 @@ Restore both files from the **same completed backup** during a maintenance windo
 3. Restore `icons.tar.gz` into the corresponding icon volume, retaining numeric UID/GID ownership. The API runs as UID 1000 and needs read/write access. Restore into a new/recovered volume when possible; do not combine unrelated backups.
 4. Start a schema-compatible API/web release and verify health, public icon responses, catalog counts, manual page order and representative credits before reopening writes.
 
-Migration 006 is additive. An older API can still read its previous columns, but cannot serve the new manual-icon route. Operational rollback therefore needs this version's icon-serving capability or a coordinated database/volume restore; merely starting an older image can leave manual icons unavailable. No live deployment or restore is performed by this PR.
+Migration 008 is additive. An older API can still read its previous columns, but cannot serve the new manual-icon route. Operational rollback therefore needs this version's icon-serving capability or a coordinated database/volume restore; merely starting an older image can leave manual icons unavailable. No live deployment or restore is performed by this PR.
 
 ## Validation
 

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { createApp } from './app.js';
 import { readConfig, type AuthConfig } from './config.js';
-import { discordIdentify } from './discord.js';
+import { createHmac } from 'node:crypto';
 import type {
   AdminIdentity,
   BackendStore,
@@ -13,14 +13,15 @@ import type {
   Settings,
   StoredSession,
 } from './types.js';
-const admin = '123456789012345678';
+const admin = 'password-admin';
+const password = 'test-password-not-for-production';
 const config: AuthConfig = {
-  origin: 'https://daybloom.net',
-  redirectUri: 'https://daybloom.net/api/v1/auth/discord/callback',
-  clientId: '234567890123456789',
-  clientSecret: 'test-only-secret',
-  adminIds: new Set([admin]),
+  origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
+  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
+    .update('admin-password:')
+    .update(password)
+    .digest(),
   secure: true,
 };
 export class MemoryStore implements BackendStore {
@@ -84,59 +85,37 @@ export class MemoryStore implements BackendStore {
     return ++this.attempts <= 20;
   }
 }
-function fixture(
-  identity: AdminIdentity = { id: admin, displayName: 'Clan admin' },
-) {
+function fixture() {
   const store = new MemoryStore();
-  let calls = 0;
-  const auth = { ...config, adminIds: new Set(config.adminIds) };
+  const auth = { ...config };
   const app = createApp(
     () => store.ready(),
     () => store.settings(),
-    {
-      store,
-      auth,
-      logger: false,
-      identify: async () => {
-        calls++;
-        return identity;
-      },
-    },
+    { store, auth, logger: false },
   );
-  return { app, store, auth, calls: () => calls };
-}
-async function start(app: FastifyInstance) {
-  const response = await app.inject('/api/v1/auth/discord');
-  assert.equal(response.statusCode, 302);
-  const url = new URL(response.headers.location!);
-  assert.equal(url.origin, 'https://discord.com');
-  assert.equal(url.searchParams.get('scope'), 'identify');
-  assert.equal(url.searchParams.get('redirect_uri'), config.redirectUri);
-  return {
-    state: url.searchParams.get('state')!,
-    cookie: String(response.headers['set-cookie']).split(';')[0]!,
-  };
+  return { app, store, auth };
 }
 async function login(app: FastifyInstance) {
-  const flow = await start(app);
   const response = await app.inject({
-    url: '/api/v1/auth/discord/callback?code=fixture&state=' + flow.state,
-    headers: { cookie: flow.cookie },
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    headers: { origin: config.origin },
+    payload: { password },
   });
-  assert.equal(response.statusCode, 302);
-  assert.equal(response.headers.location, config.origin + '/admin');
-  const cookies = response.headers['set-cookie'] as string[];
-  const cookie = cookies.find((c) => c.startsWith('__Host-clog-session='))!;
-  assert.match(cookie, /HttpOnly; SameSite=Lax; Max-Age=28800; Secure/u);
-  const header = cookie.split(';')[0]!;
+  assert.equal(response.statusCode, 200);
+  const cookie = String(response.headers['set-cookie']).split(';')[0]!;
+  assert.match(
+    String(response.headers['set-cookie']),
+    /HttpOnly; SameSite=Lax; Max-Age=28800; Secure/u,
+  );
   const session = await app.inject({
     url: '/api/v1/auth/session',
-    headers: { cookie: header },
+    headers: { cookie },
   });
   assert.equal(session.headers['cache-control'], 'no-store');
   assert.equal(session.json().authenticated, true);
   return {
-    cookie: header,
+    cookie,
     origin: config.origin,
     'x-csrf-token': session.json().csrfToken as string,
   };
@@ -197,66 +176,46 @@ test('public snapshots have stable ETags, isolated world credits and automatic c
     await app.close();
   }
 });
-test('OAuth requires browser-bound single-use state before any Discord exchange', async () => {
-  const { app, calls } = fixture();
-  try {
-    const flow = await start(app);
-    assert.equal(
-      (
-        await app.inject(
-          '/api/v1/auth/discord/callback?code=fixture&state=' + flow.state,
-        )
-      ).statusCode,
-      400,
-    );
-    assert.equal(
-      (
-        await app.inject({
-          url:
-            '/api/v1/auth/discord/callback?code=fixture&state=' +
-            'x'.repeat(43),
-          headers: { cookie: flow.cookie },
-        })
-      ).statusCode,
-      400,
-    );
-    assert.equal(calls(), 0);
-    const url =
-      '/api/v1/auth/discord/callback?code=fixture&state=' + flow.state;
-    assert.equal(
-      (await app.inject({ url, headers: { cookie: flow.cookie } })).statusCode,
-      302,
-    );
-    assert.equal(
-      (await app.inject({ url, headers: { cookie: flow.cookie } })).statusCode,
-      400,
-    );
-    assert.equal(calls(), 1);
-  } finally {
-    await app.close();
-  }
-});
-test('anonymous and non-allowlisted users cannot access settings or receive sessions', async () => {
-  const { app, store } = fixture({
-    id: '999999999999999999',
-    displayName: 'Visitor',
-  });
+test('password login rejects missing origin, bad credentials and anonymous admin reads', async () => {
+  const { app, store } = fixture();
   try {
     assert.equal((await app.inject('/api/v1/admin/settings')).statusCode, 401);
     assert.deepEqual((await app.inject('/api/v1/auth/session')).json(), {
       authenticated: false,
     });
-    const flow = await start(app);
+    assert.equal((await app.inject('/api/v1/auth/discord')).statusCode, 404);
     assert.equal(
       (
         await app.inject({
-          url: '/api/v1/auth/discord/callback?code=x&state=' + flow.state,
-          headers: { cookie: flow.cookie },
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          payload: { password },
         })
       ).statusCode,
       403,
     );
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          headers: { origin: config.origin },
+          payload: { password: 'wrong' },
+        })
+      ).statusCode,
+      401,
+    );
     assert.equal(store.sessions.size, 0);
+    const headers = await login(app);
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/admin/settings',
+          headers,
+        })
+      ).statusCode,
+      200,
+    );
   } finally {
     await app.close();
   }
@@ -337,8 +296,8 @@ test('settings require origin, CSRF, strict fields and current revision; every s
     await app.close();
   }
 });
-test('logout revokes the session and expired or newly disallowed identities fail closed', async () => {
-  const { app, store, auth } = fixture();
+test('logout revokes the password session and expired or changed identities fail closed', async () => {
+  const { app, store } = fixture();
   try {
     const headers = await login(app);
     assert.equal(
@@ -371,103 +330,54 @@ test('logout revokes the session and expired or newly disallowed identities fail
         .statusCode,
       401,
     );
-    const denied = await login(app);
-    auth.adminIds.clear();
+    const invalid = await login(app);
+    for (const session of store.sessions.values())
+      session.id = 'other-identity';
     assert.equal(
-      (await app.inject({ url: '/api/v1/admin/settings', headers: denied }))
+      (await app.inject({ url: '/api/v1/admin/settings', headers: invalid }))
         .statusCode,
-      403,
+      401,
     );
   } finally {
     await app.close();
   }
 });
-test('login rate limits and expired states prevent unbounded provider requests', async () => {
-  const { app, store, calls } = fixture();
+test('login rate limits and config fail closed without a valid admin password', async () => {
+  const { app, store } = fixture();
   try {
-    const flow = await start(app);
-    for (const key of store.state.keys()) store.state.set(key, new Date(0));
-    assert.equal(
-      (
-        await app.inject({
-          url: '/api/v1/auth/discord/callback?code=x&state=' + flow.state,
-          headers: { cookie: flow.cookie },
-        })
-      ).statusCode,
-      400,
-    );
-    assert.equal(calls(), 0);
     store.attempts = 20;
-    const blocked = await app.inject('/api/v1/auth/discord');
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: config.origin },
+      payload: { password },
+    });
     assert.equal(blocked.statusCode, 429);
     assert.equal(blocked.headers['retry-after'], '60');
   } finally {
     await app.close();
   }
-});
-test('configuration rejects insecure origins, mismatched redirects, weak secrets and broad proxy trust', () => {
   const env = {
+    NODE_ENV: 'production',
     AUTH_ENABLED: 'true',
     PUBLIC_ORIGIN: config.origin,
-    DISCORD_OAUTH_REDIRECT_URI: config.redirectUri,
-    DISCORD_CLIENT_ID: config.clientId,
-    DISCORD_CLIENT_SECRET: config.clientSecret,
-    ADMIN_DISCORD_USER_IDS: admin,
+    ADMIN_PASSWORD: password,
     SESSION_SECRET: config.secret,
   };
   assert.equal(readConfig(env).auth?.secure, true);
   assert.equal(readConfig({}).auth, undefined);
   for (const patch of [
-    { PUBLIC_ORIGIN: 'http://daybloom.net' },
-    { DISCORD_OAUTH_REDIRECT_URI: 'https://evil.example/callback' },
+    { PUBLIC_ORIGIN: 'http://clog.example.com' },
     { SESSION_SECRET: 'weak' },
-    { ADMIN_DISCORD_USER_IDS: '' },
-    { TRUSTED_PROXY_CIDRS: 'true' },
+    { ADMIN_PASSWORD: 'short' },
+    { ADMIN_PASSWORD: '' },
     { AUTH_ENABLED: 'maybe' },
+    { TRUSTED_PROXY_CIDRS: 'true' },
   ])
     assert.throws(() => readConfig({ ...env, ...patch }));
   assert.deepEqual(
     readConfig({ ...env, TRUSTED_PROXY_CIDRS: '127.0.0.1,172.18.0.0/16' })
       .trustProxy,
     ['127.0.0.1', '172.18.0.0/16'],
-  );
-});
-test('Discord exchange uses only fixed origins and form encoding; malformed identity is rejected', async () => {
-  const seen: string[] = [];
-  const request = (async (input, options) => {
-    const url = String(input);
-    seen.push(url);
-    assert.equal(options?.redirect, 'error');
-    if (url.endsWith('/token')) {
-      assert.equal(
-        new URLSearchParams(String(options?.body)).get('client_secret'),
-        config.clientSecret,
-      );
-      return Response.json({
-        access_token: 'private-token',
-        token_type: 'Bearer',
-      });
-    }
-    assert.equal(
-      (options?.headers as Record<string, string>).Authorization,
-      'Bearer private-token',
-    );
-    return Response.json({
-      id: admin,
-      username: 'Admin',
-      global_name: 'Clan admin',
-    });
-  }) as typeof fetch;
-  assert.deepEqual(await discordIdentify(config, request)('test-code'), {
-    id: admin,
-    displayName: 'Clan admin',
-  });
-  assert.deepEqual(seen, [
-    'https://discord.com/api/oauth2/token',
-    'https://discord.com/api/v10/users/@me',
-  ]);
-  await assert.rejects(
-    discordIdentify(config, (async () =>
-      Response.json({ access_token: '' })) as typeof fetch)('x'),
   );
 });

@@ -1,4 +1,4 @@
-/** Public projections plus optional configured Discord auth; unavailable services fail closed. */
+/** Public projections plus optional configured admin auth; unavailable services fail closed. */
 import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
 import { catalogRoutes } from './catalog-routes.js';
@@ -8,9 +8,9 @@ import type { AuthConfig, BotConfig } from './config.js';
 import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
 import { xpPublicRoutes } from './xp-routes.js';
+import type { ReviewStore } from './review-types.js';
 import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
-import { discordIdentify, type Identify } from './discord.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
   catalog?: PgCatalogStore | undefined;
@@ -19,8 +19,8 @@ interface Options {
   auth?: AuthConfig | undefined;
   bot?: BotConfig | undefined;
   xp?: XpStore | undefined;
+  review?: ReviewStore | undefined;
   fetchWom?: typeof fetchWomCompetition;
-  identify?: Identify;
   trustProxy?: false | string[];
   logger?: boolean;
 }
@@ -163,15 +163,15 @@ export function createApp(
           app,
           store,
           options.auth,
-          options.identify ?? discordIdentify(options.auth),
           options.xp,
+          options.review,
           options.fetchWom ?? fetchWomCompetition,
         )
       : undefined;
   if (!requireAdmin) {
     app.get('/api/v1/auth/session', async () => ({ authenticated: false }));
-    app.get('/api/v1/auth/discord', async () => {
-      throw new ApiError(503, 'Admin sign-in is not configured.');
+    app.post('/api/v1/auth/login', async () => {
+      throw new ApiError(503, 'Admin password sign-in is not configured.');
     });
   }
   if (options.catalog && options.icons)

@@ -22,6 +22,7 @@ export type SubmissionStatus = 'pending' | 'approved' | 'rejected' | 'revoked';
 export interface Submission {
   id: string;
   version: number;
+  source: 'discord' | 'manual';
   itemId: number | null;
   rawItemText: string;
   collectorName: string;
@@ -31,6 +32,15 @@ export interface Submission {
   proofUrl: string;
   hardcore: boolean;
   status: SubmissionStatus;
+}
+export interface ManualSubmissionInput {
+  itemId: number;
+  collectorName: string;
+  collectedOn: string;
+  hardcore: boolean;
+  proofUrl?: string;
+  approve: boolean;
+  reason?: string;
 }
 export interface Correction {
   itemId: number;
@@ -43,7 +53,7 @@ export interface AuditEntry {
   id: string;
   actorName: string;
   at: string;
-  action: 'edit' | 'approve' | 'reject' | 'revoke';
+  action: 'create' | 'edit' | 'approve' | 'reject' | 'revoke';
   reason: string | null;
   before: Submission;
   after: Submission;
@@ -96,6 +106,12 @@ export interface AdminClient {
     signal: AbortSignal,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
+  login(password: string, signal: AbortSignal): Promise<void>;
+  addManual(
+    fields: ManualSubmissionInput,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<Submission>;
   logout(csrf: string, signal: AbortSignal): Promise<void>;
   catalog(signal: AbortSignal): Promise<AdminCatalog>;
   queue(
@@ -149,18 +165,27 @@ function choice<T extends string>(value: unknown, allowed: readonly T[]): T {
 }
 export function parseSubmission(value: unknown): Submission {
   const row = object(value);
-  if (typeof row.hardcore !== 'boolean' || typeof row.rawItemText !== 'string')
+  if (
+    typeof row.hardcore !== 'boolean' ||
+    typeof row.rawItemText !== 'string' ||
+    typeof row.proofUrl !== 'string'
+  )
     throw new Error('Invalid submission data.');
   return {
     id: text(row.id),
     version: identity(row.version),
+    source:
+      row.source === undefined
+        ? 'discord'
+        : choice(row.source, ['discord', 'manual']),
     itemId: row.itemId === null ? null : identity(row.itemId),
     rawItemText: row.rawItemText,
     collectorName: text(row.collectorName),
     collectedOn: validateCollectionDate(text(row.collectedOn)),
     dateSource: choice(row.dateSource, ['submission', 'claim', 'admin']),
     submittedAt: timestamp(row.submittedAt),
-    proofUrl: text(row.proofUrl),
+    // Manual submissions may have no proof; bot claims must provide evidence.
+    proofUrl: row.proofUrl,
     hardcore: row.hardcore,
     status: choice(row.status, ['pending', 'approved', 'rejected', 'revoked']),
   };
@@ -198,7 +223,13 @@ export function parseDetail(value: unknown): SubmissionDetail {
       id: text(a.id),
       actorName: text(a.actorName),
       at: timestamp(a.at),
-      action: choice(a.action, ['edit', 'approve', 'reject', 'revoke']),
+      action: choice(a.action, [
+        'create',
+        'edit',
+        'approve',
+        'reject',
+        'revoke',
+      ]),
       reason: a.reason === null ? null : text(a.reason),
       before,
       after,

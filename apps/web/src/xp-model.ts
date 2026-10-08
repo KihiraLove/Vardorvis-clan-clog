@@ -89,6 +89,7 @@ export interface ImportEntry {
 export interface AdminSession {
   csrfToken: string;
   displayName: string;
+  development?: boolean;
 }
 export interface ApplyResult {
   outcome: 'applied' | 'unchanged';

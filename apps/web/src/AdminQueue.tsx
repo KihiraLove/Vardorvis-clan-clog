@@ -10,6 +10,7 @@ import {
 import type { AdminSession } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
 import { SubmissionEditor } from './SubmissionEditor.tsx';
+import { ManualSubmissionForm } from './ManualSubmissionForm.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
 export function AdminQueue({
   client,
@@ -90,6 +91,21 @@ export function AdminQueue({
   };
   return (
     <>
+      {snapshot?.catalog && (
+        <ManualSubmissionForm
+          catalog={snapshot.catalog}
+          client={client}
+          session={session}
+          onAccessLost={onAccessLost}
+          onCreated={(row) => {
+            setNotice('Manual submission created: ' + row.status + '.');
+            setSelected(row.id);
+            setView(row.status === 'pending' ? 'pending' : 'reviewed');
+            setCursors([undefined]);
+            setRefresh((v) => v + 1);
+          }}
+        />
+      )}
       <section className="admin-panel">
         <div className="admin-section-heading">
           <div>

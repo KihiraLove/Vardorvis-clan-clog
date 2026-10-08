@@ -31,7 +31,7 @@ export class XpRequestError extends Error {
   constructor(status: number) {
     super(
       status === 401
-        ? 'Sign in with Discord to import competitions.'
+        ? 'Sign in with the admin password to import competitions.'
         : status === 403
           ? 'Your account is not allowed to import competitions.'
           : status === 409
@@ -184,9 +184,15 @@ export class LiveXpClient implements XpClient {
       if (value.authenticated === false) return null;
       if (value.authenticated !== true)
         throw new Error('Invalid admin session.');
+      if (
+        value.development !== undefined &&
+        typeof value.development !== 'boolean'
+      )
+        throw new Error('Invalid admin session mode.');
       return {
         csrfToken: text(value.csrfToken),
         displayName: text(value.displayName),
+        ...(value.development === true ? { development: true } : {}),
       };
     } catch (error) {
       if (error instanceof XpRequestError && error.status === 401) return null;

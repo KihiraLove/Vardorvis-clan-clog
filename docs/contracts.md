@@ -5,7 +5,7 @@
 
 > **8 October 2026 intake update:** [Bot intake](bot-intake.md) now implements credential-scoped catalog autocomplete and durable pending submissions, including mode, dates, matching candidates and idempotent receipts. Discord gateway handling and admin review remain separate work.
 
-> **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
+> **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, password sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
 
 > **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
 
@@ -27,10 +27,10 @@ The routes marked as implemented in [backend phase one](backend-phase-one.md) an
 | `GET /api/v1/collections`                      | Public                            | Approved item credits and revision; excludes evidence/actor IDs |
 | `GET /api/v1/bot/items?q=...`                  | Bot credential                    | Ranked canonical autocomplete candidates                        |
 | `POST /api/v1/bot/submissions`                 | Bot credential + configured guild | Idempotent intake and resolution suggestions                    |
-| `GET /api/v1/auth/discord`                     | Browser                           | Start OAuth with state and approved redirect                    |
-| `GET /api/v1/auth/discord/callback`            | OAuth state/code                  | Create allowlisted admin session                                |
+| `POST /api/v1/auth/login`                      | Password + matching Origin        | Create an expiring admin session                                |
 | `GET /api/v1/auth/session`                     | Browser session                   | Report admin access and a session-bound CSRF token              |
 | `POST /api/v1/auth/logout`                     | Session + CSRF                    | Destroy session                                                 |
+| `POST /api/v1/admin/submissions`               | Admin session + CSRF              | Insert manual pending or immediately approved claim             |
 | `GET /api/v1/admin/submissions?status=pending` | Admin session                     | Paginated queue including unmatched submissions                 |
 | `GET /api/v1/admin/submissions/:id`            | Admin session                     | Current claim and private before/after audit history            |
 | `PATCH /api/v1/admin/submissions/:id`          | Admin session + CSRF              | Resolve/edit item, collector or date with expected version      |
@@ -46,12 +46,13 @@ Review writes carry `expectedVersion`; conflicts return 409. Standard errors are
 
 ## Frontend admin review payloads
 
-The #8/#31 frontend and [review guide](admin-frontend-review.md) use these proposed shapes. The foundation API does not implement them yet. All private reads use `Cache-Control: no-store`; enforce an allowlisted session on every route. Browser requests use same-origin cookies and no-store caching. Writes additionally send `X-CSRF-Token`; the server repeats all validation and derives actor identity from the session.
+The #8/#31 frontend and [review guide](admin-frontend-review.md) use these proposed shapes. The live REVIEW-01 API implements submissions and decisions; catalog CRUD remains separate work. All private reads use `Cache-Control: no-store`; enforce an allowlisted session on every route. Browser requests use same-origin cookies and no-store caching. Writes additionally send `X-CSRF-Token`; the server repeats all validation and derives actor identity from the session.
 
 ```ts
 interface Submission {
   id: string; // opaque stable identity, encoded as a URL segment
   version: number; // positive safe integer, advances on every mutation
+  source: 'discord' | 'manual'; // provenance of the claim
   itemId: number | null; // canonical ID; null means unmatched
   rawItemText: string;
   collectorName: string; // 1–80 characters after trimming
@@ -66,7 +67,7 @@ interface ReviewAudit {
   id: string;
   actorName: string;
   at: string; // UTC ISO timestamp
-  action: 'edit' | 'approve' | 'reject' | 'revoke';
+  action: 'create' | 'edit' | 'approve' | 'reject' | 'revoke';
   reason: string | null;
   before: Submission;
   after: Submission;
@@ -77,7 +78,7 @@ Queue GET accepts `status=pending|reviewed`, `limit=20`, optional opaque `cursor
 
 Correction PATCH carries `{ expectedVersion, itemId, collectorName, collectedOn, hardcore, reason }`; `itemId` must be a specific existing canonical item, and `reason` is trimmed and at most 1,000 characters. Only pending/approved claims can be edited. Approved corrections require a reason. Preserve the raw evidence/receipt timestamp; changing the collection date sets `dateSource: admin`.
 
-Approve POST carries `{ expectedVersion }`; reject/revoke carry `{ expectedVersion, reason }` with a nonblank reason. Only pending matched claims with a validated HTTPS Imgur/Gyazo proof link may approve; reject permits pending unmatched/invalid-evidence claims; revoke requires approved state. These actions return the complete saved `Submission` with a higher version. Store state and audit atomically. Stale/double decisions return 409. Public credit is derived only from current approvals, so corrections/revocations update every shared occurrence. The proof checkbox is a UI acknowledgment, not an authorization field or a substitute for real inspection.
+Approve POST carries `{ expectedVersion }`; reject/revoke carry `{ expectedVersion, reason }` with a nonblank reason. Bot-submitted claims require a validated HTTPS Imgur/Gyazo proof link before approval; authenticated manual claims may be approved without an external proof link; reject permits pending unmatched/invalid-evidence claims; revoke requires approved state. These actions return the complete saved `Submission` with a higher version. Store state and audit atomically. Stale/double decisions return 409. Public credit is derived only from current approvals, so corrections/revocations update every shared occurrence. The proof checkbox is a UI acknowledgment, not an authorization field or a substitute for real inspection.
 
 The browser blocks unsafe proof URLs but can display/reject a stored malformed claim. It never fetches or embeds submitted proof automatically. A write receipt is acknowledged even if a following audit read fails; another mutation waits for a usable current record. Conflicts reload and require explicit review/retry, never an automatic overwrite.
 

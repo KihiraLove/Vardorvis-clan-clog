@@ -1,21 +1,20 @@
 /** Disposable Compose acceptance check, invoked only by CI with an explicit opt-in. */
 import assert from 'node:assert/strict';
-import { createHmac, randomBytes } from 'node:crypto';
-import pg from 'pg';
 import sharp from 'sharp';
 if (process.env.CATALOG_SMOKE_TEST !== '1')
   throw new Error('For disposable CI databases only');
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
-const token = randomBytes(32).toString('base64url');
-const digest = (prefix) =>
-  createHmac('sha256', process.env.SESSION_SECRET).update(prefix + token);
-const tokenHash = digest('session:').digest('hex');
 const origin = process.env.PUBLIC_ORIGIN;
+const login = await fetch('http://127.0.0.1:3000/api/v1/auth/login', {
+  method: 'POST',
+  headers: { Origin: origin, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }),
+});
+assert.equal(login.status, 200, 'CI admin password login must succeed');
+const session = await login.json();
 const headers = {
   Origin: origin,
-  Cookie: '__Host-clog-session=' + token,
-  'X-CSRF-Token': digest('csrf:').digest('base64url'),
+  Cookie: login.headers.get('set-cookie').split(';')[0],
+  'X-CSRF-Token': session.csrfToken,
 };
 const request = async (path, options = {}) => {
   const response = await fetch('http://127.0.0.1:3000' + path, {
@@ -27,10 +26,6 @@ const request = async (path, options = {}) => {
   return body;
 };
 try {
-  await client.query(
-    "INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at) VALUES($1,$2,'CI catalog fixture',now()+interval '5 minutes')",
-    [tokenHash, process.env.ADMIN_DISCORD_USER_IDS.split(',')[0]],
-  );
   const png = await sharp({
     create: { width: 36, height: 32, channels: 4, background: '#ff000080' },
   })
@@ -79,8 +74,9 @@ try {
     }),
   );
 } finally {
-  await client.query('DELETE FROM admin_sessions WHERE token_hash=$1', [
-    tokenHash,
-  ]);
-  await client.end();
+  const logout = await fetch('http://127.0.0.1:3000/api/v1/auth/logout', {
+    method: 'POST',
+    headers,
+  });
+  assert.equal(logout.status, 204);
 }
