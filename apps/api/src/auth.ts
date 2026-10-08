@@ -9,6 +9,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthConfig } from './config.js';
 import type { Identify } from './discord.js';
 import { xpAdminRoutes } from './xp-routes.js';
+import { reviewRoutes } from './review-routes.js';
+import type { ReviewStore } from './review-types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
@@ -32,6 +34,7 @@ export function authRoutes(
   config: AuthConfig,
   identify: Identify,
   xp?: XpStore,
+  review?: ReviewStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
 ) {
   const sessionName = config.secure ? '__Host-clog-session' : 'clog-session';
@@ -84,6 +87,7 @@ export function authRoutes(
       );
   }
   if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
+  if (review) reviewRoutes(app, review, requireAdmin);
   app.get('/api/v1/auth/discord', async (request, reply) => {
     await loginLimit(request);
     const state = nonce();

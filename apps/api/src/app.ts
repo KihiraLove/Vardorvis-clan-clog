@@ -5,6 +5,7 @@ import type { AuthConfig, BotConfig } from './config.js';
 import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
 import { xpPublicRoutes } from './xp-routes.js';
+import type { ReviewStore } from './review-types.js';
 import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { discordIdentify, type Identify } from './discord.js';
@@ -14,6 +15,7 @@ interface Options {
   auth?: AuthConfig | undefined;
   bot?: BotConfig | undefined;
   xp?: XpStore | undefined;
+  review?: ReviewStore | undefined;
   fetchWom?: typeof fetchWomCompetition;
   identify?: Identify;
   trustProxy?: false | string[];
@@ -157,6 +159,7 @@ export function createApp(
       options.auth,
       options.identify ?? discordIdentify(options.auth),
       options.xp,
+      options.review,
       options.fetchWom ?? fetchWomCompetition,
     );
   else {
