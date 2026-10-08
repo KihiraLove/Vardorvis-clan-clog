@@ -161,7 +161,11 @@ function choice<T extends string>(value: unknown, allowed: readonly T[]): T {
 }
 export function parseSubmission(value: unknown): Submission {
   const row = object(value);
-  if (typeof row.hardcore !== 'boolean' || typeof row.rawItemText !== 'string')
+  if (
+    typeof row.hardcore !== 'boolean' ||
+    typeof row.rawItemText !== 'string' ||
+    typeof row.proofUrl !== 'string'
+  )
     throw new Error('Invalid submission data.');
   return {
     id: text(row.id),
@@ -173,7 +177,8 @@ export function parseSubmission(value: unknown): Submission {
     collectedOn: validateCollectionDate(text(row.collectedOn)),
     dateSource: choice(row.dateSource, ['submission', 'claim', 'admin']),
     submittedAt: timestamp(row.submittedAt),
-    proofUrl: text(row.proofUrl),
+    // Manual submissions may have no proof; bot claims must provide evidence.
+    proofUrl: row.proofUrl,
     hardcore: row.hardcore,
     status: choice(row.status, ['pending', 'approved', 'rejected', 'revoked']),
   };

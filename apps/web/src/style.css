@@ -201,34 +201,22 @@ main {
 }
 .game-titlebar {
   height: 26px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) 70px;
   align-items: center;
-  gap: 5px;
   padding: 0 2px 3px;
   border-bottom: 2px solid #211f19;
 }
 .game-titlebar h2 {
-  flex: 1;
+  grid-column: 2;
   margin: 0;
   text-align: center;
   font: inherit;
   font-size: 17px;
   white-space: nowrap;
 }
-.log-book {
-  width: 21px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  font-family: serif;
-  font-size: 22px;
-  line-height: 1;
-  background: #6b6553;
-  color: #29271f;
-  border: 2px solid #211e17;
-  text-shadow: 1px 1px #a39875;
-}
 .game-search {
+  grid-column: 3;
   height: 22px;
   width: 70px;
   font-size: 13px;
@@ -243,16 +231,6 @@ main {
   font-family: serif;
   font-size: 17px;
   vertical-align: middle;
-}
-.game-close {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  background: #6e6752;
-  color: #1e1c15;
-  font: 25px/17px serif;
-  border: 2px solid #211e16;
-  text-shadow: 1px 1px #a59877;
 }
 .game-tabs {
   height: 22px;

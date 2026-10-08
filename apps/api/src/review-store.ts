@@ -184,8 +184,16 @@ export class PgReviewStore implements ReviewStore {
       return created;
     } catch (e) {
       await client.query('ROLLBACK');
-      if (e && typeof e === 'object' && 'code' in e && e.code === '23505')
-        throw conflict();
+      if (
+        e && typeof e === 'object' && 'code' in e && e.code === '23505' &&
+        'constraint' in e && e.constraint === 'submissions_one_credit_per_world'
+      )
+        throw new ApiError(
+          409,
+          'This item already has an approved ' +
+            (fields.hardcore ? 'hardcore' : 'ordinary') +
+            ' collection log entry. Revoke or edit it instead.',
+        );
       throw e;
     } finally {
       client.release();

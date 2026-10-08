@@ -63,6 +63,13 @@ export function ManualSubmissionForm({
     } catch (failure) {
       if (failure instanceof Error && 'status' in failure &&
           [401, 403].includes(Number(failure.status))) onAccessLost();
+      else if (failure instanceof Error && 'status' in failure &&
+          Number(failure.status) === 409 && approve)
+        setError(
+          chosen.name + ' is already collected in ' +
+          (hardcore ? 'hardcore' : 'ordinary') +
+          ' worlds. Revoke or edit the existing approved entry instead.',
+        );
       else setError(failure instanceof Error ? failure.message : 'Could not create manual submission.');
     } finally {
       setBusy(false);

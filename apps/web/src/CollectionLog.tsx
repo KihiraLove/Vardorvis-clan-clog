@@ -109,7 +109,6 @@ export function CollectionLog({
   );
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [closed, setClosed] = useState(false);
   const scale = 2;
   const [open, setOpen] = useState<OpenItem>();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -191,14 +190,7 @@ export function CollectionLog({
 
   return (
     <section className="collection-section" aria-label="Clan collection log">
-      {closed ? (
-        <div className="reopen">
-          <button className="site-button" onClick={() => setClosed(false)}>
-            Open collection log
-          </button>
-        </div>
-      ) : (
-        <div className="log-viewport">
+      <div className="log-viewport">
           <div
             className="log-sizing"
             style={{ width: 500 * scale, height: 314 * scale }}
@@ -208,22 +200,6 @@ export function CollectionLog({
               style={{ transform: `scale(${scale})` }}
             >
               <header className="game-titlebar">
-                <span className="log-book" aria-hidden="true">
-                  ▤
-                </span>
-                <button
-                  className="game-search"
-                  type="button"
-                  aria-expanded={searching}
-                  aria-controls="page-search"
-                  onClick={() => {
-                    close();
-                    setSearching(!searching);
-                    setQuery('');
-                  }}
-                >
-                  <span aria-hidden="true">⌕</span> Search
-                </button>
                 <h2>
                   {hardcore ? 'Hardcore Collection Log' : 'Collection Log'}
                   {catalog && (
@@ -244,15 +220,17 @@ export function CollectionLog({
                   )}
                 </h2>
                 <button
-                  className="game-close"
+                  className="game-search"
                   type="button"
-                  aria-label="Close collection log"
+                  aria-expanded={searching}
+                  aria-controls="page-search"
                   onClick={() => {
                     close();
-                    setClosed(true);
+                    setSearching(!searching);
+                    setQuery('');
                   }}
                 >
-                  ×
+                  <span aria-hidden="true">⌕</span> Search
                 </button>
               </header>
               <div
@@ -426,7 +404,6 @@ export function CollectionLog({
             </div>
           </div>
         </div>
-      )}
       {data && error && (
         <p className="refresh-error" role="status">
           {error} Showing the last successful update.{' '}
