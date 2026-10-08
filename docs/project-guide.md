@@ -1,5 +1,7 @@
 # Project code, data model, architecture and CI guide
 
+> **8 October 2026 CAT-01 update:** [Complete catalog import](catalog-import.md) now supplies 1,717 items, 124 ordered pages and verified local icons. Compose initializes the catalog after migrations; earlier descriptions of catalog import as pending are superseded.
+
 > **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
 
 This guide describes the checked-in implementation reviewed on 7 October 2026. It explains the source files and their interactions, including the boundary between working frontend previews and future production services. Inline comments in the source explain the responsibilities and less obvious decisions. JSON configuration, binary assets and the checksummed SQL migration are explained here without changing their contents.

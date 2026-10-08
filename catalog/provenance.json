@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "retrievedAt": "2026-10-08T05:32:38.196Z",
+  "sourceUrl": "https://templeosrs.com/api/collection-log/categories.php",
+  "sourceRevision": "25da8ab34b0e7a6cd5fe38f8615325a49712a5a20918779a4d0ef1f7072e5c34",
+  "wikiRevision": 15347607,
+  "iconRevision": "e9ebc4b41e765d09d1d91925c44e3103223e0430",
+  "sources": [
+    {
+      "file": "categories.json",
+      "url": "https://templeosrs.com/api/collection-log/categories.php",
+      "sha256": "f682c9068ec1dc08bce3d8978133423f6054b85536b6d0add6fd9f0dfb4cc28a"
+    },
+    {
+      "file": "items.json",
+      "url": "https://templeosrs.com/api/collection-log/items.php",
+      "sha256": "4a67a8777da2c4145cf0d50905d4a00434e78fdb2311888a27ca17492657a912"
+    },
+    {
+      "file": "wiki.json",
+      "url": "https://oldschool.runescape.wiki/api.php?action=query&prop=revisions&titles=Module%3ACollection_log%2Fdata.json&rvprop=ids%7Ctimestamp%7Ccontent&rvslots=main&format=json&formatversion=2",
+      "sha256": "afe6f5e2aed83cd1ff57f246ad5cbfd5fe7de8fed20c24d4a7070f91ca6514da"
+    },
+    {
+      "file": "page-names.json",
+      "url": "https://templeosrs.com/collection-log/categories.php",
+      "sha256": "30a92d28efc7ec4ca1190c9e1dbb4d0b4c241c900fc04977d39070017cdd9acf",
+      "transformation": "Only data-parameter/data-category pairs for API pages; HTML entities decoded."
+    }
+  ],
+  "coverage": {
+    "categories": 5,
+    "pages": 124,
+    "items": 1717,
+    "slots": 1864
+  }
+}

@@ -17,10 +17,14 @@
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
     "check:docs": "node scripts/check-docs.mjs",
-    "validate": "npm run format:check && npm run lint && npm run build && npm run typecheck && npm test && npm run check:docs",
+    "validate": "npm run format:check && npm run lint && npm run build && npm run catalog:check && npm run typecheck && npm test && npm run check:docs",
     "db:migrate": "npm run migrate -w @clog/database",
     "dev:web": "npm run dev -w @clog/web",
-    "dev:api": "npm run dev -w @clog/api"
+    "dev:api": "npm run dev -w @clog/api",
+    "catalog:build": "node packages/database/dist/catalog-build.js",
+    "catalog:check": "node packages/database/dist/catalog-build.js --check",
+    "catalog:import": "node packages/database/dist/catalog-import.js",
+    "catalog:assets": "node scripts/catalog-assets.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -100,3 +100,10 @@ test('dates are calendar dates, independent of server timezone', () => {
   for (const value of ['2026-02-29', '2026-04-31', '16/10/26', '2026-13-01'])
     assert.throws(() => validateCollectionDate(value));
 });
+
+test('manual canonical items may have no external game aliases', () => {
+  validateCatalog(
+    [{ id: 1, name: 'Clan trophy', gameItemIds: [] }],
+    [{ id: 'clan', itemIds: [1] }],
+  );
+});

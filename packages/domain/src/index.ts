@@ -43,7 +43,7 @@ export function collectionState(
 }
 
 /** Validate the imported catalog graph, including globally unambiguous game-ID aliases.
- * Manual items without game IDs are supported by the web model, but not this validator yet.
+ * Manual items may omit external IDs; imported items require them at the import boundary.
  */
 export function validateCatalog(
   items: readonly CatalogItem[],
@@ -56,8 +56,7 @@ export function validateCatalog(
       !Number.isSafeInteger(item.id) ||
       item.id <= 0 ||
       itemIds.has(item.id) ||
-      !item.name.trim() ||
-      !item.gameItemIds.length
+      !item.name.trim()
     ) {
       throw new Error('Invalid or duplicate canonical item');
     }

@@ -1,0 +1,3 @@
+# Preserve captured source bytes and deterministic snapshots on every platform.
+catalog/** -text
+*.png binary
