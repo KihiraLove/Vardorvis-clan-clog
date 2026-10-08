@@ -26,18 +26,18 @@ The example contains placeholders, never working production secrets. `.env` is i
 | `DATABASE_URL`                                | Host Node      | Host PostgreSQL URI; Compose builds its own URI using `db`                       |
 | `HOST` / `PORT`                               | API            | Defaults `0.0.0.0` and 3000 in containers                                        |
 | `TEST_DATABASE_URL`                           | Tests only     | Dedicated disposable database for integration tests                              |
-| `PUBLIC_ORIGIN`                               | Future API     | Exact external HTTPS origin; not active in foundation                            |
-| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Future API     | OAuth application credentials                                                    |
-| `DISCORD_OAUTH_REDIRECT_URI`                  | Future API     | Exact callback URL registered with Discord                                       |
-| `ADMIN_DISCORD_USER_IDS`                      | Future API     | Comma-separated admin user IDs, not names or roles                               |
-| `SESSION_SECRET`                              | Future API     | At least 32 random bytes for session protection                                  |
+| `PUBLIC_ORIGIN`                               | API            | Exact external HTTPS origin for OAuth and CSRF                                   |
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | API            | OAuth application credentials                                                    |
+| `DISCORD_OAUTH_REDIRECT_URI`                  | API            | Exact callback URL registered with Discord                                       |
+| `ADMIN_DISCORD_USER_IDS`                      | API            | Comma-separated admin user IDs, not names or roles                               |
+| `SESSION_SECRET`                              | API            | At least 32 random bytes for session protection                                  |
 | `BOT_API_TOKEN`                               | Future bot/API | Dedicated service token; generate independently of session secret                |
 | `DISCORD_BOT_TOKEN`                           | Future bot     | Discord bot credential                                                           |
 | `DISCORD_APPLICATION_ID`                      | Future bot     | Application ID for explicit guild-command registration                           |
 | `DISCORD_GUILD_ID`                            | Future bot/API | Only clan guild allowed to submit                                                |
 | `API_BASE_URL`                                | Future bot     | Internal service URL, set to `http://api:3000` by Compose                        |
 
-Reserved OAuth/bot variables are documentation for later work. The foundation API currently reads database/listen settings only; auth implementation must add the relevant variables to the API service environment and validate them on startup. `apps/web` receives no secrets and will use relative `/api/v1` URLs.
+`AUTH_ENABLED=false` keeps OAuth disabled until configured. Enabled auth validates all OAuth/session variables on startup; Compose forwards them only to the API. `TRUSTED_PROXY_CIDRS` is a comma-separated list of actual proxy IPs/CIDRs (empty trusts none). See [backend setup](backend-phase-one.md) for cookie, session and TLS requirements. Bot variables remain reserved. `apps/web` receives no secrets and will use relative `/api/v1` URLs.
 
 ## All-container development
 
@@ -69,9 +69,9 @@ docker compose exec -T db createdb -U clog clog_test
 TEST_DATABASE_URL='postgresql://clog:YOUR_HEX_PASSWORD@127.0.0.1:5432/clog_test' npm test
 ```
 
-## Discord setup when the feature is ready
+## Discord setup
 
-Create one application in the Discord Developer Portal; set the future OAuth callback URL, create a bot and invite it only to the clan guild with `bot` and `applications.commands` scopes. Use the Guilds intent and no message-content privileged intent. Copy application/guild/user IDs as strings. Admin access comes from the application allowlist, not an arbitrary Discord nickname. Keep command registration separate from login/startup and validate in a test guild first.
+Create one application in the Discord Developer Portal; register the exact OAuth callback URL, for the future bot workstream, create a bot and invite it only to the clan guild with `bot` and `applications.commands` scopes. Use the Guilds intent and no message-content privileged intent. Copy application/guild/user IDs as strings. Admin access comes from the application allowlist, not an arbitrary Discord nickname. Keep command registration separate from login/startup and validate in a test guild first.
 
 ## GitHub setup
 

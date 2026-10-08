@@ -1,5 +1,7 @@
 # Mockup revision: collection log and SOTW tracker
 
+> **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
+
 This document records the owner's 7 October 2026 mockup and requests. It supersedes conflicting display and collection rules in earlier review notes. The [project guide](project-guide.md) explains the full code, data model, architecture and CI pipeline.
 
 ## Requested behavior and implementation
