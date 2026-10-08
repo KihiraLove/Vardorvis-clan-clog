@@ -19,10 +19,13 @@ const proofHosts = new Set([
   'i.gyazo.com',
 ]);
 function hasWhitespaceOrControl(value: string): boolean {
-  return /\s/u.test(value) || [...value].some((ch) => {
-    const code = ch.codePointAt(0)!;
-    return code < 32 || code === 127;
-  });
+  return (
+    /\s/u.test(value) ||
+    [...value].some((ch) => {
+      const code = ch.codePointAt(0)!;
+      return code < 32 || code === 127;
+    })
+  );
 }
 export function validProofUrl(value: string): boolean {
   if (!value || value.length > 2048 || hasWhitespaceOrControl(value))
