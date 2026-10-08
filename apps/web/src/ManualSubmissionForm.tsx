@@ -87,7 +87,7 @@ export function ManualSubmissionForm({
                 <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
               </label>
               <label>Canonical item
-                <select required size={5} value={itemId} onChange={(event) => setItemId(event.target.value)}>
+                <select aria-label="Canonical item" required size={5} value={itemId} onChange={(event) => setItemId(event.target.value)}>
                   <option value="">Choose the exact item…</option>
                   {visible.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}
                 </select>

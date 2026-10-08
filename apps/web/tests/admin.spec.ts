@@ -374,7 +374,7 @@ test('anonymous access makes no private reads and forbidden review clears privat
   state.authenticated = false;
   await page.goto('/admin');
   await expect(
-    page.getByRole('link', { name: 'Sign in with Discord', exact: true }),
+    page.getByLabel('Admin password'),
   ).toBeVisible();
   expect(state.privateReads).toBe(0);
   await expect(page.locator('.submission-card')).toHaveCount(0);
@@ -399,7 +399,7 @@ test('anonymous access makes no private reads and forbidden review clears privat
     .getByRole('button', { name: 'Approve submission', exact: true })
     .click();
   await expect(
-    page.getByRole('link', { name: 'Sign in with Discord', exact: true }),
+    page.getByLabel('Admin password'),
   ).toBeVisible();
   await expect(
     page.locator('.submission-editor, .submission-card'),
@@ -650,12 +650,12 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(
-    page.getByRole('link', { name: 'Sign in with Discord', exact: true }),
+    page.getByLabel('Admin password'),
   ).toBeVisible();
   await expect(page.locator('.submission-card')).toHaveCount(0);
   await page.getByRole('link', { name: 'XP imports', exact: true }).click();
   await expect(
-    page.getByRole('link', { name: 'Sign in with Discord', exact: true }),
+    page.getByLabel('Admin password'),
   ).toBeVisible();
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
 });

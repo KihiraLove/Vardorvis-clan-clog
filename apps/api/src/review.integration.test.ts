@@ -399,7 +399,7 @@ test(
         (await review.detail(rollback))?.submission.status,
         'pending',
       );
-      assert.equal((await backend.collections()).length, 2);
+      assert.equal((await backend.collections()).length, 3);
     } finally {
       await app?.close();
       await pool.end();
