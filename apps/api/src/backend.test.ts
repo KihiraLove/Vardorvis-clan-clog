@@ -38,6 +38,8 @@ export class MemoryStore implements BackendStore {
   };
   credits: PublicCredit[] = [];
   async ready() {}
+  async botItems() { return []; }
+  async submitClaim(): Promise<never> { throw new Error('Not configured in this test.'); }
   async catalog() {
     return this.data;
   }

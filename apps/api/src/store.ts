@@ -1,9 +1,14 @@
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
+import { randomUUID } from 'node:crypto';
+import { validCollectionDate } from './intake.js';
+import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import {
   ApiError,
   type AdminIdentity,
   type BackendStore,
+  type BotReceipt,
+  type BotSubmissionInput,
   type CatalogData,
   type PublicCredit,
   type Settings,
@@ -12,6 +17,130 @@ import {
 const unavailable = () => new ApiError(503, 'The catalog is not ready.');
 export class PgStore implements BackendStore {
   constructor(private readonly pool: pg.Pool) {}
+
+  private async matchItems(client: pg.PoolClient): Promise<MatchItem[]> {
+    const items = (
+      await client.query<{ id: number; name: string }>(
+        'SELECT id,name FROM items WHERE active ORDER BY id LIMIT 10001',
+      )
+    ).rows;
+    const aliases = (
+      await client.query<{ item_id: number; alias: string }>(
+        'SELECT a.item_id,a.alias FROM item_aliases a JOIN items i ON i.id=a.item_id WHERE i.active ORDER BY a.item_id,a.alias LIMIT 20001',
+      )
+    ).rows;
+    if (items.length > 10000 || aliases.length > 20000)
+      throw new ApiError(503, 'Bot catalog exceeds supported limits.');
+    const mapped = new Map<number, MatchItem>(
+      items.map((item) => [item.id, { ...item, aliases: [] }]),
+    );
+    for (const alias of aliases) mapped.get(alias.item_id)?.aliases.push(alias.alias);
+    return [...mapped.values()];
+  }
+
+  async botItems(query: string, limit: number) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const results = searchMatches(await this.matchItems(client), query, limit);
+      await client.query('COMMIT');
+      return results;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async submitClaim(input: BotSubmissionInput, payloadHash: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const readReceipt = async (): Promise<{ hash: string | null; receipt: BotReceipt | null } | null> => {
+        const row = (
+          await client.query<{ hash: string | null; receipt: BotReceipt | null }>(
+            'SELECT intake_payload_hash AS hash, intake_receipt AS receipt FROM submissions WHERE discord_interaction_id=$1',
+            [input.interactionId],
+          )
+        ).rows[0];
+        return row ?? null;
+      };
+      const replay = (prior: { hash: string | null; receipt: BotReceipt | null }) => {
+        if (prior.hash !== payloadHash || !prior.receipt)
+          throw new ApiError(409, 'Discord interaction ID was used for a different claim.');
+        return { created: false, receipt: prior.receipt };
+      };
+      const prior = await readReceipt();
+      if (prior) {
+        const result = replay(prior);
+        await client.query('COMMIT');
+        return result;
+      }
+      const submittedAt = (
+        await client.query<{ timestamp: Date }>('SELECT now() AS timestamp')
+      ).rows[0]!.timestamp;
+      const today = submittedAt.toISOString().slice(0, 10);
+      if (input.collectedOn && !validCollectionDate(input.collectedOn, today))
+        throw new ApiError(422, 'Collection date must be a valid, non-future UTC calendar date.');
+      const matches = await this.matchItems(client);
+      if (input.itemId !== undefined && !matches.some((item) => item.id === input.itemId))
+        throw new ApiError(422, 'Selected canonical item is unavailable.');
+      const matched = resolveMatch(matches, input.rawItemText, input.itemId);
+      const itemId = matched.itemId;
+      const creditOccupied =
+        itemId !== null &&
+        (
+          await client.query(
+            "SELECT 1 FROM submissions WHERE item_id=$1 AND hardcore=$2 AND status='approved' LIMIT 1",
+            [itemId, input.hardcore],
+          )
+        ).rowCount === 1;
+      const receipt: BotReceipt = {
+        submissionId: randomUUID(),
+        interactionId: input.interactionId,
+        status: 'pending',
+        submittedAt: submittedAt.toISOString(),
+        collectedOn: input.collectedOn ?? today,
+        dateSource: input.collectedOn ? 'collector' : 'submission_default',
+        hardcore: input.hardcore,
+        resolution: matched.resolution,
+        itemId,
+        candidates: matched.candidates,
+        creditOccupied,
+      };
+      // Unique interaction IDs serialize concurrent retries in PostgreSQL. ON CONFLICT
+      // waits for the winner, after which readReceipt observes the committed receipt.
+      const inserted = await client.query(
+        `INSERT INTO submissions (
+          id, discord_interaction_id, discord_user_id, discord_guild_id,
+          raw_item_text, item_id, collector_name, collected_on, date_source,
+          proof_url, hardcore, intake_payload_hash, intake_receipt
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (discord_interaction_id) DO NOTHING RETURNING id`,
+        [
+          receipt.submissionId, input.interactionId, input.actorDiscordId,
+          input.guildId, input.rawItemText, itemId, input.collectorName,
+          receipt.collectedOn, receipt.dateSource, input.proofUrl,
+          input.hardcore, payloadHash, JSON.stringify(receipt),
+        ],
+      );
+      if (inserted.rowCount !== 1) {
+        const winner = await readReceipt();
+        if (!winner) throw new ApiError(503, 'Claim receipt is temporarily unavailable.');
+        const result = replay(winner);
+        await client.query('COMMIT');
+        return result;
+      }
+      await client.query('COMMIT');
+      return { created: true, receipt };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   async ready() {
     await this.pool.query('SELECT token_hash FROM admin_sessions LIMIT 1');
     await this.settings();

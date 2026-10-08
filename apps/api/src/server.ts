@@ -4,8 +4,8 @@ import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { PgStore } from './store.js';
 const config = readConfig();
-if (config.auth && !process.env.DATABASE_URL)
-  throw new Error('DATABASE_URL is required when auth is enabled');
+if ((config.auth || config.bot) && !process.env.DATABASE_URL)
+  throw new Error('DATABASE_URL is required when auth or bot intake is enabled');
 const pool = process.env.DATABASE_URL
   ? new pg.Pool({
       connectionString: process.env.DATABASE_URL,
