@@ -69,10 +69,16 @@ test('uncollected items never open menus on hover focus or click; icons and page
     .toBe(true);
   // The window is fixed on the homepage; only search remains in its titlebar.
   const titlebar = page.locator('.game-titlebar');
-  await expect(titlebar.getByRole('heading', { name: /Collection Log/ })).toBeVisible();
+  await expect(
+    titlebar.getByRole('heading', { name: /Collection Log/ }),
+  ).toBeVisible();
   await expect(titlebar.locator('.log-book, .game-close')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Close collection log' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open collection log' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Close collection log' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Open collection log' }),
+  ).toHaveCount(0);
   await titlebar.getByRole('button', { name: 'Search' }).click();
   await expect(page.getByPlaceholder('Search pages...')).toBeVisible();
   await titlebar.getByRole('button', { name: 'Search' }).click();

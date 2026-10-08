@@ -15,7 +15,9 @@ const auth: AuthConfig = {
   origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
   passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:').update(password).digest(),
+    .update('admin-password:')
+    .update(password)
+    .digest(),
   secure: true,
 };
 test(
@@ -251,8 +253,10 @@ test(
         401,
       );
       const login = await app.inject({
-        method: 'POST', url: '/api/v1/auth/login',
-        headers: { origin: auth.origin }, payload: { password },
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        headers: { origin: auth.origin },
+        payload: { password },
       });
       assert.equal(login.statusCode, 200);
       const cookie = String(login.headers['set-cookie']).split(';')[0]!;
@@ -319,7 +323,8 @@ test(
         method: 'POST',
         url: '/api/v1/admin/submissions',
         headers: {
-          cookie, origin: auth.origin,
+          cookie,
+          origin: auth.origin,
           'x-csrf-token': session.csrfToken,
         },
         payload: {
@@ -337,25 +342,34 @@ test(
       assert.equal(manual.json().proofUrl, '');
       assert.equal((await backend.collections()).length, 3);
       const manualId = manual.json().id as string;
-      const provenance = (await pool.query(
-        'SELECT source,discord_user_id,discord_interaction_id FROM submissions WHERE id=$1',
-        [manualId],
-      )).rows[0]!;
+      const provenance = (
+        await pool.query(
+          'SELECT source,discord_user_id,discord_interaction_id FROM submissions WHERE id=$1',
+          [manualId],
+        )
+      ).rows[0]!;
       assert.deepEqual(provenance, {
-        source: 'manual', discord_user_id: null, discord_interaction_id: null,
+        source: 'manual',
+        discord_user_id: null,
+        discord_interaction_id: null,
       });
       const manualAudit = await review.detail(manualId);
       assert.equal(manualAudit?.audit[0]?.action, 'create');
       assert.equal(manualAudit?.audit[0]?.actorName, 'Clan admin');
       const collision = await app.inject({
-        method: 'POST', url: '/api/v1/admin/submissions',
+        method: 'POST',
+        url: '/api/v1/admin/submissions',
         headers: {
-          cookie, origin: auth.origin,
+          cookie,
+          origin: auth.origin,
           'x-csrf-token': session.csrfToken,
         },
         payload: {
-          itemId: 42, collectorName: 'Duplicate', collectedOn: '2026-10-04',
-          hardcore: false, approve: true,
+          itemId: 42,
+          collectorName: 'Duplicate',
+          collectedOn: '2026-10-04',
+          hardcore: false,
+          approve: true,
         },
       });
       assert.equal(collision.statusCode, 409);
@@ -364,27 +378,56 @@ test(
         /already has an approved ordinary collection log entry/,
       );
       const pendingManual = await app.inject({
-        method: 'POST', url: '/api/v1/admin/submissions',
+        method: 'POST',
+        url: '/api/v1/admin/submissions',
         headers: {
-          cookie, origin: auth.origin,
+          cookie,
+          origin: auth.origin,
           'x-csrf-token': session.csrfToken,
         },
         payload: {
-          itemId: 43, collectorName: 'Pending manual', collectedOn: '2026-10-03',
-          hardcore: false, approve: false,
+          itemId: 43,
+          collectorName: 'Pending manual',
+          collectedOn: '2026-10-03',
+          hardcore: false,
+          approve: false,
         },
       });
       assert.equal(pendingManual.statusCode, 201);
       assert.equal(pendingManual.json().status, 'pending');
-      assert.equal((await app.inject({
-        method: 'POST', url: '/api/v1/admin/submissions',
-        payload: { itemId: 43, collectorName: 'Anonymous', collectedOn: '2026-10-03', hardcore: false, approve: false },
-      })).statusCode, 401);
-      assert.equal((await app.inject({
-        method: 'POST', url: '/api/v1/admin/submissions',
-        headers: { cookie },
-        payload: { itemId: 43, collectorName: 'No CSRF', collectedOn: '2026-10-03', hardcore: false, approve: false },
-      })).statusCode, 403);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/v1/admin/submissions',
+            payload: {
+              itemId: 43,
+              collectorName: 'Anonymous',
+              collectedOn: '2026-10-03',
+              hardcore: false,
+              approve: false,
+            },
+          })
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/v1/admin/submissions',
+            headers: { cookie },
+            payload: {
+              itemId: 43,
+              collectorName: 'No CSRF',
+              collectedOn: '2026-10-03',
+              hardcore: false,
+              approve: false,
+            },
+          })
+        ).statusCode,
+        403,
+      );
       // An audit-write failure cannot leave a new approved credit without history.
       const rollback = await create(43, true);
       await pool.query(

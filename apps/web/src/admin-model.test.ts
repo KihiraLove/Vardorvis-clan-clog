@@ -411,13 +411,17 @@ test('proofless manual claims and audit snapshots parse without requiring XP tex
   const client = new PreviewAdminClient();
   const catalog = await client.catalog(signal());
   const item = catalog.items[0]!;
-  const created = await client.addManual({
-    itemId: item.id,
-    collectorName: 'Manual reviewer',
-    collectedOn: '2026-10-06',
-    hardcore: false,
-    approve: true,
-  }, 'preview-admin', signal());
+  const created = await client.addManual(
+    {
+      itemId: item.id,
+      collectorName: 'Manual reviewer',
+      collectedOn: '2026-10-06',
+      hardcore: false,
+      approve: true,
+    },
+    'preview-admin',
+    signal(),
+  );
   assert.equal(created.proofUrl, '');
   assert.deepEqual(parseSubmission(created), created);
   const detail = await client.detail(created.id, signal());

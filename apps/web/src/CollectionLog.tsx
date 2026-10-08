@@ -191,219 +191,211 @@ export function CollectionLog({
   return (
     <section className="collection-section" aria-label="Clan collection log">
       <div className="log-viewport">
-          <div
-            className="log-sizing"
-            style={{ width: 500 * scale, height: 314 * scale }}
-          >
+        <div
+          className="log-sizing"
+          style={{ width: 500 * scale, height: 314 * scale }}
+        >
+          <div className="game-window" style={{ transform: `scale(${scale})` }}>
+            <header className="game-titlebar">
+              <h2>
+                {hardcore ? 'Hardcore Collection Log' : 'Collection Log'}
+                {catalog && (
+                  <>
+                    {' '}
+                    -{' '}
+                    <span
+                      className={
+                        globalProgress.collected === globalProgress.total &&
+                        globalProgress.total > 0
+                          ? 'complete'
+                          : ''
+                      }
+                    >
+                      {globalProgress.collected}/{globalProgress.total}
+                    </span>
+                  </>
+                )}
+              </h2>
+              <button
+                className="game-search"
+                type="button"
+                aria-expanded={searching}
+                aria-controls="page-search"
+                onClick={() => {
+                  close();
+                  setSearching(!searching);
+                  setQuery('');
+                }}
+              >
+                <span aria-hidden="true">⌕</span> Search
+              </button>
+            </header>
             <div
-              className="game-window"
-              style={{ transform: `scale(${scale})` }}
+              className="game-tabs"
+              role="tablist"
+              aria-label="Collection log categories"
             >
-              <header className="game-titlebar">
-                <h2>
-                  {hardcore ? 'Hardcore Collection Log' : 'Collection Log'}
-                  {catalog && (
-                    <>
-                      {' '}
-                      -{' '}
-                      <span
+              {categories.map((tab, index) => (
+                <button
+                  type="button"
+                  role="tab"
+                  id={`tab-${tab.id}`}
+                  key={tab.id}
+                  aria-selected={category === tab.id}
+                  aria-controls="log-panel"
+                  tabIndex={category === tab.id ? 0 : -1}
+                  onClick={() => chooseCategory(tab.id)}
+                  onKeyDown={(event) => tabKey(event, index)}
+                >
+                  {tab.name}
+                </button>
+              ))}
+            </div>
+            <div
+              className="game-body"
+              role="tabpanel"
+              id="log-panel"
+              aria-labelledby={`tab-${category}`}
+            >
+              <aside
+                className="game-sidebar"
+                aria-label={`${categories.find((tab) => tab.id === category)!.name} pages`}
+              >
+                {searching && (
+                  <label className="page-search" id="page-search">
+                    <span className="sr-only">Search pages</span>
+                    <input
+                      ref={searchRef}
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search pages..."
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          setSearching(false);
+                          setQuery('');
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+                <div className="page-list game-scroll" ref={pageListRef}>
+                  {visiblePages.map((entry) => {
+                    const count = progress(entry.itemIds, credits);
+                    return (
+                      <button
+                        type="button"
+                        key={entry.id}
+                        aria-current={
+                          page?.id === entry.id ? 'page' : undefined
+                        }
                         className={
-                          globalProgress.collected === globalProgress.total &&
-                          globalProgress.total > 0
+                          count.total > 0 && count.collected === count.total
                             ? 'complete'
                             : ''
                         }
-                      >
-                        {globalProgress.collected}/{globalProgress.total}
-                      </span>
-                    </>
-                  )}
-                </h2>
-                <button
-                  className="game-search"
-                  type="button"
-                  aria-expanded={searching}
-                  aria-controls="page-search"
-                  onClick={() => {
-                    close();
-                    setSearching(!searching);
-                    setQuery('');
-                  }}
-                >
-                  <span aria-hidden="true">⌕</span> Search
-                </button>
-              </header>
-              <div
-                className="game-tabs"
-                role="tablist"
-                aria-label="Collection log categories"
-              >
-                {categories.map((tab, index) => (
-                  <button
-                    type="button"
-                    role="tab"
-                    id={`tab-${tab.id}`}
-                    key={tab.id}
-                    aria-selected={category === tab.id}
-                    aria-controls="log-panel"
-                    tabIndex={category === tab.id ? 0 : -1}
-                    onClick={() => chooseCategory(tab.id)}
-                    onKeyDown={(event) => tabKey(event, index)}
-                  >
-                    {tab.name}
-                  </button>
-                ))}
-              </div>
-              <div
-                className="game-body"
-                role="tabpanel"
-                id="log-panel"
-                aria-labelledby={`tab-${category}`}
-              >
-                <aside
-                  className="game-sidebar"
-                  aria-label={`${categories.find((tab) => tab.id === category)!.name} pages`}
-                >
-                  {searching && (
-                    <label className="page-search" id="page-search">
-                      <span className="sr-only">Search pages</span>
-                      <input
-                        ref={searchRef}
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Search pages..."
-                        onKeyDown={(event) => {
-                          if (event.key === 'Escape') {
-                            setSearching(false);
-                            setQuery('');
-                          }
+                        onClick={() => {
+                          close();
+                          setSelection((current) => ({
+                            ...current,
+                            [category]: entry.id,
+                          }));
+                          gridRef.current?.scrollTo(0, 0);
                         }}
-                      />
-                    </label>
-                  )}
-                  <div className="page-list game-scroll" ref={pageListRef}>
-                    {visiblePages.map((entry) => {
-                      const count = progress(entry.itemIds, credits);
-                      return (
-                        <button
-                          type="button"
-                          key={entry.id}
-                          aria-current={
-                            page?.id === entry.id ? 'page' : undefined
-                          }
-                          className={
-                            count.total > 0 && count.collected === count.total
-                              ? 'complete'
-                              : ''
-                          }
-                          onClick={() => {
-                            close();
-                            setSelection((current) => ({
-                              ...current,
-                              [category]: entry.id,
-                            }));
-                            gridRef.current?.scrollTo(0, 0);
-                          }}
-                        >
-                          {entry.name}
-                        </button>
-                      );
-                    })}
-                    {catalog && !visiblePages.length && (
-                      <p className="list-empty">
-                        {query
-                          ? 'No matching pages.'
-                          : 'No pages in this category.'}
-                      </p>
-                    )}
-                  </div>
-                </aside>
-                <div className="game-content">
-                  {catalog && page ? (
-                    <>
-                      <div className="page-heading">
-                        <h3>{page.name}</h3>
-                        <p>
-                          Obtained:{' '}
-                          <span
-                            className={
-                              pageProgress.collected === pageProgress.total &&
-                              pageProgress.total > 0
-                                ? 'complete'
-                                : 'count'
-                            }
-                          >
-                            {pageProgress.collected}/{pageProgress.total}
-                          </span>
-                        </p>
-                      </div>
-                      <div className="item-area game-scroll" ref={gridRef}>
-                        <div
-                          className="item-grid"
-                          aria-label={`${page.name} items`}
-                        >
-                          {page.itemIds.map((itemId) => (
-                            <ItemSlot
-                              key={itemId}
-                              item={items.get(itemId)!}
-                              credits={credits}
-                              open={open}
-                              show={show}
-                              leave={leave}
-                              close={close}
-                            />
-                          ))}
-                        </div>
-                        {!page.itemIds.length && (
-                          <p className="list-empty">
-                            No items on this page yet.
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div
-                      className="log-state"
-                      role={error ? 'alert' : 'status'}
-                    >
-                      <h3>
-                        {loading
-                          ? 'Loading collection log...'
-                          : error
-                            ? 'Collection log unavailable'
-                            : 'No catalog yet'}
-                      </h3>
-                      <p>
-                        {loading
-                          ? 'Fetching pages and collected items.'
-                          : (error ??
-                            'No collection-log pages have been published.')}
-                      </p>
-                      {retry && !loading && (
-                        <button
-                          className="game-button"
-                          type="button"
-                          onClick={retry}
-                        >
-                          Try again
-                        </button>
-                      )}
-                      {onPreview && !loading && (
-                        <button
-                          className="game-button"
-                          type="button"
-                          onClick={onPreview}
-                        >
-                          View frontend preview
-                        </button>
-                      )}
-                    </div>
+                      >
+                        {entry.name}
+                      </button>
+                    );
+                  })}
+                  {catalog && !visiblePages.length && (
+                    <p className="list-empty">
+                      {query
+                        ? 'No matching pages.'
+                        : 'No pages in this category.'}
+                    </p>
                   )}
                 </div>
+              </aside>
+              <div className="game-content">
+                {catalog && page ? (
+                  <>
+                    <div className="page-heading">
+                      <h3>{page.name}</h3>
+                      <p>
+                        Obtained:{' '}
+                        <span
+                          className={
+                            pageProgress.collected === pageProgress.total &&
+                            pageProgress.total > 0
+                              ? 'complete'
+                              : 'count'
+                          }
+                        >
+                          {pageProgress.collected}/{pageProgress.total}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="item-area game-scroll" ref={gridRef}>
+                      <div
+                        className="item-grid"
+                        aria-label={`${page.name} items`}
+                      >
+                        {page.itemIds.map((itemId) => (
+                          <ItemSlot
+                            key={itemId}
+                            item={items.get(itemId)!}
+                            credits={credits}
+                            open={open}
+                            show={show}
+                            leave={leave}
+                            close={close}
+                          />
+                        ))}
+                      </div>
+                      {!page.itemIds.length && (
+                        <p className="list-empty">No items on this page yet.</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="log-state" role={error ? 'alert' : 'status'}>
+                    <h3>
+                      {loading
+                        ? 'Loading collection log...'
+                        : error
+                          ? 'Collection log unavailable'
+                          : 'No catalog yet'}
+                    </h3>
+                    <p>
+                      {loading
+                        ? 'Fetching pages and collected items.'
+                        : (error ??
+                          'No collection-log pages have been published.')}
+                    </p>
+                    {retry && !loading && (
+                      <button
+                        className="game-button"
+                        type="button"
+                        onClick={retry}
+                      >
+                        Try again
+                      </button>
+                    )}
+                    {onPreview && !loading && (
+                      <button
+                        className="game-button"
+                        type="button"
+                        onClick={onPreview}
+                      >
+                        View frontend preview
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
+      </div>
       {data && error && (
         <p className="refresh-error" role="status">
           {error} Showing the last successful update.{' '}

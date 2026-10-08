@@ -244,16 +244,28 @@ test('manual create and password sign-in use private routes, CSRF and validated 
     requests.push({ url: String(url), options });
     if (String(url).endsWith('/auth/login'))
       return json({ authenticated: true });
-    return new Response(JSON.stringify({
-      ...row, source: 'manual', status: 'approved',
-    }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({
+        ...row,
+        source: 'manual',
+        status: 'approved',
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    );
   });
   await client.login('test-only-password', signal());
-  const created = await client.addManual({
-    itemId: row.itemId!, collectorName: row.collectorName,
-    collectedOn: row.collectedOn, hardcore: row.hardcore,
-    proofUrl: '', approve: true,
-  }, 'csrf', signal());
+  const created = await client.addManual(
+    {
+      itemId: row.itemId!,
+      collectorName: row.collectorName,
+      collectedOn: row.collectedOn,
+      hardcore: row.hardcore,
+      proofUrl: '',
+      approve: true,
+    },
+    'csrf',
+    signal(),
+  );
   assert.equal(created.source, 'manual');
   assert.equal(requests[0]!.url, '/api/v1/auth/login');
   assert.deepEqual(JSON.parse(requests[0]!.options!.body as string), {
@@ -261,7 +273,10 @@ test('manual create and password sign-in use private routes, CSRF and validated 
   });
   assert.equal(requests[1]!.url, '/api/v1/admin/submissions');
   assert.equal(requests[1]!.options?.method, 'POST');
-  assert.equal((requests[1]!.options?.headers as Record<string, string>)['X-CSRF-Token'], 'csrf');
+  assert.equal(
+    (requests[1]!.options?.headers as Record<string, string>)['X-CSRF-Token'],
+    'csrf',
+  );
 });
 
 test('manual submission accepts a 201 response with no proof URL and preserves the empty field', async () => {

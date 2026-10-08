@@ -122,9 +122,9 @@ export class PgReviewStore implements ReviewStore {
       fields.collectorName.trim().length > 80 ||
       typeof fields.hardcore !== 'boolean' ||
       typeof fields.approve !== 'boolean' ||
-      typeof fields.proofUrl !== 'string' && fields.proofUrl !== undefined ||
+      (typeof fields.proofUrl !== 'string' && fields.proofUrl !== undefined) ||
       (fields.proofUrl && !validProofUrl(fields.proofUrl)) ||
-      typeof fields.reason !== 'string' && fields.reason !== undefined ||
+      (typeof fields.reason !== 'string' && fields.reason !== undefined) ||
       (fields.reason?.trim().length ?? 0) > 1000
     )
       throw new ApiError(422, 'Invalid manual submission fields.');
@@ -149,9 +149,9 @@ export class PgReviewStore implements ReviewStore {
         await client.query<Row>(
           'INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,' +
             'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
-            'reviewed_by,review_reason) VALUES($1,\'manual\',$2,$3,$4,$5,\'admin\',' +
-            '$6,$7,$8,CASE WHEN $8=\'approved\' THEN now() ELSE NULL END,' +
-            'CASE WHEN $8=\'approved\' THEN $9 ELSE NULL END,$10) RETURNING ' +
+            "reviewed_by,review_reason) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
+            "$6,$7,$8,CASE WHEN $8='approved' THEN now() ELSE NULL END," +
+            "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10) RETURNING " +
             selection,
           [
             id,
@@ -170,7 +170,7 @@ export class PgReviewStore implements ReviewStore {
       const created = view(row);
       await client.query(
         'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,' +
-          'reason,old_values,new_values) VALUES($1,$2,$3,\'create\',$4,$5,$6)',
+          "reason,old_values,new_values) VALUES($1,$2,$3,'create',$4,$5,$6)",
         [
           id,
           actorId,
@@ -185,8 +185,12 @@ export class PgReviewStore implements ReviewStore {
     } catch (e) {
       await client.query('ROLLBACK');
       if (
-        e && typeof e === 'object' && 'code' in e && e.code === '23505' &&
-        'constraint' in e && e.constraint === 'submissions_one_credit_per_world'
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        e.code === '23505' &&
+        'constraint' in e &&
+        e.constraint === 'submissions_one_credit_per_world'
       )
         throw new ApiError(
           409,
