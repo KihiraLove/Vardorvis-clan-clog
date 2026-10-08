@@ -37,7 +37,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     throw new Error('BOT_API_TOKEN and DISCORD_GUILD_ID must be set together');
   if (
     botToken &&
-    (!/^[a-fA-F0-9]{64,}$/u.test(botToken) || !/^\\d{17,20}$/u.test(botGuildId))
+    (!/^[a-fA-F0-9]{64,}$/u.test(botToken) || !/^\d{17,20}$/u.test(botGuildId))
   )
     throw new Error(
       'Bot token must be 32+ random bytes as hex and guild ID must be a Discord snowflake',
