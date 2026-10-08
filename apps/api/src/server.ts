@@ -22,8 +22,12 @@ const store = pool ? new PgStore(pool) : undefined;
 const app = createApp(
   store ? () => store.ready() : undefined,
   store ? () => store.settings() : undefined,
-  { store, xp: pool ? new PgXpStore(pool) : undefined,
-    review: pool && store ? new PgReviewStore(pool,store) : undefined, ...config },
+  {
+    store,
+    xp: pool ? new PgXpStore(pool) : undefined,
+    review: pool && store ? new PgReviewStore(pool, store) : undefined,
+    ...config,
+  },
 );
 app.addHook('onClose', async () => {
   await pool?.end();

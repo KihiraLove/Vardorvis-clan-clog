@@ -35,9 +35,24 @@ export interface ReviewAudit {
 }
 export interface ReviewStore {
   adminCatalog(): Promise<unknown>;
-  queue(status: 'pending' | 'reviewed', unmatched: boolean, limit: number,
-    cursor?: string): Promise<{revision: string; submissions: ReviewSubmission[]; nextCursor: string | null}>;
-  detail(id: string): Promise<{submission: ReviewSubmission; audit: ReviewAudit[]} | null>;
-  mutate(id: string, expectedVersion: number, fields: ReviewCorrection | ReviewAction,
-    actorId: string, actorName: string): Promise<ReviewSubmission>;
+  queue(
+    status: 'pending' | 'reviewed',
+    unmatched: boolean,
+    limit: number,
+    cursor?: string,
+  ): Promise<{
+    revision: string;
+    submissions: ReviewSubmission[];
+    nextCursor: string | null;
+  }>;
+  detail(
+    id: string,
+  ): Promise<{ submission: ReviewSubmission; audit: ReviewAudit[] } | null>;
+  mutate(
+    id: string,
+    expectedVersion: number,
+    fields: ReviewCorrection | ReviewAction,
+    actorId: string,
+    actorName: string,
+  ): Promise<ReviewSubmission>;
 }

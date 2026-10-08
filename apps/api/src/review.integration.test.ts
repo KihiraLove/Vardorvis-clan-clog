@@ -9,139 +9,341 @@ import { PgStore } from './store.js';
 import { PgReviewStore } from './review-store.js';
 import type { AuthConfig } from './config.js';
 
-const adminId='123456789012345678';
-const auth:AuthConfig={
- origin:'https://clog.example.com',
- redirectUri:'https://clog.example.com/api/v1/auth/discord/callback',
- clientId:'234567890123456789',clientSecret:'fixture-only',
- adminIds:new Set([adminId]),secret:'t'.repeat(64),secure:true,
+const adminId = '123456789012345678';
+const auth: AuthConfig = {
+  origin: 'https://clog.example.com',
+  redirectUri: 'https://clog.example.com/api/v1/auth/discord/callback',
+  clientId: '234567890123456789',
+  clientSecret: 'fixture-only',
+  adminIds: new Set([adminId]),
+  secret: 't'.repeat(64),
+  secure: true,
 };
-test('review APIs atomically preserve one credit per world, audits, CSRF and conflict safety',
- {skip:!process.env.TEST_DATABASE_URL},async()=>{
- const connectionString=process.env.TEST_DATABASE_URL!;
- const schema='review_test_'+randomUUID().replaceAll('-','');
- const root=new pg.Pool({connectionString});
- await root.query('CREATE SCHEMA '+schema);
- const pool=new pg.Pool({connectionString,options:'-c search_path='+schema,max:12,statement_timeout:8000});
- let app:ReturnType<typeof createApp>|undefined;
- try{
-  for(const file of [
-   '001_initial.sql','002_world_modes.sql','003_admin_auth.sql',
-   '004_bot_intake.sql','005_xp_events.sql','006_review_audit.sql',
-  ])await pool.query(await readFile(
-   new URL('../../../packages/database/migrations/'+file,import.meta.url),'utf8'));
-  await pool.query("INSERT INTO items(id,name,icon_path) VALUES (42,'Vardorvis item','/items/42.png'),(43,'Shared item','/items/43.png')");
-  await pool.query("INSERT INTO pages(id,name,category,sort_order) VALUES ('v','Vardorvis','bosses',0),('x','Other','other',1)");
-  await pool.query("INSERT INTO page_items(page_id,item_id,slot) VALUES ('v',42,0),('v',43,1),('x',42,0)");
-  const backend=new PgStore(pool),review=new PgReviewStore(pool,backend);
-  app=createApp(()=>backend.ready(),()=>backend.settings(),{
-   store:backend,review,auth,logger:false,
-   identify:async()=>({id:adminId,displayName:'Reviewer'}),
-  });
-  const create=async(itemId:number|null,hardcore=false,proof='https://imgur.com/acceptable')=>{
-   const id=randomUUID();
-   await pool.query(
-    'INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,'+
-    'raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore)'+
-    " VALUES($1,$2,'user','guild','Vardorvis item',$3,'Collector','2026-10-05','submission_default',$4,$5)",
-    [id,randomUUID(),itemId,proof,hardcore]);
-   return id;
-  };
-  const one=await create(null);
-  const second=await create(42),hardcore=await create(42,true);
-  const unmatched=await review.queue('pending',true,20);
-  assert.deepEqual(unmatched.submissions.map(s=>s.id),[one]);
-  assert.equal(unmatched.submissions[0]?.dateSource,'submission');
-  const all=await review.queue('pending',false,1);
-  assert.ok(all.nextCursor);
-  const next=await review.queue('pending',false,1,all.nextCursor!);
-  assert.equal(next.submissions.length,1);
-  const matched=await review.mutate(one,1,{
-   itemId:42,collectorName:'Collector',collectedOn:'2026-10-05',
-   hardcore:false,reason:'Manual match',
-  },adminId,'Reviewer');
-  assert.equal(matched.version,2);
-  assert.equal(matched.status,'pending');
-  await assert.rejects(review.queue('pending',false,1,all.nextCursor!),{status:409});
-  const credited=await review.mutate(one,2,{expectedVersion:2,action:'approve'},adminId,'Reviewer');
-  assert.equal(credited.status,'approved');
-  assert.equal(credited.version,3);
-  assert.equal((await backend.collections()).length,1);
-  await assert.rejects(review.mutate(second,1,{expectedVersion:1,action:'approve'},adminId,'Reviewer'),{status:409});
-  assert.equal((await review.detail(second))?.submission.status,'pending');
-  const hc=await review.mutate(hardcore,1,{expectedVersion:1,action:'approve'},adminId,'Reviewer');
-  assert.equal(hc.hardcore,true);
-  const credits=await backend.collections();
-  assert.equal(credits.length,2);
-  assert.deepEqual(credits.map(c=>c.hardcore),[false,true]);
-  await assert.rejects(review.mutate(one,3,{
-   itemId:42,collectorName:'Collector',collectedOn:'2026-10-05',
-   hardcore:true,reason:'Move to occupied hardcore mode',
-  },adminId,'Reviewer'),{status:409});
-  assert.equal((await review.detail(one))?.submission.hardcore,false);
-  await assert.rejects(review.mutate(one,2,{expectedVersion:2,action:'revoke',reason:'Correction'},adminId,'Reviewer'),{status:409});
-  const revoked=await review.mutate(one,3,{expectedVersion:3,action:'revoke',reason:'Invalid proof'},adminId,'Reviewer');
-  assert.equal(revoked.status,'revoked');
-  assert.equal((await backend.collections()).length,1);
-  assert.equal((await backend.collections())[0]?.hardcore,true);
-  const detail=await review.detail(one);
-  assert.equal(detail?.audit.length,3);
-  assert.equal(detail?.audit[0]?.reason,'Invalid proof');
-  assert.equal(detail?.audit[0]?.actorName,'Reviewer');
-  assert.equal(detail?.audit[0]?.before.status,'approved');
-  assert.equal(detail?.audit[0]?.after.status,'revoked');
-  const invalid=await create(43,false,'https://example.com/proof');
-  await assert.rejects(review.mutate(invalid,1,{expectedVersion:1,action:'approve'},adminId,'Reviewer'),{status:422});
-  const p1=await create(43),p2=await create(43);
-  const races=await Promise.allSettled([p1,p2].map(id=>
-   review.mutate(id,1,{expectedVersion:1,action:'approve'},adminId,'Reviewer')));
-  assert.equal(races.filter(x=>x.status==='fulfilled').length,1);
-  assert.equal(races.filter(x=>x.status==='rejected'&&x.reason.status===409).length,1);
-  assert.equal((await backend.collections()).length,2);
-  const catalog=await review.adminCatalog() as {items:unknown[];pages:unknown[]};
-  assert.equal(catalog.items.length,2);
-  assert.equal(catalog.pages.length,2);
-  // Authenticated browser endpoints, separate from bot Bearer credentials.
-  assert.equal((await app.inject('/api/v1/admin/submissions')).statusCode,401);
-  assert.equal((await app.inject('/api/v1/admin/catalog')).statusCode,401);
-  assert.equal((await app.inject({url:'/api/v1/admin/submissions/'+one+'/revoke',
-   method:'POST',headers:{authorization:'Bearer '+'a'.repeat(64)},
-   payload:{expectedVersion:4,reason:'Unauthorized'}})).statusCode,401);
-  const start=await app.inject('/api/v1/auth/discord');
-  const state=new URL(start.headers.location!).searchParams.get('state')!;
-  const stateCookie=String(start.headers['set-cookie']).split(';')[0]!;
-  const login=await app.inject({url:'/api/v1/auth/discord/callback?code=fixture&state='+state,
-   headers:{cookie:stateCookie}});
-  assert.equal(login.statusCode,302);
-  const cookie=(login.headers['set-cookie'] as string[])
-   .find(s=>s.startsWith('__Host-clog-session='))!.split(';')[0]!;
-  const session=(await app.inject({url:'/api/v1/auth/session',headers:{cookie}})).json();
-  assert.equal((await app.inject({url:'/api/v1/admin/catalog',headers:{cookie}})).statusCode,200);
-  assert.equal((await app.inject({url:'/api/v1/admin/submissions?status=reviewed',
-   headers:{cookie}})).statusCode,200);
-  assert.equal((await app.inject({url:'/api/v1/admin/submissions/'+one,
-   headers:{cookie}})).statusCode,200);
-  const denied=await app.inject({url:'/api/v1/admin/submissions/'+second+'/reject',
-   method:'POST',headers:{cookie},
-   payload:{expectedVersion:1,reason:'Bad evidence'}});
-  assert.equal(denied.statusCode,403);
-  const accepted=await app.inject({url:'/api/v1/admin/submissions/'+second+'/reject',
-   method:'POST',headers:{cookie,origin:auth.origin,'x-csrf-token':session.csrfToken},
-   payload:{expectedVersion:1,reason:'Bad evidence'}});
-  assert.equal(accepted.statusCode,200);
-  assert.equal(accepted.json().status,'rejected');
-  assert.equal((await pool.query('SELECT count(*)::int AS n FROM audit_events WHERE submission_id=$1',
-   [second])).rows[0].n,1);
-  // An audit-write failure cannot leave a new approved credit without history.
-  const rollback=await create(43,true);
-  await pool.query("ALTER TABLE audit_events ADD CONSTRAINT block_actor CHECK (actor_name <> 'Blocked')");
-  await assert.rejects(review.mutate(rollback,1,{expectedVersion:1,action:'approve'},adminId,'Blocked'));
-  assert.equal((await review.detail(rollback))?.submission.status,'pending');
-  assert.equal((await backend.collections()).length,2);
- }finally{
-  await app?.close();
-  await pool.end();
-  await root.query('DROP SCHEMA '+schema+' CASCADE');
-  await root.end();
- }
-});
+test(
+  'review APIs atomically preserve one credit per world, audits, CSRF and conflict safety',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const connectionString = process.env.TEST_DATABASE_URL!;
+    const schema = 'review_test_' + randomUUID().replaceAll('-', '');
+    const root = new pg.Pool({ connectionString });
+    await root.query('CREATE SCHEMA ' + schema);
+    const pool = new pg.Pool({
+      connectionString,
+      options: '-c search_path=' + schema,
+      max: 12,
+      statement_timeout: 8000,
+    });
+    let app: ReturnType<typeof createApp> | undefined;
+    try {
+      for (const file of [
+        '001_initial.sql',
+        '002_world_modes.sql',
+        '003_admin_auth.sql',
+        '004_bot_intake.sql',
+        '005_xp_events.sql',
+        '006_review_audit.sql',
+      ])
+        await pool.query(
+          await readFile(
+            new URL(
+              '../../../packages/database/migrations/' + file,
+              import.meta.url,
+            ),
+            'utf8',
+          ),
+        );
+      await pool.query(
+        "INSERT INTO items(id,name,icon_path) VALUES (42,'Vardorvis item','/items/42.png'),(43,'Shared item','/items/43.png')",
+      );
+      await pool.query(
+        "INSERT INTO pages(id,name,category,sort_order) VALUES ('v','Vardorvis','bosses',0),('x','Other','other',1)",
+      );
+      await pool.query(
+        "INSERT INTO page_items(page_id,item_id,slot) VALUES ('v',42,0),('v',43,1),('x',42,0)",
+      );
+      const backend = new PgStore(pool),
+        review = new PgReviewStore(pool, backend);
+      app = createApp(
+        () => backend.ready(),
+        () => backend.settings(),
+        {
+          store: backend,
+          review,
+          auth,
+          logger: false,
+          identify: async () => ({ id: adminId, displayName: 'Reviewer' }),
+        },
+      );
+      const create = async (
+        itemId: number | null,
+        hardcore = false,
+        proof = 'https://imgur.com/acceptable',
+      ) => {
+        const id = randomUUID();
+        await pool.query(
+          'INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,' +
+            'raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore)' +
+            " VALUES($1,$2,'user','guild','Vardorvis item',$3,'Collector','2026-10-05','submission_default',$4,$5)",
+          [id, randomUUID(), itemId, proof, hardcore],
+        );
+        return id;
+      };
+      const one = await create(null);
+      const second = await create(42),
+        hardcore = await create(42, true);
+      const unmatched = await review.queue('pending', true, 20);
+      assert.deepEqual(
+        unmatched.submissions.map((s) => s.id),
+        [one],
+      );
+      assert.equal(unmatched.submissions[0]?.dateSource, 'submission');
+      const all = await review.queue('pending', false, 1);
+      assert.ok(all.nextCursor);
+      const next = await review.queue('pending', false, 1, all.nextCursor!);
+      assert.equal(next.submissions.length, 1);
+      const matched = await review.mutate(
+        one,
+        1,
+        {
+          itemId: 42,
+          collectorName: 'Collector',
+          collectedOn: '2026-10-05',
+          hardcore: false,
+          reason: 'Manual match',
+        },
+        adminId,
+        'Reviewer',
+      );
+      assert.equal(matched.version, 2);
+      assert.equal(matched.status, 'pending');
+      await assert.rejects(review.queue('pending', false, 1, all.nextCursor!), {
+        status: 409,
+      });
+      const credited = await review.mutate(
+        one,
+        2,
+        { expectedVersion: 2, action: 'approve' },
+        adminId,
+        'Reviewer',
+      );
+      assert.equal(credited.status, 'approved');
+      assert.equal(credited.version, 3);
+      assert.equal((await backend.collections()).length, 1);
+      await assert.rejects(
+        review.mutate(
+          second,
+          1,
+          { expectedVersion: 1, action: 'approve' },
+          adminId,
+          'Reviewer',
+        ),
+        { status: 409 },
+      );
+      assert.equal((await review.detail(second))?.submission.status, 'pending');
+      const hc = await review.mutate(
+        hardcore,
+        1,
+        { expectedVersion: 1, action: 'approve' },
+        adminId,
+        'Reviewer',
+      );
+      assert.equal(hc.hardcore, true);
+      const credits = await backend.collections();
+      assert.equal(credits.length, 2);
+      assert.deepEqual(
+        credits.map((c) => c.hardcore),
+        [false, true],
+      );
+      await assert.rejects(
+        review.mutate(
+          one,
+          3,
+          {
+            itemId: 42,
+            collectorName: 'Collector',
+            collectedOn: '2026-10-05',
+            hardcore: true,
+            reason: 'Move to occupied hardcore mode',
+          },
+          adminId,
+          'Reviewer',
+        ),
+        { status: 409 },
+      );
+      assert.equal((await review.detail(one))?.submission.hardcore, false);
+      await assert.rejects(
+        review.mutate(
+          one,
+          2,
+          { expectedVersion: 2, action: 'revoke', reason: 'Correction' },
+          adminId,
+          'Reviewer',
+        ),
+        { status: 409 },
+      );
+      const revoked = await review.mutate(
+        one,
+        3,
+        { expectedVersion: 3, action: 'revoke', reason: 'Invalid proof' },
+        adminId,
+        'Reviewer',
+      );
+      assert.equal(revoked.status, 'revoked');
+      assert.equal((await backend.collections()).length, 1);
+      assert.equal((await backend.collections())[0]?.hardcore, true);
+      const detail = await review.detail(one);
+      assert.equal(detail?.audit.length, 3);
+      assert.equal(detail?.audit[0]?.reason, 'Invalid proof');
+      assert.equal(detail?.audit[0]?.actorName, 'Reviewer');
+      assert.equal(detail?.audit[0]?.before.status, 'approved');
+      assert.equal(detail?.audit[0]?.after.status, 'revoked');
+      const invalid = await create(43, false, 'https://example.com/proof');
+      await assert.rejects(
+        review.mutate(
+          invalid,
+          1,
+          { expectedVersion: 1, action: 'approve' },
+          adminId,
+          'Reviewer',
+        ),
+        { status: 422 },
+      );
+      const p1 = await create(43),
+        p2 = await create(43);
+      const races = await Promise.allSettled(
+        [p1, p2].map((id) =>
+          review.mutate(
+            id,
+            1,
+            { expectedVersion: 1, action: 'approve' },
+            adminId,
+            'Reviewer',
+          ),
+        ),
+      );
+      assert.equal(races.filter((x) => x.status === 'fulfilled').length, 1);
+      assert.equal(
+        races.filter((x) => x.status === 'rejected' && x.reason.status === 409)
+          .length,
+        1,
+      );
+      assert.equal((await backend.collections()).length, 2);
+      const catalog = (await review.adminCatalog()) as {
+        items: unknown[];
+        pages: unknown[];
+      };
+      assert.equal(catalog.items.length, 2);
+      assert.equal(catalog.pages.length, 2);
+      // Authenticated browser endpoints, separate from bot Bearer credentials.
+      assert.equal(
+        (await app.inject('/api/v1/admin/submissions')).statusCode,
+        401,
+      );
+      assert.equal((await app.inject('/api/v1/admin/catalog')).statusCode, 401);
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/submissions/' + one + '/revoke',
+            method: 'POST',
+            headers: { authorization: 'Bearer ' + 'a'.repeat(64) },
+            payload: { expectedVersion: 4, reason: 'Unauthorized' },
+          })
+        ).statusCode,
+        401,
+      );
+      const start = await app.inject('/api/v1/auth/discord');
+      const state = new URL(start.headers.location!).searchParams.get('state')!;
+      const stateCookie = String(start.headers['set-cookie']).split(';')[0]!;
+      const login = await app.inject({
+        url: '/api/v1/auth/discord/callback?code=fixture&state=' + state,
+        headers: { cookie: stateCookie },
+      });
+      assert.equal(login.statusCode, 302);
+      const cookie = (login.headers['set-cookie'] as string[])
+        .find((s) => s.startsWith('__Host-clog-session='))!
+        .split(';')[0]!;
+      const session = (
+        await app.inject({ url: '/api/v1/auth/session', headers: { cookie } })
+      ).json();
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/catalog',
+            headers: { cookie },
+          })
+        ).statusCode,
+        200,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/submissions?status=reviewed',
+            headers: { cookie },
+          })
+        ).statusCode,
+        200,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/submissions/' + one,
+            headers: { cookie },
+          })
+        ).statusCode,
+        200,
+      );
+      const denied = await app.inject({
+        url: '/api/v1/admin/submissions/' + second + '/reject',
+        method: 'POST',
+        headers: { cookie },
+        payload: { expectedVersion: 1, reason: 'Bad evidence' },
+      });
+      assert.equal(denied.statusCode, 403);
+      const accepted = await app.inject({
+        url: '/api/v1/admin/submissions/' + second + '/reject',
+        method: 'POST',
+        headers: {
+          cookie,
+          origin: auth.origin,
+          'x-csrf-token': session.csrfToken,
+        },
+        payload: { expectedVersion: 1, reason: 'Bad evidence' },
+      });
+      assert.equal(accepted.statusCode, 200);
+      assert.equal(accepted.json().status, 'rejected');
+      assert.equal(
+        (
+          await pool.query(
+            'SELECT count(*)::int AS n FROM audit_events WHERE submission_id=$1',
+            [second],
+          )
+        ).rows[0].n,
+        1,
+      );
+      // An audit-write failure cannot leave a new approved credit without history.
+      const rollback = await create(43, true);
+      await pool.query(
+        "ALTER TABLE audit_events ADD CONSTRAINT block_actor CHECK (actor_name <> 'Blocked')",
+      );
+      await assert.rejects(
+        review.mutate(
+          rollback,
+          1,
+          { expectedVersion: 1, action: 'approve' },
+          adminId,
+          'Blocked',
+        ),
+      );
+      assert.equal(
+        (await review.detail(rollback))?.submission.status,
+        'pending',
+      );
+      assert.equal((await backend.collections()).length, 2);
+    } finally {
+      await app?.close();
+      await pool.end();
+      await root.query('DROP SCHEMA ' + schema + ' CASCADE');
+      await root.end();
+    }
+  },
+);
