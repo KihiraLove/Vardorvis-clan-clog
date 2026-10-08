@@ -85,6 +85,7 @@ jobs:
           curl --fail "http://127.0.0.1:8088$icon_path" --output /tmp/icon-before.png
           docker compose up -d --no-deps --force-recreate --wait api
           docker compose restart web
+          docker compose up -d --no-deps --wait --wait-timeout 60 web
           curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://127.0.0.1:8088$icon_path" --output /tmp/icon-after.png
           cmp /tmp/icon-before.png /tmp/icon-after.png
           bash infra/backup.sh /tmp/catalog-backup
