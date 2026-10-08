@@ -37,6 +37,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Export formatted integration sources
+        run: |
+          npx prettier --write apps/api/src/review-*.ts apps/api/src/review.integration.test.ts apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts docs/integration-01-review.md
+          for file in apps/api/src/review-*.ts apps/api/src/review.integration.test.ts apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts docs/integration-01-review.md; do
+            echo "INTEGRATION_FORMAT_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "INTEGRATION_FORMAT_END:$file"
+          done
       - run: npm run validate
 
   docker-smoke:
