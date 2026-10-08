@@ -359,6 +359,10 @@ test(
         },
       });
       assert.equal(collision.statusCode, 409);
+      assert.match(
+        collision.json().error,
+        /already has an approved ordinary collection log entry/,
+      );
       const pendingManual = await app.inject({
         method: 'POST', url: '/api/v1/admin/submissions',
         headers: {

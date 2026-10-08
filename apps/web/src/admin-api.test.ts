@@ -263,3 +263,40 @@ test('manual create and password sign-in use private routes, CSRF and validated 
   assert.equal(requests[1]!.options?.method, 'POST');
   assert.equal((requests[1]!.options?.headers as Record<string, string>)['X-CSRF-Token'], 'csrf');
 });
+
+test('manual submission accepts a 201 response with no proof URL and preserves the empty field', async () => {
+  const fixture = await adminFixtures();
+  const row = fixture.detail.submission;
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(path, '/api/v1/admin/submissions');
+    assert.equal(options?.method, 'POST');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    return new Response(
+      JSON.stringify({
+        ...row,
+        source: 'manual',
+        itemId: row.itemId,
+        hardcore: false,
+        status: 'approved',
+        proofUrl: '',
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+  const receipt = await client.addManual(
+    {
+      itemId: row.itemId!,
+      collectorName: row.collectorName,
+      collectedOn: row.collectedOn,
+      hardcore: false,
+      approve: true,
+    },
+    'csrf',
+    signal(),
+  );
+  assert.equal(receipt.proofUrl, '');
+  assert.equal(receipt.source, 'manual');
+});

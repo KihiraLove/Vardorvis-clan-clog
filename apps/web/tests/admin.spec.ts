@@ -719,3 +719,24 @@ test('live admin shows a password form and submits a password without Discord OA
   await expect(page.getByRole('heading', { name: 'Submissions' })).toBeVisible();
   expect(submittedPassword).toBe('browser-test-password');
 });
+
+test('manual entry reports duplicate item and world rather than a stale-version error', async ({ page }) => {
+  await page.goto('/admin?preview=1');
+  const add = page.getByRole('button', { name: 'Add manual submission' });
+  await add.click();
+  await page.getByLabel('Search catalog items').fill('Virtus mask');
+  const catalog = await adminFixtures();
+  const item = catalog.catalog.items.find((entry) => entry.name === 'Virtus mask')!;
+  await page.getByLabel('Canonical item', { exact: true }).selectOption(String(item.id));
+  await page.getByLabel('Collector name', { exact: true }).fill('First collector');
+  await page.getByLabel('Collection date', { exact: true }).fill('2026-10-06');
+  await page.getByRole('button', { name: 'Create manual submission' }).click();
+  await expect(page.getByText('Manual submission created: approved.')).toBeVisible();
+  await add.click();
+  await page.getByLabel('Collector name', { exact: true }).fill('Second collector');
+  await page.getByRole('button', { name: 'Create manual submission' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Virtus mask is already collected in ordinary worlds.',
+  );
+  await expect(page.getByRole('alert')).toContainText('Revoke or edit');
+});

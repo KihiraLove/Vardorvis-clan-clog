@@ -67,8 +67,16 @@ test('uncollected items never open menus on hover focus or click; icons and page
         ),
     )
     .toBe(true);
-  await page.getByRole('button', { name: 'Close collection log' }).click();
-  await page.getByRole('button', { name: 'Open collection log' }).click();
+  // The window is fixed on the homepage; only search remains in its titlebar.
+  const titlebar = page.locator('.game-titlebar');
+  await expect(titlebar.getByRole('heading', { name: /Collection Log/ })).toBeVisible();
+  await expect(titlebar.locator('.log-book, .game-close')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Close collection log' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open collection log' })).toHaveCount(0);
+  await titlebar.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByPlaceholder('Search pages...')).toBeVisible();
+  await titlebar.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByPlaceholder('Search pages...')).toHaveCount(0);
   await expect(page.locator('.game-window')).toBeVisible();
 });
 test('admin release switch reveals skull; normal and hardcore menus and contours stay independent', async ({
