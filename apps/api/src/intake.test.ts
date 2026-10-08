@@ -149,7 +149,7 @@ test('bot token is required for search/write; it cannot access admin routes', as
 test('intake enforces guild, proof, actor, fields and exact retry semantics', async () => {
   const { app, calls, receipts } = fixture();
   const submit = (payload: unknown, auth: Record<string, string> = headers) =>
-    app.inject({ method: 'POST', url: '/api/v1/bot/submissions', headers: auth, payload });
+    app.inject({ method: 'POST', url: '/api/v1/bot/submissions', headers: auth, payload: payload as object });
   try {
     assert.equal((await submit(example, {})).statusCode, 401);
     for (const payload of [
