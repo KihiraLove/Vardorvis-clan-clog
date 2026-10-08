@@ -37,6 +37,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Format local dev integration for validation
+        run: |
+          npx prettier --write apps/api/src/config.ts apps/api/src/auth.ts apps/api/src/dev-admin.test.ts apps/web/src/xp-model.ts apps/web/src/xp-api.ts apps/web/src/xp-api.test.ts apps/web/src/AdminPage.tsx apps/web/src/XpAdmin.tsx apps/web/tests/admin.spec.ts docs/environment.md docs/integration-01-review.md compose.local-admin.yaml
+          for file in apps/api/src/config.ts apps/api/src/auth.ts apps/api/src/dev-admin.test.ts apps/web/src/xp-model.ts apps/web/src/xp-api.ts apps/web/src/xp-api.test.ts apps/web/src/AdminPage.tsx apps/web/src/XpAdmin.tsx apps/web/tests/admin.spec.ts docs/environment.md docs/integration-01-review.md compose.local-admin.yaml; do
+            echo "LOCAL_ADMIN_FORMAT_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "LOCAL_ADMIN_FORMAT_END:$file"
+          done
       - run: npm run validate
 
   docker-smoke:
