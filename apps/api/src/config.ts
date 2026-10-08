@@ -1,5 +1,6 @@
 /** Fail startup for partial/unsafe auth configuration; forwarding trust is explicit. */
 import { isIP } from 'node:net';
+import { randomBytes } from 'node:crypto';
 export interface AuthConfig {
   origin: string;
   clientId: string;
@@ -8,6 +9,8 @@ export interface AuthConfig {
   adminIds: Set<string>;
   secret: string;
   secure: boolean;
+  /** Restricted to the explicit disposable localhost testing override. */
+  devOnly?: true;
 }
 export interface BotConfig {
   token: string;
@@ -16,6 +19,8 @@ export interface BotConfig {
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!['true', 'false', undefined, ''].includes(env.AUTH_ENABLED))
     throw new Error('AUTH_ENABLED must be true or false');
+  if (!['true', 'false', undefined, ''].includes(env.DEV_ADMIN_MODE))
+    throw new Error('DEV_ADMIN_MODE must be true or false');
   const trusted = (env.TRUSTED_PROXY_CIDRS ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -45,6 +50,45 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const bot: BotConfig | undefined = botToken
     ? { token: botToken, guildId: botGuildId }
     : undefined;
+  if (env.DEV_ADMIN_MODE === 'true') {
+    // Never accept a development auth bypass just because one .env flag was set.
+    // The opt-in Compose override runs with a separate test database namespace.
+    let origin: URL;
+    try {
+      origin = new URL(env.PUBLIC_ORIGIN ?? '');
+    } catch {
+      throw new Error('DEV_ADMIN_MODE requires an explicit loopback PUBLIC_ORIGIN');
+    }
+    if (
+      env.NODE_ENV !== 'development' ||
+      env.AUTH_ENABLED === 'true' ||
+      trusted.length > 0 ||
+      origin.protocol !== 'http:' ||
+      !['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname) ||
+      origin.pathname !== '/' ||
+      origin.username ||
+      origin.password ||
+      origin.search ||
+      origin.hash
+    )
+      throw new Error(
+        'DEV_ADMIN_MODE requires NODE_ENV=development, AUTH_ENABLED=false, no trusted proxies and an HTTP loopback origin',
+      );
+    return {
+      auth: {
+        origin: origin.origin,
+        clientId: '',
+        clientSecret: '',
+        redirectUri: origin.origin + '/api/v1/auth/discord/callback',
+        adminIds: new Set(['local-dev-admin']),
+        secret: randomBytes(32).toString('hex'),
+        secure: false,
+        devOnly: true as const,
+      } satisfies AuthConfig,
+      bot,
+      trustProxy: false as const,
+    };
+  }
   if (env.AUTH_ENABLED !== 'true')
     return {
       auth: undefined,

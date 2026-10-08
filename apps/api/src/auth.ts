@@ -49,7 +49,19 @@ export function authRoutes(
     createHmac('sha256', config.secret)
       .update('csrf:' + token)
       .digest('base64url');
+  function requireLocalHost(request: FastifyRequest) {
+    if (!config.devOnly) return;
+    // Nginx forwards $host without a port. Both forwarded and direct requests
+    // must use a loopback hostname, never the public deployment hostname.
+    const host = request.headers.host ?? '';
+    if (
+      !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/iu.test(host) ||
+      request.headers['x-forwarded-host'] !== undefined
+    )
+      throw new ApiError(403, 'Local admin mode accepts only loopback hostnames.');
+  }
   async function current(request: FastifyRequest) {
+    requireLocalHost(request);
     const token = cookieValue(request, sessionName);
     if (!token) return null;
     const session = await store.session(key(token));
@@ -89,6 +101,7 @@ export function authRoutes(
   if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
   if (review) reviewRoutes(app, review, requireAdmin);
   app.get('/api/v1/auth/discord', async (request, reply) => {
+    if (config.devOnly) throw new ApiError(404, 'Discord login is disabled in local admin mode.');
     await loginLimit(request);
     const state = nonce();
     await store.createState(hash(state), new Date(Date.now() + 10 * 60 * 1000));
@@ -105,6 +118,7 @@ export function authRoutes(
       .redirect(url.toString());
   });
   app.get('/api/v1/auth/discord/callback', async (request, reply) => {
+    if (config.devOnly) throw new ApiError(404, 'Discord login is disabled in local admin mode.');
     await loginLimit(request);
     reply.header('Set-Cookie', cookie(stateName, '', 0));
     const query = request.query as Record<string, unknown>,
@@ -151,13 +165,24 @@ export function authRoutes(
       ])
       .redirect(config.origin + '/admin');
   });
-  app.get('/api/v1/auth/session', async (request) => {
-    const session = await current(request);
+  app.get('/api/v1/auth/session', async (request, reply) => {
+    let session = await current(request);
+    if (!session && config.devOnly) {
+      // A real expiring, browser-bound session with CSRF and database audit,
+      // but no external Discord OAuth during explicitly enabled local tests.
+      const token = nonce();
+      const identity = { id: 'local-dev-admin', displayName: 'Local test admin' };
+      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      await store.createSession(key(token), identity, expiresAt);
+      reply.header('Set-Cookie', cookie(sessionName, token, 8 * 60 * 60));
+      session = { ...identity, token, expiresAt };
+    }
     return session
       ? {
           authenticated: true,
           displayName: session.displayName,
           csrfToken: csrf(session.token),
+          ...(config.devOnly ? { development: true } : {}),
         }
       : { authenticated: false };
   });
