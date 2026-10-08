@@ -655,7 +655,7 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await expect(page.locator('.submission-card')).toHaveCount(0);
   await page.getByRole('link', { name: 'XP imports', exact: true }).click();
   await expect(
-    page.getByLabel('Admin password'),
+    page.getByRole('heading', { name: 'Admin sign-in required' }),
   ).toBeVisible();
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
 });
