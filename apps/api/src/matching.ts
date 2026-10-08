@@ -76,12 +76,18 @@ export function resolveMatch(
   if (id !== undefined) {
     const selected = items.find((item) => item.id === id);
     return selected
-      ? { resolution: 'resolved' as const, itemId: selected.id, candidates: [{ id: selected.id, name: selected.name }] }
+      ? {
+          resolution: 'resolved' as const,
+          itemId: selected.id,
+          candidates: [{ id: selected.id, name: selected.name }],
+        }
       : { resolution: 'needs_match' as const, itemId: null, candidates: [] };
   }
   const query = normalizeItem(raw);
   const exact = items.filter((item) =>
-    [item.name, ...item.aliases].some((value) => normalizeItem(value) === query),
+    [item.name, ...item.aliases].some(
+      (value) => normalizeItem(value) === query,
+    ),
   );
   if (exact.length === 1)
     return {

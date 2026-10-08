@@ -2,15 +2,25 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BotConfig } from './config.js';
-import { ApiError, type BackendStore, type BotSubmissionInput } from './types.js';
+import {
+  ApiError,
+  type BackendStore,
+  type BotSubmissionInput,
+} from './types.js';
 
 const snowflake = '^\\d{17,20}$';
 const proofHosts = new Set([
-  'imgur.com', 'www.imgur.com', 'm.imgur.com', 'i.imgur.com',
-  'gyazo.com', 'www.gyazo.com', 'i.gyazo.com',
+  'imgur.com',
+  'www.imgur.com',
+  'm.imgur.com',
+  'i.imgur.com',
+  'gyazo.com',
+  'www.gyazo.com',
+  'i.gyazo.com',
 ]);
 export function validProofUrl(value: string): boolean {
-  if (!value || value.length > 2048 || /[\s\x00-\x1f\x7f]/u.test(value)) return false;
+  if (!value || value.length > 2048 || (/\s/u.test(value) || [...value].some((ch) => { const code = ch.codePointAt(0)!; return code < 32 || code === 127; })))
+    return false;
   try {
     const url = new URL(value);
     return (
@@ -55,7 +65,8 @@ export function claimHash(input: BotSubmissionInput): string {
 function requireBot(request: FastifyRequest, config: BotConfig) {
   const authorization = request.headers.authorization;
   const supplied =
-    typeof authorization === 'string' && /^Bearer [a-fA-F0-9]{64,}$/u.test(authorization)
+    typeof authorization === 'string' &&
+    /^Bearer [a-fA-F0-9]{64,}$/u.test(authorization)
       ? authorization.slice(7)
       : '';
   const a = createHash('sha256').update(supplied).digest();
@@ -63,7 +74,11 @@ function requireBot(request: FastifyRequest, config: BotConfig) {
   if (!supplied || !timingSafeEqual(a, b))
     throw new ApiError(401, 'Bot credential is required.');
 }
-export function botRoutes(app: FastifyInstance, store: BackendStore, config: BotConfig) {
+export function botRoutes(
+  app: FastifyInstance,
+  store: BackendStore,
+  config: BotConfig,
+) {
   app.get<{ Querystring: { q?: string; limit?: string } }>(
     '/api/v1/bot/items',
     {
@@ -80,7 +95,10 @@ export function botRoutes(app: FastifyInstance, store: BackendStore, config: Bot
       },
     },
     async (request) => ({
-      items: await store.botItems(request.query.q ?? '', Number(request.query.limit ?? '25')),
+      items: await store.botItems(
+        request.query.q ?? '',
+        Number(request.query.limit ?? '25'),
+      ),
     }),
   );
   app.post<{ Body: BotSubmissionInput }>(
@@ -92,8 +110,12 @@ export function botRoutes(app: FastifyInstance, store: BackendStore, config: Bot
           type: 'object',
           additionalProperties: false,
           required: [
-            'interactionId', 'guildId', 'actorDiscordId', 'rawItemText',
-            'collectorName', 'proofUrl',
+            'interactionId',
+            'guildId',
+            'actorDiscordId',
+            'rawItemText',
+            'collectorName',
+            'proofUrl',
           ],
           properties: {
             interactionId: { type: 'string', pattern: snowflake },
@@ -112,13 +134,19 @@ export function botRoutes(app: FastifyInstance, store: BackendStore, config: Bot
     async (request, reply) => {
       const body = request.body;
       if (body.guildId !== config.guildId)
-        throw new ApiError(403, 'Submissions are restricted to the configured guild.');
+        throw new ApiError(
+          403,
+          'Submissions are restricted to the configured guild.',
+        );
       if (
         !body.rawItemText.trim() ||
         !body.collectorName.trim() ||
         !validProofUrl(body.proofUrl)
       )
-        throw new ApiError(422, 'Item, collector name or HTTPS proof URL is invalid.');
+        throw new ApiError(
+          422,
+          'Item, collector name or HTTPS proof URL is invalid.',
+        );
       // The store validates collectedOn against the database UTC receipt date,
       // not the clock of the client or an untrusted date supplied in the request.
       const input = { ...body, hardcore: body.hardcore ?? false };

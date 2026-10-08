@@ -46,7 +46,10 @@ export interface BotReceipt {
   creditOccupied: boolean;
 }
 export interface BackendStore {
-  botItems(query: string, limit: number): Promise<{ id: number; name: string }[]>;
+  botItems(
+    query: string,
+    limit: number,
+  ): Promise<{ id: number; name: string }[]>;
   submitClaim(
     input: BotSubmissionInput,
     payloadHash: string,

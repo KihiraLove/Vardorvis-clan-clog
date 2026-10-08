@@ -5,7 +5,12 @@ import { createApp } from './app.js';
 import { readConfig, type BotConfig } from './config.js';
 import { claimHash, validCollectionDate, validProofUrl } from './intake.js';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
-import { ApiError, type BackendStore, type BotSubmissionInput, type BotReceipt } from './types.js';
+import {
+  ApiError,
+  type BackendStore,
+  type BotSubmissionInput,
+  type BotReceipt,
+} from './types.js';
 
 const guildId = '234567890123456789';
 const actorDiscordId = '123456789012345678';
@@ -39,7 +44,8 @@ function fixture() {
       calls++;
       const prior = receipts.get(input.interactionId);
       if (prior) {
-        if (prior.hash !== hash) throw new ApiError(409, 'Changed interaction.');
+        if (prior.hash !== hash)
+          throw new ApiError(409, 'Changed interaction.');
         return { created: false, receipt: prior.receipt };
       }
       const today = new Date().toISOString().slice(0, 10);
@@ -85,7 +91,8 @@ test('proof URLs permit only actual HTTPS Imgur/Gyazo hosts and nonempty paths',
     'https://i.imgur.com/hello.png',
     'https://gyazo.com/hello',
     'https://i.gyazo.com/hello.png',
-  ]) assert.equal(validProofUrl(proof), true, proof);
+  ])
+    assert.equal(validProofUrl(proof), true, proof);
   for (const proof of [
     'http://imgur.com/hello',
     'https://imgur.com.evil.test/hello',
@@ -97,7 +104,8 @@ test('proof URLs permit only actual HTTPS Imgur/Gyazo hosts and nonempty paths',
     'https://gyazo.com/hello\n',
     'https://gyazo.com',
     'javascript:alert(1)',
-  ]) assert.equal(validProofUrl(proof), false, proof);
+  ])
+    assert.equal(validProofUrl(proof), false, proof);
 });
 test('date checks reject impossible, future and malformed calendar days', () => {
   assert.equal(validCollectionDate('2026-02-28', '2026-10-08'), true);
@@ -117,31 +125,64 @@ test('hardcore and every immutable claim field enter the idempotency fingerprint
     { proofUrl: 'https://gyazo.com/other' },
     { collectedOn: '2026-01-01' },
     { actorDiscordId: '999999999999999999' },
-  ]) assert.notEqual(claimHash({ ...example, ...change }), standard);
+  ])
+    assert.notEqual(claimHash({ ...example, ...change }), standard);
 });
 test('bot routes are disabled without both credentials, and config refuses partial or weak settings', async () => {
   const noBot = createApp();
   assert.equal((await noBot.inject('/api/v1/bot/items')).statusCode, 404);
   await noBot.close();
   assert.equal(readConfig({}).bot, undefined);
-  assert.equal(readConfig({ BOT_API_TOKEN: token, DISCORD_GUILD_ID: guildId }).bot?.guildId, guildId);
+  assert.equal(
+    readConfig({ BOT_API_TOKEN: token, DISCORD_GUILD_ID: guildId }).bot
+      ?.guildId,
+    guildId,
+  );
   for (const env of [
     { BOT_API_TOKEN: token },
     { DISCORD_GUILD_ID: guildId },
     { BOT_API_TOKEN: 'weak', DISCORD_GUILD_ID: guildId },
     { BOT_API_TOKEN: token, DISCORD_GUILD_ID: 'invalid' },
-  ]) assert.throws(() => readConfig(env));
+  ])
+    assert.throws(() => readConfig(env));
 });
 test('bot token is required for search/write; it cannot access admin routes', async () => {
   const { app } = fixture();
   try {
     assert.equal((await app.inject('/api/v1/bot/items')).statusCode, 401);
-    assert.equal((await app.inject({ url: '/api/v1/bot/items', headers: { authorization: 'Bearer ' + 'b'.repeat(64) } })).statusCode, 401);
-    assert.equal((await app.inject({ url: '/api/v1/bot/items?q=axe&limit=2', headers })).json().items.length, 2);
-    assert.equal((await app.inject({ url: '/api/v1/bot/items?q=axe&limit=26', headers })).statusCode, 400);
-    assert.equal((await app.inject({ url: '/api/v1/admin/settings', headers })).statusCode, 404);
-    assert.equal((await app.inject({ url: '/api/v1/status' })).json().submissionsEnabled, true);
-    assert.equal((await app.inject({ url: '/api/v1/bot/items?q=x&unexpected=1', headers })).statusCode, 400);
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/bot/items',
+          headers: { authorization: 'Bearer ' + 'b'.repeat(64) },
+        })
+      ).statusCode,
+      401,
+    );
+    assert.equal(
+      (
+        await app.inject({ url: '/api/v1/bot/items?q=axe&limit=2', headers })
+      ).json().items.length,
+      2,
+    );
+    assert.equal(
+      (await app.inject({ url: '/api/v1/bot/items?q=axe&limit=26', headers }))
+        .statusCode,
+      400,
+    );
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/settings', headers })).statusCode,
+      404,
+    );
+    assert.equal(
+      (await app.inject({ url: '/api/v1/status' })).json().submissionsEnabled,
+      true,
+    );
+    assert.equal(
+      (await app.inject({ url: '/api/v1/bot/items?q=x&unexpected=1', headers }))
+        .statusCode,
+      400,
+    );
   } finally {
     await app.close();
   }
@@ -149,7 +190,12 @@ test('bot token is required for search/write; it cannot access admin routes', as
 test('intake enforces guild, proof, actor, fields and exact retry semantics', async () => {
   const { app, calls, receipts } = fixture();
   const submit = (payload: unknown, auth: Record<string, string> = headers) =>
-    app.inject({ method: 'POST', url: '/api/v1/bot/submissions', headers: auth, payload: payload as object });
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/bot/submissions',
+      headers: auth,
+      payload: payload as object,
+    });
   try {
     assert.equal((await submit(example, {})).statusCode, 401);
     for (const payload of [
@@ -178,7 +224,10 @@ test('intake enforces guild, proof, actor, fields and exact retry semantics', as
     const retry = await submit({ ...example, hardcore: false });
     assert.equal(retry.statusCode, 200);
     assert.deepEqual(retry.json(), first.json());
-    assert.equal((await submit({ ...example, hardcore: true })).statusCode, 409);
+    assert.equal(
+      (await submit({ ...example, hardcore: true })).statusCode,
+      409,
+    );
     assert.equal(receipts.size, 1);
     const unknown = await submit({
       ...example,

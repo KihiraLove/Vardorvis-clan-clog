@@ -34,7 +34,8 @@ export class PgStore implements BackendStore {
     const mapped = new Map<number, MatchItem>(
       items.map((item) => [item.id, { ...item, aliases: [] }]),
     );
-    for (const alias of aliases) mapped.get(alias.item_id)?.aliases.push(alias.alias);
+    for (const alias of aliases)
+      mapped.get(alias.item_id)?.aliases.push(alias.alias);
     return [...mapped.values()];
   }
 
@@ -42,7 +43,11 @@ export class PgStore implements BackendStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const results = searchMatches(await this.matchItems(client), query, limit);
+      const results = searchMatches(
+        await this.matchItems(client),
+        query,
+        limit,
+      );
       await client.query('COMMIT');
       return results;
     } catch (error) {
@@ -57,18 +62,30 @@ export class PgStore implements BackendStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const readReceipt = async (): Promise<{ hash: string | null; receipt: BotReceipt | null } | null> => {
+      const readReceipt = async (): Promise<{
+        hash: string | null;
+        receipt: BotReceipt | null;
+      } | null> => {
         const row = (
-          await client.query<{ hash: string | null; receipt: BotReceipt | null }>(
+          await client.query<{
+            hash: string | null;
+            receipt: BotReceipt | null;
+          }>(
             'SELECT intake_payload_hash AS hash, intake_receipt AS receipt FROM submissions WHERE discord_interaction_id=$1',
             [input.interactionId],
           )
         ).rows[0];
         return row ?? null;
       };
-      const replay = (prior: { hash: string | null; receipt: BotReceipt | null }) => {
+      const replay = (prior: {
+        hash: string | null;
+        receipt: BotReceipt | null;
+      }) => {
         if (prior.hash !== payloadHash || !prior.receipt)
-          throw new ApiError(409, 'Discord interaction ID was used for a different claim.');
+          throw new ApiError(
+            409,
+            'Discord interaction ID was used for a different claim.',
+          );
         return { created: false, receipt: prior.receipt };
       };
       const prior = await readReceipt();
@@ -82,9 +99,15 @@ export class PgStore implements BackendStore {
       ).rows[0]!.timestamp;
       const today = submittedAt.toISOString().slice(0, 10);
       if (input.collectedOn && !validCollectionDate(input.collectedOn, today))
-        throw new ApiError(422, 'Collection date must be a valid, non-future UTC calendar date.');
+        throw new ApiError(
+          422,
+          'Collection date must be a valid, non-future UTC calendar date.',
+        );
       const matches = await this.matchItems(client);
-      if (input.itemId !== undefined && !matches.some((item) => item.id === input.itemId))
+      if (
+        input.itemId !== undefined &&
+        !matches.some((item) => item.id === input.itemId)
+      )
         throw new ApiError(422, 'Selected canonical item is unavailable.');
       const matched = resolveMatch(matches, input.rawItemText, input.itemId);
       const itemId = matched.itemId;
@@ -119,15 +142,25 @@ export class PgStore implements BackendStore {
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         ON CONFLICT (discord_interaction_id) DO NOTHING RETURNING id`,
         [
-          receipt.submissionId, input.interactionId, input.actorDiscordId,
-          input.guildId, input.rawItemText, itemId, input.collectorName,
-          receipt.collectedOn, receipt.dateSource, input.proofUrl,
-          input.hardcore, payloadHash, JSON.stringify(receipt),
+          receipt.submissionId,
+          input.interactionId,
+          input.actorDiscordId,
+          input.guildId,
+          input.rawItemText,
+          itemId,
+          input.collectorName,
+          receipt.collectedOn,
+          receipt.dateSource,
+          input.proofUrl,
+          input.hardcore,
+          payloadHash,
+          JSON.stringify(receipt),
         ],
       );
       if (inserted.rowCount !== 1) {
         const winner = await readReceipt();
-        if (!winner) throw new ApiError(503, 'Claim receipt is temporarily unavailable.');
+        if (!winner)
+          throw new ApiError(503, 'Claim receipt is temporarily unavailable.');
         const result = replay(winner);
         await client.query('COMMIT');
         return result;

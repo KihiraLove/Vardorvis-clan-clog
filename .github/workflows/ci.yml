@@ -37,15 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Temporary one-run Prettier export for connector sync
-        run: |
-          npx prettier --write apps/api/src/backend.test.ts apps/api/src/config.ts apps/api/src/intake.store.test.ts apps/api/src/intake.test.ts apps/api/src/intake.ts apps/api/src/matching.ts apps/api/src/server.ts apps/api/src/store.ts apps/api/src/types.ts
-          for file in apps/api/src/backend.test.ts apps/api/src/config.ts apps/api/src/intake.store.test.ts apps/api/src/intake.test.ts apps/api/src/intake.ts apps/api/src/matching.ts apps/api/src/server.ts apps/api/src/store.ts apps/api/src/types.ts; do
-            echo "FORMATTED_FILE_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FORMATTED_FILE_END:$file"
-          done
       - run: npm run validate
 
   docker-smoke:
