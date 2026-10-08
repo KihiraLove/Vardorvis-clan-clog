@@ -14,6 +14,7 @@ import {
   type AdminClient,
   type AdminPage,
   type Correction,
+  type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
   type QueueView,
@@ -100,6 +101,29 @@ export class LiveAdminClient implements AdminClient {
         throw new AdminRequestError(failure.status);
       throw failure;
     }
+  }
+  async login(password: string, signal: AbortSignal): Promise<void> {
+    await this.response('/api/v1/auth/login', signal, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+  }
+  async addManual(fields: ManualSubmissionInput, csrf: string, signal: AbortSignal) {
+    const response = await this.response(
+      '/api/v1/admin/submissions',
+      signal,
+      this.write(csrf, fields),
+    );
+    if (response.status !== 201) throw new Error('Unexpected manual submission status.');
+    const result = parseSubmission(await response.json());
+    if (
+      result.source !== 'manual' ||
+      result.itemId !== fields.itemId ||
+      result.hardcore !== fields.hardcore ||
+      result.status !== (fields.approve ? 'approved' : 'pending')
+    ) throw new Error('Unexpected manual submission receipt.');
+    return result;
   }
   async settings(signal: AbortSignal) {
     return parseSettings(await this.json('/api/v1/admin/settings', signal));

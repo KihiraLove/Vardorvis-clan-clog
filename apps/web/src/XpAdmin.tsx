@@ -178,10 +178,10 @@ export function XpAdmin({
       <section className="xp-panel">
         <h2>Admin sign-in required</h2>
         <p>
-          Only allowlisted clan admins can import or refresh competition XP.
+          Sign in with the admin password to import or refresh competition XP.
         </p>
-        <a className="site-button" href="/api/v1/auth/discord">
-          Sign in with Discord
+        <a className="site-button" href="/admin">
+          Admin password sign-in
         </a>
         {error && <p role="alert">{error}</p>}
       </section>

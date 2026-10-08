@@ -31,7 +31,7 @@ export class XpRequestError extends Error {
   constructor(status: number) {
     super(
       status === 401
-        ? 'Sign in with Discord to import competitions.'
+        ? 'Sign in with the admin password to import competitions.'
         : status === 403
           ? 'Your account is not allowed to import competitions.'
           : status === 409
