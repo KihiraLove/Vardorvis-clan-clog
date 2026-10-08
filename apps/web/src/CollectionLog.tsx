@@ -198,7 +198,7 @@ export function CollectionLog({
           <div className="game-window" style={{ transform: `scale(${scale})` }}>
             <header className="game-titlebar">
               <h2>
-                {hardcore ? 'Hardcore Collection Log' : 'Collection Log'}
+                Collection Log
                 {catalog && (
                   <>
                     {' '}
