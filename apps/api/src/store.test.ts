@@ -31,6 +31,7 @@ test(
         '001_initial.sql',
         '002_world_modes.sql',
         '003_admin_auth.sql',
+        '004_admin_catalog.sql',
       ])
         await pool.query(
           await readFile(

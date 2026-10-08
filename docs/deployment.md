@@ -1,5 +1,7 @@
 # CI/CD and self-hosting
 
+> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
+
 ## Pipeline
 
 `CI` runs on pull requests, pushes to `main`, and manual validation. `validate` installs the lockfile, checks formatting/lint, builds all workspaces, type-checks, runs unit/database tests and checks relative doc links. `docker-smoke` builds all three images, migrates a fresh disposable database, starts Compose and checks the web/API/bot paths. Both run on GitHub-hosted runners without deployment credentials.

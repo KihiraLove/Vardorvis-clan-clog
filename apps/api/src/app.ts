@@ -1,11 +1,16 @@
 /** Public projections plus optional configured Discord auth; unavailable services fail closed. */
 import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
+import { catalogRoutes } from './catalog-routes.js';
+import type { PgCatalogStore } from './catalog-store.js';
+import type { IconStorage } from './icon-storage.js';
 import type { AuthConfig } from './config.js';
 import { authRoutes } from './auth.js';
 import { discordIdentify, type Identify } from './discord.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  catalog?: PgCatalogStore | undefined;
+  icons?: IconStorage | undefined;
   store?: BackendStore | undefined;
   auth?: AuthConfig | undefined;
   identify?: Identify;
@@ -62,8 +67,10 @@ export function createApp(
           ? 400
           : error instanceof Error &&
               'statusCode' in error &&
-              error.statusCode === 413
-            ? 413
+              typeof error.statusCode === 'number' &&
+              error.statusCode >= 400 &&
+              error.statusCode < 500
+            ? error.statusCode
             : 503;
     // Do not log driver/provider errors: they may contain SQL parameters or OAuth secrets.
     if (status >= 500)
@@ -140,18 +147,51 @@ export function createApp(
       adminAuthEnabled: !!(store && options.auth),
     };
   });
-  if (store && options.auth)
-    authRoutes(
-      app,
-      store,
-      options.auth,
-      options.identify ?? discordIdentify(options.auth),
-    );
-  else {
+  const requireAdmin =
+    store && options.auth
+      ? authRoutes(
+          app,
+          store,
+          options.auth,
+          options.identify ?? discordIdentify(options.auth),
+        )
+      : undefined;
+  if (!requireAdmin) {
     app.get('/api/v1/auth/session', async () => ({ authenticated: false }));
     app.get('/api/v1/auth/discord', async () => {
       throw new ApiError(503, 'Admin sign-in is not configured.');
     });
   }
+  if (options.catalog && options.icons)
+    catalogRoutes(app, options.catalog, options.icons, requireAdmin);
+  app.get<{ Querystring: { q?: string } }>(
+    '/api/v1/catalog/search',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { q: { type: 'string', maxLength: 100 } },
+        },
+      },
+    },
+    async (request) => {
+      if (!store) throw new ApiError(503, 'Catalog search unavailable.');
+      const data = await store.catalog(),
+        query = (request.query.q ?? '').trim().toLowerCase();
+      return {
+        revision:
+          'catalog-' +
+          createHash('sha256').update(JSON.stringify(data)).digest('hex'),
+        items: data.items
+          .filter(
+            (item) =>
+              item.name.toLowerCase().includes(query) ||
+              String(item.id) === query,
+          )
+          .slice(0, 25),
+      };
+    },
+  );
   return app;
 }

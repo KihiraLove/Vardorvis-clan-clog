@@ -1,5 +1,7 @@
 # Backend phase 1: public reads, Discord login and release settings
 
+> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
+
 > **8 October 2026 CAT-01 update:** [Complete catalog import](catalog-import.md) now supplies 1,717 items, 124 ordered pages and verified local icons. Compose initializes the catalog after migrations; earlier descriptions of catalog import as pending are superseded.
 
 Implemented on `codex/backend-auth-and-public-api` for issues [#2](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/2), [#4](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/4) and the settings/storage portion of [#26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26). All three are assigned to KihiraLove. This document supersedes earlier statements that these routes are only frontend contracts.

@@ -3,6 +3,8 @@ import pg from 'pg';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { PgStore } from './store.js';
+import { PgCatalogStore } from './catalog-store.js';
+import { IconStorage } from './icon-storage.js';
 const config = readConfig();
 if (config.auth && !process.env.DATABASE_URL)
   throw new Error('DATABASE_URL is required when auth is enabled');
@@ -15,10 +17,17 @@ const pool = process.env.DATABASE_URL
     })
   : undefined;
 const store = pool ? new PgStore(pool) : undefined;
+const icons = config.iconDirectory
+  ? new IconStorage(config.iconDirectory)
+  : undefined;
+if (icons) await icons.initialize();
+if (config.auth && !icons)
+  throw new Error('ICON_STORAGE_PATH is required when auth is enabled');
+const catalog = pool ? new PgCatalogStore(pool) : undefined;
 const app = createApp(
   store ? () => store.ready() : undefined,
   store ? () => store.settings() : undefined,
-  { store, ...config },
+  { store, catalog, icons, ...config },
 );
 app.addHook('onClose', async () => {
   await pool?.end();

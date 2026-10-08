@@ -1,5 +1,6 @@
 /** Fail startup for partial/unsafe auth configuration; forwarding trust is explicit. */
 import { isIP } from 'node:net';
+import { isAbsolute } from 'node:path';
 export interface AuthConfig {
   origin: string;
   clientId: string;
@@ -10,6 +11,9 @@ export interface AuthConfig {
   secure: boolean;
 }
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
+  const iconDirectory = env.ICON_STORAGE_PATH?.trim() || undefined;
+  if (iconDirectory && !isAbsolute(iconDirectory))
+    throw new Error('ICON_STORAGE_PATH must be absolute');
   if (!['true', 'false', undefined, ''].includes(env.AUTH_ENABLED))
     throw new Error('AUTH_ENABLED must be true or false');
   const trusted = (env.TRUSTED_PROXY_CIDRS ?? '')
@@ -30,6 +34,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (env.AUTH_ENABLED !== 'true')
     return {
       auth: undefined,
+      iconDirectory,
       trustProxy: trusted.length ? trusted : (false as const),
     };
   const required = (name: string) => {
@@ -70,6 +75,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
     );
   return {
+    iconDirectory,
     auth: {
       origin: origin.origin,
       clientId,

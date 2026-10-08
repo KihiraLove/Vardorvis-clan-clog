@@ -1,5 +1,7 @@
 # Environment setup
 
+> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
+
 ## Local prerequisites
 
 Node 24 LTS, npm, Git, and Docker Engine/Desktop with a recent Compose v2 supporting `up --wait`. The initial database is PostgreSQL 17. Native Node development and container development use the same migration files.

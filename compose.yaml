@@ -37,6 +37,7 @@ services:
       DATABASE_URL: postgresql://clog:${POSTGRES_PASSWORD}@db:5432/clog
       HOST: 0.0.0.0
       PORT: '3000'
+      ICON_STORAGE_PATH: /data/catalog-icons
       NODE_ENV: production
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
@@ -46,6 +47,8 @@ services:
       ADMIN_DISCORD_USER_IDS: ${ADMIN_DISCORD_USER_IDS:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+    volumes:
+      - catalog-icons:/data/catalog-icons
     depends_on:
       migrate: { condition: service_completed_successfully }
     security_opt: ['no-new-privileges:true']
@@ -78,3 +81,4 @@ services:
 
 volumes:
   postgres-data:
+  catalog-icons:

@@ -201,4 +201,5 @@ export function authRoutes(
       return saved;
     },
   );
+  return requireAdmin;
 }

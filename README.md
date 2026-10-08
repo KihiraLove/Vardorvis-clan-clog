@@ -4,13 +4,13 @@ Monorepo for a public OSRS collection log, an admin submission queue, a Discord 
 
 ## Current state
 
-The [first backend slice](docs/backend-phase-one.md) now serves PostgreSQL-backed catalog/collections, Discord admin login and persistent versioned hardcore settings. Enable auth only after configuring the Discord app, HTTPS origin, allowlist and session secret. The [complete catalog importer](docs/catalog-import.md) now bootstraps 1,717 items across 124 pages with verified local icons. Submission review and WOM remain pending.
+The [first backend slice](docs/backend-phase-one.md) now serves PostgreSQL-backed catalog/collections, Discord admin login and persistent versioned hardcore settings. Enable auth only after configuring the Discord app, HTTPS origin, allowlist and session secret. The [complete catalog importer](docs/catalog-import.md) now bootstraps 1,717 items across 124 pages with verified local icons. The [admin catalog backend](docs/admin-catalog-backend.md) supports manual items, durable icons and page ordering. Submission review and WOM remain pending.
 
 This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. Further backend feature routes and release approval remain pending.
 
 Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and independent hardcore mode, a release switch, silhouette outlines and collected-item menus; an inline RuneScape-style event XP tracker with a scrollable sidebar, million labels and exact tooltips and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, PostgreSQL schema with per-mode unique credits, default-off hardcore visibility and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
 
-Planned: reviewed catalog refreshes, final reference-approved pixel matching, Discord submission persistence, transactional review API, end-to-end hardcore claim persistence/review, Wise Old Man import persistence, durable admin-created items/icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
+Planned: reviewed catalog refreshes, final reference-approved pixel matching, Discord submission persistence, transactional review API, end-to-end hardcore claim persistence/review, Wise Old Man import persistence, production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
 ## Workspace
 
@@ -56,6 +56,8 @@ The zero-initialized XP event tracker is below the log (legacy `/xp?preview=1` s
 Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` for submission review, item creation and page ordering. The brand and admin links share the in-memory preview ledger, so approvals and new items appear in the public preview. Reload resets it. The [admin review guide](docs/admin-frontend-review.md) covers the steps and backend boundaries. ADMIN-01 #8 and ADMIN-02 #31 are assigned to KihiraLove and remain open for manual review in the same draft PR #33.
 
 ## Documentation
+
+- [Admin catalog backend, durable storage and coordinated backups](docs/admin-catalog-backend.md)
 
 - [Complete catalog import, identity mapping and asset provenance](docs/catalog-import.md)
 

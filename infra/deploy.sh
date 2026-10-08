@@ -14,9 +14,8 @@ docker compose config --quiet
 mkdir -p backups
 # A failed dump must never appear as a completed backup; finish before changing images.
 if [[ -n "$(docker compose ps --status running -q db)" ]]; then
-  backup_path="backups/clog-$(date -u +%Y%m%dT%H%M%SZ)-$release_sha.dump"
-  docker compose exec -T db pg_dump -U clog -d clog -Fc > "$backup_path.tmp"
-  mv "$backup_path.tmp" "$backup_path"
+  backup_path="backups/clog-$(date -u +%Y%m%dT%H%M%SZ)-$release_sha"
+  BACKUP_DEPLOY_LOCK_HELD=1 bash infra/backup.sh "$backup_path"
 fi
 docker compose pull
 # Failure may leave changed containers/schema; recovery requires an operator decision.
