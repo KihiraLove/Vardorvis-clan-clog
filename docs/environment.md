@@ -98,3 +98,43 @@ Install Chromium with `npx playwright install chromium` (Linux CI installs depen
 The XP page adds no environment secrets or build-time origins. Open `http://127.0.0.1:5173/xp?preview=1` for independent public/admin UI review; sample imports stay in memory. Live mode uses same-origin XP endpoints and the planned session/CSRF endpoint, with WOM requests performed by the future backend. Live imports/authentication remain unavailable until #27/#4. See the [XP review guide](xp-frontend-review.md).
 
 The submission/catalog frontend also needs no new environment values. Review `/admin?preview=1` and `/admin/catalog?preview=1` with the [admin review guide](admin-frontend-review.md). SPA navigation shares an in-memory catalog and review ledger; reload resets it. Live mode uses same-origin session/CSRF and private admin endpoints from [contracts](contracts.md). Auth, review persistence and durable uploaded assets remain #4/#7/#30. Do not put credentials in web build variables or treat browser validation as server authorization.
+
+## Local admin testing without Discord login
+
+For live-API development, use the opt-in `compose.local-admin.yaml`
+override. It creates a **separate Compose project and PostgreSQL volume** for
+real review, hardcore settings and WOM import testing, without needing a
+Discord login or touching production clan data:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml up -d --build --wait
+# Open http://127.0.0.1:8088/admin
+# XP imports: http://127.0.0.1:8088/admin/xp
+```
+
+Your `.env` still needs `POSTGRES_PASSWORD`. If ports 8088 or 5432 are
+already in use, stop the other local stack before starting this one, or
+choose different available ports. A fresh browser automatically gets a
+time-limited, HTTP-only local development session from
+`/api/v1/auth/session`; mutations still use CSRF tokens, expected versions
+and database audits. The admin page visibly labels development mode.
+No `?preview=1` is needed here: edits persist in the **separate test DB**.
+The old `?preview=1` option remains a separate, in-memory UI preview.
+
+The bypass is **off by default**. Startup rejects it unless
+`DEV_ADMIN_MODE=true`, `NODE_ENV=development`,
+`AUTH_ENABLED=false`, `PUBLIC_ORIGIN` is an HTTP loopback origin and
+no trusted proxies are configured. Admin requests with non-loopback Host
+or forwarded-host headers are rejected. Never expose this Compose project
+through a public reverse proxy or connect it to the real clan database.
+
+Stop only this local stack with:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml down
+# Optional: explicitly destroy the disposable local database.
+docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml down --volumes
+```
+
+For production, omit `compose.local-admin.yaml`; the existing
+Discord OAuth allowlist and session checks remain mandatory.

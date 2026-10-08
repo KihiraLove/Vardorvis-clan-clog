@@ -32,3 +32,7 @@ CI supplies \`TEST_DATABASE_URL\` and runs \`npm run validate\`. Preview/testing
 \`npm run dev:web\`; visit \`/?preview=1\`, \`/admin?preview=1\` and \`/admin/xp?preview=1\`. Real admin endpoints are available only with a migrated database and valid allowlisted OAuth configuration; no staged icon upload or catalog editor writes are claimed here.
 
 Avoid merging this PR until tests and manual acceptance are complete. The PR deliberately references #43 and the original six issues **without closing keywords** while still incomplete.
+
+## Local no-login testing
+
+The explicit disposable `compose.local-admin.yaml` override allows direct `/admin` and `/admin/xp` live-API review without Discord login. It uses an isolated local database and fails closed in production. See [local admin setup](environment.md#local-admin-testing-without-discord-login). This does not replace production OAuth acceptance.

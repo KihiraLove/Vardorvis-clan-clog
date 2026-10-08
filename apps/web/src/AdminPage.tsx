@@ -98,6 +98,12 @@ export function AdminPage({
           </button>
         </div>
       )}
+      {session?.development && (
+        <div className="preview-banner" role="status">
+          Local test admin — no Discord login required. Changes are saved
+          to a separate test database, not clan production.
+        </div>
+      )}
       <div className="admin-heading">
         <div>
           <p className="xp-eyebrow">Vardorvis clan</p>
@@ -106,18 +112,20 @@ export function AdminPage({
         {session && (
           <div className="admin-account">
             <span>{session.displayName}</span>
-            <button
-              className="site-button"
-              disabled={action.busy}
-              onClick={() => {
-                void action.execute(async (signal) => {
-                  await client.logout(session.csrfToken, signal);
-                  if (!signal.aborted) accessLost();
-                });
-              }}
-            >
-              Sign out
-            </button>
+            {!session.development && (
+              <button
+                className="site-button"
+                disabled={action.busy}
+                onClick={() => {
+                  void action.execute(async (signal) => {
+                    await client.logout(session.csrfToken, signal);
+                    if (!signal.aborted) accessLost();
+                  });
+                }}
+              >
+                Sign out
+              </button>
+            )}
           </div>
         )}
       </div>
