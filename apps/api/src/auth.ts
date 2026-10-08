@@ -58,7 +58,10 @@ export function authRoutes(
       !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/iu.test(host) ||
       request.headers['x-forwarded-host'] !== undefined
     )
-      throw new ApiError(403, 'Local admin mode accepts only loopback hostnames.');
+      throw new ApiError(
+        403,
+        'Local admin mode accepts only loopback hostnames.',
+      );
   }
   async function current(request: FastifyRequest) {
     requireLocalHost(request);
@@ -101,7 +104,8 @@ export function authRoutes(
   if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
   if (review) reviewRoutes(app, review, requireAdmin);
   app.get('/api/v1/auth/discord', async (request, reply) => {
-    if (config.devOnly) throw new ApiError(404, 'Discord login is disabled in local admin mode.');
+    if (config.devOnly)
+      throw new ApiError(404, 'Discord login is disabled in local admin mode.');
     await loginLimit(request);
     const state = nonce();
     await store.createState(hash(state), new Date(Date.now() + 10 * 60 * 1000));
@@ -118,7 +122,8 @@ export function authRoutes(
       .redirect(url.toString());
   });
   app.get('/api/v1/auth/discord/callback', async (request, reply) => {
-    if (config.devOnly) throw new ApiError(404, 'Discord login is disabled in local admin mode.');
+    if (config.devOnly)
+      throw new ApiError(404, 'Discord login is disabled in local admin mode.');
     await loginLimit(request);
     reply.header('Set-Cookie', cookie(stateName, '', 0));
     const query = request.query as Record<string, unknown>,
@@ -171,7 +176,10 @@ export function authRoutes(
       // A real expiring, browser-bound session with CSRF and database audit,
       // but no external Discord OAuth during explicitly enabled local tests.
       const token = nonce();
-      const identity = { id: 'local-dev-admin', displayName: 'Local test admin' };
+      const identity = {
+        id: 'local-dev-admin',
+        displayName: 'Local test admin',
+      };
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
       await store.createSession(key(token), identity, expiresAt);
       reply.header('Set-Cookie', cookie(sessionName, token, 8 * 60 * 60));

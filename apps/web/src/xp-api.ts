@@ -184,7 +184,10 @@ export class LiveXpClient implements XpClient {
       if (value.authenticated === false) return null;
       if (value.authenticated !== true)
         throw new Error('Invalid admin session.');
-      if (value.development !== undefined && typeof value.development !== 'boolean')
+      if (
+        value.development !== undefined &&
+        typeof value.development !== 'boolean'
+      )
         throw new Error('Invalid admin session mode.');
       return {
         csrfToken: text(value.csrfToken),

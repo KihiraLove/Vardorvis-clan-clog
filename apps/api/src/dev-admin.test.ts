@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
-import type { AdminIdentity, BackendStore, Settings, StoredSession } from './types.js';
+import type {
+  AdminIdentity,
+  BackendStore,
+  Settings,
+  StoredSession,
+} from './types.js';
 
 const config = {
   NODE_ENV: 'development',
@@ -38,11 +43,17 @@ function disposableStore() {
     },
     createState: async () => {},
     consumeState: async () => false,
-    createSession: async (key: string, identity: AdminIdentity, expiresAt: Date) => {
+    createSession: async (
+      key: string,
+      identity: AdminIdentity,
+      expiresAt: Date,
+    ) => {
       sessions.set(key, { ...identity, expiresAt });
     },
     session: async (key: string) => sessions.get(key) ?? null,
-    deleteSession: async (key: string) => { sessions.delete(key); },
+    deleteSession: async (key: string) => {
+      sessions.delete(key);
+    },
     allowLogin: async () => true,
   };
   return { store, sessions, audits };
@@ -67,65 +78,133 @@ test('local admin flag is opt-in and forbidden on production, public origins or 
 test('fresh localhost browser can review and save with CSRF but no login', async () => {
   const { store, sessions, audits } = disposableStore();
   const auth = readConfig(config).auth!;
-  const app = createApp(() => store.ready(), () => store.settings(),
-    { store, auth, logger: false });
+  const app = createApp(
+    () => store.ready(),
+    () => store.settings(),
+    { store, auth, logger: false },
+  );
   const host = '127.0.0.1:8088';
   try {
-    assert.equal((await app.inject({
-      url: '/api/v1/admin/settings', headers: { host },
-    })).statusCode, 401);
-    const first = await app.inject({ url: '/api/v1/auth/session', headers: { host } });
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/admin/settings',
+          headers: { host },
+        })
+      ).statusCode,
+      401,
+    );
+    const first = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { host },
+    });
     assert.equal(first.statusCode, 200);
     assert.equal(first.headers['cache-control'], 'no-store');
     assert.equal(first.json().authenticated, true);
     assert.equal(first.json().development, true);
     assert.equal(first.json().displayName, 'Local test admin');
-    assert.match(String(first.headers['set-cookie']), /HttpOnly; SameSite=Lax/u);
+    assert.match(
+      String(first.headers['set-cookie']),
+      /HttpOnly; SameSite=Lax/u,
+    );
     assert.doesNotMatch(String(first.headers['set-cookie']), /; Secure/u);
     const cookie = String(first.headers['set-cookie']).split(';')[0]!;
     assert.equal(sessions.size, 1);
     const next = await app.inject({
-      url: '/api/v1/auth/session', headers: { host, cookie },
+      url: '/api/v1/auth/session',
+      headers: { host, cookie },
     });
     assert.equal(next.headers['set-cookie'], undefined);
     assert.equal(next.json().csrfToken, first.json().csrfToken);
-    assert.equal((await app.inject({
-      url: '/api/v1/admin/settings', headers: { host, cookie },
-    })).statusCode, 200);
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/admin/settings',
+          headers: { host, cookie },
+        })
+      ).statusCode,
+      200,
+    );
     const request = {
-      method: 'PUT' as const, url: '/api/v1/admin/settings',
+      method: 'PUT' as const,
+      url: '/api/v1/admin/settings',
       payload: { hardcoreEnabled: true, expectedRevision: 'settings-1' },
     };
-    assert.equal((await app.inject({
-      ...request, headers: { host, cookie, origin: auth.origin },
-    })).statusCode, 403);
-    assert.equal((await app.inject({
-      ...request, headers: { host, cookie, origin: 'http://evil.example',
-        'x-csrf-token': first.json().csrfToken },
-    })).statusCode, 403);
+    assert.equal(
+      (
+        await app.inject({
+          ...request,
+          headers: { host, cookie, origin: auth.origin },
+        })
+      ).statusCode,
+      403,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          ...request,
+          headers: {
+            host,
+            cookie,
+            origin: 'http://evil.example',
+            'x-csrf-token': first.json().csrfToken,
+          },
+        })
+      ).statusCode,
+      403,
+    );
     const saved = await app.inject({
-      ...request, headers: { host, cookie, origin: auth.origin,
-        'x-csrf-token': first.json().csrfToken },
+      ...request,
+      headers: {
+        host,
+        cookie,
+        origin: auth.origin,
+        'x-csrf-token': first.json().csrfToken,
+      },
     });
     assert.equal(saved.statusCode, 200);
     assert.equal(saved.json().hardcoreEnabled, true);
     assert.deepEqual(audits, ['local-dev-admin']);
-    assert.equal((await app.inject({
-      url: '/api/v1/auth/discord', headers: { host },
-    })).statusCode, 404);
-    assert.equal((await app.inject({
-      url: '/api/v1/auth/discord/callback?code=fake', headers: { host },
-    })).statusCode, 404);
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/auth/discord',
+          headers: { host },
+        })
+      ).statusCode,
+      404,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/auth/discord/callback?code=fake',
+          headers: { host },
+        })
+      ).statusCode,
+      404,
+    );
     for (const bad of [
       { host: 'daybloom.net', cookie },
       { host, cookie, 'x-forwarded-host': 'daybloom.net' },
     ]) {
-      assert.equal((await app.inject({
-        url: '/api/v1/admin/settings', headers: bad,
-      })).statusCode, 403);
-      assert.equal((await app.inject({
-        url: '/api/v1/auth/session', headers: bad,
-      })).statusCode, 403);
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/settings',
+            headers: bad,
+          })
+        ).statusCode,
+        403,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/auth/session',
+            headers: bad,
+          })
+        ).statusCode,
+        403,
+      );
     }
     assert.equal(sessions.size, 1);
   } finally {

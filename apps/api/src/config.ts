@@ -57,7 +57,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     try {
       origin = new URL(env.PUBLIC_ORIGIN ?? '');
     } catch {
-      throw new Error('DEV_ADMIN_MODE requires an explicit loopback PUBLIC_ORIGIN');
+      throw new Error(
+        'DEV_ADMIN_MODE requires an explicit loopback PUBLIC_ORIGIN',
+      );
     }
     if (
       env.NODE_ENV !== 'development' ||

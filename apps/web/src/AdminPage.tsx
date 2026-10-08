@@ -100,8 +100,8 @@ export function AdminPage({
       )}
       {session?.development && (
         <div className="preview-banner" role="status">
-          Local test admin — no Discord login required. Changes are saved
-          to a separate test database, not clan production.
+          Local test admin — no Discord login required. Changes are saved to a
+          separate test database, not clan production.
         </div>
       )}
       <div className="admin-heading">

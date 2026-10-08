@@ -660,14 +660,18 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
 });
 
-test('live local admin session shows test indicator and no Discord sign-out', async ({ page }) => {
+test('live local admin session shows test indicator and no Discord sign-out', async ({
+  page,
+}) => {
   const fixture = await adminFixtures();
   await mockAdmin(page);
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill({ json: { ...fixture.session, development: true } }),
   );
   await page.goto('/admin');
-  await expect(page.getByText(/Local test admin — no Discord login required/)).toBeVisible();
+  await expect(
+    page.getByText(/Local test admin — no Discord login required/),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
   await expect(page.locator('.submission-card')).toHaveCount(1);
 });
