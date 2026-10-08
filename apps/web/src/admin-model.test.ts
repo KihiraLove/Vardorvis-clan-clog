@@ -1,3 +1,4 @@
+/** Validate private data and preview transitions, including shared credits and catalog edits. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { itemState, progress } from './model.ts';

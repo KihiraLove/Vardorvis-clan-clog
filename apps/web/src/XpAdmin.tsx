@@ -1,3 +1,4 @@
+/** Session-gated preview/apply workflow with expiry, correction acknowledgment and history. */
 import { useEffect, useRef, useState } from 'react';
 import {
   competitionUrl,
@@ -10,7 +11,7 @@ import {
   type XpClient,
 } from './xp-model.ts';
 import { XpRequestError } from './xp-api.ts';
-import { ParticipantTable, xpDate, xpTime } from './XpTables.tsx';
+import { xpDate, xpTime } from './XpTables.tsx';
 
 export function XpAdmin({
   client,
@@ -132,6 +133,7 @@ export function XpAdmin({
           controller.signal,
         );
         if (controller.signal.aborted) return;
+        // One key per preview is reused after timeouts where the apply outcome is uncertain.
         requestKey.current = crypto.randomUUID();
         setPreview(result);
       }
@@ -191,8 +193,8 @@ export function XpAdmin({
         <span>{session.displayName}</span>
       </div>
       <p>
-        Preview every competitor and the change to each recorded skill total
-        before applying.
+        Add an event by its Wise Old Man link. Review its name, skill or
+        all-skill scope, and gained XP before applying.
       </p>
       {previewMode && (
         <p className="xp-note">
@@ -280,7 +282,12 @@ export function XpAdmin({
               </tbody>
             </table>
           </div>
-          <ParticipantTable detail={preview} key={preview.previewToken} />
+          <p>
+            Skills:{' '}
+            {preview.competition.skills.length === 1
+              ? skillName(preview.competition.skills[0]!)
+              : 'All skills'}
+          </p>
           {preview.warnings.map((warning) => (
             <p className="xp-note" key={warning}>
               {warning}

@@ -1,3 +1,4 @@
+/** Verify exact arithmetic, strict source/payload parsing and repeatable preview reconciliation. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -21,7 +22,7 @@ test('million labels never round above recorded XP, and hover values retain inte
   assert.equal(millionXp('0'), '0.00m');
   assert.equal(millionXp('999999'), '0.99m');
   assert.equal(millionXp('12345678'), '12.34m');
-  assert.equal(millionXp('9007199254740993'), '9,007,199,254.74m');
+  assert.equal(millionXp('9007199254740993'), '9007199254.74m');
   assert.equal(exactXp('9007199254740993'), '9,007,199,254,740,993');
   assert.equal(compareXp('9007199254740993', '9007199254740992'), -1);
   assert.equal(compareXp('0', null), -1);
@@ -168,10 +169,16 @@ test('multi-skill imports accumulate independently, and repeat sample setup adds
   assert.equal(snapshot.overview.totals.attack, '18345678');
   assert.equal(snapshot.overview.totals.fishing, '4400123');
   assert.equal(snapshot.overview.totals.sailing, '7500000');
-  assert.deepEqual(snapshot.detail!.competition.skills, ['fishing', 'sailing']);
+  assert.deepEqual(
+    snapshot.detail!.competition.skills,
+    skills.map(([id]) => id),
+  );
   assert.equal(snapshot.detail!.participants.length, 4);
   parseCompetition(snapshot.detail!.competition);
-  parseParticipants(snapshot.detail!.participants, ['fishing', 'sailing']);
+  parseParticipants(
+    snapshot.detail!.participants,
+    skills.map(([id]) => id),
+  );
   assert.equal(snapshot.overview.totals.mining, '0');
 });
 

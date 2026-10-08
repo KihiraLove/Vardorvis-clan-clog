@@ -1,3 +1,4 @@
+/** Decode a local icon, stage its upload, then create one item with multiple memberships. */
 import { useCallback, useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
@@ -13,6 +14,7 @@ import {
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
 
+/** Revoke preview URLs and close decoded bitmaps when replacing files or leaving the form. */
 function IconPicker({
   disabled,
   onValid,
@@ -122,6 +124,7 @@ export function ItemCreator({
   const locked = action.busy || Boolean(pending);
   const save = () => {
     void action.execute(async (signal) => {
+      // Preserve payload and idempotency key after an uncertain response to avoid duplicates.
       let request = pending;
       if (!request) {
         if (!file) throw new Error('Choose a valid item icon before saving.');

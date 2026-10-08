@@ -1,3 +1,4 @@
+/** Wire-shaped fixtures distinguish positive, zero and unavailable participant gains. */
 import {
   zeroTotals,
   type ImportPreview,

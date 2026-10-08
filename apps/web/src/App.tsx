@@ -1,3 +1,4 @@
+/** Public log and event tracker share one page; admin routes remain directly addressable. */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AdminPage, AdminNavigation } from './AdminPage.tsx';
 import { LiveAdminClient } from './admin-api.ts';
@@ -8,17 +9,24 @@ import { PreviewXpClient } from './preview/xp.ts';
 import { CollectionLog } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
+import { parseSettings } from './site-settings.ts';
 
-function LiveLog({ preview }: { preview: () => void }) {
+function LiveLog({
+  preview,
+  hardcore,
+}: {
+  preview: () => void;
+  hardcore: boolean;
+}) {
   const state = usePublicLog();
-  return <CollectionLog {...state} onPreview={preview} />;
+  return <CollectionLog {...state} hardcore={hardcore} onPreview={preview} />;
 }
 function PreviewLog({
-  live,
   client,
+  hardcore,
 }: {
-  live: () => void;
   client: PreviewAdminClient;
+  hardcore: boolean;
 }) {
   const [scenario, setScenario] = useState<Scenario | 'reviewed'>('reviewed');
   const revision = useSyncExternalStore(client.subscribe, client.getRevision);
@@ -28,39 +36,73 @@ function PreviewLog({
   );
   return (
     <>
-      <div className="preview-banner">
-        <div>
-          <strong>Frontend preview</strong>
-          <p>
-            Sample pages, not the live clan log. Collection examples below are
-            for review only. Admin decisions use the in-memory preview ledger.
-          </p>
-        </div>
-        <button type="button" className="site-button" onClick={live}>
-          View live log
-        </button>
-      </div>
-      <div className="preview-controls">
-        <label htmlFor="preview-scenario">Review scenario</label>
-        <select
-          id="preview-scenario"
-          value={scenario}
-          onChange={(event) =>
-            setScenario(event.target.value as Scenario | 'reviewed')
-          }
-        >
-          <option value="reviewed">Admin review results</option>
-          {scenarios.map((entry) => (
-            <option value={entry.id} key={entry.id}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
-        <span>No clan data is changed.</span>
-      </div>
-      <CollectionLog preview data={data} />
+      <details className="preview-options">
+        <summary>Frontend preview · sample data</summary>
+        <label>
+          Review scenario{' '}
+          <select
+            value={scenario}
+            onChange={(event) =>
+              setScenario(event.target.value as Scenario | 'reviewed')
+            }
+          >
+            <option value="reviewed">Admin review results</option>
+            {scenarios.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p>
+          Review fixtures only. Reload resets changes; no clan data is changed.
+        </p>
+      </details>
+      <CollectionLog preview data={data} hardcore={hardcore} />
     </>
   );
+}
+function Skull({
+  enabled,
+  onChange,
+}: {
+  enabled: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      className={
+        'hardcore-toggle' + (enabled ? ' hardcore-toggle--active' : '')
+      }
+      aria-label="Hardcore worlds"
+      aria-pressed={enabled}
+      title={enabled ? 'Switch to normal worlds' : 'Switch to hardcore worlds'}
+      onClick={onChange}
+    >
+      <img src="/brand/skull.png" alt="" />
+      <span className="sr-only">
+        {enabled ? 'Hardcore worlds' : 'Normal worlds'}
+      </span>
+    </button>
+  );
+}
+function PreviewSkull({
+  client,
+  hardcore,
+  onChange,
+}: {
+  client: PreviewAdminClient;
+  hardcore: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  useSyncExternalStore(client.subscribe, client.getRevision);
+  const enabled = client.publicSettings().hardcoreEnabled;
+  useEffect(() => {
+    if (!enabled) onChange(false);
+  }, [enabled, onChange]);
+  return enabled ? (
+    <Skull enabled={hardcore} onChange={() => onChange(!hardcore)} />
+  ) : null;
 }
 export function App() {
   const location = () => ({
@@ -68,11 +110,61 @@ export function App() {
     preview: new URLSearchParams(window.location.search).get('preview') === '1',
   });
   const [route, setRoute] = useState(location);
+  const [hardcore, setHardcore] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(false);
   useEffect(() => {
     const change = () => setRoute(location());
     window.addEventListener('popstate', change);
     return () => window.removeEventListener('popstate', change);
   }, []);
+  useEffect(() => {
+    setHardcore(false);
+    setLiveEnabled(false);
+    if (route.preview) return;
+    let stopped = false;
+    let pending = false;
+    let controller: AbortController | undefined;
+    const load = async () => {
+      if (pending || stopped) return;
+      pending = true;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 10000);
+      try {
+        const response = await fetch('/api/v1/settings', {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('Settings unavailable');
+        const value = parseSettings(await response.json());
+        if (!stopped) {
+          setLiveEnabled(value.hardcoreEnabled);
+          if (!value.hardcoreEnabled) setHardcore(false);
+        }
+      } catch {
+        if (!stopped) {
+          setLiveEnabled(false);
+          setHardcore(false);
+        }
+      } finally {
+        clearTimeout(timeout);
+        pending = false;
+      }
+    };
+    void load();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, 25000);
+    const resume = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      stopped = true;
+      controller?.abort();
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, [route.preview]);
   const mode = (next: boolean) => {
     const url = new URL(window.location.href);
     if (next) url.searchParams.set('preview', '1');
@@ -94,9 +186,7 @@ export function App() {
     setRoute(location());
     window.scrollTo(0, 0);
   };
-  const href = (path: string) => path + (route.preview ? '?preview=1' : '');
   const admin = route.path === '/admin' || route.path.startsWith('/admin/');
-  const xp = route.path === '/xp' || route.path === '/admin/xp';
   const adminClient = useMemo(
     () => (route.preview ? new PreviewAdminClient() : new LiveAdminClient()),
     [route.preview],
@@ -107,7 +197,7 @@ export function App() {
     },
     [adminClient],
   );
-  const client = useMemo(
+  const xpClient = useMemo(
     () =>
       route.preview
         ? new PreviewXpClient((signal) => adminClient.session(signal))
@@ -116,100 +206,116 @@ export function App() {
   );
   return (
     <>
-      <a
-        className="skip-link"
-        href={admin ? '#admin-main' : xp ? '#xp-main' : '#collection-log'}
+      <svg
+        width="0"
+        height="0"
+        aria-hidden="true"
+        style={{ position: 'absolute' }}
       >
-        Skip to{' '}
-        {admin ? 'clan administration' : xp ? 'XP tracker' : 'collection log'}
+        <defs>
+          <filter
+            id="hardcore-outline"
+            x="-20%"
+            y="-20%"
+            width="140%"
+            height="140%"
+            colorInterpolationFilters="sRGB"
+          >
+            <feMorphology
+              in="SourceAlpha"
+              operator="dilate"
+              radius="0.65"
+              result="expanded"
+            />
+            <feComposite
+              in="expanded"
+              in2="SourceAlpha"
+              operator="out"
+              result="edge"
+            />
+            <feFlood floodColor="#ff2929" />
+            <feComposite in2="edge" operator="in" result="red-edge" />
+            <feMerge>
+              <feMergeNode in="red-edge" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+      </svg>
+      <a className="skip-link" href={admin ? '#admin-main' : '#collection-log'}>
+        Skip to {admin ? 'clan administration' : 'collection log'}
       </a>
       <div className="site-shell">
         <header className="site-header">
           <a
             className="clan-brand"
-            href={href('/')}
+            href={'/' + (route.preview ? '?preview=1' : '')}
             onClick={navigate}
             aria-label="Vardorvis clan collection log"
           >
-            <span className="brand-mark" aria-hidden="true">
-              V
-            </span>
+            <img className="clan-logo" src="/brand/mexicat.gif" alt="" />
             <div>
               <span className="clan-name">Vardorvis</span>
-              <span className="clan-subtitle">Clan collection log</span>
+              <span className="clan-subtitle">Clan Collection Log</span>
             </div>
           </a>
-          <nav className="site-nav" aria-label="Site navigation">
-            <a
-              href={href('/')}
-              onClick={navigate}
-              aria-current={!xp && !admin ? 'page' : undefined}
-            >
-              Collection log
-            </a>
-            <a
-              href={href('/xp')}
-              onClick={navigate}
-              aria-current={route.path === '/xp' ? 'page' : undefined}
-            >
-              XP gained
-            </a>
-            <a
-              href={href('/admin')}
-              onClick={navigate}
-              aria-current={admin ? 'page' : undefined}
-            >
-              Admin
-            </a>
-          </nav>
-          <span
-            className={
-              'mode-label' + (route.preview ? ' mode-label--preview' : '')
-            }
-          >
-            {route.preview
-              ? 'Review preview'
-              : admin
-                ? 'Clan administration'
-                : xp
-                  ? 'Public XP tracker'
-                  : 'Public collection log'}
-          </span>
+          {!admin &&
+            (adminClient instanceof PreviewAdminClient ? (
+              <PreviewSkull
+                client={adminClient}
+                hardcore={hardcore}
+                onChange={setHardcore}
+              />
+            ) : liveEnabled ? (
+              <Skull
+                enabled={hardcore}
+                onChange={() => setHardcore(!hardcore)}
+              />
+            ) : null)}
         </header>
-        <main id={admin ? 'admin-main' : xp ? 'xp-main' : 'collection-log'}>
-          {admin && xp && (
-            <AdminNavigation
-              preview={route.preview}
-              path={route.path}
-              onNavigate={navigate}
-            />
-          )}
-          {xp ? (
-            <XpPage
-              key={route.preview ? 'preview-xp' : 'live-xp'}
-              client={client}
-              admin={route.path === '/admin/xp'}
-              preview={route.preview}
-              onMode={mode}
-              onNavigate={navigate}
-            />
-          ) : admin ? (
-            <AdminPage
-              key={route.preview ? 'preview-admin' : 'live-admin'}
-              client={adminClient}
-              preview={route.preview}
-              path={route.path}
-              onMode={mode}
-              onNavigate={navigate}
-            />
-          ) : route.preview && adminClient instanceof PreviewAdminClient ? (
-            <PreviewLog live={() => mode(false)} client={adminClient} />
+        <main id={admin ? 'admin-main' : 'collection-log'}>
+          {admin ? (
+            route.path === '/admin/xp' ? (
+              <>
+                <AdminNavigation
+                  preview={route.preview}
+                  path={route.path}
+                  onNavigate={navigate}
+                />
+                <XpPage
+                  client={xpClient}
+                  admin
+                  preview={route.preview}
+                  onMode={mode}
+                />
+              </>
+            ) : (
+              <AdminPage
+                client={adminClient}
+                preview={route.preview}
+                path={route.path}
+                onMode={mode}
+                onNavigate={navigate}
+              />
+            )
           ) : (
-            <LiveLog preview={() => mode(true)} />
+            <>
+              {adminClient instanceof PreviewAdminClient ? (
+                <PreviewLog client={adminClient} hardcore={hardcore} />
+              ) : (
+                <LiveLog preview={() => mode(true)} hardcore={hardcore} />
+              )}
+              <XpPage
+                client={xpClient}
+                admin={false}
+                preview={route.preview}
+                onMode={mode}
+              />
+            </>
           )}
         </main>
         <footer className="site-footer">
-          <p>One clan. Every collection.</p>
+          <p>Vardorvis · One clan. Every collection.</p>
           <p>Old School RuneScape assets © Jagex. Community project.</p>
         </footer>
       </div>

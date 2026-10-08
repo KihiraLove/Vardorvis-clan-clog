@@ -1,3 +1,4 @@
+# Manual promotion: verify release provenance on GitHub before using the home runner.
 name: Deploy home
 on:
   workflow_dispatch:
@@ -33,6 +34,7 @@ jobs:
           jq -e --arg sha "$RELEASE_SHA" '.workflow_runs | any(.head_sha == $sha and .head_branch == "main" and .conclusion == "success")' "$RUNNER_TEMP/runs.json" >/dev/null
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
   deploy:
+    # Call the preinstalled helper without checking out repository code on this runner.
     needs: verify
     environment: home-production
     runs-on: [self-hosted, Linux, clog-production]

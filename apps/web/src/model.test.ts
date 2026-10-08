@@ -1,7 +1,9 @@
+/** Public parser/projection tests cover shared counts, invalid relationships and hardcore removal. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   creditLine,
+  modeCredits,
   itemState,
   parseCatalog,
   parseCollections,
@@ -95,32 +97,30 @@ test('one shared item increments both pages but global progress counts it once',
     { collected: 1, total: 1 },
   );
 });
-test('mixed credits, exact dates and final-hardcore revocation retain ordinary collection', () => {
+test('normal and hardcore credits are independent; one collector is displayed in each log', () => {
   const credits = parseCollections({
     revision: 'one',
     credits: [hardcore, normal],
   }).credits;
-  const mixed = itemState(1, credits);
-  assert.equal(mixed.hardcoreCollected, true);
+  const ordinary = itemState(1, modeCredits(credits, false));
+  const hc = itemState(1, modeCredits(credits, true));
+  assert.equal(ordinary.hardcoreCollected, false);
+  assert.equal(hc.hardcoreCollected, true);
   assert.equal(
-    creditLine(mixed.collectors[0]!),
+    creditLine(ordinary.collectors[0]!),
     'Collected by KihiraVD on 03/10/26',
   );
   assert.equal(
-    creditLine(mixed.collectors[1]!),
+    creditLine(hc.collectors[0]!),
     'Collected by KihiraVD on 05/10/26 on hardcore worlds',
   );
-  assert.deepEqual(
-    {
-      ...itemState(
-        1,
-        credits.filter((credit) => !credit.hardcore),
-      ),
-      collectors: [],
-    },
-    { collected: true, collectors: [], hardcoreCollected: false },
+  assert.equal(itemState(1, modeCredits([credits[1]!], true)).collected, false);
+  assert.throws(() =>
+    parseCollections({
+      revision: 'one',
+      credits: [normal, { ...normal, submissionId: 'duplicate' }],
+    }),
   );
-  assert.equal(itemState(1, []).collected, false);
   assert.throws(() =>
     parseCollections({
       revision: 'one',

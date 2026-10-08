@@ -1,5 +1,7 @@
 # Collection-log frontend review
 
+> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+
 Status: first frontend slice, 2026-10-05. UI-01 [#3](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/3) and UI-02 [#9](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/9) are assigned to KihiraLove and remain open for manual review. This work is on a feature branch/draft PR, not merged to main.
 
 ## Run and inspect

@@ -1,3 +1,4 @@
+/** Mock XP endpoints check exact values, coherent revisions, staged ETags and import receipts. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LiveXpClient } from './xp-api.ts';

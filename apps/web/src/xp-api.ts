@@ -1,3 +1,5 @@
+/** Future XP/auth HTTP contracts with validated snapshots and private import operations. */
+import { parseTracker } from './xp-tracker.ts';
 import {
   amount,
   competitionUrl,
@@ -79,11 +81,21 @@ export class LiveXpClient implements XpClient {
     staged?.set(path, { data, etag: response.headers.get('ETag') });
     return data;
   }
+  async tracker(signal: AbortSignal) {
+    const staged = new Map<string, Cached>();
+    const result = parseTracker(
+      await this.json('/api/v1/xp/tracker', signal, {}, staged),
+    );
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    for (const [path, entry] of staged) this.cache.set(path, entry);
+    return result;
+  }
   async load(
     selected: SkillId,
     competitionId: number | undefined,
     signal: AbortSignal,
   ): Promise<XpSnapshot> {
+    // Stage conditional responses until totals, members and competition share one revision.
     const staged = new Map<string, Cached>();
     const [skillValue, competitionValue] = await Promise.all([
       this.json('/api/v1/xp/skills', signal, {}, staged),
@@ -198,6 +210,7 @@ export class LiveXpClient implements XpClient {
       throw new Error('The preview does not match the requested competition.');
     return preview;
   }
+  /** Apply the server's preview token; never submit browser-calculated totals as authority. */
   async apply(
     preview: ImportPreview,
     csrf: string,

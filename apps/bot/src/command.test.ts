@@ -1,3 +1,4 @@
+/** Check the serialized Discord contract without logging in or registering commands. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { collectionLogCommand } from './command.js';

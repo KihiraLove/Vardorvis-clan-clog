@@ -1,3 +1,4 @@
+/** Edit a complete page permutation locally, then publish it against the saved page version. */
 import { useEffect, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
@@ -42,6 +43,7 @@ export function PageOrderEditor({
   useEffect(() => {
     if (catalog.revision === seen.current) return;
     seen.current = catalog.revision;
+    // Preserve an unsaved arrangement on refresh; a changed version blocks saving it.
     if (!dirty) accept(latest);
   }, [catalog.revision, dirty, latest]);
   const move = (from: number, to: number) => {

@@ -1,3 +1,4 @@
+/** Describe Discord's command payload; this module does not contact Discord. */
 import { SlashCommandBuilder } from 'discord.js';
 
 /** Contract only: registration and persistence will be delivered in the bot workstream. */

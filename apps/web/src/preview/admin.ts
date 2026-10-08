@@ -1,3 +1,4 @@
+/** In-memory admin simulator shared with the public preview; all state is lost on reload. */
 import { AdminRequestError } from '../admin-api.ts';
 import {
   safeProof,
@@ -25,6 +26,9 @@ import {
 
 export class PreviewAdminClient implements AdminClient {
   private revision = 0;
+  private queueRevision = 0;
+  private setting = { revision: 'settings-0', hardcoreEnabled: false };
+  private settingsVersion = 0;
   private signedIn = true;
   private listeners = new Set<() => void>();
   private pageVersions = new Map(
@@ -119,8 +123,9 @@ export class PreviewAdminClient implements AdminClient {
     };
   };
   getRevision = () => this.revision;
-  private changed() {
+  private changed(includeQueue = true) {
     this.revision++;
+    if (includeQueue) this.queueRevision++;
     for (const listener of this.listeners) listener();
   }
   private access(signal: AbortSignal) {
@@ -133,6 +138,41 @@ export class PreviewAdminClient implements AdminClient {
       ? { csrfToken: 'preview-admin', displayName: 'Preview admin' }
       : null;
   }
+  publicSettings() {
+    return { ...this.setting };
+  }
+  async settings(signal: AbortSignal) {
+    this.access(signal);
+    return this.publicSettings();
+  }
+  async saveSettings(
+    hardcoreEnabled: boolean,
+    expectedRevision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (expectedRevision !== this.setting.revision)
+      throw new AdminRequestError(409);
+    this.setting = {
+      hardcoreEnabled,
+      revision: 'settings-' + ++this.settingsVersion,
+    };
+    this.changed(false);
+    return this.publicSettings();
+  }
+  private ensureUnique(id: string, itemId: number, hardcore: boolean) {
+    if (
+      this.rows.some(
+        (row) =>
+          row.id !== id &&
+          row.status === 'approved' &&
+          row.itemId === itemId &&
+          row.hardcore === hardcore,
+      )
+    )
+      throw new AdminRequestError(409);
+  }
   async logout(_csrf: string, signal: AbortSignal) {
     this.access(signal);
     this.signedIn = false;
@@ -141,6 +181,7 @@ export class PreviewAdminClient implements AdminClient {
     this.access(signal);
     return structuredClone(this.data);
   }
+  /** Project only public catalog fields and approved credits, excluding private review data. */
   publicLog(scenario: Scenario | 'reviewed' = 'reviewed'): LogData {
     return structuredClone({
       catalog: {
@@ -181,8 +222,9 @@ export class PreviewAdminClient implements AdminClient {
     signal: AbortSignal,
   ) {
     this.access(signal);
+    // Revision-bound cursors reject pagination through a ledger changed by another action.
     const match = cursor ? /^(\d+):(\d+)$/u.exec(cursor) : undefined;
-    if (cursor && (!match || Number(match[2]) !== this.revision))
+    if (cursor && (!match || Number(match[2]) !== this.queueRevision))
       throw new AdminRequestError(409);
     const start = match ? Number(match[1]) : 0;
     const rows = this.rows.filter((row) =>
@@ -192,11 +234,11 @@ export class PreviewAdminClient implements AdminClient {
           (view !== 'unmatched' || row.itemId === null),
     );
     return structuredClone({
-      revision: 'preview-queue-' + this.revision,
+      revision: 'preview-queue-' + this.queueRevision,
       submissions: rows.slice(start, start + 2),
       nextCursor:
         start + 2 < rows.length
-          ? String(start + 2) + ':' + this.revision
+          ? String(start + 2) + ':' + this.queueRevision
           : null,
     });
   }
@@ -214,6 +256,7 @@ export class PreviewAdminClient implements AdminClient {
       audit: this.audit.get(id) ?? [],
     });
   }
+  /** Copy snapshots before notifying subscribers so later edits cannot rewrite audit history. */
   private record(
     before: Submission,
     after: Submission,
@@ -248,6 +291,8 @@ export class PreviewAdminClient implements AdminClient {
       (row.status === 'approved' && !clean.reason)
     )
       throw new AdminRequestError(422);
+    if (row.status === 'approved')
+      this.ensureUnique(id, clean.itemId, clean.hardcore);
     const before = structuredClone(row);
     Object.assign(row, {
       itemId: clean.itemId,
@@ -280,6 +325,7 @@ export class PreviewAdminClient implements AdminClient {
         : !reason.trim())
     )
       throw new AdminRequestError(422);
+    if (action === 'approve') this.ensureUnique(id, row.itemId!, row.hardcore);
     const before = structuredClone(row);
     row.status = (
       { approve: 'approved', reject: 'rejected', revoke: 'revoked' } as const
@@ -307,6 +353,7 @@ export class PreviewAdminClient implements AdminClient {
     signal: AbortSignal,
   ) {
     this.access(signal);
+    // Matching retries return the receipt; reusing a key for different fields is a conflict.
     const clean = validateItem(fields, this.data),
       serialized = JSON.stringify(clean),
       receipt = this.receipts.get(key);
@@ -317,6 +364,7 @@ export class PreviewAdminClient implements AdminClient {
     const asset = this.assets.get(clean.iconAssetId);
     if (!asset || Date.parse(asset.expiresAt) <= Date.now())
       throw new AdminRequestError(422);
+    // This allocator is safe only in this single in-memory simulator, not a concurrent API.
     const item = {
       id: Math.max(0, ...this.data.items.map((i) => i.id)) + 1,
       name: clean.name,
@@ -365,6 +413,7 @@ export class PreviewAdminClient implements AdminClient {
     this.data.revision = 'preview-catalog-' + this.revision;
     return structuredClone(page);
   }
+  /** Blob URLs belong to this preview client and must be released when its mode is left. */
   dispose() {
     for (const asset of this.assets.values())
       URL.revokeObjectURL(asset.iconPath);

@@ -1,3 +1,4 @@
+/** Apply recommended JS/TypeScript checks to authored code, excluding generated output. */
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 

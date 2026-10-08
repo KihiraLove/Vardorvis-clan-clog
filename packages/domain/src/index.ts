@@ -1,3 +1,4 @@
+/** Pure collection-log rules shared by the browser and future service handlers. */
 export interface CatalogItem {
   id: number;
   name: string;
@@ -15,23 +16,35 @@ export interface CollectionCredit {
   collectorName: string;
   collectedOn: string;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  hardcore?: boolean;
 }
 
 /** Collection state belongs to the canonical item, never to a page occurrence. */
 export function collectionState(
   itemId: number,
   submissions: readonly CollectionCredit[],
+  hardcore?: boolean,
 ) {
   const collectors = submissions
-    .filter((entry) => entry.itemId === itemId && entry.status === 'approved')
+    .filter(
+      (entry) =>
+        entry.itemId === itemId &&
+        entry.status === 'approved' &&
+        (hardcore === undefined || (entry.hardcore ?? false) === hardcore),
+    )
     .sort(
       (a, b) =>
         a.collectedOn.localeCompare(b.collectedOn) ||
         a.submissionId.localeCompare(b.submissionId),
-    );
+    )
+    // Legacy duplicate inputs display only the earliest credit; writes must enforce uniqueness.
+    .slice(0, 1);
   return { collected: collectors.length > 0, collectors };
 }
 
+/** Validate the imported catalog graph, including globally unambiguous game-ID aliases.
+ * Manual items without game IDs are supported by the web model, but not this validator yet.
+ */
 export function validateCatalog(
   items: readonly CatalogItem[],
   pages: readonly CatalogPage[],
@@ -103,6 +116,7 @@ export function validateProofUrl(input: string): string {
   return url.toString();
 }
 
+/** Round-trip through UTC to reject normalized invalid dates such as February 30. */
 export function validateCollectionDate(input: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(input)) throw new Error('Use YYYY-MM-DD');
   const parsed = new Date(`${input}T00:00:00Z`);
@@ -114,6 +128,7 @@ export function validateCollectionDate(input: string): string {
   return input;
 }
 
+/** Format a calendar date without letting the viewer's timezone shift its day. */
 export function formatCollectionDate(input: string): string {
   validateCollectionDate(input);
   return `${input.slice(8, 10)}/${input.slice(5, 7)}/${input.slice(2, 4)}`;

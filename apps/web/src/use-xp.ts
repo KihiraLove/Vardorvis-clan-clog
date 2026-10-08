@@ -1,3 +1,4 @@
+/** Refresh the selected XP projection on visibility, polling or import; retain data on failure. */
 import { useEffect, useRef, useState } from 'react';
 import type { SkillId, XpClient, XpSnapshot } from './xp-model.ts';
 import { XpRequestError } from './xp-api.ts';
@@ -53,6 +54,7 @@ export function useXp(
       if (document.visibilityState === 'visible') void load();
     };
     document.addEventListener('visibilitychange', resume);
+    // Selection/client changes cancel the old request before its result can replace the view.
     return () => {
       stopped = true;
       controller?.abort();

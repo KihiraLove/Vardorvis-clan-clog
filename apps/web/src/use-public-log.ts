@@ -1,3 +1,4 @@
+/** Poll visible pages every 25 seconds; preserve the last good snapshot on failure. */
 import { useEffect, useRef, useState } from 'react';
 import { LogUnavailable, PublicLogClient } from './api.ts';
 import type { LogData } from './model.ts';
@@ -13,6 +14,7 @@ export function usePublicLog() {
     let pending = false;
     let controller: AbortController | undefined;
     const load = async () => {
+      // Avoid overlapping polls and ignore completions after this view has unmounted.
       if (pending || stopped) return;
       pending = true;
       controller = new AbortController();

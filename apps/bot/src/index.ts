@@ -1,3 +1,4 @@
+/** Container smoke-test entry point, pending a real Discord gateway adapter. */
 import { createServer } from 'node:http';
 import { collectionLogCommand } from './command.js';
 

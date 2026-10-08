@@ -1,3 +1,5 @@
+/** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
+import { parseSettings } from './site-settings.ts';
 import { LiveXpClient } from './xp-api.ts';
 import { list, object, text, timestamp, unique } from './xp-model.ts';
 import {
@@ -69,6 +71,7 @@ export class LiveAdminClient implements AdminClient {
       await this.response(path, signal, options)
     ).json() as Promise<unknown>;
   }
+  // CSRF protects browser writes; a stable request key lets creation retries be deduplicated.
   private write(
     csrf: string,
     body: unknown,
@@ -97,6 +100,29 @@ export class LiveAdminClient implements AdminClient {
         throw new AdminRequestError(failure.status);
       throw failure;
     }
+  }
+  async settings(signal: AbortSignal) {
+    return parseSettings(await this.json('/api/v1/admin/settings', signal));
+  }
+  async saveSettings(
+    hardcoreEnabled: boolean,
+    expectedRevision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSettings(
+      await this.json(
+        '/api/v1/admin/settings',
+        signal,
+        this.write(csrf, { hardcoreEnabled, expectedRevision }, 'PUT'),
+      ),
+    );
+    if (
+      result.hardcoreEnabled !== hardcoreEnabled ||
+      result.revision === expectedRevision
+    )
+      throw new Error('Unexpected settings receipt.');
+    return result;
   }
   async logout(csrf: string, signal: AbortSignal) {
     await this.response('/api/v1/auth/logout', signal, this.write(csrf, {}));
@@ -131,6 +157,7 @@ export class LiveAdminClient implements AdminClient {
       throw new Error('Unexpected submission identity.');
     return result;
   }
+  /** Version checks are the server's concurrency contract; receipts must advance it. */
   async edit(
     id: string,
     version: number,
@@ -188,6 +215,7 @@ export class LiveAdminClient implements AdminClient {
     signal: AbortSignal,
   ): Promise<StagedIcon> {
     await validateIconFile(file);
+    // Let fetch choose the multipart boundary instead of supplying a JSON content type.
     const data = new FormData();
     data.set('icon', file);
     const result = object(

@@ -1,3 +1,4 @@
+/** Searchable member/participant tables; stable name/ID tie-breakers keep ordering predictable. */
 import { useState } from 'react';
 import {
   compareXp,
@@ -9,6 +10,7 @@ import {
 } from './xp-model.ts';
 import { XpAmount } from './XpAmount.tsx';
 
+// Source timestamps are presented in UTC consistently across reviewers' local timezones.
 export const xpDate = (value: string) =>
   new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',

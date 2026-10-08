@@ -1,3 +1,4 @@
+/** Conditional public reads with separate ETags and an all-or-nothing cache commit. */
 import {
   parseCatalog,
   parseCollections,
@@ -46,6 +47,7 @@ export class PublicLogClient {
     };
   }
 
+  /** Keep the previous pair reusable if either request, parser or relationship check fails. */
   async load(signal: AbortSignal): Promise<LogData> {
     const [catalog, collections] = await Promise.all([
       this.read('/api/v1/catalog', this.catalog, parseCatalog, signal),

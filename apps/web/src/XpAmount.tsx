@@ -1,3 +1,4 @@
+/** Abbreviated XP with exact accessible text and a viewport-clamped portal tooltip. */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -133,7 +134,7 @@ export function XpAmount({
       ) : (
         <span
           tabIndex={0}
-          className="xp-amount"
+          className={skill ? 'skill-cell xp-amount' : 'xp-amount'}
           ref={(node) => {
             anchor.current = node;
           }}

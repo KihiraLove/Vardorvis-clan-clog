@@ -1,5 +1,7 @@
 # Planned hardcore, XP and admin catalog features
 
+> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+
 Status: planned, 2026-10-05. This document extends the foundation plan; it does not implement runtime routes, database fields, the bot extension or new pages. Tracking issues: [HC-01 #26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26), [XP-01 #27](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/27), [XP-02 #28](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/28), [CAT-02 #30](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/30), [ADMIN-02 #31](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/31); the [V1 epic #15](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/15) includes them.
 
 ## Hardcore collection credits

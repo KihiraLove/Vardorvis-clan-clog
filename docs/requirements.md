@@ -1,5 +1,7 @@
 # Product requirements
 
+> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+
 ## Public collection log
 
 - Recreate the OSRS collection-log layout 1:1 at its reference desktop size: window frame, five top-level tabs, page navigation, scrollbars, item grid and ordering, labels, counters, font, spacing and icon treatment. Preserve the original proportions when adapting to small screens.

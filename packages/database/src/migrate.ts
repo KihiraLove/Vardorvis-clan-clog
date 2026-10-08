@@ -1,3 +1,4 @@
+/** Apply forward-only SQL migrations; the API image also runs this as a one-shot job. */
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +8,7 @@ export async function migrate(databaseUrl: string): Promise<void> {
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   try {
+    // One transaction makes the whole pending batch atomic; the lock serializes migrators.
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(74261005)');
     await client.query(
@@ -23,6 +25,7 @@ export async function migrate(databaseUrl: string): Promise<void> {
         'SELECT checksum FROM schema_migrations WHERE name = $1',
         [name],
       );
+      // Hash the original bytes, including comments: applied files must never be edited.
       if (applied.rows[0]) {
         if (applied.rows[0].checksum !== checksum)
           throw new Error(`Applied migration changed: ${name}`);
@@ -43,6 +46,7 @@ export async function migrate(databaseUrl: string): Promise<void> {
   }
 }
 
+// Importing migrate() in tests must not also execute the command-line entry point.
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href

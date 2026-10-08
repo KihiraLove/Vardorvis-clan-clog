@@ -1,3 +1,4 @@
+/** Load catalog plus paged claims together, retaining cursor history for previous-page navigation. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
@@ -79,6 +80,7 @@ export function AdminQueue({
       clearTimeout(timer);
     };
   }, [client, view, cursor, refresh, onAccessLost]);
+  // A retained response must match the selected filter/page before it can be acted upon.
   const ready = snapshot?.view === view && snapshot.cursor === cursor;
   const choose = (next: QueueView) => {
     setView(next);

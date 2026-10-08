@@ -1,3 +1,4 @@
+/** Mock transport tests verify private headers, version/idempotency payloads and server receipts. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LiveAdminClient } from './admin-api.ts';

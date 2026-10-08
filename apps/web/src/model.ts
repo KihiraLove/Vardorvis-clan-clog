@@ -1,3 +1,4 @@
+/** Public wire models, runtime payload checks and canonical-item display projections. */
 import {
   collectionState,
   formatCollectionDate,
@@ -69,6 +70,7 @@ function unique<T>(values: T[]): void {
     throw new Error('Duplicate public log identity');
 }
 
+/** Reject unsafe icon paths, duplicate identities and dangling page memberships. */
 export function parseCatalog(value: unknown): Catalog {
   const data = record(value);
   const items = array(data.items).map((entry): Item => {
@@ -104,6 +106,7 @@ export function parseCatalog(value: unknown): Catalog {
   return { revision: text(data.revision), items, pages };
 }
 
+/** Normalize approved credits; older responses without hardcore default to ordinary. */
 export function parseCollections(value: unknown): Collections {
   const data = record(value);
   const credits: Credit[] = [];
@@ -125,9 +128,16 @@ export function parseCollections(value: unknown): Collections {
     });
   }
   unique(credits.map((credit) => credit.submissionId));
+  // One active collection per canonical item in each independent world mode.
+  unique(
+    credits.map(
+      (credit) => String(credit.itemId) + ':' + String(credit.hardcore),
+    ),
+  );
   return { revision: text(data.revision), credits };
 }
 
+/** Independently fetched catalog and credits must still form a valid relationship graph. */
 export function validateLog(data: LogData): LogData {
   const ids = new Set(data.catalog.items.map((item) => item.id));
   if (data.collections.credits.some((credit) => !ids.has(credit.itemId)))
@@ -135,6 +145,15 @@ export function validateLog(data: LogData): LogData {
   return data;
 }
 
+/** Hardcore is derived from surviving approved credits, never persisted on a page slot. */
+export function modeCredits(
+  credits: readonly Credit[],
+  hardcore: boolean,
+): Credit[] {
+  return credits.filter(
+    (credit) => credit.status === 'approved' && credit.hardcore === hardcore,
+  );
+}
 export function itemState(itemId: number, credits: readonly Credit[]) {
   const state = collectionState(itemId, credits);
   const collectors = state.collectors as Credit[];
@@ -144,6 +163,7 @@ export function itemState(itemId: number, credits: readonly Credit[]) {
     hardcoreCollected: collectors.some((credit) => credit.hardcore),
   };
 }
+/** Count each canonical item once, even if callers combine overlapping page lists. */
 export function progress(
   itemIds: readonly number[],
   credits: readonly Credit[],
@@ -159,6 +179,7 @@ export function progress(
     total: uniqueIds.size,
   };
 }
+/** Use the same collector/date wording for every occurrence of a shared item. */
 export function creditLine(credit: Credit): string {
   return `Collected by ${credit.collectorName} on ${formatCollectionDate(credit.collectedOn)}${credit.hardcore ? ' on hardcore worlds' : ''}`;
 }

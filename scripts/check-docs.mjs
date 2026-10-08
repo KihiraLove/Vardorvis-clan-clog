@@ -1,3 +1,4 @@
+/** Check relative Markdown link targets; this does not validate anchors or remote URLs. */
 import { readFile, readdir, access } from 'node:fs/promises';
 import path from 'node:path';
 

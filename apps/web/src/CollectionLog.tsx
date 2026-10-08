@@ -1,3 +1,4 @@
+/** Render the five-tab log, per-category selection, canonical progress and item history. */
 import {
   useCallback,
   useEffect,
@@ -9,6 +10,7 @@ import {
   categories,
   itemState,
   progress,
+  modeCredits,
   type Category,
   type Credit,
   type LogData,
@@ -16,6 +18,7 @@ import {
 } from './model.ts';
 import { ItemMenu, type OpenItem } from './ItemMenu.tsx';
 
+/** Hover/focus opens transient history; clicking or tapping pins it until dismissal. */
 function ItemSlot({
   item,
   credits,
@@ -35,6 +38,7 @@ function ItemSlot({
   const [broken, setBroken] = useState(false);
   const active = open?.item.id === item.id;
   const reveal = (anchor: HTMLElement, pinned: boolean) =>
+    state.collected &&
     show({
       item,
       anchor,
@@ -82,7 +86,7 @@ export function CollectionLog({
   loading = false,
   error,
   retry,
-  preview = false,
+  hardcore = false,
   onPreview,
 }: {
   data?: LogData | undefined;
@@ -90,6 +94,7 @@ export function CollectionLog({
   error?: string | undefined;
   retry?: (() => void) | undefined;
   preview?: boolean;
+  hardcore?: boolean;
   onPreview?: (() => void) | undefined;
 }) {
   const requestedPage = new URLSearchParams(window.location.search).get('page');
@@ -105,13 +110,14 @@ export function CollectionLog({
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [closed, setClosed] = useState(false);
-  const [scale, setScale] = useState(window.innerWidth >= 800 ? 1.5 : 1);
+  const scale = 2;
   const [open, setOpen] = useState<OpenItem>();
   const searchRef = useRef<HTMLInputElement>(null);
   const pageListRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | undefined>(undefined);
   const catalog = data?.catalog;
+  // Resolve deep links once asynchronous live data arrives without resetting later choices.
   const initialized = useRef(Boolean(catalog));
   useEffect(() => {
     if (!catalog || initialized.current) return;
@@ -125,7 +131,7 @@ export function CollectionLog({
       setSelection({ [initial.category]: initial.id });
     }
   }, [catalog, requestedPage]);
-  const credits = data?.collections.credits ?? [];
+  const credits = modeCredits(data?.collections.credits ?? [], hardcore);
   const pages =
     catalog?.pages.filter((page) => page.category === category) ?? [];
   const page =
@@ -148,12 +154,16 @@ export function CollectionLog({
     stay();
     setOpen(next);
   };
+  // A short grace period lets the pointer cross from an item into its portal tooltip.
   const leave = () => {
     stay();
     if (!open?.pinned)
       hideTimer.current = window.setTimeout(() => setOpen(undefined), 160);
   };
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
+  useEffect(() => {
+    close();
+  }, [hardcore, close]);
   useEffect(() => {
     if (searching) searchRef.current?.focus();
   }, [searching]);
@@ -164,6 +174,7 @@ export function CollectionLog({
     pageListRef.current?.scrollTo(0, 0);
     gridRef.current?.scrollTo(0, 0);
   };
+  // Roving tab focus implements arrow/Home/End navigation without extra tab stops.
   const tabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next: number;
     if (event.key === 'ArrowRight') next = (index + 1) % categories.length;
@@ -180,31 +191,6 @@ export function CollectionLog({
 
   return (
     <section className="collection-section" aria-label="Clan collection log">
-      <div className="view-controls">
-        <span>{preview ? 'Preview catalog' : 'Clan collection log'}</span>
-        <div role="group" aria-label="Log display size">
-          <button
-            type="button"
-            aria-pressed={scale === 1}
-            onClick={() => {
-              close();
-              setScale(1);
-            }}
-          >
-            Native 1×
-          </button>
-          <button
-            type="button"
-            aria-pressed={scale === 1.5}
-            onClick={() => {
-              close();
-              setScale(1.5);
-            }}
-          >
-            Larger 1.5×
-          </button>
-        </div>
-      </div>
       {closed ? (
         <div className="reopen">
           <button className="site-button" onClick={() => setClosed(false)}>
@@ -239,7 +225,7 @@ export function CollectionLog({
                   <span aria-hidden="true">⌕</span> Search
                 </button>
                 <h2>
-                  Collection Log
+                  {hardcore ? 'Hardcore Collection Log' : 'Collection Log'}
                   {catalog && (
                     <>
                       {' '}
@@ -450,9 +436,12 @@ export function CollectionLog({
         </p>
       )}
       <p className="log-help">
-        Hover, focus or tap an item to view its collection history.
+        {hardcore
+          ? 'Collected on hardcore worlds during BOTW events'
+          : 'Collected during BOTW events'}
       </p>
       {open &&
+        itemState(open.item.id, credits).collected &&
         (() => {
           const current = itemState(open.item.id, credits);
           return (

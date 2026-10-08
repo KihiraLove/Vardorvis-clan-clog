@@ -1,3 +1,4 @@
+/** Review saved claims, stage corrections separately and display before/after audit history. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
@@ -47,6 +48,7 @@ export function SubmissionEditor({
   const [readError, setReadError] = useState<string>(),
     [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
+  // A new version invalidates both the draft and the user's previous proof acknowledgment.
   const accept = (next: SubmissionDetail) => {
     setDetail(next);
     setDraft(draftOf(next.submission));
@@ -117,6 +119,7 @@ export function SubmissionEditor({
     setDraft({ ...draft, ...fields });
     setChecked(false);
   };
+  // Save corrections before approval so the acknowledgment refers to persisted claim fields.
   const perform = (decision?: 'approve' | 'reject' | 'revoke') => {
     void action.execute(async (signal) => {
       if (

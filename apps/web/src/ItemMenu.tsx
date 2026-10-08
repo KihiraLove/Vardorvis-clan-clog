@@ -1,3 +1,4 @@
+/** Portal tooltip escapes the scaled/clipped log window and stays inside the viewport. */
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { creditLine, type Credit, type Item } from './model.ts';
@@ -48,6 +49,7 @@ export function ItemMenu({
       setPosition({ left, top, ready: true });
     };
     place();
+    // Credit changes can resize an already-open menu; scrolling can move its anchor.
     const observer = new ResizeObserver(place);
     if (ref.current) observer.observe(ref.current);
     window.addEventListener('resize', place);

@@ -1,3 +1,4 @@
+/** Explicit visual-review fixtures; loading the catalog itself never awards collection credit. */
 import rawCatalog from './catalog.json' with { type: 'json' };
 import { parseCatalog, type Collections, type Credit } from '../model.ts';
 

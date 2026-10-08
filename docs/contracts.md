@@ -1,5 +1,7 @@
 # API and Discord contracts
 
+> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+
 Only the three foundation endpoints below currently exist. All other routes in this document are planned contracts, not working APIs.
 
 ## Shipped foundation

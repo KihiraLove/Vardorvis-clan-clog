@@ -1,3 +1,4 @@
+/** Fresh private response fixtures prevent mutations from leaking between test cases. */
 import { PreviewAdminClient } from '../src/preview/admin.ts';
 export async function adminFixtures() {
   const client = new PreviewAdminClient(),

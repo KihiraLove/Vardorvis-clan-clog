@@ -1,3 +1,4 @@
+/** Serialize form operations, bound their duration and centralize access/conflict errors. */
 import { useEffect, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 
@@ -17,6 +18,7 @@ export function useAdminAction(onAccessLost: () => void) {
     work: (signal: AbortSignal) => Promise<void>,
     conflict?: (signal: AbortSignal) => Promise<void>,
   ) => {
+    // A ref closes the double-click gap before React renders the disabled busy state.
     if (controller.current) return;
     const current = new AbortController();
     controller.current = current;
@@ -43,6 +45,7 @@ export function useAdminAction(onAccessLost: () => void) {
                 ? failure.message
                 : 'The admin request could not be completed.',
         );
+        // A conflict may reload current state, but never silently replays the write.
         if (
           failure instanceof AdminRequestError &&
           failure.status === 409 &&

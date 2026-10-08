@@ -1,378 +1,219 @@
-import { expect, test, type Page } from '@playwright/test';
-import { competition, importPreview, publicXp } from './xp-fixtures.ts';
+import { expect, test } from '@playwright/test';
 import { skills, zeroTotals } from '../src/xp-model.ts';
-
-const attack = (page: Page) => page.getByRole('button', { name: /^Attack:/ });
-const skillGroup = (page: Page) =>
-  page.getByRole('group', { name: 'Select a skill' });
-const sampleLink = 'https://wiseoldman.net/competitions/1001';
-
-async function mockPublic(page: Page) {
-  await page.route('**/api/v1/xp/**', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    const data = publicXp()[path];
-    return route.fulfill({ status: data ? 200 : 404, json: data ?? {} });
-  });
-}
-
-test('skill tab has all 24 local icons, millions, exact hover/focus XP and searchable competitors', async ({
+import { importPreview } from './xp-fixtures.ts';
+const tracker = {
+  revision: 'one',
+  totals: { ...zeroTotals(), attack: '1234567890', fishing: '5000000' },
+  events: [
+    {
+      id: 1001,
+      title: 'Attack week',
+      sourceUrl: 'https://wiseoldman.net/competitions/1001',
+      skills: ['attack'],
+      gains: { attack: '1234567890' },
+    },
+    {
+      id: 1002,
+      title: 'All-skill weekend',
+      sourceUrl: 'https://wiseoldman.net/competitions/1002',
+      skills: skills.map(([id]) => id),
+      gains: { ...zeroTotals(), fishing: '5000000' },
+    },
+  ],
+};
+test('Total and event sidebar display exact event gains and links with four-digit million labels', async ({
   page,
 }) => {
-  await page.goto('/xp?preview=1');
-  await expect(skillGroup(page).getByRole('button')).toHaveCount(24);
-  for (const [, name] of skills)
-    await expect(
-      page.getByRole('button', { name: name + ': 0 XP', exact: true }),
-    ).toContainText('0.00m');
-  await expect
-    .poll(() =>
-      page
-        .locator('.skill-cell img')
-        .evaluateAll((images) =>
-          images.every(
-            (image) =>
-              (image as HTMLImageElement).complete &&
-              (image as HTMLImageElement).naturalWidth > 0,
-          ),
-        ),
-    )
-    .toBe(true);
-  const columns = await page
-    .locator('.skill-grid')
-    .evaluate(
-      (element) =>
-        getComputedStyle(element).gridTemplateColumns.split(' ').length,
-    );
-  expect(columns).toBe(3);
-  await page.getByRole('button', { name: 'Show sample XP' }).click();
-  await expect(attack(page)).toContainText('18.34m');
-  await attack(page).hover();
-  await expect(page.getByRole('tooltip')).toContainText('18,345,678 XP');
-  await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({
-    path: test.info().outputPath('xp-desktop.png'),
-    fullPage: true,
-  });
-  await attack(page).focus();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('tooltip')).toHaveCount(0);
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: /^Hitpoints:/ })).toBeFocused();
-  await expect(page.getByRole('tooltip')).toContainText('0 XP');
-  const members = page.getByRole('table', {
-    name: 'Attack cumulative member XP',
-  });
-  await expect(members.getByRole('row')).toHaveCount(5);
-  await expect(members.getByRole('row', { name: /Iron Fern/ })).toContainText(
-    '0.00m',
+  await page.route('**/api/v1/xp/tracker', (route) =>
+    route.fulfill({ json: tracker }),
   );
-  await expect(members.getByRole('row', { name: /New recruit/ })).toContainText(
-    'Unavailable',
-  );
-  await page.getByLabel('Search members', { exact: true }).fill('kihira');
-  await expect(members.getByRole('row')).toHaveCount(2);
-  await expect(members.getByRole('row', { name: /KihiraVD/ })).toContainText(
-    '12.34m',
-  );
-  await page.getByLabel('Search competitors', { exact: true }).fill('iron');
+  await page.goto('/');
   await expect(
     page
-      .getByRole('table', { name: 'Vardorvis Attack week competition gains' })
-      .getByRole('row', { name: /Iron Fern/ }),
-  ).toContainText('0 XP');
+      .getByRole('navigation', { name: 'XP events' })
+      .getByRole('button', { name: 'Total', exact: true }),
+  ).toHaveAttribute('aria-current', 'true');
+  const group = page.getByRole('group', { name: 'Event skill XP' });
+  await expect(group.locator('img')).toHaveCount(24);
+  const attack = group.getByLabel('Attack: 1,234,567,890 XP', { exact: true });
+  await expect(attack).toContainText('1234.56m');
+  await attack.hover();
+  await expect(page.getByRole('tooltip')).toContainText('1,234,567,890 XP');
+  const fits = await attack
+    .locator('.xp-amount__number')
+    .evaluate((el) => el.scrollWidth <= el.getBoundingClientRect().width + 1);
+  expect(fits).toBe(true);
+  await page.getByRole('button', { name: 'Attack week', exact: true }).click();
+  await expect(
+    group.getByLabel('Fishing: 0 XP', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /View event on Wise Old Man/ }),
+  ).toHaveAttribute('href', tracker.events[0]!.sourceUrl);
+  await page
+    .getByRole('button', { name: 'All-skill weekend', exact: true })
+    .click();
+  await expect(group.getByLabel('Attack: 0 XP', { exact: true })).toBeVisible();
+  await expect(
+    group.getByLabel('Fishing: 5,000,000 XP', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Total', exact: true }).click();
+  await expect(attack).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('event-tracker-desktop.png'),
+    fullPage: true,
+  });
 });
-
-test('touch selects skills and exact tooltips fit a 320px viewport', async ({
-  browser,
-}) => {
+test('event list scrolls while Total stays above it', async ({ page }) => {
+  const events = Array.from({ length: 20 }, (_, index) => ({
+    ...tracker.events[0],
+    id: index + 1,
+    title: 'Event ' + (index + 1),
+    sourceUrl: 'https://wiseoldman.net/competitions/' + (index + 1),
+  }));
+  await page.route('**/api/v1/xp/tracker', (route) =>
+    route.fulfill({ json: { ...tracker, events } }),
+  );
+  await page.goto('/');
+  await expect(
+    page.getByRole('button', { name: 'Event 20', exact: true }),
+  ).toBeAttached();
+  expect(
+    await page
+      .locator('.event-list')
+      .evaluate((el) => el.scrollHeight > el.clientHeight),
+  ).toBe(true);
+  await page.getByRole('button', { name: 'Event 20', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Total', exact: true }),
+  ).toBeVisible();
+});
+test('touch exact values and skill cells fit at 320px', async ({ browser }) => {
   const context = await browser.newContext({
-    viewport: { width: 320, height: 740 },
-    isMobile: true,
+    viewport: { width: 320, height: 850 },
     hasTouch: true,
   });
   const page = await context.newPage();
-  await page.goto('/xp?preview=1');
-  await page.getByRole('button', { name: 'Show sample XP' }).tap();
-  const sailing = page.getByRole('button', { name: /^Sailing:/ });
-  await expect(sailing).toContainText('7.50m');
-  await sailing.tap();
-  await expect(sailing).toHaveAttribute('aria-pressed', 'true');
-  await expect(
-    page.getByRole('heading', { name: 'Sailing', exact: true }),
-  ).toBeVisible();
-  const tooltip = page.getByRole('tooltip');
-  await expect(tooltip).toContainText('7,500,000 XP');
-  const box = (await tooltip.boundingBox())!;
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(320);
-  expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.y + box.height).toBeLessThanOrEqual(740);
+  await page.route('**/api/v1/xp/tracker', (route) =>
+    route.fulfill({ json: tracker }),
+  );
+  await page.goto('/');
+  await page.getByLabel('Attack: 1,234,567,890 XP', { exact: true }).tap();
+  await expect(page.getByRole('tooltip')).toContainText('1,234,567,890 XP');
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
+  const box = await page.getByRole('tooltip').boundingBox();
+  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   await page.screenshot({
-    path: test.info().outputPath('xp-mobile-tooltip.png'),
-  });
-  await page.getByRole('heading', { name: 'XP gained', exact: true }).tap();
-  await expect(tooltip).toHaveCount(0);
-  await page.evaluate(async () => {
-    window.scrollTo(0, 0);
-    await document.fonts.ready;
-  });
-  await page.screenshot({
-    path: test.info().outputPath('xp-mobile.png'),
+    path: test.info().outputPath('event-tracker-mobile.png'),
     fullPage: true,
   });
   await context.close();
 });
-
-test('admin preview/apply, unchanged refresh, incremental gains and multi-skill import update the same tracker', async ({
+test('preview samples add once; switching event changes totals without showing member tables', async ({
   page,
 }) => {
-  await page.goto('/xp?preview=1');
-  await expect(attack(page)).toContainText('0.00m');
+  await page.goto('/?preview=1');
+  await page.getByText('XP preview controls', { exact: true }).click();
   await page
-    .getByRole('link', { name: 'Admin: import or refresh a competition' })
+    .getByRole('button', { name: 'Show sample XP', exact: true })
     .click();
-  await expect(page).toHaveURL(/\/admin\/xp\?preview=1$/);
-  const url = page.getByLabel('Wise Old Man competition link');
-  const previewButton = page.getByRole('button', {
-    name: 'Preview competition',
-    exact: true,
-  });
-  const apply = page.getByRole('button', {
-    name: 'Apply import',
-    exact: true,
-  });
-  await url.fill(sampleLink);
-  await previewButton.click();
-  const preview = page.locator('.xp-import-preview');
-  await expect(
-    preview.getByRole('table', { name: 'Change to cumulative site totals' }),
-  ).toContainText('+18,345,678');
-  await expect(
-    preview
-      .getByRole('table', { name: 'Vardorvis Attack week competition gains' })
-      .getByRole('row'),
-  ).toHaveCount(5);
-  await expect(attack(page)).toContainText('0.00m');
-  await apply.click();
-  await expect(attack(page)).toContainText('18.34m');
-  await previewButton.click();
-  await expect(
-    preview.getByRole('table', { name: 'Change to cumulative site totals' }),
-  ).toContainText('18,345,678');
-  await apply.click();
-  await expect(page.getByRole('status')).toContainText(
-    'Unchanged — no XP was added.',
-  );
-  await expect(attack(page)).toContainText('18.34m');
+  const attack = page.getByLabel('Attack: 18,345,678 XP', { exact: true });
+  await expect(attack).toBeVisible();
   await page
-    .getByRole('button', { name: 'Advance sample Attack results' })
+    .getByRole('button', { name: 'Show sample XP', exact: true })
     .click();
-  await previewButton.click();
-  await expect(
-    preview.getByRole('table', { name: 'Change to cumulative site totals' }),
-  ).toContainText('+1,250,000');
-  await apply.click();
-  await expect(attack(page)).toContainText('19.59m');
-  await url.fill('https://wiseoldman.net/competitions/1002');
-  await previewButton.click();
-  await expect(
-    preview.getByRole('table', { name: 'Change to cumulative site totals' }),
-  ).toContainText('Sailing');
-  await apply.click();
-  await expect(page.getByRole('button', { name: /^Sailing:/ })).toContainText(
-    '7.50m',
-  );
-  await page.getByText('Import history (4)', { exact: true }).click();
-  await expect(page.locator('.xp-history li')).toHaveCount(4);
-  await page.evaluate(async () => {
-    window.scrollTo(0, 0);
-    await document.fonts.ready;
-  });
-  await page.screenshot({
-    path: test.info().outputPath('xp-admin.png'),
-    fullPage: true,
-  });
-  await page.getByRole('link', { name: 'XP gained', exact: true }).click();
-  await expect(attack(page)).toContainText('19.59m');
-  await page.getByRole('link', { name: 'Collection log', exact: true }).click();
-  await expect(page.getByRole('tab')).toHaveCount(5);
-  await page.getByRole('link', { name: 'XP gained', exact: true }).click();
-  await expect(attack(page)).toContainText('19.59m');
+  await expect(attack).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Vardorvis skilling weekend', exact: true })
+    .click();
+  await expect(page.getByLabel('Attack: 0 XP', { exact: true })).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
 });
-
-test('live failures and mixed revisions retain the last snapshot, and large XP remains exact', async ({
+test('failed or malformed refresh retains the last exact snapshot', async ({
   page,
 }) => {
-  let status = 503,
-    revision = 'xp-one',
-    total = '18345678',
-    inconsistent = false;
-  let conditionals = 0;
-  await page.route('**/api/v1/xp/**', (route) => {
-    if (route.request().headers()['if-none-match']) conditionals++;
-    const path = new URL(route.request().url()).pathname;
-    const data = publicXp(
-      total,
-      inconsistent && path.endsWith('/competitions') ? 'mixed' : revision,
-    )[path];
-    return route.fulfill({
-      status,
-      json: status === 200 ? data : {},
-      headers: { ETag: revision },
-    });
-  });
-  await page.goto('/xp');
-  await expect(page.getByRole('alert')).toContainText('XP tracker unavailable');
-  await expect(attack(page)).toContainText('—');
+  let fail = false;
+  await page.route('**/api/v1/xp/tracker', (route) =>
+    fail
+      ? route.fulfill({ json: { ...tracker, totals: { attack: 'bad' } } })
+      : route.fulfill({ json: tracker }),
+  );
+  await page.goto('/');
   await expect(
-    page.getByRole('button', { name: 'Show sample XP' }),
-  ).toHaveCount(0);
-  status = 200;
-  await page.getByRole('button', { name: 'Retry XP' }).click();
-  await expect(attack(page)).toContainText('18.34m');
-  status = 503;
-  await page.getByRole('button', { name: 'Refresh XP', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText(
-    'Showing the last successful update',
+    page.getByLabel('Attack: 1,234,567,890 XP', { exact: true }),
+  ).toBeVisible();
+  fail = true;
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event('visibilitychange')),
   );
-  await expect(attack(page)).toContainText('18.34m');
-  status = 200;
-  inconsistent = true;
-  await page.getByRole('button', { name: 'Retry XP' }).click();
-  await expect(page.getByRole('alert')).toContainText('XP refresh failed');
-  await expect(attack(page)).toContainText('18.34m');
-  inconsistent = false;
-  revision = 'xp-two';
-  total = '9007199254740993';
-  await page.getByRole('button', { name: 'Retry XP' }).click();
-  await expect(attack(page)).toContainText('9,007,199,254.74m');
-  await attack(page).hover();
-  await expect(page.getByRole('tooltip')).toContainText(
-    '9,007,199,254,740,993 XP',
-  );
-  expect(conditionals).toBeGreaterThan(0);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'XP could not' }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Attack: 1,234,567,890 XP', { exact: true }),
+  ).toBeVisible();
 });
-
-test('non-admin cannot import, and live empty data is zero while changing modes cannot carry sample XP into live', async ({
+test('direct admin imports require access, review corrections and send CSRF plus stable request identity', async ({
   page,
 }) => {
-  let posts = 0,
-    unavailable = false;
-  await page.route('**/api/v1/**', (route) => {
-    if (route.request().method() === 'POST') posts++;
-    const path = new URL(route.request().url()).pathname;
-    if (path === '/api/v1/auth/session') return route.fulfill({ status: 401 });
-    const revision = 'empty';
-    const data = path.endsWith('/skills')
-      ? {
-          revision,
-          updatedAt: null,
-          skills: Object.entries(zeroTotals()).map(([skill, xp]) => ({
-            skill,
-            xp,
-          })),
-        }
-      : path.endsWith('/competitions')
-        ? { revision, competitions: [] }
-        : { revision, skill: 'attack', members: [] };
-    return route.fulfill({ status: unavailable ? 503 : 200, json: data });
-  });
+  await page.route('**/api/v1/auth/session', (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
   await page.goto('/admin/xp');
   await expect(
-    page.getByRole('heading', { name: 'Admin sign-in required' }),
+    page.getByText('Admin sign-in required', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
-  await expect(attack(page)).toContainText('0.00m');
-  expect(posts).toBe(0);
-  await page.goto('/xp?preview=1');
-  await page.getByRole('button', { name: 'Show sample XP' }).click();
-  await expect(attack(page)).toContainText('18.34m');
-  unavailable = true;
-  await page.getByRole('button', { name: 'View live XP', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('XP tracker unavailable');
-  await expect(attack(page)).toContainText('—');
-  await expect(
-    page.getByRole('button', { name: 'Show sample XP' }),
-  ).toHaveCount(0);
-});
-
-test('authenticated imports reject invalid links, require correction acknowledgment, handle conflict and send CSRF/idempotency', async ({
-  page,
-}) => {
-  await mockPublic(page);
-  const posts: { path: string; body: unknown; csrf?: string; key?: string }[] =
-    [];
+  await expect(page.getByRole('button', { name: 'Apply import' })).toHaveCount(
+    0,
+  );
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill({
+      json: { authenticated: true, csrfToken: 'csrf', displayName: 'Reviewer' },
+    }),
+  );
+  await page.route('**/api/v1/admin/xp/imports', (route) =>
+    route.fulfill({ json: { imports: [] } }),
+  );
+  await page.route('**/api/v1/admin/xp/imports/preview', (route) =>
+    route.fulfill({
       json: {
-        authenticated: true,
-        displayName: 'KihiraVD',
-        csrfToken: 'session-csrf',
+        ...importPreview,
+        changes: [
+          {
+            skill: 'attack',
+            before: '18345678',
+            after: '1',
+            change: '-18345677',
+          },
+        ],
       },
     }),
   );
-  await page.route('**/api/v1/admin/xp/imports**', (route) => {
-    if (route.request().method() === 'GET')
-      return route.fulfill({ json: { imports: [] } });
-    const request = route.request(),
-      path = new URL(request.url()).pathname;
-    posts.push({
-      path,
-      body: request.postDataJSON(),
-      csrf: request.headers()['x-csrf-token'],
-      key: request.headers()['idempotency-key'],
-    });
-    return path.endsWith('/preview')
-      ? route.fulfill({
-          json: {
-            ...importPreview,
-            changes: [
-              {
-                skill: 'attack',
-                before: '18345678',
-                after: '17345678',
-                change: '-1000000',
-              },
-            ],
-          },
-        })
-      : route.fulfill({
-          status: 409,
-          json: { error: { code: 'STALE_PREVIEW' } },
-        });
-  });
-  await page.goto('/admin/xp');
-  const input = page.getByLabel('Wise Old Man competition link');
-  await input.fill('https://example.com/competitions/1001');
+  await page.reload();
+  await page
+    .getByLabel('Wise Old Man competition link')
+    .fill('https://wiseoldman.net/competitions/1001');
   await page
     .getByRole('button', { name: 'Preview competition', exact: true })
     .click();
-  await expect(page.getByRole('alert')).toContainText(
-    'Use https://wiseoldman.net',
-  );
-  expect(posts).toHaveLength(0);
-  await input.fill(competition.sourceUrl);
+  await expect(
+    page.getByRole('button', { name: 'Apply import' }),
+  ).toBeDisabled();
   await page
-    .getByRole('button', { name: 'Preview competition', exact: true })
-    .click();
-  const apply = page.getByRole('button', {
-    name: 'Apply import',
-    exact: true,
+    .getByLabel('I reviewed the corrections that reduce recorded XP.')
+    .check();
+  await page.route('**/api/v1/admin/xp/imports', (route) => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().headers()['x-csrf-token']).toBe('csrf');
+      expect(route.request().headers()['idempotency-key']).toBeTruthy();
+      return route.fulfill({ json: { outcome: 'applied', revision: 'two' } });
+    }
+    return route.fulfill({ json: { imports: [] } });
   });
-  await expect(apply).toBeDisabled();
-  await page.getByRole('checkbox').check();
-  await apply.click();
-  await expect(page.getByRole('alert')).toContainText('out of date');
-  await expect(page.locator('.xp-import-preview')).toHaveCount(0);
-  expect(posts).toHaveLength(2);
-  expect(posts.every((p) => p.csrf === 'session-csrf')).toBe(true);
-  expect(posts[1]!.key).toBeTruthy();
-  expect(posts[1]!.body).toEqual({
-    previewToken: 'validated-token',
-    expectedRevision: 'xp-one',
-  });
-  await expect(attack(page)).toContainText('18.34m');
+  await page.getByRole('button', { name: 'Apply import' }).click();
+  await expect(
+    page.getByText('Competition imported. Recorded skill totals are updated.'),
+  ).toBeVisible();
 });

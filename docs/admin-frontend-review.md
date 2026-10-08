@@ -1,5 +1,7 @@
 # Admin frontend review
 
+> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+
 Status: frontend implementation for manual review, 2026-10-06, in draft [PR #33](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/33). ADMIN-01 [#8](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/8) and ADMIN-02 [#31](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/31) are assigned to KihiraLove and remain open. Main is unchanged.
 
 ## Run and routes

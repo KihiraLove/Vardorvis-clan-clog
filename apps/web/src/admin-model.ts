@@ -1,3 +1,4 @@
+/** Private API contracts and form validation; server authorization remains mandatory. */
 import { validateCollectionDate, validateProofUrl } from '@clog/domain';
 import {
   categories,
@@ -85,6 +86,15 @@ export interface CreatedItem {
   catalogRevision: string;
 }
 export interface AdminClient {
+  settings(
+    signal: AbortSignal,
+  ): Promise<import('./site-settings.ts').SiteSettings>;
+  saveSettings(
+    enabled: boolean,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
   logout(csrf: string, signal: AbortSignal): Promise<void>;
   catalog(signal: AbortSignal): Promise<AdminCatalog>;
@@ -125,6 +135,7 @@ export interface AdminClient {
   ): Promise<AdminPage>;
 }
 
+/** Keep malformed claims reviewable/rejectable while withholding an unsafe proof link. */
 export function safeProof(input: string): string | undefined {
   try {
     return validateProofUrl(input);
@@ -154,6 +165,7 @@ export function parseSubmission(value: unknown): Submission {
     status: choice(row.status, ['pending', 'approved', 'rejected', 'revoked']),
   };
 }
+/** Verify status boundaries as well as row shape so a response cannot change queue meaning. */
 export function parseQueue(value: unknown, view: QueueView): QueueResult {
   const data = object(value),
     submissions = list(data.submissions).map(parseSubmission);
@@ -172,6 +184,7 @@ export function parseQueue(value: unknown, view: QueueView): QueueResult {
     nextCursor: data.nextCursor === null ? null : text(data.nextCursor),
   };
 }
+/** Every before/after audit snapshot must refer to the selected submission. */
 export function parseDetail(value: unknown): SubmissionDetail {
   const data = object(value),
     submission = parseSubmission(data.submission);
@@ -225,6 +238,7 @@ export function parseAdminPage(value: unknown): AdminPage {
     orderOrigin: choice(page.orderOrigin, ['source', 'manual']),
   };
 }
+/** Extend the public graph with source/manual provenance and page concurrency versions. */
 export function parseAdminCatalog(value: unknown): AdminCatalog {
   const data = object(value),
     base = parseCatalog(data);
@@ -248,6 +262,7 @@ export function parseAdminCatalog(value: unknown): AdminCatalog {
     pages: base.pages.map((page) => ({ ...page, ...metadata.get(page.id)! })),
   };
 }
+/** Corrections require an exact canonical match; display-name similarity is insufficient. */
 export function validateCorrection(
   fields: Correction,
   catalog: Catalog,
@@ -271,6 +286,7 @@ export function validateCorrection(
     collectedOn: validateCollectionDate(fields.collectedOn),
   };
 }
+/** New manual items need a staged icon and existing pages, but no external game ID. */
 export function validateItem(fields: CreateItem, catalog: Catalog): CreateItem {
   const name = fields.name.trim();
   if (!name || name.length > 200)
@@ -285,6 +301,7 @@ export function validateItem(fields: CreateItem, catalog: Catalog): CreateItem {
     throw new Error('Select one or more existing collection-log pages.');
   return { ...fields, name };
 }
+/** An order edit must be a permutation, with no added, missing or duplicate memberships. */
 export function validateOrder(
   current: readonly number[],
   next: readonly number[],
@@ -298,6 +315,7 @@ export function validateOrder(
       'An order must contain every current page item exactly once.',
     );
 }
+/** Return a new ordered array for drag, keyboard and button controls to share. */
 export function moveItem(
   ids: readonly number[],
   from: number,
@@ -316,6 +334,7 @@ export function moveItem(
 }
 export const MAX_ICON_BYTES = 2 * 1024 * 1024;
 export const MAX_ICON_SIZE = 512;
+/** Check size, MIME and signature before decode/upload; this is not server validation. */
 export async function validateIconFile(file: File): Promise<void> {
   if (
     !['image/png', 'image/webp'].includes(file.type) ||
@@ -336,6 +355,7 @@ export async function validateIconFile(file: File): Promise<void> {
   )
     throw new Error('The icon content does not match its PNG/WebP file type.');
 }
+/** Enforce decoded dimensions after createImageBitmap has verified the image is readable. */
 export function validateIconSize(width: number, height: number): void {
   if (
     ![width, height].every(

@@ -1,3 +1,4 @@
+/** Fastify injection tests exercise health/readiness without opening a network socket. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from './app.js';
@@ -28,4 +29,21 @@ test('configured database check can report ready', async () => {
   } finally {
     await app.close();
   }
+});
+
+test('public settings are disabled by default, expose only visibility, and fail closed on database failure', async () => {
+  const app = createApp();
+  assert.deepEqual((await app.inject('/api/v1/settings')).json(), {
+    revision: 'settings-disabled',
+    hardcoreEnabled: false,
+  });
+  await app.close();
+  const failed = createApp(
+    async () => {},
+    async () => {
+      throw new Error('DB unavailable');
+    },
+  );
+  assert.equal((await failed.inject('/api/v1/settings')).statusCode, 503);
+  await failed.close();
 });

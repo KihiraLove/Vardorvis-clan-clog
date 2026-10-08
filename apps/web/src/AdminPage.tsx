@@ -1,8 +1,10 @@
+/** Resolve the admin session before mounting private queue/catalog views; share navigation. */
 import { useCallback, useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { AdminSettings } from './AdminSettings.tsx';
 import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
 
@@ -120,6 +122,13 @@ export function AdminPage({
         )}
       </div>
       <AdminNavigation preview={preview} path={path} onNavigate={onNavigate} />
+      {session && (
+        <AdminSettings
+          client={client}
+          session={session}
+          onAccessLost={accessLost}
+        />
+      )}
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}

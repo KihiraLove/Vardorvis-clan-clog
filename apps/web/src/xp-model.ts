@@ -1,3 +1,4 @@
+/** XP wire types, exact arithmetic and parsers; also supplies shared private-response guards. */
 export const skills = [
   ['attack', 'Attack'],
   ['hitpoints', 'Hitpoints'],
@@ -25,6 +26,7 @@ export const skills = [
   ['sailing', 'Sailing'],
 ] as const;
 export type SkillId = (typeof skills)[number][0];
+// Decimal strings survive JSON without Number rounding; null means unavailable, not zero.
 export type Xp = string;
 export type Gains = Partial<Record<SkillId, Xp | null>>;
 export interface Competition {
@@ -93,6 +95,7 @@ export interface ApplyResult {
   revision: string;
 }
 export interface XpClient {
+  tracker(signal: AbortSignal): Promise<import('./xp-tracker.ts').XpTracker>;
   load(
     skill: SkillId,
     competitionId: number | undefined,
@@ -120,10 +123,11 @@ export const zeroTotals = () =>
   Object.fromEntries(skills.map(([id]) => [id, '0'])) as Record<SkillId, Xp>;
 export const exactXp = (xp: Xp) =>
   new Intl.NumberFormat('en-GB').format(BigInt(xp));
+/** Truncate to two million-unit decimals so abbreviated labels never overstate gains. */
 export function millionXp(xp: Xp): string {
   const value = BigInt(xp);
   return (
-    new Intl.NumberFormat('en-GB').format(value / 1_000_000n) +
+    (value / 1_000_000n).toString() +
     '.' +
     ((value % 1_000_000n) / 10_000n).toString().padStart(2, '0') +
     'm'
@@ -132,11 +136,13 @@ export function millionXp(xp: Xp): string {
 export function signedXp(xp: string): string {
   return (BigInt(xp) > 0n ? '+' : '') + exactXp(xp);
 }
+/** Sort largest exact gains first, retaining unavailable rows at the end. */
 export function compareXp(a: Xp | null, b: Xp | null): number {
   if (a === null) return b === null ? 0 : 1;
   if (b === null) return -1;
   return BigInt(a) > BigInt(b) ? -1 : BigInt(a) < BigInt(b) ? 1 : 0;
 }
+/** Extract a positive WOM identity and discard query/fragment data from the canonical URL. */
 export function competitionUrl(input: string): { id: number; url: string } {
   let url: URL;
   try {
@@ -179,6 +185,7 @@ export function identity(value: unknown): number {
     throw new Error('Invalid XP identity.');
   return value;
 }
+/** Accept canonical integer strings; only change deltas may be negative. */
 export function amount(value: unknown, signed = false): string {
   if (
     typeof value !== 'string' ||
@@ -208,6 +215,7 @@ export function unique(values: readonly unknown[]): void {
   if (new Set(values).size !== values.length)
     throw new Error('Duplicate XP identity.');
 }
+/** Validate source identity, metric uniqueness and a strictly increasing competition period. */
 export function parseCompetition(value: unknown): Competition {
   const c = object(value);
   const source = competitionUrl(text(c.sourceUrl));
@@ -215,7 +223,8 @@ export function parseCompetition(value: unknown): Competition {
   if (source.id !== id) throw new Error('Competition link identity mismatch.');
   const ids = list(c.skills).map(skill);
   unique(ids);
-  if (!ids.length) throw new Error('Competition has no skill XP.');
+  if (ids.length !== 1 && ids.length !== skills.length)
+    throw new Error('An event must track one skill or all skills.');
   const startsAt = timestamp(c.startsAt),
     endsAt = timestamp(c.endsAt);
   if (Date.parse(endsAt) <= Date.parse(startsAt))
@@ -230,6 +239,7 @@ export function parseCompetition(value: unknown): Competition {
     importedAt: timestamp(c.importedAt),
   };
 }
+/** Require every declared metric per participant while preserving explicit unavailable values. */
 export function parseParticipants(
   value: unknown,
   ids: SkillId[],
@@ -250,6 +260,7 @@ export function parseParticipants(
   unique(rows.map((p) => p.playerId));
   return rows;
 }
+/** Recalculate each delta with BigInt before trusting a preview or history response. */
 export function parseChanges(value: unknown): ImportChange[] {
   const changes = list(value).map((entry) => {
     const c = object(entry),
@@ -263,6 +274,7 @@ export function parseChanges(value: unknown): ImportChange[] {
   unique(changes.map((c) => c.skill));
   return changes;
 }
+/** An import preview combines complete participant data with an expiring revision-bound token. */
 export function parsePreview(value: unknown): ImportPreview {
   const p = object(value),
     competition = parseCompetition(p.competition);

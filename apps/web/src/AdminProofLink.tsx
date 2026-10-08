@@ -1,3 +1,4 @@
+/** Show only validated external evidence links, without sending referrer or opener access. */
 import { safeProof } from './admin-model.ts';
 export function ProofLink({ url }: { url: string }) {
   const safe = safeProof(url);

@@ -1,6 +1,8 @@
+/** Simulate two WOM competitions and reconciliation locally; no source/network persistence. */
 import {
   competitionUrl,
   zeroTotals,
+  skills,
   type AdminSession,
   type ApplyResult,
   type CompetitionDetail,
@@ -38,7 +40,7 @@ export class PreviewXpClient implements XpClient {
         id,
         title: attack ? 'Vardorvis Attack week' : 'Vardorvis skilling weekend',
         sourceUrl: 'https://wiseoldman.net/competitions/' + id,
-        skills: attack ? ['attack'] : ['fishing', 'sailing'],
+        skills: attack ? ['attack'] : skills.map(([id]) => id),
         startsAt: '2026-10-01T00:00:00Z',
         endsAt: '2026-10-08T00:00:00Z',
         importedAt: new Date().toISOString(),
@@ -49,30 +51,33 @@ export class PreviewXpClient implements XpClient {
           displayName: 'KihiraVD',
           gains: attack
             ? { attack: String(12345678 + this.sourceVersion * 1250000) }
-            : { fishing: '3200123', sailing: '4000000' },
+            : { ...zeroTotals(), fishing: '3200123', sailing: '4000000' },
         },
         {
           playerId: 2,
           displayName: 'Oakheart',
           gains: attack
             ? { attack: '6000000' }
-            : { fishing: '1200000', sailing: '2500000' },
+            : { ...zeroTotals(), fishing: '1200000', sailing: '2500000' },
         },
         {
           playerId: 3,
           displayName: 'Iron Fern',
           gains: attack
             ? { attack: '0' }
-            : { fishing: '0', sailing: '1000000' },
+            : { ...zeroTotals(), fishing: '0', sailing: '1000000' },
         },
         {
           playerId: 4,
           displayName: 'New recruit',
-          gains: attack ? { attack: null } : { fishing: null, sailing: null },
+          gains: attack
+            ? { attack: null }
+            : { ...zeroTotals(), fishing: null, sailing: null },
         },
       ],
     };
   }
+  /** Recompute from stored competition snapshots so refreshes replace rather than append XP. */
   private totals() {
     const totals = zeroTotals();
     for (const detail of this.stored.values())
@@ -81,6 +86,34 @@ export class PreviewXpClient implements XpClient {
           if (row.gains[id] !== null && row.gains[id] !== undefined)
             totals[id] = String(BigInt(totals[id]) + BigInt(row.gains[id]!));
     return totals;
+  }
+  async tracker(signal: AbortSignal) {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    return structuredClone({
+      revision: 'preview-' + this.revision,
+      totals: this.totals(),
+      events: [...this.stored.values()].map((detail) => ({
+        id: detail.competition.id,
+        title: detail.competition.title,
+        sourceUrl: detail.competition.sourceUrl,
+        skills: detail.competition.skills,
+        gains: Object.fromEntries(
+          detail.competition.skills.map((id) => {
+            const known = detail.participants
+              .map((row) => row.gains[id])
+              .filter((value) => value !== null && value !== undefined);
+            return [
+              id,
+              known.length
+                ? String(known.reduce((sum, value) => sum + BigInt(value), 0n))
+                : detail.participants.length
+                  ? null
+                  : '0',
+            ];
+          }),
+        ),
+      })),
+    });
   }
   async load(
     skill: SkillId,
@@ -163,6 +196,7 @@ export class PreviewXpClient implements XpClient {
     signal: AbortSignal,
   ): Promise<ApplyResult> {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    // Resolve known retries before checking the revision advanced by the original apply.
     const receipt = this.receipts.get(requestKey);
     if (receipt) {
       if (receipt.token !== preview.previewToken) throw new XpRequestError(409);
@@ -175,6 +209,7 @@ export class PreviewXpClient implements XpClient {
       Date.parse(current.expiresAt) <= Date.now()
     )
       throw new XpRequestError(409);
+    // Fixture outcome tracks aggregate changes; a production reconciler must also track rows.
     const outcome =
       current.changes.some((c) => BigInt(c.change) !== 0n) ||
       !this.stored.has(current.competition.id)

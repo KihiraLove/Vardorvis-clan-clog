@@ -1,3 +1,4 @@
+/** Pure-rule regression tests: shared identity, approved-only credit, links and calendar dates. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -47,7 +48,7 @@ test('pending, rejected and revoked submissions never grant collection credit', 
   }
 });
 
-test('multiple approved collectors are preserved and ordered by collection date', () => {
+test('legacy duplicate approvals display only the earliest collection', () => {
   const credits: CollectionCredit[] = ['2026-10-16', '2026-10-01'].map(
     (collectedOn, index) => ({
       submissionId: String(index),
@@ -61,7 +62,7 @@ test('multiple approved collectors are preserved and ordered by collection date'
     collectionState(1, credits).collectors[0]?.collectedOn,
     '2026-10-01',
   );
-  assert.equal(collectionState(1, credits).collectors.length, 2);
+  assert.equal(collectionState(1, credits).collectors.length, 1);
 });
 
 test('catalog rejects ambiguous mappings and dangling page references', () => {

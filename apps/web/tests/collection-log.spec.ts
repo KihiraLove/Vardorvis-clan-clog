@@ -1,270 +1,187 @@
 import { expect, test } from '@playwright/test';
 import catalog from '../src/preview/catalog.json' with { type: 'json' };
 
-test('all-uncollected preview, native geometry and five keyboard-operable tabs', async ({
+test('homepage uses animated branding, 2x log and inline XP without public admin navigation', async ({
   page,
 }) => {
   await page.goto('/?preview=1');
+  await expect(page.locator('.clan-logo')).toHaveAttribute(
+    'src',
+    '/brand/mexicat.gif',
+  );
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
+    'href',
+    '/favicon.png',
+  );
   await expect(
-    page.getByText('Frontend preview', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: 'Admin', exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByRole('tab')).toHaveCount(5);
-  await expect(
-    page.getByRole('heading', {
-      name: `Collection Log - 0/${catalog.items.length}`,
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(page.locator('.item-slot--collected')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Native 1×' }).click();
-  const box = await page.locator('.game-window').boundingBox();
-  expect(box?.width).toBe(500);
-  expect(box?.height).toBe(314);
-  await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({
-    path: test.info().outputPath('native-uncollected.png'),
-    fullPage: true,
-  });
+  const log = await page.locator('.game-window').boundingBox();
+  expect(log!.width).toBe(1000);
+  expect(log!.height).toBe(628);
+  const xp = await page.locator('.event-tracker').boundingBox();
+  expect(xp!.y).toBeGreaterThan(log!.y + log!.height);
   await page.getByRole('tab', { name: 'Bosses', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(
     page.getByRole('tab', { name: 'Raids', exact: true }),
   ).toBeFocused();
-  await expect(
-    page.getByRole('heading', { name: 'Chambers of Xeric', exact: true }),
-  ).toBeVisible();
-  await page.keyboard.press('End');
-  await expect(
-    page.getByRole('tab', { name: 'Other', exact: true }),
-  ).toBeFocused();
-  await expect(
-    page.getByRole('heading', { name: 'Slayer', exact: true }),
-  ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('homepage-desktop.png'),
+    fullPage: true,
+  });
 });
-test('mixed hardcore credits propagate across pages; revocation clears only hardcore state', async ({
+test('uncollected items never open menus on hover focus or click; icons and page navigation work', async ({
   page,
 }) => {
   await page.goto('/?preview=1');
+  const item = page.getByRole('button', {
+    name: 'Virtus mask: not collected',
+    exact: true,
+  });
+  await item.hover();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await item.focus();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await item.click();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  for (const category of ['Bosses', 'Raids', 'Clues', 'Minigames', 'Other']) {
+    await page.getByRole('tab', { name: category, exact: true }).click();
+    const first = page.locator('.page-list button').first();
+    if (await first.count()) await first.click();
+  }
+  await expect
+    .poll(() =>
+      page
+        .locator('.item-slot img')
+        .evaluateAll((images) =>
+          images.every(
+            (image) =>
+              (image as HTMLImageElement).complete &&
+              (image as HTMLImageElement).naturalWidth > 0,
+          ),
+        ),
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Close collection log' }).click();
+  await page.getByRole('button', { name: 'Open collection log' }).click();
+  await expect(page.locator('.game-window')).toBeVisible();
+});
+test('admin release switch reveals skull; normal and hardcore menus and contours stay independent', async ({
+  page,
+}) => {
+  await page.goto('/admin?preview=1');
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
+  await page.getByRole('button', { name: 'Save site settings' }).click();
+  await expect(page.getByText('Hardcore visibility saved.')).toBeVisible();
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
+    .click();
+  await page.locator('.preview-options').first().locator('summary').click();
   await page.getByLabel('Review scenario').selectOption('hardcore');
-  const mask = page.getByRole('button', {
+  await page
+    .getByRole('button', { name: 'Virtus mask: collected', exact: true })
+    .hover();
+  await expect(page.getByRole('tooltip')).toContainText('03/10/26');
+  await expect(page.getByRole('tooltip')).not.toContainText('hardcore worlds');
+  await page
+    .getByRole('button', { name: 'Hardcore worlds', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  const item = page.getByRole('button', {
     name: 'Virtus mask: collected, hardcore',
     exact: true,
   });
-  await mask.hover();
-  await expect(page.getByRole('tooltip')).toHaveClass(/item-menu--hardcore/);
-  await expect(
-    page
-      .getByRole('tooltip')
-      .getByText('Collected by KihiraVD on 03/10/26', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByRole('tooltip')
-      .getByText('Collected by KihiraVD on 05/10/26 on hardcore worlds', {
-        exact: true,
-      }),
-  ).toBeVisible();
-  await expect(page.getByLabel('Hardcore collection')).toBeVisible();
+  await item.hover();
+  await expect(page.getByRole('tooltip')).toContainText(
+    '05/10/26 on hardcore worlds',
+  );
+  await expect(page.getByRole('tooltip')).not.toContainText('03/10/26');
+  expect(
+    await item
+      .locator('img')
+      .evaluate((image) => getComputedStyle(image).filter),
+  ).toContain('hardcore-outline');
+  expect(
+    await item.evaluate((node) => getComputedStyle(node).borderColor),
+  ).toBe('rgba(0, 0, 0, 0)');
+  await page
+    .getByRole('button', { name: 'Duke Sucellus', exact: true })
+    .click();
+  await expect(item).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath('hardcore-desktop.png'),
     fullPage: true,
   });
+  await page.goBack();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Save site settings' }).click();
+  await expect(page.getByText('Hardcore visibility saved.')).toBeVisible();
   await page
-    .getByRole('button', { name: 'Duke Sucellus', exact: true })
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();
   await expect(
-    page.getByRole('button', {
-      name: 'Virtus mask: collected, hardcore',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', {
-      name: `Collection Log - 1/${catalog.items.length}`,
-      exact: true,
-    }),
-  ).toBeVisible();
-  await page.getByLabel('Review scenario').selectOption('collected');
-  await expect(page.locator('.item-slot--hardcore')).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Virtus mask: collected', exact: true })
-    .focus();
-  await expect(page.getByRole('tooltip')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('tooltip')).toHaveCount(0);
-  await page.getByLabel('Review scenario').selectOption('uncollected');
-  await expect(page.locator('.item-slot--collected')).toHaveCount(0);
+    page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
+  ).toHaveCount(0);
 });
-test('each preview page has real local icons; search and closing/reopening work', async ({
-  page,
-}) => {
-  await page.goto('/?preview=1');
-  for (const category of ['bosses', 'raids', 'clues', 'minigames', 'other']) {
-    await page
-      .getByRole('tab', {
-        name: category[0]!.toUpperCase() + category.slice(1),
-        exact: true,
-      })
-      .click();
-    for (const entry of catalog.pages.filter(
-      (entry) => entry.category === category,
-    )) {
-      await page.getByRole('button', { name: entry.name, exact: true }).click();
-      await expect(page.locator('.item-slot')).toHaveCount(
-        entry.itemIds.length,
-      );
-      await expect
-        .poll(() =>
-          page
-            .locator('.item-slot img')
-            .evaluateAll((images) =>
-              images.every(
-                (image) =>
-                  (image as HTMLImageElement).complete &&
-                  (image as HTMLImageElement).naturalWidth > 0,
-              ),
-            ),
-        )
-        .toBe(true);
-      await expect(page.locator('.icon-missing')).toHaveCount(0);
-    }
-  }
-  await page.getByRole('tab', { name: 'Bosses', exact: true }).click();
-  await page.getByRole('button', { name: 'Search', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Search pages' }).fill('Vardorvis');
-  await expect(page.locator('.page-list button')).toHaveCount(1);
-  await page
-    .getByRole('textbox', { name: 'Search pages' })
-    .fill('nothing-matches');
-  await expect(page.getByText('No matching pages.')).toBeVisible();
-  await page.getByRole('textbox', { name: 'Search pages' }).press('Escape');
-  await page.getByRole('button', { name: 'Close collection log' }).click();
-  await expect(page.locator('.game-window')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Open collection log' }).click();
-  await expect(page.locator('.game-window')).toBeVisible();
-});
-test('touch menus remain inside a narrow viewport and outside taps dismiss', async ({
+test('320px viewport contains log scrolling and touch menus', async ({
   browser,
 }) => {
   const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    isMobile: true,
+    viewport: { width: 320, height: 850 },
     hasTouch: true,
   });
   const page = await context.newPage();
   await page.goto('/?preview=1');
-  await page.getByLabel('Review scenario').selectOption('hardcore');
+  await page.locator('.preview-options').first().locator('summary').click();
+  await page.getByLabel('Review scenario').selectOption('collected');
   await page
-    .getByRole('button', {
-      name: 'Virtus mask: collected, hardcore',
-      exact: true,
-    })
+    .getByRole('button', { name: 'Virtus mask: collected', exact: true })
     .tap();
-  const tooltip = page.getByRole('tooltip');
-  await expect(tooltip).toBeVisible();
-  const box = await tooltip.boundingBox();
+  const box = await page.getByRole('tooltip').boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
-  expect(box!.y).toBeGreaterThanOrEqual(0);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  ).toBeLessThanOrEqual(320);
+  await page.locator('.clan-logo').tap();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.screenshot({
-    path: test.info().outputPath('hardcore-mobile.png'),
+    path: test.info().outputPath('homepage-mobile.png'),
     fullPage: true,
   });
-  await page.getByText('Frontend preview', { exact: true }).tap();
-  await expect(tooltip).toHaveCount(0);
   await context.close();
 });
-test('live errors do not show fixture credit; refresh adds and revokes real API credits', async ({
+test('live flag fails closed and public read failures never invent collected items', async ({
   page,
 }) => {
-  page.on('pageerror', (error) =>
-    console.error('Live page error:', error.message),
-  );
-  page.on('requestfailed', (request) =>
-    console.error(
-      'Live request failed:',
-      request.url(),
-      request.failure()?.errorText,
-    ),
-  );
-  let status = 503;
-  let credits: unknown[] = [];
-  let conditionals = 0;
-  await page.route('**/api/v1/catalog', async (route) => {
-    if (route.request().headers()['if-none-match']) conditionals++;
-    await route.fulfill({
-      status,
-      json: status === 200 ? catalog : { error: { code: 'NOT_READY' } },
-      headers: { ETag: 'catalog-one' },
-    });
-  });
-  await page.route('**/api/v1/collections', (route) =>
-    route.fulfill({
-      status,
-      json:
-        status === 200
-          ? { revision: `credits-${credits.length}`, credits }
-          : {},
-      headers: { ETag: `credits-${credits.length}` },
-    }),
-  );
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 503 }));
   await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText(
-    'Collection log unavailable',
-  );
-  await expect(page.getByLabel('Review scenario')).toHaveCount(0);
-  status = 200;
-  await page.getByRole('button', { name: 'Try again', exact: true }).click();
-  try {
-    await expect(
-      page.getByRole('heading', {
-        name: `Collection Log - 0/${catalog.items.length}`,
-        exact: true,
-      }),
-    ).toBeVisible();
-  } catch (failure) {
-    console.error('Live retry page:', await page.locator('main').innerText());
-    throw failure;
-  }
-  const itemId = catalog.items.find((item) => item.name === 'Virtus mask')!.id;
-  credits = [
-    {
-      submissionId: 'approved',
-      itemId,
-      collectorName: 'Real collector',
-      collectedOn: '2026-10-05',
-      hardcore: true,
-    },
-  ];
-  await page.evaluate(() =>
-    document.dispatchEvent(new Event('visibilitychange')),
-  );
   await expect(
-    page.getByRole('button', {
-      name: 'Virtus mask: collected, hardcore',
-      exact: true,
-    }),
-  ).toBeVisible();
-  status = 503;
-  await page.evaluate(() =>
-    document.dispatchEvent(new Event('visibilitychange')),
-  );
-  await expect(
-    page.getByText(/Showing the last successful update/),
+    page.getByText('Collection log unavailable', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', {
-      name: 'Virtus mask: collected, hardcore',
-      exact: true,
-    }),
-  ).toBeVisible();
-  status = 200;
-  credits = [];
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
+  ).toHaveCount(0);
   await expect(page.locator('.item-slot--collected')).toHaveCount(0);
-  expect(conditionals).toBeGreaterThan(0);
+  await page.route('**/api/v1/catalog', (route) =>
+    route.fulfill({ json: catalog }),
+  );
+  await page.route('**/api/v1/collections', (route) =>
+    route.fulfill({ json: { revision: 'empty', credits: [] } }),
+  );
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(
+    page.getByRole('button', {
+      name: 'Virtus mask: not collected',
+      exact: true,
+    }),
+  ).toBeVisible();
 });

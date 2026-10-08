@@ -1,5 +1,6 @@
 name: vardorvis-clog
 
+# Startup: healthy DB -> successful one-shot migration -> healthy API -> web/bot.
 services:
   db:
     image: postgres:17-alpine
@@ -17,6 +18,7 @@ services:
       retries: 20
     security_opt: ['no-new-privileges:true']
 
+  # Reuse the API image's migration code and SQL, then exit after the batch completes.
   migrate:
     image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-api:${IMAGE_TAG:?Set IMAGE_TAG to a published sha tag}
     command: ['node', 'packages/database/dist/migrate.js']
@@ -39,6 +41,7 @@ services:
       migrate: { condition: service_completed_successfully }
     security_opt: ['no-new-privileges:true']
 
+  # Loopback exposure expects an externally managed reverse proxy for public TLS.
   web:
     image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-web:${IMAGE_TAG:?Set IMAGE_TAG}
     restart: unless-stopped
@@ -48,6 +51,7 @@ services:
       api: { condition: service_healthy }
     security_opt: ['no-new-privileges:true']
 
+  # Opt in with --profile bot; integration credentials are reserved for future behavior.
   bot:
     image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-bot:${IMAGE_TAG:?Set IMAGE_TAG}
     profiles: ['bot']

@@ -1,5 +1,7 @@
 # Clan XP frontend review
 
+> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+
 XP-02 [#28](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/28) is assigned to KihiraLove and stays open for manual review in draft PR #33. The public page and admin import interface are implemented against the proposed [API contract](contracts.md#frontend-xp-payloads). Live WOM fetching, persistence/reconciliation and admin authentication still require #27/#4. No backend endpoint is added by this frontend work.
 
 ## Start and review

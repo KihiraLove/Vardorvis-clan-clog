@@ -1,3 +1,4 @@
+/** Injected fetch responses verify conditional reads and cache preservation on partial failure. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PublicLogClient } from './api.ts';

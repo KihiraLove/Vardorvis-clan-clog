@@ -1,3 +1,4 @@
+# Install workspace dependencies once and compile all packages before splitting targets.
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -10,9 +11,11 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
+# Preserve workspace links while stripping build/test dependencies from Node service images.
 FROM build AS production-dependencies
 RUN npm prune --omit=dev --no-audit --no-fund
 
+# Shared compiled packages and SQL allow the API target to run the migration job too.
 FROM node:24-bookworm-slim AS service-base
 WORKDIR /app
 ENV NODE_ENV=production
@@ -30,16 +33,19 @@ COPY --from=build --chown=node:node /app/packages/database/migrations ./packages
 LABEL org.opencontainers.image.source="https://github.com/KihiraLove/Vardorvis-clan-clog"
 USER node
 
+# Readiness verifies the migrated database view, not feature completeness.
 FROM service-base AS api
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD node -e "fetch('http://127.0.0.1:3000/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "apps/api/dist/server.js"]
 
+# Scaffold liveness only: the current bot does not connect to Discord.
 FROM service-base AS bot
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "apps/bot/dist/index.js"]
 
+# Ship static assets and same-origin proxy configuration in an unprivileged web server.
 FROM nginxinc/nginx-unprivileged:stable-alpine AS web
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY infra/nginx/default.conf /etc/nginx/conf.d/default.conf

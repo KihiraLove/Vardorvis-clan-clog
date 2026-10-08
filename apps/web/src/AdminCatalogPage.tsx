@@ -1,3 +1,4 @@
+/** Coordinate one catalog snapshot shared by item creation and per-page order editing. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';

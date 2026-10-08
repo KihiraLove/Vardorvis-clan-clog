@@ -1,3 +1,4 @@
+/** Preview/mocked browser review flows; these do not verify real backend authorization. */
 import { expect, test, type Page } from '@playwright/test';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
@@ -8,8 +9,6 @@ const proofCheck = (page: Page) =>
   editor(page).getByLabel(/^I checked the linked proof/);
 const review = (page: Page, collector: string) =>
   page.getByRole('button', { name: new RegExp('^Review ' + collector + ' ·') });
-const globalNav = (page: Page) =>
-  page.getByRole('navigation', { name: 'Site navigation' });
 const itemIcon = resolve('public/skills/sailing.png');
 
 async function approve(page: Page, collector: string) {
@@ -82,6 +81,9 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   const f = await adminFixtures(),
     maskId = f.detail.submission.itemId!;
   await page.goto('/admin?preview=1');
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
+  await page.getByRole('button', { name: 'Save site settings' }).click();
+  await expect(page.getByText('Hardcore visibility saved.')).toBeVisible();
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await review(page, 'Iron Fern').click();
@@ -130,8 +132,11 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   await expect(
     editor(page).getByText('approve · Preview admin', { exact: true }),
   ).toBeVisible();
-  await globalNav(page)
-    .getByRole('link', { name: 'Collection log', exact: true })
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Hardcore worlds', exact: true })
     .click();
   await page
     .getByRole('button', {
@@ -151,9 +156,9 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     }),
   ).toBeVisible();
-  await globalNav(page)
-    .getByRole('link', { name: 'Admin', exact: true })
-    .click();
+  await page.goBack();
+  if (page.url().includes('/admin/catalog'))
+    await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
   await review(page, 'Matched collector').click();
   await editor(page)
@@ -173,19 +178,17 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     }),
   ).toBeVisible();
-  await globalNav(page)
-    .getByRole('link', { name: 'Collection log', exact: true })
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();
   await expect(page.locator('.item-slot--collected')).toHaveCount(0);
 });
 
-test('approved corrections require a reason and clear only hardcore styling while ordinary credit remains', async ({
+test('approved corrections require a reason and move the single credit into a free normal slot', async ({
   page,
 }) => {
   await page.goto('/admin?preview=1');
   await approve(page, 'KihiraVD');
-  await page.getByRole('button', { name: 'Pending', exact: true }).click();
-  await approve(page, 'Oakheart');
   await review(page, 'KihiraVD').click();
   await editor(page)
     .getByLabel('Collected on hardcore worlds', { exact: true })
@@ -216,8 +219,8 @@ test('approved corrections require a reason and clear only hardcore styling whil
       exact: true,
     }),
   ).toBeVisible();
-  await globalNav(page)
-    .getByRole('link', { name: 'Collection log', exact: true })
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();
   await expect(page.locator('.item-slot--hardcore')).toHaveCount(0);
   await page
@@ -226,9 +229,7 @@ test('approved corrections require a reason and clear only hardcore styling whil
   await expect(page.getByRole('tooltip')).toContainText(
     'Collected by KihiraVD on 05/10/26',
   );
-  await expect(page.getByRole('tooltip')).toContainText(
-    'Collected by Oakheart on 05/10/26',
-  );
+  await expect(page.getByRole('tooltip')).not.toContainText('Oakheart');
 });
 
 test('manual item creation shares one identity, keyboard and drag order affect one page, and later review credits every occurrence', async ({
@@ -267,8 +268,8 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await page.getByRole('button', { name: 'Save order', exact: true }).click();
   await expect(page.getByText(/Page order saved\./)).toBeVisible();
   await capture(page, 'admin-catalog-desktop.png');
-  await globalNav(page)
-    .getByRole('link', { name: 'Collection log', exact: true })
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();
   await expect(page.locator('.item-slot').first()).toHaveAttribute(
     'aria-label',
@@ -281,9 +282,9 @@ test('manual item creation shares one identity, keyboard and drag order affect o
     'aria-label',
     'New clan drop: not collected',
   );
-  await globalNav(page)
-    .getByRole('link', { name: 'Admin', exact: true })
-    .click();
+  await page.goBack();
+  if (page.url().includes('/admin/catalog'))
+    await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('button', { name: 'Unmatched', exact: true }).click();
   await review(page, 'Iron Fern').click();
   await editor(page).getByLabel('Search catalog items').fill('New clan drop');
@@ -305,8 +306,8 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await expect(
     page.getByText('Saved submission state: approved.', { exact: true }),
   ).toBeVisible();
-  await globalNav(page)
-    .getByRole('link', { name: 'Collection log', exact: true })
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();
   await expect(
     page.getByRole('button', { name: 'New clan drop: collected', exact: true }),

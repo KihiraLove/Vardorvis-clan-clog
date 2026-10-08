@@ -1,12 +1,12 @@
 # Vardorvis Clan Collection Log
 
-Monorepo for a public OSRS collection log, an admin submission queue, a Discord submission bot, and a separate clan XP gained page. The public log starts entirely uncollected. Approved evidence credits the canonical item everywhere it appears.
+Monorepo for a public OSRS collection log, an admin submission queue, a Discord submission bot, and an inline clan XP event tracker. The public log starts entirely uncollected. Approved evidence credits the canonical item everywhere it appears in the selected world mode.
 
 ## Current state
 
 This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. The full catalog, backend feature routes and release approval remain pending.
 
-Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and hardcore presentation, accessible item menus; a separate RuneScape-style skill XP page with million labels, exact tooltips, member/competition results and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, initial PostgreSQL schema and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
+Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and independent hardcore mode, a release switch, silhouette outlines and collected-item menus; an inline RuneScape-style event XP tracker with a scrollable sidebar, million labels and exact tooltips and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, PostgreSQL schema with per-mode unique credits, default-off hardcore visibility and migration runner, Discord command definition, three Docker image targets, Compose, PR validation, and validated-main image publishing. The bot image runs a scaffold health service; it does not log into Discord, register commands, or accept submissions.
 
 Planned: complete item/page catalog and assets, final reference-approved pixel matching, Discord submission persistence, Discord admin OAuth, transactional review API, end-to-end hardcore claim persistence/review, Wise Old Man import persistence, durable admin-created items/icons and per-page ordering, and production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
@@ -49,12 +49,14 @@ npm run dev:web
 
 Open `http://127.0.0.1:5173/?preview=1`. The labelled sample catalog starts all uncollected; the review selector can show ordinary or mixed hardcore example credits without changing clan data. Use the [frontend review guide](docs/frontend-review.md) for screenshots, browser checks and the remaining work in UI-01 #3 / UI-02 #9. These issues stay open for manual review.
 
-Open `http://127.0.0.1:5173/xp?preview=1` for the zero-initialized skill XP tracker. Show sample XP, hover/focus/tap for exact values, and use Admin to preview/apply competition fixtures or refresh incremental gains. See the [XP review guide](docs/xp-frontend-review.md). XP-02 #28 is also assigned to KihiraLove and remains open. Live XP imports and authenticated sessions still need #27/#4; preview never changes clan data.
+The zero-initialized XP event tracker is below the log (legacy `/xp?preview=1` shows the same page). Expand XP preview controls to show samples, then hover/focus/tap for exact values. Open `/admin/xp?preview=1` directly to review imports. See the [XP review guide](docs/xp-frontend-review.md). XP-02 #28 is also assigned to KihiraLove and remains open. Live XP imports and authenticated sessions still need #27/#4; preview never changes clan data.
 
-Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` for submission review, item creation and page ordering. Site navigation shares the in-memory preview ledger, so approvals and new items appear in the public preview. Reload resets it. The [admin review guide](docs/admin-frontend-review.md) covers the steps and backend boundaries. ADMIN-01 #8 and ADMIN-02 #31 are assigned to KihiraLove and remain open for manual review in the same draft PR #33.
+Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` for submission review, item creation and page ordering. The brand and admin links share the in-memory preview ledger, so approvals and new items appear in the public preview. Reload resets it. The [admin review guide](docs/admin-frontend-review.md) covers the steps and backend boundaries. ADMIN-01 #8 and ADMIN-02 #31 are assigned to KihiraLove and remain open for manual review in the same draft PR #33.
 
 ## Documentation
 
+- [Mockup revision and implementation status](docs/mockup-revision.md)
+- [Project code walkthrough, data model, architecture and CI guide](docs/project-guide.md)
 - [Requirements and product behavior](docs/requirements.md)
 - [Architecture and data model](docs/architecture.md)
 - [API and Discord contracts](docs/contracts.md)
