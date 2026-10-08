@@ -316,7 +316,22 @@ export function App() {
         </main>
         <footer className="site-footer">
           <p>Vardorvis · One clan. Every collection.</p>
-          <p>Old School RuneScape assets © Jagex. Community project.</p>
+          <p>
+            Created using intellectual property belonging to Jagex Limited under
+            the terms of Jagex's{' '}
+            <a href="https://legal.jagex.com/docs/policies/fan-content-policy">
+              Fan Content Policy
+            </a>
+            . This content is not endorsed by or affiliated with Jagex.
+          </p>
+          <p>
+            Catalog data:{' '}
+            <a href="https://templeosrs.com/api_doc.php">TempleOSRS</a> and{' '}
+            <a href="https://oldschool.runescape.wiki/w/Module:Collection_log/data.json?oldid=15347607">
+              OSRS Wiki contributors
+            </a>
+            .
+          </p>
         </footer>
       </div>
     </>

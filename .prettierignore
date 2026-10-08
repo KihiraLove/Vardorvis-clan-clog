@@ -2,3 +2,6 @@ node_modules
 **/dist
 coverage
 package-lock.json
+
+# Captured and generated catalog bytes are checksummed; use catalog:build.
+catalog/**/*.json

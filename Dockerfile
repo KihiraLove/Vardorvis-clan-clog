@@ -9,7 +9,7 @@ COPY packages/domain/package.json ./packages/domain/package.json
 COPY packages/database/package.json ./packages/database/package.json
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN npm run build
+RUN npm run build && npm run catalog:check
 
 # Preserve workspace links while stripping build/test dependencies from Node service images.
 FROM build AS production-dependencies
@@ -30,6 +30,7 @@ COPY --from=build --chown=node:node /app/packages/domain/dist ./packages/domain/
 COPY --from=build --chown=node:node /app/packages/database/package.json ./packages/database/package.json
 COPY --from=build --chown=node:node /app/packages/database/dist ./packages/database/dist
 COPY --from=build --chown=node:node /app/packages/database/migrations ./packages/database/migrations
+COPY --from=build --chown=node:node /app/catalog/snapshot.json /app/catalog/snapshot.sha256 ./catalog/
 LABEL org.opencontainers.image.source="https://github.com/KihiraLove/Vardorvis-clan-clog"
 USER node
 

@@ -10,7 +10,8 @@
     "migrate": "node dist/migrate.js"
   },
   "dependencies": {
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "@clog/domain": "*"
   },
   "devDependencies": {
     "@types/pg": "^8.15.5"
