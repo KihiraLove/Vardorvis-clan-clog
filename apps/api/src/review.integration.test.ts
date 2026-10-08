@@ -44,6 +44,7 @@ test(
         '005_xp_events.sql',
         '006_review_audit.sql',
         '007_manual_submissions.sql',
+        '008_admin_catalog.sql',
       ])
         await pool.query(
           await readFile(

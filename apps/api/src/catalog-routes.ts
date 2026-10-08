@@ -50,15 +50,6 @@ export function catalogRoutes(
         .send(bytes);
     },
   );
-  app.get(
-    '/api/v1/admin/catalog',
-    {
-      onRequest: async (request) => {
-        await admin(request);
-      },
-    },
-    () => store.catalog(),
-  );
   app.register(async (scope) => {
     await scope.register(multipart, {
       limits: {

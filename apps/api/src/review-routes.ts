@@ -23,9 +23,6 @@ export function reviewRoutes(
     async (req: FastifyRequest) => {
       await authorize(req, write);
     };
-  app.get('/api/v1/admin/catalog', { onRequest: guard() }, async () =>
-    store.adminCatalog(),
-  );
   app.post<{ Body: ManualSubmissionInput }>(
     '/api/v1/admin/submissions',
     {

@@ -174,6 +174,22 @@ export function createApp(
       throw new ApiError(503, 'Admin password sign-in is not configured.');
     });
   }
+  // Review and catalog editing share one private catalog projection and auth boundary.
+  if (options.catalog || options.review)
+    app.get(
+      '/api/v1/admin/catalog',
+      {
+        onRequest: async (request) => {
+          if (!requireAdmin)
+            throw new ApiError(503, 'Admin sign-in is not configured.');
+          await requireAdmin(request);
+        },
+      },
+      () =>
+        options.catalog
+          ? options.catalog.catalog()
+          : options.review!.adminCatalog(),
+    );
   if (options.catalog && options.icons)
     catalogRoutes(app, options.catalog, options.icons, requireAdmin);
   app.get<{ Querystring: { q?: string } }>(

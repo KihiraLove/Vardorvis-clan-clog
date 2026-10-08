@@ -9,6 +9,7 @@ import pg from 'pg';
 import sharp from 'sharp';
 import { createApp } from './app.js';
 import { PgStore } from './store.js';
+import { PgReviewStore } from './review-store.js';
 import {
   PgCatalogStore,
   type AdminCatalog,
@@ -61,6 +62,7 @@ test(
       {
         store,
         catalog,
+        review: new PgReviewStore(pool, store),
         icons,
         auth: config,
         bot: { token: 'b'.repeat(64), guildId: '234567890123456789' },
