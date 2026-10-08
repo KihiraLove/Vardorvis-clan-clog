@@ -38,7 +38,22 @@ export function reviewRoutes(
           properties: {
             itemId: version,
             collectorName: { type: 'string', minLength: 1, maxLength: 80 },
-            collectedOn: { type: 'string', pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}
+            collectedOn: { type: 'string', pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' },
+            hardcore: { type: 'boolean' },
+            proofUrl: { type: 'string', maxLength: 2048 },
+            approve: { type: 'boolean' },
+            reason,
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const actor = await authorize(req, true);
+      return reply.code(201).send(
+        await store.createManual(req.body, actor.id, actor.displayName),
+      );
+    },
+  );
   app.get<{
     Querystring: {
       status?: 'pending' | 'reviewed';
