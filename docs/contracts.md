@@ -1,5 +1,7 @@
 # API and Discord contracts
 
+> **8 October 2026 XP-01 update:** [XP event import](xp-import.md) implements the aggregate `GET /api/v1/xp/tracker` and secured admin preview/apply/history. Earlier per-member XP routes below are superseded by the revised event-only requirement; use the new document for active endpoints.
+
 > **8 October 2026 intake update:** [Bot intake](bot-intake.md) now implements credential-scoped catalog autocomplete and durable pending submissions, including mode, dates, matching candidates and idempotent receipts. Discord gateway handling and admin review remain separate work.
 
 > **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
