@@ -1,7 +1,6 @@
 /** Guild slash-command contract; registration is always an explicit operation. */
 import { SlashCommandBuilder } from 'discord.js';
 
-
 export const collectionLogCommand = new SlashCommandBuilder()
   .setName('cc-clog')
   .setDescription('Clan collection log')
@@ -35,6 +34,8 @@ export const collectionLogCommand = new SlashCommandBuilder()
       .addBooleanOption((option) =>
         option
           .setName('hardcore')
-          .setDescription('Claim the item was obtained on hardcore worlds (default: no)'),
+          .setDescription(
+            'Claim the item was obtained on hardcore worlds (default: no)',
+          ),
       ),
   );

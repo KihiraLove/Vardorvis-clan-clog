@@ -4,11 +4,7 @@ import { type BotApi } from './api.js';
 import { handleInteraction } from './handler.js';
 
 type Gateway = Pick<Client, 'on' | 'isReady' | 'destroy'>;
-export function wireGateway(
-  client: Gateway,
-  api: BotApi,
-  guildId: string,
-) {
+export function wireGateway(client: Gateway, api: BotApi, guildId: string) {
   let stopping = false;
   client.on(Events.InteractionCreate, (interaction: Interaction) => {
     if (stopping) return;

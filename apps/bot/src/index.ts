@@ -9,9 +9,14 @@ const config = readBotConfig();
 const client = config
   ? new Client({ intents: [GatewayIntentBits.Guilds] })
   : null;
-const runtime = config && client
-  ? wireGateway(client, new HttpBotApi(config.apiOrigin, config.apiToken), config.guildId)
-  : null;
+const runtime =
+  config && client
+    ? wireGateway(
+        client,
+        new HttpBotApi(config.apiOrigin, config.apiToken),
+        config.guildId,
+      )
+    : null;
 let stopping = false;
 const server = createServer((request, response) => {
   response.setHeader('Content-Type', 'application/json');
@@ -24,11 +29,13 @@ const server = createServer((request, response) => {
   const discordConnected = runtime?.ready() ?? false;
   const ready = !stopping && discordConnected;
   response.writeHead(request.url === '/readyz' && !ready ? 503 : 200);
-  response.end(JSON.stringify({
-    status: stopping ? 'stopping' : config ? 'running' : 'disabled',
-    discordConfigured: !!config,
-    discordConnected,
-  }));
+  response.end(
+    JSON.stringify({
+      status: stopping ? 'stopping' : config ? 'running' : 'disabled',
+      discordConfigured: !!config,
+      discordConnected,
+    }),
+  );
 });
 async function shutdown(exitCode = 0) {
   if (stopping) return;
@@ -38,21 +45,31 @@ async function shutdown(exitCode = 0) {
   if (exitCode) process.exitCode = exitCode;
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
-  process.once(signal, () => { void shutdown(); });
+  process.once(signal, () => {
+    void shutdown();
+  });
 server.listen(3001, '0.0.0.0');
 if (client && config) {
   client.on(Events.Error, () => {
-    console.error('Discord gateway error; connection will be retried by discord.js.');
+    console.error(
+      'Discord gateway error; connection will be retried by discord.js.',
+    );
   });
   client.on(Events.ClientReady, () => {
-    console.log('Discord gateway connected; bot is ready for guild-only commands.');
+    console.log(
+      'Discord gateway connected; bot is ready for guild-only commands.',
+    );
   });
   try {
     await client.login(config.discordToken);
   } catch {
-    console.error('Discord gateway login failed; bot will exit without accepting commands.');
+    console.error(
+      'Discord gateway login failed; bot will exit without accepting commands.',
+    );
     await shutdown(1);
   }
 } else {
-  console.log('Discord bot disabled: configure credentials to enable gateway commands.');
+  console.log(
+    'Discord bot disabled: configure credentials to enable gateway commands.',
+  );
 }

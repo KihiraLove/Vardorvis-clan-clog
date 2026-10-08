@@ -5,6 +5,7 @@ Implementation of [BOT-01 #6](https://github.com/KihiraLove/Vardorvis-clan-clog/
 ## Runtime
 
 Enable the optional bot Compose profile only after configuring:
+
 - `DISCORD_BOT_TOKEN`: Discord bot token, kept on the host; never exposed in web assets.
 - `DISCORD_GUILD_ID`: the one clan guild allowed to submit (17–20 digit Discord snowflake).
 - `BOT_API_TOKEN`: a dedicated independent 32-byte-or-longer hex token, matching the value on the **API** container. Generate with `openssl rand -hex 32`.
