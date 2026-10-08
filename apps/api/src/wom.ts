@@ -227,7 +227,7 @@ export async function fetchWomCompetition(
     try {
       response = await request(url, {
         redirect: 'error',
-        signal: AbortSignal.timeout(8500),
+        signal: AbortSignal.timeout(6500),
         headers: {
           Accept: 'application/json',
           'User-Agent': 'Vardorvis-clan-clog/1.0',

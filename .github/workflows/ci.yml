@@ -40,7 +40,7 @@ jobs:
       - name: Export formatted XP source files
         run: |
           npx prettier --write apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts apps/api/src/xp-*.ts apps/api/src/wom*.ts apps/api/src/xp.auth.test.ts apps/api/src/xp.store.test.ts apps/web/src/xp-api.ts apps/web/src/xp-model.ts apps/web/src/XpAdmin.tsx docs/xp-import.md docs/contracts.md docs/environment.md
-          for file in apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts apps/api/src/xp-*.ts apps/api/src/wom*.ts apps/web/src/xp-api.ts apps/web/src/xp-model.ts apps/web/src/XpAdmin.tsx docs/xp-import.md docs/contracts.md docs/environment.md; do
+          for file in apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts apps/api/src/xp-*.ts apps/api/src/wom*.ts apps/api/src/xp.auth.test.ts apps/api/src/xp.store.test.ts apps/web/src/xp-api.ts apps/web/src/xp-model.ts apps/web/src/XpAdmin.tsx docs/xp-import.md docs/contracts.md docs/environment.md; do
             echo "XP_FORMAT_BEGIN:$file"
             base64 -w0 "$file"
             echo
