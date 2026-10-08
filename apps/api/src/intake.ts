@@ -27,6 +27,7 @@ export function validProofUrl(value: string): boolean {
 }
 export function validCollectionDate(value: string, today: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  if (value.startsWith('0000-')) return false;
   const time = new Date(value + 'T00:00:00.000Z');
   return (
     Number.isFinite(time.getTime()) &&

@@ -1,10 +1,10 @@
 # API and Discord contracts
 
-> **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
+> **8 October 2026 intake update:** [Bot intake](bot-intake.md) now implements credential-scoped catalog autocomplete and durable pending submissions, including mode, dates, matching candidates and idempotent receipts. Discord gateway handling and admin review remain separate work.\n\n> **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
 
 > **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
 
-Only the three foundation endpoints below currently exist. All other routes in this document are planned contracts, not working APIs.
+The routes marked as implemented in [backend phase one](backend-phase-one.md) and [bot intake](bot-intake.md) are active when their services and credentials are configured. Other routes remain planned.
 
 ## Shipped foundation
 
@@ -33,7 +33,7 @@ Only the three foundation endpoints below currently exist. All other routes in t
 | `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF              | Reject with reason                                              |
 | `POST /api/v1/admin/submissions/:id/revoke`    | Admin session + CSRF              | Revoke approved credit with reason                              |
 
-Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`. The API sets submission timestamp/date default. A later optional collection date requires a validated ISO calendar date and explicit source. The bot cannot send approval state or reviewer identity.
+Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false) and `collectedOn` (ISO `YYYY-MM-DD`). The API sets submission timestamp/date default. A later optional collection date requires a validated ISO calendar date and explicit source. The bot cannot send approval state or reviewer identity.
 
 Intake returns 201 for a new durable pending submission, or 200 with the same receipt for an exact interaction retry. A reused interaction ID with a different payload is a 409 conflict. Return `resolution: resolved|needs_match` and canonical candidates. No fuzzy suggestion grants credit.
 
