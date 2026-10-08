@@ -26,10 +26,8 @@ The example contains placeholders, never working production secrets. `.env` is i
 | `DATABASE_URL`                                | Host Node      | Host PostgreSQL URI; Compose builds its own URI using `db`                       |
 | `HOST` / `PORT`                               | API            | Defaults `0.0.0.0` and 3000 in containers                                        |
 | `TEST_DATABASE_URL`                           | Tests only     | Dedicated disposable database for integration tests                              |
-| `PUBLIC_ORIGIN`                               | API            | Exact external HTTPS origin for OAuth and CSRF                                   |
-| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | API            | OAuth application credentials                                                    |
-| `DISCORD_OAUTH_REDIRECT_URI`                  | API            | Exact callback URL registered with Discord                                       |
-| `ADMIN_DISCORD_USER_IDS`                      | API            | Comma-separated admin user IDs, not names or roles                               |
+| `PUBLIC_ORIGIN`                               | API            | Exact admin origin for password login and CSRF                                   |
+| `ADMIN_PASSWORD`                             | API            | Private shared admin login password; required when `AUTH_ENABLED=true`       |
 | `SESSION_SECRET`                              | API            | At least 32 random bytes for session protection                                  |
 | `BOT_API_TOKEN`                               | Future bot/API | Dedicated service token; generate independently of session secret                |
 | `DISCORD_BOT_TOKEN`                           | Future bot     | Discord bot credential                                                           |
@@ -37,7 +35,7 @@ The example contains placeholders, never working production secrets. `.env` is i
 | `DISCORD_GUILD_ID`                            | Future bot/API | Only clan guild allowed to submit                                                |
 | `API_BASE_URL`                                | Future bot     | Internal service URL, set to `http://api:3000` by Compose                        |
 
-`AUTH_ENABLED=false` keeps OAuth disabled until configured. Enabled auth validates all OAuth/session variables on startup; Compose forwards them only to the API. `TRUSTED_PROXY_CIDRS` is a comma-separated list of actual proxy IPs/CIDRs (empty trusts none). See [backend setup](backend-phase-one.md) for cookie, session and TLS requirements. Bot variables remain reserved. `apps/web` receives no secrets and will use relative `/api/v1` URLs.
+`AUTH_ENABLED=false` keeps password-protected admin routes unavailable until configured. Enabled auth validates the admin password, session secret and exact site origin at startup. The API receives these through Compose; the web bundle never receives them. `TRUSTED_PROXY_CIDRS` is a comma-separated list of actual proxy IPs/CIDRs (empty trusts none). See [backend setup](backend-phase-one.md) for cookie, session and TLS requirements. Bot variables remain reserved. `apps/web` receives no secrets and will use relative `/api/v1` URLs.
 
 ## All-container development
 
@@ -75,11 +73,11 @@ TEST_DATABASE_URL='postgresql://clog:YOUR_HEX_PASSWORD@127.0.0.1:5432/clog_test'
 
 ## XP tracker imports
 
-[XP-01](xp-import.md) uses the existing API PostgreSQL connection and OAuth admin session; no additional secrets are needed. After migration 005, `GET /api/v1/xp/tracker` serves zero until the first valid admin import via `/admin/xp`. The public page does not call WOM. See the import guide for safe source validation, previews and audit behavior.
+[XP-01](xp-import.md) uses the existing API PostgreSQL connection and password admin session; no additional secrets are needed. After migration 005, `GET /api/v1/xp/tracker` serves zero until the first valid admin import via `/admin/xp`. The public page does not call WOM. See the import guide for safe source validation, previews and audit behavior.
 
 ## Discord setup
 
-Create one application in the Discord Developer Portal; register the exact OAuth callback URL, for the future bot workstream, create a bot and invite it only to the clan guild with `bot` and `applications.commands` scopes. Use the Guilds intent and no message-content privileged intent. Copy application/guild/user IDs as strings. Admin access comes from the application allowlist, not an arbitrary Discord nickname. Keep command registration separate from login/startup and validate in a test guild first.
+For the independent Discord **bot intake** workstream, create a bot and invite it only to the clan guild with `bot` and `applications.commands` scopes. Use the Guilds intent and no message-content privileged intent. Copy application/guild/user IDs as strings. Admin access comes from the application allowlist, not an arbitrary Discord nickname. Keep command registration separate from login/startup and validate in a test guild first.
 
 ## GitHub setup
 
@@ -136,8 +134,7 @@ docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml d
 docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml down --volumes
 ```
 
-For production, omit `compose.local-admin.yaml`; the existing
-Discord OAuth allowlist and session checks remain mandatory.
+For production, omit `compose.local-admin.yaml`; password authentication and session checks remain mandatory.
 
 ## Password-protected admin
 
