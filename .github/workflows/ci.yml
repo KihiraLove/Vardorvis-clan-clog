@@ -77,13 +77,15 @@ jobs:
           curl --fail http://127.0.0.1:8088/api/v1/auth/session
           docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       - name: Admin catalog, durable icons and coordinated backup
+        env:
+          COMPOSE_FILE: compose.yaml:compose.dev.yaml
         run: |
           docker compose exec -T -e CATALOG_SMOKE_TEST=1 api node --input-type=module < scripts/catalog-smoke.mjs > /tmp/catalog-created.json
           icon_path="$(jq -r '.iconPath' /tmp/catalog-created.json)"
           curl --fail "http://127.0.0.1:8088$icon_path" --output /tmp/icon-before.png
           docker compose up -d --no-deps --force-recreate --wait api
           docker compose restart web
-          curl --fail "http://127.0.0.1:8088$icon_path" --output /tmp/icon-after.png
+          curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://127.0.0.1:8088$icon_path" --output /tmp/icon-after.png
           cmp /tmp/icon-before.png /tmp/icon-after.png
           bash infra/backup.sh /tmp/catalog-backup
           test -f /tmp/catalog-backup/COMPLETE
