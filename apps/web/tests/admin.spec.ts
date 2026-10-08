@@ -760,6 +760,8 @@ test('manual entry reports duplicate item and world rather than a stale-version 
   ).toBeVisible();
   await add.click();
   await page
+    .locator('section.admin-panel')
+    .filter({ has: page.getByRole('heading', { name: 'Manual submission' }) })
     .getByLabel('Collector name', { exact: true })
     .fill('Second collector');
   await page.getByRole('button', { name: 'Create manual submission' }).click();
