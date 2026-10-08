@@ -250,17 +250,12 @@ test(
         ).statusCode,
         401,
       );
-      const start = await app.inject('/api/v1/auth/discord');
-      const state = new URL(start.headers.location!).searchParams.get('state')!;
-      const stateCookie = String(start.headers['set-cookie']).split(';')[0]!;
       const login = await app.inject({
-        url: '/api/v1/auth/discord/callback?code=fixture&state=' + state,
-        headers: { cookie: stateCookie },
+        method: 'POST', url: '/api/v1/auth/login',
+        headers: { origin: auth.origin }, payload: { password },
       });
-      assert.equal(login.statusCode, 302);
-      const cookie = (login.headers['set-cookie'] as string[])
-        .find((s) => s.startsWith('__Host-clog-session='))!
-        .split(';')[0]!;
+      assert.equal(login.statusCode, 200);
+      const cookie = String(login.headers['set-cookie']).split(';')[0]!;
       const session = (
         await app.inject({ url: '/api/v1/auth/session', headers: { cookie } })
       ).json();
@@ -319,6 +314,73 @@ test(
         ).rows[0].n,
         1,
       );
+      // Manual claims are first-class submissions with no Discord identifiers.
+      const manual = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/submissions',
+        headers: {
+          cookie, origin: auth.origin,
+          'x-csrf-token': session.csrfToken,
+        },
+        payload: {
+          itemId: 42,
+          collectorName: 'Manual collector',
+          collectedOn: '2026-10-04',
+          hardcore: false,
+          approve: true,
+          reason: 'Added from admin panel',
+        },
+      });
+      assert.equal(manual.statusCode, 201);
+      assert.equal(manual.json().source, 'manual');
+      assert.equal(manual.json().status, 'approved');
+      assert.equal(manual.json().proofUrl, '');
+      assert.equal((await backend.collections()).length, 3);
+      const manualId = manual.json().id as string;
+      const provenance = (await pool.query(
+        'SELECT source,discord_user_id,discord_interaction_id FROM submissions WHERE id=$1',
+        [manualId],
+      )).rows[0]!;
+      assert.deepEqual(provenance, {
+        source: 'manual', discord_user_id: null, discord_interaction_id: null,
+      });
+      const manualAudit = await review.detail(manualId);
+      assert.equal(manualAudit?.audit[0]?.action, 'create');
+      assert.equal(manualAudit?.audit[0]?.actorName, 'Clan admin');
+      const collision = await app.inject({
+        method: 'POST', url: '/api/v1/admin/submissions',
+        headers: {
+          cookie, origin: auth.origin,
+          'x-csrf-token': session.csrfToken,
+        },
+        payload: {
+          itemId: 42, collectorName: 'Duplicate', collectedOn: '2026-10-04',
+          hardcore: false, approve: true,
+        },
+      });
+      assert.equal(collision.statusCode, 409);
+      const pendingManual = await app.inject({
+        method: 'POST', url: '/api/v1/admin/submissions',
+        headers: {
+          cookie, origin: auth.origin,
+          'x-csrf-token': session.csrfToken,
+        },
+        payload: {
+          itemId: 43, collectorName: 'Pending manual', collectedOn: '2026-10-03',
+          hardcore: false, approve: false,
+        },
+      });
+      assert.equal(pendingManual.statusCode, 201);
+      assert.equal(pendingManual.json().status, 'pending');
+      assert.equal((await app.inject({
+        method: 'POST', url: '/api/v1/admin/submissions',
+        payload: { itemId: 43, collectorName: 'Anonymous', collectedOn: '2026-10-03', hardcore: false, approve: false },
+      })).statusCode, 401);
+      assert.equal((await app.inject({
+        method: 'POST', url: '/api/v1/admin/submissions',
+        headers: { cookie },
+        payload: { itemId: 43, collectorName: 'No CSRF', collectedOn: '2026-10-03', hardcore: false, approve: false },
+      })).statusCode, 403);
       // An audit-write failure cannot leave a new approved credit without history.
       const rollback = await create(43, true);
       await pool.query(
