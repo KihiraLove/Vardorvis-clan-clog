@@ -37,15 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Export formatted XP source files
-        run: |
-          npx prettier --write apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts apps/api/src/xp-*.ts apps/api/src/wom*.ts apps/api/src/xp.auth.test.ts apps/api/src/xp.store.test.ts apps/web/src/xp-api.ts apps/web/src/xp-model.ts apps/web/src/XpAdmin.tsx docs/xp-import.md docs/contracts.md docs/environment.md
-          for file in apps/api/src/app.ts apps/api/src/auth.ts apps/api/src/server.ts apps/api/src/xp-*.ts apps/api/src/wom*.ts apps/api/src/xp.auth.test.ts apps/api/src/xp.store.test.ts apps/web/src/xp-api.ts apps/web/src/xp-model.ts apps/web/src/XpAdmin.tsx docs/xp-import.md docs/contracts.md docs/environment.md; do
-            echo "XP_FORMAT_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "XP_FORMAT_END:$file"
-          done
       - run: npm run validate
 
   docker-smoke:
