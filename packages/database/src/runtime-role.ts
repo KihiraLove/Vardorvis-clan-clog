@@ -5,10 +5,7 @@ import pg from 'pg';
 // are cluster-level state, and the operator can rotate this credential without
 // editing an already-applied migration or storing credentials in SQL history.
 export const runtimeRole = 'clog_runtime';
-const ownerOnly = new Set([
-  'schema_migrations',
-  'catalog_taxonomy_updates',
-]);
+const ownerOnly = new Set(['schema_migrations', 'catalog_taxonomy_updates']);
 const readOnly = new Set(['catalog_versions']);
 const appendOnly = new Set([
   'audit_events',

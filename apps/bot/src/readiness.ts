@@ -9,11 +9,7 @@ export function cachedReadiness(
   let pending: Promise<boolean> | null = null;
   return async () => {
     const time = now();
-    if (
-      checkedAt !== null &&
-      time >= checkedAt &&
-      time - checkedAt < ttlMs
-    )
+    if (checkedAt !== null && time >= checkedAt && time - checkedAt < ttlMs)
       return healthy;
     if (!pending) {
       pending = probe()

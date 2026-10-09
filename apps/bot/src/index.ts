@@ -11,8 +11,11 @@ const client = config
   ? new Client({ intents: [GatewayIntentBits.Guilds] })
   : null;
 const api = config ? new HttpBotApi(config.apiOrigin, config.apiToken) : null;
-const runtime = config && client && api ? wireGateway(client, api, config.guildId) : null;
-const apiReady = api ? cachedReadiness(() => api.checkReady()) : async () => false;
+const runtime =
+  config && client && api ? wireGateway(client, api, config.guildId) : null;
+const apiReady = api
+  ? cachedReadiness(() => api.checkReady())
+  : async () => false;
 let stopping = false;
 const server = createServer((request, response) => {
   response.setHeader('Content-Type', 'application/json');

@@ -6,10 +6,14 @@ test('real API readiness probes share an in-flight request and cache bounded res
   let time = 1000;
   let calls = 0;
   let ok = true;
-  const ready = cachedReadiness(async () => {
-    calls++;
-    return ok;
-  }, 5000, () => time);
+  const ready = cachedReadiness(
+    async () => {
+      calls++;
+      return ok;
+    },
+    5000,
+    () => time,
+  );
   assert.deepEqual(await Promise.all([ready(), ready()]), [true, true]);
   assert.equal(calls, 1);
   ok = false;
@@ -23,10 +27,14 @@ test('real API readiness probes share an in-flight request and cache bounded res
 
 test('API readiness probe fails closed on connection errors', async () => {
   let time = 0;
-  const ready = cachedReadiness(async () => {
-    if (time === 0) throw Error('connection refused');
-    return true;
-  }, 5000, () => time);
+  const ready = cachedReadiness(
+    async () => {
+      if (time === 0) throw Error('connection refused');
+      return true;
+    },
+    5000,
+    () => time,
+  );
   assert.equal(await ready(), false);
   time = 5000;
   assert.equal(await ready(), true);
