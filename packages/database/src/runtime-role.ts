@@ -40,8 +40,7 @@ export async function provisionRuntimeRole(
       'SELECT 1 FROM pg_roles WHERE rolname = $1',
       [runtimeRole],
     );
-    if (!exists.rowCount)
-      await client.query('CREATE ROLE clog_runtime LOGIN');
+    if (!exists.rowCount) await client.query('CREATE ROLE clog_runtime LOGIN');
     // Password is a validated hex-only string, not interpolated user SQL.
     await client.query(
       `ALTER ROLE clog_runtime WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
@@ -78,6 +77,11 @@ export async function provisionRuntimeRole(
       );
     await client.query(
       'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO clog_runtime',
+    );
+    // Catalog creation advances this sequence with setval(), which needs UPDATE.
+    // Other sequences (including audit IDs) never receive UPDATE privilege.
+    await client.query(
+      'GRANT UPDATE ON SEQUENCE public.canonical_item_id_seq TO clog_runtime',
     );
     // No default-privilege blanket grants: newly added tables remain
     // inaccessible until a reviewed bootstrap applies updated permissions.
