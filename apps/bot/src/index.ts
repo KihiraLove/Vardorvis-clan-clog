@@ -4,19 +4,15 @@ import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { HttpBotApi } from './api.js';
 import { readBotConfig } from './config.js';
 import { wireGateway } from './runtime.js';
+import { cachedReadiness } from './readiness.js';
 
 const config = readBotConfig();
 const client = config
   ? new Client({ intents: [GatewayIntentBits.Guilds] })
   : null;
-const runtime =
-  config && client
-    ? wireGateway(
-        client,
-        new HttpBotApi(config.apiOrigin, config.apiToken),
-        config.guildId,
-      )
-    : null;
+const api = config ? new HttpBotApi(config.apiOrigin, config.apiToken) : null;
+const runtime = config && client && api ? wireGateway(client, api, config.guildId) : null;
+const apiReady = api ? cachedReadiness(() => api.checkReady()) : async () => false;
 let stopping = false;
 const server = createServer((request, response) => {
   response.setHeader('Content-Type', 'application/json');
@@ -27,15 +23,36 @@ const server = createServer((request, response) => {
     return;
   }
   const discordConnected = runtime?.ready() ?? false;
-  const ready = !stopping && discordConnected;
-  response.writeHead(request.url === '/readyz' && !ready ? 503 : 200);
-  response.end(
-    JSON.stringify({
-      status: stopping ? 'stopping' : config ? 'running' : 'disabled',
-      discordConfigured: !!config,
-      discordConnected,
-    }),
-  );
+  if (request.url === '/healthz') {
+    // Liveness stays available in intentionally disabled test mode.
+    response.writeHead(200);
+    response.end(
+      JSON.stringify({
+        status: stopping ? 'stopping' : config ? 'running' : 'disabled',
+        discordConfigured: !!config,
+        discordConnected,
+      }),
+    );
+    return;
+  }
+  // A live /readyz checks BOTH the Discord gateway and the authenticated
+  // database-backed bot intake route; failures never imply readiness.
+  void (async () => {
+    const apiConnected = !stopping && discordConnected && (await apiReady());
+    const ready = !stopping && (runtime?.ready() ?? false) && apiConnected;
+    response.writeHead(ready ? 200 : 503);
+    response.end(
+      JSON.stringify({
+        status: ready ? 'ready' : 'not-ready',
+        discordConfigured: !!config,
+        discordConnected: runtime?.ready() ?? false,
+        apiConnected,
+      }),
+    );
+  })().catch(() => {
+    response.writeHead(503);
+    response.end('{"status":"not-ready"}');
+  });
 });
 async function shutdown(exitCode = 0) {
   if (stopping) return;

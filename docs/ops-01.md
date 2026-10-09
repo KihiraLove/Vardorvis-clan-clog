@@ -64,8 +64,10 @@ secrets from logs, source control, CI artifacts and command history.
 
 ## OPS-01 boundaries still awaiting evidence
 
-- Real gateway **and API** bot readiness (currently only gateway readiness
-  is reflected by `/readyz`).
+- Bot `/readyz` now requires **both** a live Discord gateway and a successful
+  authenticated, database-backed bot catalog request. Probes are time-bounded
+  and cached for five seconds to avoid readiness traffic amplifying load;
+  liveness `/healthz` remains separate and works in disabled/test mode.
 - Guild/endpoint rate budgets and WOM import throttling, with safe
   per-source error behavior.
 - Production hostname/TLS, ARM/AMD64 host, session/cookie and restart drills.
