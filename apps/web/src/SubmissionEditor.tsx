@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
   safeProof,
+  dateSourceLabel,
   validateCorrection,
   type AdminCatalog,
   type AdminClient,
@@ -220,13 +221,7 @@ export function SubmissionEditor({
         </div>
         <div>
           <dt>Date source</dt>
-          <dd>
-            {row.dateSource === 'submission'
-              ? 'Submission date'
-              : row.dateSource === 'claim'
-                ? 'Submitted claim'
-                : 'Admin correction'}
-          </dd>
+          <dd>{dateSourceLabel(row.dateSource)}</dd>
         </div>
         <div>
           <dt>Submitted</dt>
@@ -235,7 +230,7 @@ export function SubmissionEditor({
         <div>
           <dt>Proof</dt>
           <dd>
-            <ProofLink url={row.proofUrl} />
+            <ProofLink url={row.proofUrl} source={row.source} />
           </dd>
         </div>
       </dl>
@@ -312,6 +307,7 @@ export function SubmissionEditor({
               <input
                 type="date"
                 required
+                max={new Date().toISOString().slice(0, 10)}
                 value={draft.collectedOn}
                 onChange={(event) =>
                   change({ collectedOn: event.target.value })

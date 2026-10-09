@@ -315,3 +315,34 @@ test('manual submission accepts a 201 response with no proof URL and preserves t
   assert.equal(receipt.proofUrl, '');
   assert.equal(receipt.source, 'manual');
 });
+
+test('409 occupied credit detail is shown only for the known server conflict message', async () => {
+  const occupied =
+    'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.';
+  const client = new LiveAdminClient(
+    async () =>
+      new Response(JSON.stringify({ error: occupied }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+  );
+  await assert.rejects(client.queue('pending', undefined, signal()), {
+    status: 409,
+    message: occupied,
+  });
+  const untrusted = new LiveAdminClient(
+    async () =>
+      new Response(
+        JSON.stringify({ error: 'private SQL details must not show' }),
+        {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+  );
+  await assert.rejects(untrusted.queue('pending', undefined, signal()), {
+    status: 409,
+    message:
+      'Another change was saved. Load the latest data before trying again.',
+  });
+});

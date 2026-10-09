@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { itemState, progress } from './model.ts';
 import {
+  dateSourceLabel,
   moveItem,
   parseAdminCatalog,
   parseDetail,
@@ -430,4 +431,10 @@ test('proofless manual claims and audit snapshots parse without requiring XP tex
     () => parseSubmission({ ...created, proofUrl: null }),
     /Invalid submission data/,
   );
+});
+
+test('review date source labels differentiate collector claims, server defaults and admin corrections', () => {
+  assert.equal(dateSourceLabel('submission'), 'Submission date');
+  assert.equal(dateSourceLabel('claim'), 'Collector supplied');
+  assert.equal(dateSourceLabel('admin'), 'Admin correction');
 });
