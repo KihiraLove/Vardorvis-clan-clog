@@ -30,7 +30,6 @@ export interface BotSubmissionInput {
   itemId?: number;
   collectorName: string;
   proofUrl: string;
-  collectedOn?: string;
   hardcore: boolean;
 }
 export interface BotReceipt {

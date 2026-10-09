@@ -56,6 +56,23 @@ jobs:
         with: { persist-credentials: false }
       - name: Validate Compose
         run: docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+      - name: Validate opt-in Traefik labels and private network topology
+        env:
+          CLOG_HOST: clog.example.com
+        run: |
+          docker compose -f compose.yaml -f compose.traefik.yaml config --quiet
+          docker compose -f compose.yaml -f compose.traefik.yaml config --format json > /tmp/clog-traefik.json
+          jq -e '
+            (.services.web.networks | keys | sort) == ["default", "web"] and
+            .services.api.environment.PUBLIC_ORIGIN == "https://clog.example.com" and
+            .services.api.environment.AUTH_ENABLED == "true" and
+            .networks.web.external == true and
+            (.services.web.labels."traefik.docker.network" == "web") and
+            (.services.web.labels."traefik.http.services.clog.loadbalancer.server.port" == "8080") and
+            (.services.web.labels."traefik.http.routers.clog.tls.certresolver" == "letsencrypt") and
+            (.services.web.labels."traefik.http.routers.clog.entrypoints" == "websecure") and
+            ([.services | to_entries[] | select(.key != "web") | (.value.networks // {} | keys[])] | index("web") == null)
+          ' /tmp/clog-traefik.json
       - name: Build all service images
         run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot build
       - name: Start and smoke test

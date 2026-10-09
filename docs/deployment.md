@@ -43,9 +43,76 @@ The current containers deploy the foundation/status page, not a usable public co
 
 ## Reverse proxy / Traefik
 
-A host-native reverse proxy can forward to `127.0.0.1:8088`. Terminate TLS there and preserve `X-Forwarded-Proto`. Later OAuth/session work must explicitly configure trusted proxy behavior; do not trust arbitrary forwarded headers from an internet-exposed API.
+**Confirmed by owner (9 October 2026):** existing Traefik provides TLS with
+Let's Encrypt and runs on Docker networks `web` and `socknet`. The owner
+has visually inspected and approved the frontend. Actual production host/DNS,
+HTTPS router and issued certificate have **not** been validated by this PR.
 
-If Traefik itself runs in Docker, its own loopback cannot reach the host loopback binding. Add a reviewed Compose override attaching **web only** to your existing external Traefik network; route to container port 8080 with `traefik.docker.network` and `traefik.http.services.clog.loadbalancer.server.port=8080`. Keep web on the app's default network too so it can reach API. Add your own hostname/router/TLS labels and remove the host port binding if appropriate. Do not attach the database to the external proxy network. The repository does not assume your domain, network name or certificate resolver.
+For containerized Traefik, connect **only** the collection-log `web` service
+to external Docker network `web`; keep its internal Compose `default` network
+so Nginx can still reach `api:3000`. The Traefik `socknet` socket-proxy
+network is not an application network; do **not** attach the clog services to it.
+Leave the API, PostgreSQL, bot and migrations off the proxy network.
+
+The repository includes the **opt-in**
+[compose.traefik.yaml](../compose.traefik.yaml) override with Docker labels
+for host routing, TLS, existing resolver selection, and service port. It
+uses only external `web` and the private application `default` networks;
+`socknet` is never connected to the app.
+
+On the production host, copy both Compose files from a reviewed release and
+configure these values in the private `.env`:
+
+```dotenv
+# Choose the hostname used by visitors (not a URL or /admin path).
+CLOG_HOST=YOUR_REAL_HOSTNAME
+# Must match names already configured in Traefik's startup config.
+TRAEFIK_HTTPS_ENTRYPOINT=websecure
+TRAEFIK_CERT_RESOLVER=letsencrypt
+# Activates the override for normal docker compose and deploy.sh commands.
+COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+ADMIN_PASSWORD=REPLACE_WITH_UNIQUE_STRONG_PASSWORD
+SESSION_SECRET=REPLACE_WITH_64_RANDOM_HEX_CHARACTERS
+```
+
+The override sets `AUTH_ENABLED=true` and derives the API's
+`PUBLIC_ORIGIN=https://${CLOG_HOST}` from the same hostname as the
+Traefik router, avoiding an admin login **403** caused by an origin mismatch.
+It requires the admin password and session secret at startup. Its example
+`websecure` entrypoint and `letsencrypt` resolver are **names**, not
+additional Traefik setup; change the two values only if your existing
+Traefik uses different names. Port **8080** is Nginx inside the `web`
+container; the base stack's `127.0.0.1:8088` diagnostic binding remains
+loopback-only. No admin/API/database port is routed directly.
+
+```bash
+docker compose config --quiet
+docker compose config --format json | jq '.services.web.labels'
+# After reviewing the resolved config, use the normal host deploy workflow.
+```
+
+The example admin URL `https://daybloom.net/admin` does not itself verify
+that the hostname is live. Traefik's entrypoints and Let's Encrypt resolver
+**definitions** are startup configuration, not application container
+labels; Docker labels **reference** those existing definitions. DNS records,
+certificate issuance and any host-specific proxy trust checks also remain
+external to Compose labels. Docker Compose supports `COMPOSE_FILE` in the
+host `.env`, so the existing deployment script can use the override without
+being modified.
+
+The API's `TRUSTED_PROXY_CIDRS` applies to Fastify's **immediate trusted
+proxy hops**, not the Traefik `socknet`. Nginx in the app's web container
+proxies `/api/` over the private network and relays forwarded headers. Validate
+the real source CIDRs and which forwarded headers each hop trusts/overwrites
+before enabling proxy-derived client IPs; do not trust `0.0.0.0/0`. With
+unverified proxy addresses, leave this field empty rather than broadening it.
+
+Live release checklist: validate hostname/DNS, the actual HTTPS router and
+Let's Encrypt certificate, public page and `/api/v1/status`, direct
+`/admin` navigation, correct-password login and authenticated session,
+strict Origin rejection, CSRF-enforced admin writes and absence of public
+database/API ports. CI and visual inspection do not verify these host-specific
+checks. This documentation update makes no live network/deployment changes.
 
 ## Opt-in home CI/CD
 

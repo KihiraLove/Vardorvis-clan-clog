@@ -1,6 +1,5 @@
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
-import { validCollectionDate } from './intake.js';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import {
@@ -98,11 +97,6 @@ export class PgStore implements BackendStore {
         await client.query<{ timestamp: Date }>('SELECT now() AS timestamp')
       ).rows[0]!.timestamp;
       const today = submittedAt.toISOString().slice(0, 10);
-      if (input.collectedOn && !validCollectionDate(input.collectedOn, today))
-        throw new ApiError(
-          422,
-          'Collection date must be a valid, non-future UTC calendar date.',
-        );
       const matches = await this.matchItems(client);
       if (
         input.itemId !== undefined &&
@@ -124,8 +118,8 @@ export class PgStore implements BackendStore {
         interactionId: input.interactionId,
         status: 'pending',
         submittedAt: submittedAt.toISOString(),
-        collectedOn: input.collectedOn ?? today,
-        dateSource: input.collectedOn ? 'collector' : 'submission_default',
+        collectedOn: today,
+        dateSource: 'submission_default',
         hardcore: input.hardcore,
         resolution: matched.resolution,
         itemId,

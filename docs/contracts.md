@@ -38,7 +38,7 @@ The routes marked as implemented in [backend phase one](backend-phase-one.md) an
 | `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF              | Reject with reason                                              |
 | `POST /api/v1/admin/submissions/:id/revoke`    | Admin session + CSRF              | Revoke approved credit with reason                              |
 
-Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false) and `collectedOn` (ISO `YYYY-MM-DD`). The API sets submission timestamp/date default. A later optional collection date requires a validated ISO calendar date and explicit source. The bot cannot send approval state or reviewer identity.
+Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false). The bot-only endpoint rejects any `collectedOn` field. The API assigns the UTC receipt timestamp/date; exact retries retain the original. The bot cannot send approval state or reviewer identity.
 
 Intake returns 201 for a new durable pending submission, or 200 with the same receipt for an exact interaction retry. A reused interaction ID with a different payload is a 409 conflict. Return `resolution: resolved|needs_match` and canonical candidates. No fuzzy suggestion grants credit.
 
@@ -126,23 +126,42 @@ Categories are `bosses`, `raids`, `clues`, `minigames`, `other`. Array order def
 
 ## Discord definition
 
-The checked-in [command builder](../apps/bot/src/command.ts) defines this schema:
+The checked-in [command builder](../apps/bot/src/command.ts), the
+[guild handler](../apps/bot/src/handler.ts), and the
+[registration guide](bot-operations.md) implement the following single
+guild-only subcommand. Registration is an explicit operation, never automatic
+on startup.
 
-| Field            | Required | Resolution                                                                     |
-| ---------------- | -------- | ------------------------------------------------------------------------------ |
-| `item`           | Yes      | Autocomplete canonical ID or raw text; manual resolution for uncertain matches |
-| `proof`          | Yes      | HTTPS Imgur/Gyazo link; admin inspects actual evidence                         |
-| `submitter-name` | No       | Collector display snapshot, default current guild name/username                |
+| Field            | Required | Resolution                                                                       |
+| ---------------- | -------- | -------------------------------------------------------------------------------- |
+| `item`           | Yes      | Autocomplete canonical ID or raw text, with manual review for ambiguity          |
+| `proof`          | Yes      | Validated HTTPS Imgur/Gyazo URL; human admin inspects proof                      |
+| `submitter-name` | No       | Snapshot of collector display name; defaults to guild display name then username |
+| `hardcore`       | No       | Boolean claim, default false, verified/corrected by admin                        |
 
-Guild registration and gateway handling are not implemented yet. Add a separate registration script, a guild-only runtime check, 25-result autocomplete responses, ephemeral deferral/receipts, timeout/error handling and a service-authenticated API adapter. Record interaction IDs as strings; Discord snowflakes must not be converted to JavaScript numbers.
+The bot defers and responds ephemerally, restricts handling to the configured
+guild, and confirms a pending claim only after a durable, idempotent API
+receipt. It cannot approve submissions. The owner confirmed **no**
+`collected-on` slash option or bot-only API field. The API always assigns
+its UTC receipt calendar date (`dateSource: submission_default`).
+Authenticated, versioned admin review corrections remain separate and
+set `dateSource: admin` without changing `submittedAt`.
 
-The second requested command is an open product decision. An optional explicit collection-date input is also an open decision; current date handling is documented in [requirements](requirements.md).
+Each canonical item can have one **current** approval in normal mode and one
+in hardcore mode. Public `/api/v1/collections` returns only those approved
+credits for the selected mode; revoked/rejected/pending claims and the complete
+audit trail remain private. The public collection UI never lists multiple
+collectors for one item within a mode.
+
+The owner confirmed **only `/cc-clog submit` exists**. The earlier
+second-command reference was residual ideation; do not register a lookup
+or any additional command. See [ADR 002](decisions/002-command-date-display.md).
 
 ## Planned hardcore extension
 
 Bot intake and admin review accept `hardcore: boolean`, default false. Public approved credits include that value, and the canonical item projection exposes `hardcoreCollected` derived from approved hardcore credits only. Include the flag in idempotency comparisons, optimistic version checks and audit before/after values. It never grants credit by itself.
 
-The planned command adds optional `[hardcore:<true|false>]`. The original checked-in command builder above remains unchanged until #26 is implemented. See [feature behavior](planned-features.md) for red borders, the skull and exact text suffix.
+The checked-in command **already supports** optional `[hardcore:<true|false>]`. The public client selects an independent hardcore view only when its admin-controlled release flag is enabled; see [mockup revision](mockup-revision.md).
 
 ## Planned competition XP API
 

@@ -1,6 +1,6 @@
 # Product requirements
 
-> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+> **9 October 2026 DEC-01 review:** [ADR 002](decisions/002-command-date-display.md) records the approved one-credit-per-mode policy, actual password auth and command/date defaults. The sole `/cc-clog submit` command and API receipt-date policy are confirmed. The owner confirmed Traefik/Let's Encrypt using Docker networks `web` and `socknet` and visually approved the frontend on 9 October 2026. Actual domain/DNS, deployed TLS routing/certificate and live login checks remain unverified.
 
 ## Public collection log
 
@@ -9,25 +9,24 @@
 - Pending/rejected submissions never change the public log. Approved submissions visibly change the item's original dim/uncollected appearance into its collected appearance. Include an accessible state label in addition to color.
 - Each item's status is shared across all pages where the same item appears. Distinct legitimate item variants stay distinct unless an explicit canonical mapping says otherwise.
 - A custom OSRS-style mini menu appears on pointer hover and keyboard focus. On touch it opens on tap and closes on outside tap/Escape. It stays inside the viewport and does not obscure the triggering item unnecessarily.
-- Display `Collected by KihiraVD on 16/10/26` using the actual collector/date. Multiple approved collectors are retained and listed in collection-date order. This is a documented initial policy, not a requirement to replace earlier collectors.
+- In the selected ordinary or hardcore mode, display the one active approved credit's saved collector name and collection date, e.g. `Collected by KihiraVD on 16/10/26`. Each canonical item may have one separate credit **per world mode**, not multiple publicly displayed collectors. Preserve all prior submissions and audit events privately; never erase history when an approval is revoked or corrected.
 - Use a versioned, complete catalog snapshot with source revisions and locally served icons/assets. Do not hard-code a timeless total item count or depend on a live external site to render the log.
 - Global progress counts unique canonical items. Page progress counts the page's own slots. An item shared by two pages can increment both page counters but only once in the global total.
 - After an approval/revocation, an open public page refreshes within 30 seconds. Initial implementation uses ETag-aware polling; reassess push updates only if needed.
 
-## Hardcore item flag
+## Hardcore collection mode
 
-- A collection credit has a `hardcore` flag, default false, reviewed/correctable by an admin. The canonical item flag is on while at least one approved hardcore credit remains; it applies to all page occurrences.
-- When on, the item has a red border. Its custom OSRS-style mini menu also has a red border and a skull icon inside.
-- Each hardcore collector line ends with exactly `on hardcore worlds`: `Collected by KihiraVD on 16/10/26 on hardcore worlds`.
-- For mixed ordinary/hardcore credits, list all approved collectors; append the suffix only to hardcore credit lines. Ordinary lines retain their original wording. Menu/item styling is red while any approved hardcore credit exists.
-- Pending, rejected and revoked claims never create the hardcore item flag. Correcting/revoking the final hardcore credit removes red borders/skull; ordinary approved credits can keep the item collected.
-- The flag is an evidence-backed collection condition, independent of the collector's current account type. It does not create another item identity or extra collection count.
-- The planned bot extension is optional `hardcore` boolean input; an admin can also set/correct the claim during review. The current checked-in command builder has not been changed by this planning update.
+- `hardcore` belongs to an individual submission/approved credit and defaults to false; it is a reviewed condition, not a distinct item identity or inferred account type.
+- Ordinary and hardcore logs show **independent** credits, counts and collector details over the same canonical item catalog; one active approved credit is allowed **per item per mode**. An item can appear collected in both modes.
+- When the admin enables the hardcore release flag, the public skull switches to the hardcore log and turns red while that mode is active; disabled mode hides the skull without deleting or modifying hardcore credits. Do not release by a hardcoded date.
+- In hardcore mode, collected icons show a red silhouette contour and the menu shows the skull and suffix `on hardcore worlds`, e.g. `Collected by KihiraVD on 16/10/26 on hardcore worlds`. Ordinary mode keeps its normal treatment. Do not combine two mode-specific collector lines.
+- Pending, rejected or revoked claims never create a collected state. Revoking a credit affects only its mode and retains private audit history.
+- The implemented slash command has an optional `hardcore` boolean. See [ADR 002](decisions/002-command-date-display.md) for the confirmed single command and receipt-date policy.
 
-## XP gained tab and page
+## XP gained tracker below the collection log
 
-- Add a site-navigation `XP gained` tab leading to a separate `/xp` page. Preserve the collection log's original five tabs inside its recreated window.
-- Track imported competition XP for clan participants by skill. Show the skill name/icon, cumulative site skill XP, each member's accumulated XP, and each imported competition's complete participant gains, including zero/unavailable rows.
+- Display the SOTW/competition XP tracker **below the collection log on the homepage**, not behind a separate public navigation tab. The `/xp` route may remain a compatibility alias; preserve the collection log's five in-window tabs.
+- Show site-aggregated skill XP and imported competition events with their titles, source links, and per-skill totals. Detailed participant records are retained for reconciled imports, but **not** presented as a public member table. Show zero or unavailable event values accurately.
 - An allowlisted admin supplies a Wise Old Man competition link to import/refresh results. The selected competition provides the participant roster; do not silently omit competitors or require a separate automatic clan sync.
 - Use competition gained XP for the appropriate skill, adding every valid competitor contribution to the site's existing total. This total is competition-accumulated XP, not each account's lifetime HiScores XP.
 - First import adds the full gains; refreshing the same competition applies only differences from the stored contribution. The same unchanged competition/link cannot add XP twice. Further competitions add their gains to the existing matching skill totals.
@@ -52,13 +51,13 @@ These features are planned in #26, #27, #28, #30 and #31; detailed data rules an
 
 Every submission records raw item input, resolved canonical item when known, collector display name, collection date, hardcore claim, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
 
-The admin page is protected by Discord OAuth and an explicit user-ID allowlist. It lists pending submissions with item/match state, collector, date, external proof link and submission time. An admin can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited; a public anonymous request cannot perform them.
+The admin page is protected by a server-side shared password and session/CSRF checks; Discord OAuth is not used for site administration. It lists pending submissions with item/match state, collector, date, external proof link and submission time. An admin can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited; a public anonymous request cannot perform them.
 
 Proof links must use HTTPS on the allowed Imgur/Gyazo hosts. Link validity is separate from evidence validity: an admin still inspects the evidence. V1 stores links, without server-side image downloading or permanent archival. A missing external image must be visible as a review limitation; it does not grant automatic approval.
 
 ## Discord
 
-The specified command is `/cc-clog submit item:<item/name> proof:<imgur-or-gyazo-link> [submitter-name:<collector>]`.
+The implemented command is `/cc-clog submit item:<item/name> proof:<imgur-or-gyazo-link> [submitter-name:<collector>] [hardcore:<boolean>]`.
 
 - Item and proof are mandatory. Collector name is optional and defaults to the actor's current Discord guild display name, falling back to username; save a snapshot rather than a live reference.
 - Item autocomplete searches the complete canonical catalog and returns up to 25 ranked candidates. Selection submits a canonical ID. Free text is accepted; an unambiguous normalized exact name/alias resolves, while fuzzy/ambiguous matches remain suggestions for manual review.
@@ -66,13 +65,13 @@ The specified command is `/cc-clog submit item:<item/name> proof:<imgur-or-gyazo
 - Acknowledge/defer promptly and send an ephemeral receipt only after durable persistence. Retry the same Discord interaction ID without creating duplicate submissions. Report API failures accurately.
 - Do not overwrite all application commands on every container restart. Provide a separate, explicit guild-command registration script when the bot feature is implemented.
 
-The user mentioned two commands but named only this one. The second command remains unspecified; no extra command is assumed.
+The owner confirmed **exactly one command**, `/cc-clog submit`. The earlier second-command reference was residual ideation; no additional command should be registered.
 
 ## Date policy
 
-`collected_on` is a calendar date; `submitted_at` is a UTC timestamp. Initially, use the submission's UTC calendar date when no collection date is supplied and label the source `submission_default`. The admin can correct it before approval. This avoids pretending delayed submissions describe their actual drop date.
+`collected_on` is the **UTC calendar date of receipt by the API** and `submitted_at` is the UTC receipt timestamp. The submitting user and bot cannot specify a different collection date; `dateSource` is `submission_default`. Exact interaction retries retain the original timestamp/date. The admin may make a separate, audited correction during review.
 
-The command currently defines only the three requested fields. A future optional `collected-on` field can accept ISO `YYYY-MM-DD` if confirmed. Public rendering is always `DD/MM/YY`; never parse user input as an ambiguous locale date. Reject future collection dates at the submission/review boundary.
+The command defines `item`, `proof`, optional `submitter-name` and optional `hardcore`; it does **not** expose `collected-on`. The bot API also rejects a caller-supplied `collectedOn`. Public rendering is `DD/MM/YY`; authenticated admin corrections must be valid, nonfuture calendar dates.
 
 ## Deployment scope
 
