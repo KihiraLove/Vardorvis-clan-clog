@@ -7,9 +7,9 @@ import pg from 'pg';
 export const runtimeRole = 'clog_runtime';
 const ownerOnly = new Set([
   'schema_migrations',
-  'catalog_versions',
   'catalog_taxonomy_updates',
 ]);
+const readOnly = new Set(['catalog_versions']);
 const appendOnly = new Set([
   'audit_events',
   'site_settings_audit',
@@ -61,9 +61,11 @@ export async function provisionRuntimeRole(
     );
     for (const { tablename } of tables.rows) {
       if (ownerOnly.has(tablename)) continue;
-      const operations = appendOnly.has(tablename)
-        ? 'SELECT, INSERT'
-        : 'SELECT, INSERT, UPDATE, DELETE';
+      const operations = readOnly.has(tablename)
+        ? 'SELECT'
+        : appendOnly.has(tablename)
+          ? 'SELECT, INSERT'
+          : 'SELECT, INSERT, UPDATE, DELETE';
       await client.query(
         `GRANT ${operations} ON TABLE public.${identifier(tablename)} TO clog_runtime`,
       );

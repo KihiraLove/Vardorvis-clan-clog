@@ -14,8 +14,9 @@ assets. The role provisioning is idempotent and runs **after** migrations and
 source/taxonomy import; it revalidates permissions after future migrations.
 
 The role has schema USAGE (not CREATE), SELECT on public views, DML only on
-application tables, and necessary sequence usage. It has **no** access to
-`schema_migrations`, `catalog_versions` or `catalog_taxonomy_updates`.
+application tables, and necessary sequence usage. It may **read**
+`catalog_versions` for the authenticated catalog view but cannot change it;
+`schema_migrations` and `catalog_taxonomy_updates` remain owner-only.
 Audit tables (`audit_events`, `site_settings_audit`, `catalog_audit`,
 `xp_import_history`) receive **SELECT and INSERT only**. No UPDATE, DELETE,
 TRUNCATE, ALTER or role-creation grants are given. Future audit tables must
