@@ -207,7 +207,11 @@ export function AdminPage({
               {loggingIn ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-          {loginError && <p role="alert" className="admin-error">{loginError}</p>}
+          {loginError && (
+            <p role="alert" className="admin-error">
+              {loginError}
+            </p>
+          )}
           {preview && (
             <p className="admin-note">
               Reload to start a new signed-in preview session.

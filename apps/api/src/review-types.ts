@@ -45,7 +45,11 @@ export interface ReviewAudit {
 }
 export interface ReviewStore {
   adminCatalog(): Promise<unknown>;
-  createManual(fields: ManualSubmissionInput, actorId: string, actorName: string): Promise<ReviewSubmission>;
+  createManual(
+    fields: ManualSubmissionInput,
+    actorId: string,
+    actorName: string,
+  ): Promise<ReviewSubmission>;
   queue(
     status: 'pending' | 'reviewed',
     unmatched: boolean,

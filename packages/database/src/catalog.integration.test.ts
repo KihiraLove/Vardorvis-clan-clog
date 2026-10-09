@@ -34,7 +34,7 @@ test(
       const snapshot = await readBundledSnapshot();
       // A late alias conflict must also undo the already-inserted canonical items.
       await client.query(
-        "INSERT INTO items(id, name) VALUES(42, 'Manual item')",
+        "INSERT INTO items(id, name, origin, overrides) VALUES(42, 'Manual item', 'manual', ARRAY['name','icon','pages'])",
       );
       await client.query(
         'INSERT INTO game_item_ids(game_item_id, item_id) VALUES($1,42)',
@@ -108,7 +108,45 @@ test(
         "UPDATE items SET name='Manual correction' WHERE id=$1",
         [shared.id],
       );
+      await client.query(
+        "INSERT INTO page_items(page_id,item_id,slot,origin) VALUES('abyssal_sire',42,9,'manual')",
+      );
+      await client.query(
+        "UPDATE page_items SET slot=slot+100000 WHERE page_id='abyssal_sire'",
+      );
+      await client.query(
+        "UPDATE page_items SET slot=100009-slot WHERE page_id='abyssal_sire'",
+      );
+      await client.query(
+        "UPDATE pages SET order_origin='manual' WHERE id='abyssal_sire'",
+      );
+      const savedSlots = (
+        await client.query(
+          "SELECT item_id,slot,origin FROM page_items WHERE page_id='abyssal_sire' ORDER BY slot",
+        )
+      ).rows;
       assert.equal(await importCatalog(client, snapshot), 'unchanged');
+      assert.deepEqual(
+        (
+          await client.query(
+            "SELECT item_id,slot,origin FROM page_items WHERE page_id='abyssal_sire' ORDER BY slot",
+          )
+        ).rows,
+        savedSlots,
+      );
+      assert.equal(
+        (
+          await client.query(
+            "SELECT order_origin FROM pages WHERE id='abyssal_sire'",
+          )
+        ).rows[0].order_origin,
+        'manual',
+      );
+      assert.equal(
+        (await client.query('SELECT origin FROM items WHERE id=42')).rows[0]
+          .origin,
+        'manual',
+      );
       assert.equal(
         (await client.query('SELECT count(*)::int AS n FROM catalog_versions'))
           .rows[0].n,

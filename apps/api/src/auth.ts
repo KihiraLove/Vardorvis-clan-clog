@@ -1,5 +1,10 @@
 /** Shared-password login, expiring sessions and same-origin CSRF for admin routes. */
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthConfig } from './config.js';
 import { xpAdminRoutes } from './xp-routes.js';
@@ -8,7 +13,8 @@ import type { ReviewStore } from './review-types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
-const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+const hash = (value: string) =>
+  createHash('sha256').update(value).digest('hex');
 const nonce = () => randomBytes(32).toString('base64url');
 const same = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -33,9 +39,13 @@ export function authRoutes(
   const cookie = (value: string, seconds: number) =>
     `${sessionName}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${config.secure ? '; Secure' : ''}`;
   const key = (token: string) =>
-    createHmac('sha256', config.secret).update('session:' + token).digest('hex');
+    createHmac('sha256', config.secret)
+      .update('session:' + token)
+      .digest('hex');
   const csrf = (token: string) =>
-    createHmac('sha256', config.secret).update('csrf:' + token).digest('base64url');
+    createHmac('sha256', config.secret)
+      .update('csrf:' + token)
+      .digest('base64url');
   function requireLocalHost(request: FastifyRequest) {
     if (!config.devOnly) return;
     const host = request.headers.host ?? '';
@@ -43,7 +53,10 @@ export function authRoutes(
       !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/iu.test(host) ||
       request.headers['x-forwarded-host'] !== undefined
     )
-      throw new ApiError(403, 'Local admin mode accepts only loopback hostnames.');
+      throw new ApiError(
+        403,
+        'Local admin mode accepts only loopback hostnames.',
+      );
   }
   async function current(request: FastifyRequest) {
     requireLocalHost(request);
@@ -57,7 +70,8 @@ export function authRoutes(
   }
   async function requireAdmin(request: FastifyRequest, write = false) {
     const session = await current(request);
-    if (!session) throw new ApiError(401, 'Enter the admin password to continue.');
+    if (!session)
+      throw new ApiError(401, 'Enter the admin password to continue.');
     if (write) {
       const supplied = request.headers['x-csrf-token'];
       if (
@@ -66,7 +80,10 @@ export function authRoutes(
         !/^[\w-]{43}$/u.test(supplied) ||
         !same(csrf(session.token), supplied)
       )
-        throw new ApiError(403, 'The request could not be verified. Reload and try again.');
+        throw new ApiError(
+          403,
+          'The request could not be verified. Reload and try again.',
+        );
     }
     return session;
   }
@@ -80,24 +97,39 @@ export function authRoutes(
           type: 'object',
           additionalProperties: false,
           required: ['password'],
-          properties: { password: { type: 'string', minLength: 1, maxLength: 256 } },
+          properties: {
+            password: { type: 'string', minLength: 1, maxLength: 256 },
+          },
         },
       },
       onRequest: async (request) => {
-        if (config.devOnly) throw new ApiError(404, 'Password login is disabled for local test mode.');
+        if (config.devOnly)
+          throw new ApiError(
+            404,
+            'Password login is disabled for local test mode.',
+          );
         if (request.headers.origin !== config.origin)
-          throw new ApiError(403, 'Login must originate from the configured site.');
+          throw new ApiError(
+            403,
+            'Login must originate from the configured site.',
+          );
       },
     },
     async (request, reply) => {
       // Shared database limiter applies to *all* attempts, not just invalid ones.
       if (!(await store.allowLogin(hash(request.ip))))
-        throw new ApiError(429, 'Too many sign-in attempts. Try again in a minute.');
+        throw new ApiError(
+          429,
+          'Too many sign-in attempts. Try again in a minute.',
+        );
       const digest = createHmac('sha256', Buffer.from(config.secret, 'hex'))
         .update('admin-password:')
         .update(request.body.password)
         .digest();
-      if (!config.passwordDigest || !timingSafeEqual(digest, config.passwordDigest))
+      if (
+        !config.passwordDigest ||
+        !timingSafeEqual(digest, config.passwordDigest)
+      )
         throw new ApiError(401, 'Incorrect admin password.');
       const old = cookieValue(request, sessionName);
       if (old) await store.deleteSession(key(old));
@@ -118,7 +150,10 @@ export function authRoutes(
     let session = await current(request);
     if (!session && config.devOnly) {
       const token = nonce();
-      const identity = { id: 'local-dev-admin', displayName: 'Local test admin' };
+      const identity = {
+        id: 'local-dev-admin',
+        displayName: 'Local test admin',
+      };
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
       await store.createSession(key(token), identity, expiresAt);
       reply.header('Set-Cookie', cookie(token, 8 * 60 * 60));
@@ -180,4 +215,5 @@ export function authRoutes(
       return saved;
     },
   );
+  return requireAdmin;
 }

@@ -13,7 +13,9 @@ const auth: AuthConfig = {
   origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
   passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:').update(password).digest(),
+    .update('admin-password:')
+    .update(password)
+    .digest(),
   secure: true,
 };
 const source = {
@@ -137,8 +139,10 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     );
     assert.equal(fetched, 0);
     const login = await app.inject({
-      method: 'POST', url: '/api/v1/auth/login',
-      headers: { origin: auth.origin }, payload: { password },
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: auth.origin },
+      payload: { password },
     });
     assert.equal(login.statusCode, 200);
     const sessionCookie = String(login.headers['set-cookie']).split(';')[0]!;

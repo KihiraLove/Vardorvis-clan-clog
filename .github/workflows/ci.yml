@@ -37,15 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Format in-branch changes and export for permanent commit
-        run: |
-          npx prettier --write apps/api/src/config.ts apps/api/src/auth.ts apps/api/src/app.ts apps/api/src/review-types.ts apps/api/src/review-store.ts apps/api/src/review-routes.ts apps/api/src/backend.test.ts apps/api/src/xp.auth.test.ts apps/api/src/review.integration.test.ts apps/web/src/admin-model.ts apps/web/src/admin-api.ts apps/web/src/preview/admin.ts apps/web/src/AdminPage.tsx apps/web/src/AdminQueue.tsx apps/web/src/SubmissionEditor.tsx apps/web/src/XpAdmin.tsx apps/web/src/xp-api.ts apps/web/src/ManualSubmissionForm.tsx apps/web/src/admin-api.test.ts apps/web/tests/admin.spec.ts compose.yaml compose.dev.yaml docs/environment.md docs/integration-01-review.md docs/backend-phase-one.md docs/contracts.md docs/project-guide.md README.md .github/workflows/ci.yml
-          for file in apps/api/src/config.ts apps/api/src/auth.ts apps/api/src/app.ts apps/api/src/review-types.ts apps/api/src/review-store.ts apps/api/src/review-routes.ts apps/api/src/backend.test.ts apps/api/src/xp.auth.test.ts apps/api/src/review.integration.test.ts apps/web/src/admin-model.ts apps/web/src/admin-api.ts apps/web/src/preview/admin.ts apps/web/src/AdminPage.tsx apps/web/src/AdminQueue.tsx apps/web/src/SubmissionEditor.tsx apps/web/src/XpAdmin.tsx apps/web/src/xp-api.ts apps/web/src/ManualSubmissionForm.tsx apps/web/src/admin-api.test.ts apps/web/tests/admin.spec.ts compose.yaml compose.dev.yaml docs/environment.md docs/integration-01-review.md docs/backend-phase-one.md docs/contracts.md docs/project-guide.md README.md .github/workflows/ci.yml; do
-            echo "FORMAT_RESULT_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FORMAT_RESULT_END:$file"
-          done
       - run: npm run validate
 
   docker-smoke:
@@ -85,6 +76,22 @@ jobs:
             -H 'Content-Type: application/json' -d '{"password":"wrong"}' \
             http://127.0.0.1:8088/api/v1/auth/login)" = "401"
           docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      - name: Admin catalog, durable icons and coordinated backup
+        env:
+          COMPOSE_FILE: compose.yaml:compose.dev.yaml
+        run: |
+          docker compose exec -T -e CATALOG_SMOKE_TEST=1 api node --input-type=module < scripts/catalog-smoke.mjs > /tmp/catalog-created.json
+          icon_path="$(jq -r '.iconPath' /tmp/catalog-created.json)"
+          curl --fail "http://127.0.0.1:8088$icon_path" --output /tmp/icon-before.png
+          docker compose up -d --no-deps --force-recreate --wait api
+          docker compose restart web
+          docker compose up -d --no-deps --wait --wait-timeout 60 web
+          curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://127.0.0.1:8088$icon_path" --output /tmp/icon-after.png
+          cmp /tmp/icon-before.png /tmp/icon-after.png
+          bash infra/backup.sh /tmp/catalog-backup
+          test -f /tmp/catalog-backup/COMPLETE
+          (cd /tmp/catalog-backup && sha256sum --check SHA256SUMS)
+          tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
       - name: Stop default stack before local admin override
         run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
       - name: Verify passwordless local admin Compose override
@@ -96,6 +103,8 @@ jobs:
           jq -e '.authenticated == true and .development == true and .displayName == "Local test admin"' /tmp/clog-local-session.json
           curl --fail -sS -b /tmp/clog-local-cookie.txt \
             http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == false'
+          curl --fail -sS -b /tmp/clog-local-cookie.txt \
+            http://127.0.0.1:8088/api/v1/admin/catalog | jq -e '(.items | length) == 1717 and (.pages | length) == 124'
           csrf="$(jq -r '.csrfToken' /tmp/clog-local-session.json)"
           curl --fail -sS -b /tmp/clog-local-cookie.txt -X PUT \
             -H "Origin: http://127.0.0.1:8088" \

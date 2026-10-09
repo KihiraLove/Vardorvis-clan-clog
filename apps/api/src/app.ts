@@ -1,6 +1,9 @@
-/** Public projections plus optional configured Discord auth; unavailable services fail closed. */
+/** Public projections plus optional configured admin auth; unavailable services fail closed. */
 import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
+import { catalogRoutes } from './catalog-routes.js';
+import type { PgCatalogStore } from './catalog-store.js';
+import type { IconStorage } from './icon-storage.js';
 import type { AuthConfig, BotConfig } from './config.js';
 import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
@@ -10,6 +13,8 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  catalog?: PgCatalogStore | undefined;
+  icons?: IconStorage | undefined;
   store?: BackendStore | undefined;
   auth?: AuthConfig | undefined;
   bot?: BotConfig | undefined;
@@ -70,8 +75,10 @@ export function createApp(
           ? 400
           : error instanceof Error &&
               'statusCode' in error &&
-              error.statusCode === 413
-            ? 413
+              typeof error.statusCode === 'number' &&
+              error.statusCode >= 400 &&
+              error.statusCode < 500
+            ? error.statusCode
             : 503;
     // Do not log driver/provider errors: they may contain SQL parameters or OAuth secrets.
     if (status >= 500)
@@ -150,20 +157,69 @@ export function createApp(
     };
   });
   if (store && options.bot) botRoutes(app, store, options.bot);
-  if (store && options.auth)
-    authRoutes(
-      app,
-      store,
-      options.auth,
-      options.xp,
-      options.review,
-      options.fetchWom ?? fetchWomCompetition,
-    );
-  else {
+  const requireAdmin =
+    store && options.auth
+      ? authRoutes(
+          app,
+          store,
+          options.auth,
+          options.xp,
+          options.review,
+          options.fetchWom ?? fetchWomCompetition,
+        )
+      : undefined;
+  if (!requireAdmin) {
     app.get('/api/v1/auth/session', async () => ({ authenticated: false }));
     app.post('/api/v1/auth/login', async () => {
       throw new ApiError(503, 'Admin password sign-in is not configured.');
     });
   }
+  // Review and catalog editing share one private catalog projection and auth boundary.
+  if (options.catalog || options.review)
+    app.get(
+      '/api/v1/admin/catalog',
+      {
+        onRequest: async (request) => {
+          if (!requireAdmin)
+            throw new ApiError(503, 'Admin sign-in is not configured.');
+          await requireAdmin(request);
+        },
+      },
+      () =>
+        options.catalog
+          ? options.catalog.catalog()
+          : options.review!.adminCatalog(),
+    );
+  if (options.catalog && options.icons)
+    catalogRoutes(app, options.catalog, options.icons, requireAdmin);
+  app.get<{ Querystring: { q?: string } }>(
+    '/api/v1/catalog/search',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { q: { type: 'string', maxLength: 100 } },
+        },
+      },
+    },
+    async (request) => {
+      if (!store) throw new ApiError(503, 'Catalog search unavailable.');
+      const data = await store.catalog(),
+        query = (request.query.q ?? '').trim().toLowerCase();
+      return {
+        revision:
+          'catalog-' +
+          createHash('sha256').update(JSON.stringify(data)).digest('hex'),
+        items: data.items
+          .filter(
+            (item) =>
+              item.name.toLowerCase().includes(query) ||
+              String(item.id) === query,
+          )
+          .slice(0, 25),
+      };
+    },
+  );
   return app;
 }

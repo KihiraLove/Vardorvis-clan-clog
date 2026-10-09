@@ -109,20 +109,26 @@ export class LiveAdminClient implements AdminClient {
       body: JSON.stringify({ password }),
     });
   }
-  async addManual(fields: ManualSubmissionInput, csrf: string, signal: AbortSignal) {
+  async addManual(
+    fields: ManualSubmissionInput,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
     const response = await this.response(
       '/api/v1/admin/submissions',
       signal,
       this.write(csrf, fields),
     );
-    if (response.status !== 201) throw new Error('Unexpected manual submission status.');
+    if (response.status !== 201)
+      throw new Error('Unexpected manual submission status.');
     const result = parseSubmission(await response.json());
     if (
       result.source !== 'manual' ||
       result.itemId !== fields.itemId ||
       result.hardcore !== fields.hardcore ||
       result.status !== (fields.approve ? 'approved' : 'pending')
-    ) throw new Error('Unexpected manual submission receipt.');
+    )
+      throw new Error('Unexpected manual submission receipt.');
     return result;
   }
   async settings(signal: AbortSignal) {

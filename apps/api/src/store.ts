@@ -233,8 +233,14 @@ export class PgStore implements BackendStore {
         rows.push(slot.item_id);
         membership.set(slot.page_id, rows);
       }
+      const version = (
+        await client.query<{ version: string }>(
+          'SELECT version::text FROM catalog_state WHERE singleton',
+        )
+      ).rows[0]!.version;
       await client.query('COMMIT');
       return {
+        catalogVersion: 'catalog-' + version,
         items,
         pages: pages.map((p) => ({
           ...p,

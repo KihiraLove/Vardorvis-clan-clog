@@ -1,5 +1,6 @@
 /** Read a shared admin password from .env. No Discord OAuth credentials are needed. */
 import { isIP } from 'node:net';
+import { isAbsolute } from 'node:path';
 import { createHmac, randomBytes } from 'node:crypto';
 
 export interface AuthConfig {
@@ -14,6 +15,9 @@ export interface BotConfig {
   guildId: string;
 }
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
+  const iconDirectory = env.ICON_STORAGE_PATH?.trim() || undefined;
+  if (iconDirectory && !isAbsolute(iconDirectory))
+    throw new Error('ICON_STORAGE_PATH must be absolute');
   if (!['true', 'false', undefined, ''].includes(env.AUTH_ENABLED))
     throw new Error('AUTH_ENABLED must be true or false');
   if (!['true', 'false', undefined, ''].includes(env.DEV_ADMIN_MODE))
@@ -49,21 +53,37 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     : undefined;
   const devOnly = env.DEV_ADMIN_MODE === 'true';
   if (!devOnly && env.AUTH_ENABLED !== 'true')
-    return { auth: undefined, bot, trustProxy: trusted.length ? trusted : (false as const) };
+    return {
+      auth: undefined,
+      iconDirectory,
+      bot,
+      trustProxy: trusted.length ? trusted : (false as const),
+    };
   let origin: URL;
   try {
     origin = new URL(env.PUBLIC_ORIGIN ?? '');
   } catch {
     throw new Error('Admin auth requires a valid PUBLIC_ORIGIN');
   }
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(
+    origin.hostname,
+  );
   if (
-    origin.username || origin.password || origin.search || origin.hash ||
+    origin.username ||
+    origin.password ||
+    origin.search ||
+    origin.hash ||
     origin.pathname !== '/' ||
     (origin.protocol !== 'https:' &&
-      !(origin.protocol === 'http:' && loopback && env.NODE_ENV === 'development'))
+      !(
+        origin.protocol === 'http:' &&
+        loopback &&
+        env.NODE_ENV === 'development'
+      ))
   )
-    throw new Error('PUBLIC_ORIGIN must use HTTPS (HTTP loopback only in development)');
+    throw new Error(
+      'PUBLIC_ORIGIN must use HTTPS (HTTP loopback only in development)',
+    );
   if (devOnly) {
     if (
       env.NODE_ENV !== 'development' ||
@@ -72,8 +92,11 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       !loopback ||
       origin.protocol !== 'http:'
     )
-      throw new Error('DEV_ADMIN_MODE requires development, disabled password auth, no trusted proxies and an HTTP loopback origin');
+      throw new Error(
+        'DEV_ADMIN_MODE requires development, disabled password auth, no trusted proxies and an HTTP loopback origin',
+      );
     return {
+      iconDirectory,
       auth: {
         origin: origin.origin,
         secret: randomBytes(32).toString('hex'),
@@ -87,16 +110,25 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   }
   const secret = env.SESSION_SECRET?.trim() ?? '';
   if (!/^[a-f\d]{64,}$/iu.test(secret))
-    throw new Error('SESSION_SECRET must contain at least 32 random bytes encoded as hex');
+    throw new Error(
+      'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
+    );
   const password = env.ADMIN_PASSWORD ?? '';
-  if (password.length < 12 || password.length > 256 || password.trim() !== password)
-    throw new Error('ADMIN_PASSWORD must contain 12–256 characters without surrounding whitespace');
+  if (
+    password.length < 12 ||
+    password.length > 256 ||
+    password.trim() !== password
+  )
+    throw new Error(
+      'ADMIN_PASSWORD must contain 12–256 characters without surrounding whitespace',
+    );
   // Store only a keyed verifier in memory, never the plaintext credential.
   const passwordDigest = createHmac('sha256', Buffer.from(secret, 'hex'))
     .update('admin-password:')
     .update(password)
     .digest();
   return {
+    iconDirectory,
     auth: {
       origin: origin.origin,
       secret,

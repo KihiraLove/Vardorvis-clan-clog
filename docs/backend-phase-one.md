@@ -1,21 +1,23 @@
 # Backend phase 1: public reads, admin password login and release settings
 
+> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
+
 > **8 October 2026 CAT-01 update:** [Complete catalog import](catalog-import.md) now supplies 1,717 items, 124 ordered pages and verified local icons. Compose initializes the catalog after migrations; earlier descriptions of catalog import as pending are superseded.
 
 Implemented on `codex/backend-auth-and-public-api` for issues [#2](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/2), [#4](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/4) and the settings/storage portion of [#26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26). All three are assigned to KihiraLove. This document supersedes earlier statements that these routes are only frontend contracts.
 
 ## Routes now implemented
 
-| Route                               | Behavior                                                                                                                                                  |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/catalog`               | Active canonical items and ordered page memberships from one repeatable database snapshot. Includes manual identities without game IDs.                   |
-| `GET /api/v1/collections`           | Approved normal/HC credits only, with item, collector, date and mode. No evidence, actors or audit fields.                                                |
-| `GET /api/v1/settings`              | Minimal public hardcore visibility and revision. No-store; unavailable storage returns 503.                                                               |
-| `POST /api/v1/auth/login`           | Checks the `.env` password with origin and rate-limit guards; creates a private session.                                                                 |
-| `GET /api/v1/auth/session`          | Returns display name and CSRF token for a valid password-authenticated session, or authenticated false.                              |
-| `POST /api/v1/auth/logout`          | Requires same-origin/CSRF, deletes the server session and expires its cookie.                                                                             |
-| `GET /api/v1/admin/settings`        | Requires an authenticated admin session.                                                                                                                          |
-| `PUT /api/v1/admin/settings`        | Strict boolean and expected revision; requires session, exact Origin and CSRF. Atomically saves the new version and actor audit; stale writes return 409. |
+| Route                        | Behavior                                                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/catalog`        | Active canonical items and ordered page memberships from one repeatable database snapshot. Includes manual identities without game IDs.                   |
+| `GET /api/v1/collections`    | Approved normal/HC credits only, with item, collector, date and mode. No evidence, actors or audit fields.                                                |
+| `GET /api/v1/settings`       | Minimal public hardcore visibility and revision. No-store; unavailable storage returns 503.                                                               |
+| `POST /api/v1/auth/login`    | Checks the `.env` password with origin and rate-limit guards; creates a private session.                                                                  |
+| `GET /api/v1/auth/session`   | Returns display name and CSRF token for a valid password-authenticated session, or authenticated false.                                                   |
+| `POST /api/v1/auth/logout`   | Requires same-origin/CSRF, deletes the server session and expires its cookie.                                                                             |
+| `GET /api/v1/admin/settings` | Requires an authenticated admin session.                                                                                                                  |
+| `PUT /api/v1/admin/settings` | Strict boolean and expected revision; requires session, exact Origin and CSRF. Atomically saves the new version and actor audit; stale writes return 409. |
 
 Catalog and collection revisions are SHA-256 hashes of their complete, deterministically ordered public projections. Each has its own ETag. Approval, correction, revocation, membership/order changes or manual additions change the relevant response hash automatically; no process-local cache invalidation is needed. Weak/list/wildcard conditional requests are supported. Hashes are cache validators, not credentials.
 
@@ -44,11 +46,11 @@ The API stores only a keyed password verifier in process memory, compares creden
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `apps/api/src/types.ts`                           | Store/identity/public payload contracts and safe API errors.                                                        |
 | `apps/api/src/config.ts`                          | Auth environment and trusted-proxy validation.                                                                      |
-| `apps/api/src/auth.ts`                            | Password login, cookie/session/CSRF enforcement and settings routes.                          |
+| `apps/api/src/auth.ts`                            | Password login, cookie/session/CSRF enforcement and settings routes.                                                |
 | `apps/api/src/store.ts`                           | Parameterized SQL, consistent public snapshots, atomic settings audit and durable session/state/rate-limit storage. |
 | `apps/api/src/app.ts`                             | Fastify composition, bounded strict JSON, safe errors/logging, ETags and health/status endpoints.                   |
 | `apps/api/src/server.ts`                          | Runtime environment, bounded pool/query timeouts and shutdown.                                                      |
-| `packages/database/migrations/003_admin_auth.sql` | Existing session, settings audit and login rate-limit tables; unused legacy OAuth state remains inert.                                          |
+| `packages/database/migrations/003_admin_auth.sql` | Existing session, settings audit and login rate-limit tables; unused legacy OAuth state remains inert.              |
 
 Migration 003 leaves existing catalog/credits and migrations 001/002 unchanged. New tables are independent of submission-specific audit history. Settings writes lock the singleton row, compare its version, update it and insert the audit row in one transaction. Database audit failure rolls back the setting. Concurrent saves of the same version produce one success and one conflict. The SQL constraints from migration 002 continue to enforce one approved item/mode credit.
 

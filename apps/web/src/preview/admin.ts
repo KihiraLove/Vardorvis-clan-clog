@@ -139,7 +139,11 @@ export class PreviewAdminClient implements AdminClient {
     this.signedIn = true;
     this.changed(false);
   }
-  async addManual(fields: ManualSubmissionInput, _csrf: string, signal: AbortSignal) {
+  async addManual(
+    fields: ManualSubmissionInput,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
     this.access(signal);
     const item = this.data.items.find((row) => row.id === fields.itemId);
     if (!item) throw new AdminRequestError(422);
@@ -353,7 +357,8 @@ export class PreviewAdminClient implements AdminClient {
         ? row.status !== 'approved'
         : row.status !== 'pending') ||
       (action === 'approve'
-        ? row.itemId === null || (row.source !== 'manual' && !safeProof(row.proofUrl))
+        ? row.itemId === null ||
+          (row.source !== 'manual' && !safeProof(row.proofUrl))
         : !reason.trim())
     )
       throw new AdminRequestError(422);

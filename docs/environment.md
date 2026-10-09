@@ -1,5 +1,7 @@
 # Environment setup
 
+> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
+
 ## Local prerequisites
 
 Node 24 LTS, npm, Git, and Docker Engine/Desktop with a recent Compose v2 supporting `up --wait`. The initial database is PostgreSQL 17. Native Node development and container development use the same migration files.
@@ -17,23 +19,23 @@ The example contains placeholders, never working production secrets. `.env` is i
 
 ## Configuration inventory
 
-| Variable                                      | Where          | Current/future purpose                                                           |
-| --------------------------------------------- | -------------- | -------------------------------------------------------------------------------- |
-| `POSTGRES_PASSWORD`                           | Compose        | Required database owner password; generate locally                               |
-| `IMAGE_PREFIX`                                | Compose        | Default `ghcr.io/kihiralove/vardorvis-clan-clog`; service suffix is appended     |
-| `IMAGE_TAG`                                   | Compose        | Production `sha-<full main commit SHA>`; placeholder allowed with local override |
-| `WEB_PORT`                                    | Compose        | Loopback host port, default 8088                                                 |
-| `DATABASE_URL`                                | Host Node      | Host PostgreSQL URI; Compose builds its own URI using `db`                       |
-| `HOST` / `PORT`                               | API            | Defaults `0.0.0.0` and 3000 in containers                                        |
-| `TEST_DATABASE_URL`                           | Tests only     | Dedicated disposable database for integration tests                              |
-| `PUBLIC_ORIGIN`                               | API            | Exact admin origin for password login and CSRF                                   |
-| `ADMIN_PASSWORD`                             | API            | Private shared admin login password; required when `AUTH_ENABLED=true`       |
-| `SESSION_SECRET`                              | API            | At least 32 random bytes for session protection                                  |
-| `BOT_API_TOKEN`                               | Future bot/API | Dedicated service token; generate independently of session secret                |
-| `DISCORD_BOT_TOKEN`                           | Future bot     | Discord bot credential                                                           |
-| `DISCORD_APPLICATION_ID`                      | Future bot     | Application ID for explicit guild-command registration                           |
-| `DISCORD_GUILD_ID`                            | Future bot/API | Only clan guild allowed to submit                                                |
-| `API_BASE_URL`                                | Future bot     | Internal service URL, set to `http://api:3000` by Compose                        |
+| Variable                 | Where          | Current/future purpose                                                           |
+| ------------------------ | -------------- | -------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`      | Compose        | Required database owner password; generate locally                               |
+| `IMAGE_PREFIX`           | Compose        | Default `ghcr.io/kihiralove/vardorvis-clan-clog`; service suffix is appended     |
+| `IMAGE_TAG`              | Compose        | Production `sha-<full main commit SHA>`; placeholder allowed with local override |
+| `WEB_PORT`               | Compose        | Loopback host port, default 8088                                                 |
+| `DATABASE_URL`           | Host Node      | Host PostgreSQL URI; Compose builds its own URI using `db`                       |
+| `HOST` / `PORT`          | API            | Defaults `0.0.0.0` and 3000 in containers                                        |
+| `TEST_DATABASE_URL`      | Tests only     | Dedicated disposable database for integration tests                              |
+| `PUBLIC_ORIGIN`          | API            | Exact admin origin for password login and CSRF                                   |
+| `ADMIN_PASSWORD`         | API            | Private shared admin login password; required when `AUTH_ENABLED=true`           |
+| `SESSION_SECRET`         | API            | At least 32 random bytes for session protection                                  |
+| `BOT_API_TOKEN`          | Future bot/API | Dedicated service token; generate independently of session secret                |
+| `DISCORD_BOT_TOKEN`      | Future bot     | Discord bot credential                                                           |
+| `DISCORD_APPLICATION_ID` | Future bot     | Application ID for explicit guild-command registration                           |
+| `DISCORD_GUILD_ID`       | Future bot/API | Only clan guild allowed to submit                                                |
+| `API_BASE_URL`           | Future bot     | Internal service URL, set to `http://api:3000` by Compose                        |
 
 `AUTH_ENABLED=false` keeps password-protected admin routes unavailable until configured. Enabled auth validates the admin password, session secret and exact site origin at startup. The API receives these through Compose; the web bundle never receives them. `TRUSTED_PROXY_CIDRS` is a comma-separated list of actual proxy IPs/CIDRs (empty trusts none). See [backend setup](backend-phase-one.md) for cookie, session and TLS requirements. Bot variables remain reserved. `apps/web` receives no secrets and will use relative `/api/v1` URLs.
 

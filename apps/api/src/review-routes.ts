@@ -23,9 +23,6 @@ export function reviewRoutes(
     async (req: FastifyRequest) => {
       await authorize(req, write);
     };
-  app.get('/api/v1/admin/catalog', { onRequest: guard() }, async () =>
-    store.adminCatalog(),
-  );
   app.post<{ Body: ManualSubmissionInput }>(
     '/api/v1/admin/submissions',
     {
@@ -34,11 +31,20 @@ export function reviewRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['itemId', 'collectorName', 'collectedOn', 'hardcore', 'approve'],
+          required: [
+            'itemId',
+            'collectorName',
+            'collectedOn',
+            'hardcore',
+            'approve',
+          ],
           properties: {
             itemId: version,
             collectorName: { type: 'string', minLength: 1, maxLength: 80 },
-            collectedOn: { type: 'string', pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' },
+            collectedOn: {
+              type: 'string',
+              pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$',
+            },
             hardcore: { type: 'boolean' },
             proofUrl: { type: 'string', maxLength: 2048 },
             approve: { type: 'boolean' },
@@ -49,9 +55,9 @@ export function reviewRoutes(
     },
     async (req, reply) => {
       const actor = await authorize(req, true);
-      return reply.code(201).send(
-        await store.createManual(req.body, actor.id, actor.displayName),
-      );
+      return reply
+        .code(201)
+        .send(await store.createManual(req.body, actor.id, actor.displayName));
     },
   );
   app.get<{

@@ -22,3 +22,6 @@ _site/
 .jekyll-metadata
 /vendor
 Gemfile.lock
+
+# Host-run durable uploads must never be committed.
+.data/

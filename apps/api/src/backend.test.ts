@@ -19,7 +19,9 @@ const config: AuthConfig = {
   origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
   passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:').update(password).digest(),
+    .update('admin-password:')
+    .update(password)
+    .digest(),
   secure: true,
 };
 export class MemoryStore implements BackendStore {
@@ -95,20 +97,26 @@ function fixture() {
 }
 async function login(app: FastifyInstance) {
   const response = await app.inject({
-    method: 'POST', url: '/api/v1/auth/login',
+    method: 'POST',
+    url: '/api/v1/auth/login',
     headers: { origin: config.origin },
     payload: { password },
   });
   assert.equal(response.statusCode, 200);
   const cookie = String(response.headers['set-cookie']).split(';')[0]!;
-  assert.match(String(response.headers['set-cookie']), /HttpOnly; SameSite=Lax; Max-Age=28800; Secure/u);
+  assert.match(
+    String(response.headers['set-cookie']),
+    /HttpOnly; SameSite=Lax; Max-Age=28800; Secure/u,
+  );
   const session = await app.inject({
-    url: '/api/v1/auth/session', headers: { cookie },
+    url: '/api/v1/auth/session',
+    headers: { cookie },
   });
   assert.equal(session.headers['cache-control'], 'no-store');
   assert.equal(session.json().authenticated, true);
   return {
-    cookie, origin: config.origin,
+    cookie,
+    origin: config.origin,
     'x-csrf-token': session.json().csrfToken as string,
   };
 }
@@ -176,19 +184,41 @@ test('password login rejects missing origin, bad credentials and anonymous admin
       authenticated: false,
     });
     assert.equal((await app.inject('/api/v1/auth/discord')).statusCode, 404);
-    assert.equal((await app.inject({
-      method: 'POST', url: '/api/v1/auth/login', payload: { password },
-    })).statusCode, 403);
-    assert.equal((await app.inject({
-      method: 'POST', url: '/api/v1/auth/login',
-      headers: { origin: config.origin }, payload: { password: 'wrong' },
-    })).statusCode, 401);
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          payload: { password },
+        })
+      ).statusCode,
+      403,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          headers: { origin: config.origin },
+          payload: { password: 'wrong' },
+        })
+      ).statusCode,
+      401,
+    );
     assert.equal(store.sessions.size, 0);
     const headers = await login(app);
-    assert.equal((await app.inject({
-      url: '/api/v1/admin/settings', headers,
-    })).statusCode, 200);
-  } finally { await app.close(); }
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/admin/settings',
+          headers,
+        })
+      ).statusCode,
+      200,
+    );
+  } finally {
+    await app.close();
+  }
 });
 test('settings require origin, CSRF, strict fields and current revision; every saved write is audited', async () => {
   const { app, store } = fixture();
@@ -270,36 +300,63 @@ test('logout revokes the password session and expired or changed identities fail
   const { app, store } = fixture();
   try {
     const headers = await login(app);
-    assert.equal((await app.inject({
-      method: 'POST', url: '/api/v1/auth/logout',
-      headers: { cookie: headers.cookie },
-    })).statusCode, 403);
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/logout',
+          headers: { cookie: headers.cookie },
+        })
+      ).statusCode,
+      403,
+    );
     const out = await app.inject({
-      method: 'POST', url: '/api/v1/auth/logout', headers,
+      method: 'POST',
+      url: '/api/v1/auth/logout',
+      headers,
     });
     assert.equal(out.statusCode, 204);
     assert.match(String(out.headers['set-cookie']), /Max-Age=0/u);
     assert.equal(store.sessions.size, 0);
-    assert.equal((await app.inject({ url: '/api/v1/admin/settings', headers })).statusCode, 401);
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/settings', headers })).statusCode,
+      401,
+    );
     const expired = await login(app);
-    for (const session of store.sessions.values()) session.expiresAt = new Date(0);
-    assert.equal((await app.inject({ url: '/api/v1/admin/settings', headers: expired })).statusCode, 401);
+    for (const session of store.sessions.values())
+      session.expiresAt = new Date(0);
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/settings', headers: expired }))
+        .statusCode,
+      401,
+    );
     const invalid = await login(app);
-    for (const session of store.sessions.values()) session.id = 'other-identity';
-    assert.equal((await app.inject({ url: '/api/v1/admin/settings', headers: invalid })).statusCode, 401);
-  } finally { await app.close(); }
+    for (const session of store.sessions.values())
+      session.id = 'other-identity';
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/settings', headers: invalid }))
+        .statusCode,
+      401,
+    );
+  } finally {
+    await app.close();
+  }
 });
 test('login rate limits and config fail closed without a valid admin password', async () => {
   const { app, store } = fixture();
   try {
     store.attempts = 20;
     const blocked = await app.inject({
-      method: 'POST', url: '/api/v1/auth/login',
-      headers: { origin: config.origin }, payload: { password },
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: config.origin },
+      payload: { password },
     });
     assert.equal(blocked.statusCode, 429);
     assert.equal(blocked.headers['retry-after'], '60');
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
   const env = {
     NODE_ENV: 'production',
     AUTH_ENABLED: 'true',
@@ -319,7 +376,8 @@ test('login rate limits and config fail closed without a valid admin password', 
   ])
     assert.throws(() => readConfig({ ...env, ...patch }));
   assert.deepEqual(
-    readConfig({ ...env, TRUSTED_PROXY_CIDRS: '127.0.0.1,172.18.0.0/16' }).trustProxy,
+    readConfig({ ...env, TRUSTED_PROXY_CIDRS: '127.0.0.1,172.18.0.0/16' })
+      .trustProxy,
     ['127.0.0.1', '172.18.0.0/16'],
   );
 });

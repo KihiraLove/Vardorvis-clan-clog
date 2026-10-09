@@ -1,5 +1,6 @@
 # API and Discord contracts
 
+> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
 > **8 October 2026 XP-01 update:** [XP event import](xp-import.md) implements the aggregate `GET /api/v1/xp/tracker` and secured admin preview/apply/history. Earlier per-member XP routes below are superseded by the revised event-only requirement; use the new document for active endpoints.
 
 > **8 October 2026 intake update:** [Bot intake](bot-intake.md) now implements credential-scoped catalog autocomplete and durable pending submissions, including mode, dates, matching candidates and idempotent receipts. Discord gateway handling and admin review remain separate work.
@@ -26,7 +27,7 @@ The routes marked as implemented in [backend phase one](backend-phase-one.md) an
 | `GET /api/v1/collections`                      | Public                            | Approved item credits and revision; excludes evidence/actor IDs |
 | `GET /api/v1/bot/items?q=...`                  | Bot credential                    | Ranked canonical autocomplete candidates                        |
 | `POST /api/v1/bot/submissions`                 | Bot credential + configured guild | Idempotent intake and resolution suggestions                    |
-| `POST /api/v1/auth/login`                      | Password + matching Origin        | Create an expiring admin session                                 |
+| `POST /api/v1/auth/login`                      | Password + matching Origin        | Create an expiring admin session                                |
 | `GET /api/v1/auth/session`                     | Browser session                   | Report admin access and a session-bound CSRF token              |
 | `POST /api/v1/auth/logout`                     | Session + CSRF                    | Destroy session                                                 |
 | `POST /api/v1/admin/submissions`               | Admin session + CSRF              | Insert manual pending or immediately approved claim             |

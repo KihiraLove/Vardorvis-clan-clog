@@ -124,7 +124,10 @@ export function SubmissionEditor({
     void action.execute(async (signal) => {
       if (
         decision === 'approve' &&
-        (dirty || !checked || (!proof && row.source !== 'manual') || row.itemId === null)
+        (dirty ||
+          !checked ||
+          (!proof && row.source !== 'manual') ||
+          row.itemId === null)
       )
         throw new Error(
           'Save a specific item match and check the linked proof before approving.',
@@ -195,7 +198,11 @@ export function SubmissionEditor({
         <div>
           <h2 id="submission-title">Review {row.collectorName}</h2>
           <p>
-            {row.status} · {row.source === 'manual' ? 'Manual submission' : 'Discord submission'} {row.id} · Version {row.version}
+            {row.status} ·{' '}
+            {row.source === 'manual'
+              ? 'Manual submission'
+              : 'Discord submission'}{' '}
+            {row.id} · Version {row.version}
           </p>
         </div>
         <button
@@ -378,7 +385,12 @@ export function SubmissionEditor({
             <input
               type="checkbox"
               checked={checked}
-              disabled={locked || dirty || (!proof && row.source !== 'manual') || row.itemId === null}
+              disabled={
+                locked ||
+                dirty ||
+                (!proof && row.source !== 'manual') ||
+                row.itemId === null
+              }
               onChange={(event) => setChecked(event.target.checked)}
             />
             {row.source === 'manual'
@@ -393,7 +405,11 @@ export function SubmissionEditor({
                 className="site-button site-button--approve"
                 type="button"
                 disabled={
-                  locked || dirty || !checked || (!proof && row.source !== 'manual') || row.itemId === null
+                  locked ||
+                  dirty ||
+                  !checked ||
+                  (!proof && row.source !== 'manual') ||
+                  row.itemId === null
                 }
                 onClick={() => perform('approve')}
               >
