@@ -132,12 +132,12 @@ The checked-in [command builder](../apps/bot/src/command.ts), the
 guild-only subcommand. Registration is an explicit operation, never automatic
 on startup.
 
-| Field | Required | Resolution |
-| --- | --- | --- |
-| `item` | Yes | Autocomplete canonical ID or raw text, with manual review for ambiguity |
-| `proof` | Yes | Validated HTTPS Imgur/Gyazo URL; human admin inspects proof |
-| `submitter-name` | No | Snapshot of collector display name; defaults to guild display name then username |
-| `hardcore` | No | Boolean claim, default false, verified/corrected by admin |
+| Field            | Required | Resolution                                                                       |
+| ---------------- | -------- | -------------------------------------------------------------------------------- |
+| `item`           | Yes      | Autocomplete canonical ID or raw text, with manual review for ambiguity          |
+| `proof`          | Yes      | Validated HTTPS Imgur/Gyazo URL; human admin inspects proof                      |
+| `submitter-name` | No       | Snapshot of collector display name; defaults to guild display name then username |
+| `hardcore`       | No       | Boolean claim, default false, verified/corrected by admin                        |
 
 The bot defers and responds ephemerally, restricts handling to the configured
 guild, and confirms a pending claim only after a durable, idempotent API

@@ -55,7 +55,6 @@ TLS certificate issuance, trusted reverse-proxy CIDRs and owner visual
 acceptance before production rollout. These details remain open in
 [DEC-01 / ADR 002](decisions/002-command-date-display.md).
 
-
 A host-native reverse proxy can forward to `127.0.0.1:8088`. Terminate TLS there and preserve `X-Forwarded-Proto`. Later OAuth/session work must explicitly configure trusted proxy behavior; do not trust arbitrary forwarded headers from an internet-exposed API.
 
 If Traefik itself runs in Docker, its own loopback cannot reach the host loopback binding. Add a reviewed Compose override attaching **web only** to your existing external Traefik network; route to container port 8080 with `traefik.docker.network` and `traefik.http.services.clog.loadbalancer.server.port=8080`. Keep web on the app's default network too so it can reach API. Add your own hostname/router/TLS labels and remove the host port binding if appropriate. Do not attach the database to the external proxy network. The repository does not assume your domain, network name or certificate resolver.

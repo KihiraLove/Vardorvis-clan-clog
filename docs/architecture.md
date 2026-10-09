@@ -35,16 +35,16 @@ Foundation API endpoints are `/healthz`, `/readyz` and `/api/v1/status`. Readine
 
 Initial schema: [001_initial.sql](../packages/database/migrations/001_initial.sql). The schema has no catalog seed or fake approvals.
 
-| Entity                  | Main invariant                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| `catalog_versions`      | Source URL/revision and import timestamp identify the checked-in snapshot            |
-| `items`                 | Stable canonical item ID; soft deactivation preserves existing credits               |
-| `game_item_ids`         | One source game item ID maps to exactly one canonical item                           |
-| `pages` / `page_items`  | Ordered slots; one occurrence of a canonical item per page                           |
-| `submissions`           | Unique Discord interaction ID; optional item while unmatched; approval requires item |
-| `audit_events`          | Before/after review values and authenticated actor                                   |
+| Entity                  | Main invariant                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `catalog_versions`      | Source URL/revision and import timestamp identify the checked-in snapshot                   |
+| `items`                 | Stable canonical item ID; soft deactivation preserves existing credits                      |
+| `game_item_ids`         | One source game item ID maps to exactly one canonical item                                  |
+| `pages` / `page_items`  | Ordered slots; one occurrence of a canonical item per page                                  |
+| `submissions`           | Unique Discord interaction ID; optional item while unmatched; approval requires item        |
+| `audit_events`          | Before/after review values and authenticated actor                                          |
 | `collection_credits`    | One current approved collector per canonical item and world mode; old claims remain private |
-| `item_collection_state` | Item collected iff at least one approved credit exists                               |
+| `item_collection_state` | Item collected iff at least one approved credit exists                                      |
 
 ## Review transactions
 
