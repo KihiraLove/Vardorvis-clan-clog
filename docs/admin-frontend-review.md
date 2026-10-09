@@ -60,3 +60,23 @@ Sixteen new Node tests cover decoded private payloads, corrections, safe proof U
 CI uploads `admin-review-desktop.png`, `admin-review-mobile.png`, `admin-catalog-desktop.png` and `admin-catalog-mobile.png` in the `frontend-browser-review` artifact, along with existing captures and failure traces. Screenshots are implementation review captures, not accepted pixel baselines. All browser evidence uses sample or mocked data.
 
 Manual acceptance still includes visual approval, real mobile/hardware checks and server-backed review/catalog flows once their backend dependencies exist. Keep #8/#31 open for that review; this PR has no closing keywords.
+
+## ADMIN-01 follow-up hardening
+
+The live pending/unmatched/reviewed cards now display **submitted via**
+(bot versus manual) and **date source** (submission default, collector supplied,
+or admin correction) alongside the collection date. The detail editor uses the
+same source labels and limits collection dates to today (UTC).
+
+Proofless *manual* entries are shown as "No proof supplied (manual entry)",
+rather than an invalid-proof warning; manual pending approvals still require
+explicit checkbox acknowledgment. Missing or unsafe evidence on **bot** claims
+continues to block approval. Stale reviews reload current state and clear the
+acknowledgment; the known occupied-credit database conflict also displays
+an actionable explanation rather than reporting only a concurrent edit.
+
+Validation added: live-HTTP-adapter Chromium tests with mocked endpoints for
+manual proofless review and credit conflicts, unit tests for response message
+allowlisting and source labels, and PostgreSQL collision rollback checks.
+Browser mocks do not replace an actual browser-to-PostgreSQL acceptance pass or
+human mobile/visual review. ADMIN-01 #8 stays open until those are accepted.

@@ -139,7 +139,10 @@ test(
           adminId,
           'Reviewer',
         ),
-        { status: 409 },
+        {
+          status: 409,
+          message: /An approved credit already exists for this item and world mode/,
+        },
       );
       assert.equal((await review.detail(second))?.submission.status, 'pending');
       const hc = await review.mutate(
@@ -173,6 +176,7 @@ test(
         { status: 409 },
       );
       assert.equal((await review.detail(one))?.submission.hardcore, false);
+      assert.deepEqual((await backend.collections()).map((c) => c.hardcore), [false, true]);
       await assert.rejects(
         review.mutate(
           one,
