@@ -49,16 +49,14 @@ function fixture() {
         return { created: false, receipt: prior.receipt };
       }
       const today = new Date().toISOString().slice(0, 10);
-      if (input.collectedOn && !validCollectionDate(input.collectedOn, today))
-        throw new ApiError(422, 'Invalid collection date.');
       const match = resolveMatch(rows, input.rawItemText, input.itemId);
       const receipt: BotReceipt = {
         submissionId: 'fixture-' + input.interactionId,
         interactionId: input.interactionId,
         status: 'pending',
         submittedAt: new Date().toISOString(),
-        collectedOn: input.collectedOn ?? today,
-        dateSource: input.collectedOn ? 'collector' : 'submission_default',
+        collectedOn: today,
+        dateSource: 'submission_default',
         hardcore: input.hardcore,
         resolution: match.resolution,
         itemId: match.itemId,
@@ -123,7 +121,6 @@ test('hardcore and every immutable claim field enter the idempotency fingerprint
     { itemId: 42 },
     { rawItemText: 'Dragon axe' },
     { proofUrl: 'https://gyazo.com/other' },
-    { collectedOn: '2026-01-01' },
     { actorDiscordId: '999999999999999999' },
   ])
     assert.notEqual(claimHash({ ...example, ...change }), standard);
@@ -207,6 +204,7 @@ test('intake enforces guild, proof, actor, fields and exact retry semantics', as
       { ...example, itemId: '42' },
       { ...example, hardcore: 'true' },
       { ...example, reviewedBy: actorDiscordId },
+      { ...example, collectedOn: '2026-01-01' },
       { ...example, collectedOn: 'not-a-date' },
     ]) {
       const response = await submit(payload);
@@ -234,12 +232,12 @@ test('intake enforces guild, proof, actor, fields and exact retry semantics', as
       interactionId: '456789012345678901',
       rawItemText: 'Shared axe',
       hardcore: true,
-      collectedOn: '2026-01-12',
     });
     assert.equal(unknown.statusCode, 201);
     assert.equal(unknown.json().itemId, null);
     assert.equal(unknown.json().resolution, 'needs_match');
-    assert.equal(unknown.json().dateSource, 'collector');
+    assert.equal(unknown.json().dateSource, 'submission_default');
+    assert.equal(unknown.json().collectedOn, unknown.json().submittedAt.slice(0, 10));
   } finally {
     await app.close();
   }

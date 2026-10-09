@@ -65,7 +65,7 @@ export function claimHash(input: BotSubmissionInput): string {
         input.itemId ?? null,
         input.collectorName,
         input.proofUrl,
-        input.collectedOn ?? null,
+        null, // Preserve the legacy hash field position for existing retries.
         input.hardcore,
       ]),
     )
@@ -134,7 +134,6 @@ export function botRoutes(
             itemId: { type: 'integer', minimum: 1, maximum: 2147483647 },
             collectorName: { type: 'string', minLength: 1, maxLength: 80 },
             proofUrl: { type: 'string', minLength: 1, maxLength: 2048 },
-            collectedOn: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
             hardcore: { type: 'boolean' },
           },
         },
@@ -156,8 +155,7 @@ export function botRoutes(
           422,
           'Item, collector name or HTTPS proof URL is invalid.',
         );
-      // The store validates collectedOn against the database UTC receipt date,
-      // not the clock of the client or an untrusted date supplied in the request.
+      // The strict schema rejects caller dates; only the database assigns a receipt date.
       const input = { ...body, hardcore: body.hardcore ?? false };
       const result = await store.submitClaim(input, claimHash(input));
       return reply.code(result.created ? 201 : 200).send(result.receipt);
