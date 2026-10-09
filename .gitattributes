@@ -4,3 +4,6 @@ catalog/** -text
 
 # Shell helpers must run identically from Windows checkouts and Linux hosts.
 *.sh text eol=lf
+
+# Consistent migration checksums on Windows and Linux
+packages/database/migrations/*.sql text eol=lf
