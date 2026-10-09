@@ -46,6 +46,7 @@ jobs:
     timeout-minutes: 20
     env:
       POSTGRES_PASSWORD: ci-only-password
+      APP_DB_PASSWORD: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       IMAGE_TAG: ci
       AUTH_ENABLED: 'true'
       PUBLIC_ORIGIN: https://clog.example.com
@@ -102,6 +103,19 @@ jobs:
             -H 'Content-Type: application/json' -d '{"password":"wrong"}' \
             http://127.0.0.1:8088/api/v1/auth/login)" = "401"
           docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      - name: Verify restricted database runtime and append-only audit privileges
+        run: |
+          docker compose exec -T api node --input-type=module -e "
+            import pg from 'pg';
+            const client = new pg.Client({connectionString: process.env.DATABASE_URL});
+            await client.connect();
+            try {
+              const current = (await client.query('SELECT current_user AS user')).rows[0].user;
+              if (current !== 'clog_runtime') throw Error('API must not run as migrator');
+              const roles = (await client.query(\"SELECT has_table_privilege(current_user,'public.audit_events','INSERT') AS ai, has_table_privilege(current_user,'public.audit_events','UPDATE') AS au, has_table_privilege(current_user,'public.audit_events','DELETE') AS ad, has_table_privilege(current_user,'public.catalog_audit','DELETE') AS cd, has_table_privilege(current_user,'public.xp_import_history','UPDATE') AS xu, has_table_privilege(current_user,'public.schema_migrations','SELECT') AS ms, has_table_privilege(current_user,'public.submissions','UPDATE') AS su\")).rows[0];
+              if (JSON.stringify(roles) !== JSON.stringify({ai:true,au:false,ad:false,cd:false,xu:false,ms:false,su:true})) throw Error('Unexpected runtime grants: '+JSON.stringify(roles));
+            } finally { await client.end(); }
+          "
       - name: Admin catalog, durable icons and coordinated backup
         env:
           COMPOSE_FILE: compose.yaml:compose.dev.yaml

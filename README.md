@@ -71,6 +71,7 @@ Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` fo
 - [Planned hardcore, XP and admin catalog features](docs/planned-features.md)
 - [Environment setup](docs/environment.md)
 - [CI/CD, self-hosting, backups and rollback](docs/deployment.md)
+- [OPS-01 runtime privileges and security handover](docs/ops-01.md)
 - [Testing and completion gates](docs/testing.md)
 - [Admin frontend review](docs/admin-frontend-review.md)
 - [Architecture decisions](docs/decisions/001-foundation.md)
