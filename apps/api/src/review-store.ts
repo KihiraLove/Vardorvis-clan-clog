@@ -49,6 +49,11 @@ const conflict = () =>
     409,
     'Submission changed or approved credit already exists; reload.',
   );
+const occupied = () =>
+  new ApiError(
+    409,
+    'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.',
+  );
 function requireId(id: string) {
   if (!uuid.test(id)) throw new ApiError(404, 'Submission not found.');
 }
@@ -475,8 +480,11 @@ export class PgReviewStore implements ReviewStore {
       return after;
     } catch (e) {
       await client.query('ROLLBACK');
-      if (e && typeof e === 'object' && 'code' in e && e.code === '23505')
+      if (e && typeof e === 'object' && 'code' in e && e.code === '23505') {
+        if ('constraint' in e && e.constraint === 'submissions_one_credit_per_world')
+          throw occupied();
         throw conflict();
+      }
       throw e;
     } finally {
       client.release();

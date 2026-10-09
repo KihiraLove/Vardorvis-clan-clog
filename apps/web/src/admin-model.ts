@@ -19,6 +19,13 @@ import {
 
 export type QueueView = 'pending' | 'unmatched' | 'reviewed';
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected' | 'revoked';
+export function dateSourceLabel(source: Submission['dateSource']): string {
+  return source === 'submission'
+    ? 'Submission date'
+    : source === 'claim'
+      ? 'Collector supplied'
+      : 'Admin correction';
+}
 export interface Submission {
   id: string;
   version: number;

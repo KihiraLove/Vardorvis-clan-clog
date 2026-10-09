@@ -23,9 +23,12 @@ import {
 
 export class AdminRequestError extends Error {
   readonly status: number;
-  constructor(status: number) {
+  constructor(status: number, serverConflict?: string) {
     super(
-      status === 401
+      status === 409 && serverConflict ===
+          'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.'
+        ? serverConflict
+        : status === 401
         ? 'Your session expired. Sign in again.'
         : status === 403
           ? 'Your account is not allowed to administer the clan.'
@@ -60,7 +63,20 @@ export class LiveAdminClient implements AdminClient {
       credentials: 'same-origin',
       cache: 'no-store',
     });
-    if (!response.ok) throw new AdminRequestError(response.status);
+    if (!response.ok) {
+      let serverConflict: string | undefined;
+      if (response.status === 409) {
+        try {
+          const body: unknown = await response.json();
+          if (body && typeof body === 'object' && 'error' in body &&
+              typeof body.error === 'string')
+            serverConflict = body.error;
+        } catch {
+          // Unexpected error responses keep the standard conflict message.
+        }
+      }
+      throw new AdminRequestError(response.status, serverConflict);
+    }
     return response;
   }
   private async json(

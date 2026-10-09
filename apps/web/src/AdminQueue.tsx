@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
+  dateSourceLabel,
   type AdminCatalog,
   type AdminClient,
   type QueueResult,
@@ -203,6 +204,14 @@ export function AdminQueue({
                       <dd>{row.collectedOn}</dd>
                     </div>
                     <div>
+                      <dt>Date source</dt>
+                      <dd>{dateSourceLabel(row.dateSource)}</dd>
+                    </div>
+                    <div>
+                      <dt>Submitted via</dt>
+                      <dd>{row.source === 'manual' ? 'Admin entry' : 'Discord bot'}</dd>
+                    </div>
+                    <div>
                       <dt>Claim</dt>
                       <dd>
                         {row.hardcore ? 'Hardcore worlds' : 'Ordinary worlds'}
@@ -214,7 +223,7 @@ export function AdminQueue({
                     </div>
                   </dl>
                   <div className="admin-actions">
-                    <ProofLink url={row.proofUrl} />
+                    <ProofLink url={row.proofUrl} source={row.source} />
                     <button
                       type="button"
                       className="site-button"
