@@ -85,7 +85,7 @@ actual names on the installed Traefik before use. The owner confirmed the
 Let's Encrypt issuer, not specific Traefik label names. The router targets
 web-container port **8080**, not the host's `127.0.0.1:8088` loopback
 diagnostic port, and not API port 3000. The base Compose file still publishes
-a *loopback-only* port for local diagnostics.
+a _loopback-only_ port for local diagnostics.
 
 When the actual hostname and DNS are verified, configure host `.env` with
 `CLOG_HOST` set to that hostname and `PUBLIC_ORIGIN=https://<host>` (no
