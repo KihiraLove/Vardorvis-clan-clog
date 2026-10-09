@@ -1,6 +1,6 @@
 # Product requirements
 
-> **9 October 2026 DEC-01 review:** [ADR 002](decisions/002-command-date-display.md) records the approved one-credit-per-mode policy, actual password auth and command/date defaults. The second Discord command, optional slash date, and proxy/TLS/visual sign-off remain owner decisions.
+> **9 October 2026 DEC-01 review:** [ADR 002](decisions/002-command-date-display.md) records the approved one-credit-per-mode policy, actual password auth and command/date defaults. The sole `/cc-clog submit` command and API receipt-date policy are confirmed. Proxy/TLS and visual sign-off remain open.
 
 ## Public collection log
 
@@ -21,7 +21,7 @@
 - When the admin enables the hardcore release flag, the public skull switches to the hardcore log and turns red while that mode is active; disabled mode hides the skull without deleting or modifying hardcore credits. Do not release by a hardcoded date.
 - In hardcore mode, collected icons show a red silhouette contour and the menu shows the skull and suffix `on hardcore worlds`, e.g. `Collected by KihiraVD on 16/10/26 on hardcore worlds`. Ordinary mode keeps its normal treatment. Do not combine two mode-specific collector lines.
 - Pending, rejected or revoked claims never create a collected state. Revoking a credit affects only its mode and retains private audit history.
-- The implemented slash command has an optional `hardcore` boolean. See [ADR 002](decisions/002-command-date-display.md) for the still-open second-command and optional collection-date choices.
+- The implemented slash command has an optional `hardcore` boolean. See [ADR 002](decisions/002-command-date-display.md) for the confirmed single command and receipt-date policy.
 
 ## XP gained tracker below the collection log
 
@@ -65,13 +65,13 @@ The implemented command is `/cc-clog submit item:<item/name> proof:<imgur-or-gya
 - Acknowledge/defer promptly and send an ephemeral receipt only after durable persistence. Retry the same Discord interaction ID without creating duplicate submissions. Report API failures accurately.
 - Do not overwrite all application commands on every container restart. Provide a separate, explicit guild-command registration script when the bot feature is implemented.
 
-The user mentioned two commands but named only this one. The second remains **unapproved and unimplemented**; see the [DEC-01 decision record](decisions/002-command-date-display.md) for an explicitly nonbinding suggestion.
+The owner confirmed **exactly one command**, `/cc-clog submit`. The earlier second-command reference was residual ideation; no additional command should be registered.
 
 ## Date policy
 
-`collected_on` is a calendar date; `submitted_at` is a UTC timestamp. Initially, use the submission's UTC calendar date when no collection date is supplied and label the source `submission_default`. The admin can correct it before approval. This avoids pretending delayed submissions describe their actual drop date.
+`collected_on` is the **UTC calendar date of receipt by the API** and `submitted_at` is the UTC receipt timestamp. The submitting user and bot cannot specify a different collection date; `dateSource` is `submission_default`. Exact interaction retries retain the original timestamp/date. The admin may make a separate, audited correction during review.
 
-The command currently defines `item`, `proof`, optional `submitter-name` and optional `hardcore`; it does **not** expose `collected-on`. The API supports an explicitly supplied ISO date, but enabling that slash option requires the owner's decision. Until then, the UTC receipt-date fallback and admin correction remain in effect. Public rendering is always `DD/MM/YY`; never parse user input as an ambiguous locale date. Reject future collection dates at the submission/review boundary.
+The command defines `item`, `proof`, optional `submitter-name` and optional `hardcore`; it does **not** expose `collected-on`. The bot API also rejects a caller-supplied `collectedOn`. Public rendering is `DD/MM/YY`; authenticated admin corrections must be valid, nonfuture calendar dates.
 
 ## Deployment scope
 

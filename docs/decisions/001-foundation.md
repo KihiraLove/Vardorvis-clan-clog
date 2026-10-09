@@ -13,11 +13,11 @@ Status: accepted for the project foundation, 2026-10-05. Open product questions 
 | Shared-password admin login                   | Supersedes Discord OAuth; exact origin, expiring server-side sessions and CSRF are required        |
 | Discord gateway bot → internal API            | Outbound connectivity suits home hosting; API owns business writes                                 |
 | Autocomplete plus raw-text fallback           | A full log cannot fit a fixed 25-choice Discord list; admins resolve ambiguity                     |
-| UTC submission-date default, admin correction | Requested command has no date input; actual collection day is kept distinct from receipt time      |
+| UTC receipt date, separate admin correction  | Owner-confirmed: only the server sets the submitted claim's date at receipt |
 | Private GHCR, multi-architecture images       | Fits existing GitHub/private repo and ARM/AMD64 home servers                                       |
 | Manual validated-SHA home deployment          | Makes initial rollout/rollback reviewable before unattended deployments                            |
 
-The 7 October mockup supersedes the initial multi-collector, admin-OAuth and display assumptions. [ADR 002](002-command-date-display.md) is the active DEC-01 record: the second command, optional slash collection date, exact proxy/TLS deployment, and final visual acceptance still require owner confirmation. The public display is already confirmed as one approved credit per canonical item and world mode.
+The 7 October mockup supersedes the initial multi-collector, admin-OAuth and display assumptions. [ADR 002](002-command-date-display.md) is the active DEC-01 record: the single `/cc-clog submit` command and server-issued UTC receipt date are now confirmed. Proxy/TLS deployment and final visual acceptance still need owner review. The public display is already confirmed as one approved credit per canonical item and world mode.
 
 ## Planned extensions recorded 2026-10-05
 

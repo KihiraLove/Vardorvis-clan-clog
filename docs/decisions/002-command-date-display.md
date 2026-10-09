@@ -1,6 +1,6 @@
 # ADR 002: Discord commands, collection dates and collector display
 
-Status: **partially confirmed; owner decisions pending** (DEC-01 #14), 9 October 2026.
+Status: **command and date confirmed; proxy/TLS and visual sign-off pending** (DEC-01 #14), 9 October 2026.
 
 This record distinguishes owner-approved requirements, shipped contracts, safe
 interim behavior, and recommendations. **Recommendations are not authorizations
@@ -16,31 +16,26 @@ assumptions in [ADR 001](001-foundation.md).
 | Collector identity       | An optional `submitter-name` overrides the actor's current guild display name, falling back to username. The resolved, trimmed name is stored as a snapshot; it is not tied to future Discord renames. Admin can correct it with audit.                                                                 | Implemented                                                        |
 | Hardcore display         | Hardcore mode is a separate public view with its own counters and details. The skull selects it only if the admin release flag is enabled; there is no scheduled unlock date. Do not combine ordinary and hardcore collector lines in a single public menu.                                             | Owner-approved 7 October; implemented                              |
 | Primary command          | `/cc-clog submit item:<item> proof:<https-link> [submitter-name:<name>] [hardcore:<boolean>]`. The bot limits commands to the configured guild, validates proof, saves a pending submission through the bot-only API, and replies ephemerally after a durable receipt.                                  | Implemented                                                        |
-| Default date             | Slash submissions have **no `collected-on` option**. The API records `submittedAt` in UTC and sets `collectedOn` to the UTC submission calendar date, `dateSource: submission_default`. Admin edits change the stored date and provenance to `admin`. The fallback is not a verified drop day.          | Implemented interim behavior                                       |
+| Submission date | Server-issued UTC receipt date; never supplied by the submitting user or bot. The intake API records `submittedAt` and its UTC calendar date as `collectedOn` with source `submission_default`. A versioned, audited admin correction remains an exceptional separate review action. | Owner-confirmed 9 October; enforced by intake API |
 | Display date             | Public collected dates are formatted `DD/MM/YY` (for example, `16/10/26`). Collection dates are calendar values and never parsed as locale-dependent strings. Reject future dates on review.                                                                                                            | Implemented                                                        |
 | Admin access             | Direct `/admin` and `/admin/xp` URLs, no public Admin button. Site administration uses a server-side shared password, session cookie, exact `PUBLIC_ORIGIN` and CSRF; Discord OAuth is **not** used for admin login.                                                                                    | Owner-approved UI; implemented                                     |
 | Homepage                 | Supplied animated Mexicat GIF, 2× collection log, then XP tracker below the log.                                                                                                                                                                                                                        | Owner-approved layout; visual acceptance still open                |
 
-### Decisions not yet made by the owner
+### Confirmed decisions — 9 October 2026
 
-**Second Discord command:** The original request mentioned two commands but
-specified only `/cc-clog submit`. No second command is implemented or
-registered. **Proposed**, for consideration: `/cc-clog lookup item:<item>`
-would give an ephemeral, read-only summary of that item's approved ordinary
-and hardcore status. If chosen, scope it to the clan guild, show only public
-approved information, honor the hardcore release flag, and use autocomplete.
-It must not disclose proof links, pending claims, audit events, or admin
-details. Alternatively the owner may choose a completely different command.
-**Decision required before code or registration changes.**
+**Exactly one Discord command:** The earlier reference to a second command
+was residual ideation. `/cc-clog submit` is the only intended command.
+Do not implement or register `/cc-clog lookup` or another subcommand.
 
-**Optional collection date:** Current behavior is to use the UTC receipt
-date and permit a later admin correction; this remains the compatibility
-default. The owner must decide whether slash input should additionally accept
-`[collected-on:YYYY-MM-DD]`. If approved, accept only a real, nonfuture ISO
-calendar date, record `dateSource: collector`, validate again in the API,
-and include it in retry/idempotency payload checks. Omitted input continues
-to use the UTC submission date. This is a proposed contract, **not** a current
-bot input.
+**Date is the submission's receipt date:** The API sets both `submittedAt`
+and the UTC calendar `collectedOn` at receipt. The bot offers no
+`collected-on` input, and the authenticated bot intake API rejects
+`collectedOn` even if a caller submits it directly. Exact retries return
+the original persisted receipt/date, not a new timestamp. Existing manual
+review date corrections remain a separate, authenticated, versioned and
+audited exception; no user may backdate a submitted claim.
+
+### Remaining deployment and visual acceptance
 
 **Proxy/TLS and deployment:** The supplied direct-admin example is
 `https://daybloom.net/admin`, but this does not confirm DNS, an active
@@ -62,10 +57,10 @@ are useful evidence but are not owner sign-off.
 
 - [x] Document the already confirmed one-credit-per-mode and collector display policy.
 - [x] Reconcile documentation with the current password-login and command contracts.
-- [x] Preserve UTC receipt-date fallback and admin-correction behavior.
-- [ ] Owner specifies the second Discord command and authorizes registration scope.
-- [ ] Owner explicitly chooses optional slash collection date or current fallback only.
+- [x] Owner confirmed `/cc-clog submit` is the only Discord command.
+- [x] Owner confirmed server-issued UTC receipt date with no user-supplied date.
+- [x] Preserve audited admin corrections as a separate review operation.
 - [ ] Owner confirms production origin, proxy/TLS specifics and manual visual acceptance.
 
-Until those three outstanding decisions are confirmed, keep issue #14 open.
+Keep issue #14 open until deployment and visual acceptance are reviewed.
 Do not infer approval from passing CI or a draft PR.

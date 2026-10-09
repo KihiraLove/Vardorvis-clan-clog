@@ -38,7 +38,7 @@ The routes marked as implemented in [backend phase one](backend-phase-one.md) an
 | `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF              | Reject with reason                                              |
 | `POST /api/v1/admin/submissions/:id/revoke`    | Admin session + CSRF              | Revoke approved credit with reason                              |
 
-Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false) and `collectedOn` (ISO `YYYY-MM-DD`). The API sets submission timestamp/date default. A later optional collection date requires a validated ISO calendar date and explicit source. The bot cannot send approval state or reviewer identity.
+Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false). The bot-only endpoint rejects any `collectedOn` field. The API assigns the UTC receipt timestamp/date; exact retries retain the original. The bot cannot send approval state or reviewer identity.
 
 Intake returns 201 for a new durable pending submission, or 200 with the same receipt for an exact interaction retry. A reused interaction ID with a different payload is a 409 conflict. Return `resolution: resolved|needs_match` and canonical candidates. No fuzzy suggestion grants credit.
 
@@ -141,12 +141,11 @@ on startup.
 
 The bot defers and responds ephemerally, restricts handling to the configured
 guild, and confirms a pending claim only after a durable, idempotent API
-receipt. It cannot approve submissions. A `collected-on` slash field is
-**not implemented**; the bot sends no date and the intake API chooses its
-UTC receipt calendar date (`dateSource: submission_default`). If a future
-owner-approved optional date is supplied via API, validate a real nonfuture
-`YYYY-MM-DD` date and set `dateSource: collector`. Corrections by the
-admin set `dateSource: admin`.
+receipt. It cannot approve submissions. The owner confirmed **no**
+`collected-on` slash option or bot-only API field. The API always assigns
+its UTC receipt calendar date (`dateSource: submission_default`).
+Authenticated, versioned admin review corrections remain separate and
+set `dateSource: admin` without changing `submittedAt`.
 
 Each canonical item can have one **current** approval in normal mode and one
 in hardcore mode. Public `/api/v1/collections` returns only those approved
@@ -154,9 +153,9 @@ credits for the selected mode; revoked/rejected/pending claims and the complete
 audit trail remain private. The public collection UI never lists multiple
 collectors for one item within a mode.
 
-No second command has been approved or registered. See
-[ADR 002](decisions/002-command-date-display.md) for a nonbinding read-only
-lookup proposal and the remaining choices.
+The owner confirmed **only `/cc-clog submit` exists**. The earlier
+second-command reference was residual ideation; do not register a lookup
+or any additional command. See [ADR 002](decisions/002-command-date-display.md).
 
 ## Planned hardcore extension
 
