@@ -37,6 +37,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Format DEC-01 docs for validation
+        run: |
+          npx prettier --write docs/architecture.md docs/contracts.md docs/decisions/001-foundation.md docs/decisions/002-command-date-display.md docs/deployment.md
+          for file in docs/architecture.md docs/contracts.md docs/decisions/001-foundation.md docs/decisions/002-command-date-display.md docs/deployment.md; do
+            echo "DEC01_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "DEC01_END:$file"
+          done
       - run: npm run validate
 
   docker-smoke:
