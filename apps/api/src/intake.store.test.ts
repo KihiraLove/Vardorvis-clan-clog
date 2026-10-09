@@ -176,7 +176,11 @@ test(
         interactionId: '923456789012345678',
         collectedOn: today,
       } as BotSubmissionInput);
-      assert.equal(overridden.statusCode, 400, 'Caller-supplied date is forbidden');
+      assert.equal(
+        overridden.statusCode,
+        400,
+        'Caller-supplied date is forbidden',
+      );
       const dated = await submit({
         ...claim,
         interactionId: '923456789012345678',
@@ -184,7 +188,10 @@ test(
       });
       assert.equal(dated.statusCode, 201);
       assert.equal(dated.json().dateSource, 'submission_default');
-      assert.equal(dated.json().collectedOn, dated.json().submittedAt.slice(0, 10));
+      assert.equal(
+        dated.json().collectedOn,
+        dated.json().submittedAt.slice(0, 10),
+      );
       // Failed SQL insert must not reserve the interaction ID or leave a partial receipt.
       await pool.query(
         "ALTER TABLE submissions ADD CONSTRAINT no_failure_name CHECK (collector_name <> 'Reject me')",

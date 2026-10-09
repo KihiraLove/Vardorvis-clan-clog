@@ -37,15 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Format confirmed DEC-01 review files
-        run: |
-          npx prettier --write apps/api/src/intake.store.test.ts apps/api/src/intake.test.ts apps/bot/src/command.test.ts docs/decisions/001-foundation.md docs/decisions/002-command-date-display.md
-          for file in apps/api/src/intake.store.test.ts apps/api/src/intake.test.ts apps/bot/src/command.test.ts docs/decisions/001-foundation.md docs/decisions/002-command-date-display.md; do
-            echo "DEC_FINAL_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "DEC_FINAL_END:$file"
-          done
       - run: npm run validate
 
   docker-smoke:

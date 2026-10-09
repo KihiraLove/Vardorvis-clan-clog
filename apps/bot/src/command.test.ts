@@ -6,7 +6,11 @@ import { collectionLogCommand } from './command.js';
 test('submission command keeps required item/proof before optional name and uses autocomplete', () => {
   const command = collectionLogCommand.toJSON();
   assert.equal(command.name, 'cc-clog');
-  assert.equal(command.options?.length, 1, 'DEC-01 allows only /cc-clog submit');
+  assert.equal(
+    command.options?.length,
+    1,
+    'DEC-01 allows only /cc-clog submit',
+  );
   const submit = command.options?.[0];
   assert.equal(submit?.name, 'submit');
   assert.ok(submit && 'options' in submit);

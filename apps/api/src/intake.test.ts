@@ -237,7 +237,10 @@ test('intake enforces guild, proof, actor, fields and exact retry semantics', as
     assert.equal(unknown.json().itemId, null);
     assert.equal(unknown.json().resolution, 'needs_match');
     assert.equal(unknown.json().dateSource, 'submission_default');
-    assert.equal(unknown.json().collectedOn, unknown.json().submittedAt.slice(0, 10));
+    assert.equal(
+      unknown.json().collectedOn,
+      unknown.json().submittedAt.slice(0, 10),
+    );
   } finally {
     await app.close();
   }
