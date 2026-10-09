@@ -41,7 +41,10 @@ The existing Docker Traefik proxy issues HTTPS certificates through **Let's Encr
 and uses the networks **`web`** and **`socknet`**. Attach only the app's web
 container to external `web`, retaining its separate internal application network.
 Do not attach app services to Traefik's `socknet` socket-proxy network, and do not
-publish the API, database, bot or migration ports. Refer to
+publish the API, database, bot or migration ports. The opt-in [Traefik Compose override](../../compose.traefik.yaml) implements
+Docker-label routing on `web` with environment-selectable HTTPS entrypoint
+and Let's Encrypt resolver names. It also derives `PUBLIC_ORIGIN` from the
+router hostname to prevent admin login origin mismatches. Refer to
 [Traefik deployment guidance](../deployment.md#reverse-proxy--traefik).
 
 The owner reports having visually inspected and approved the frontend.

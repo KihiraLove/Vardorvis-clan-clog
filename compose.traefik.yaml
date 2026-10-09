@@ -1,0 +1,28 @@
+# Opt-in production routing through the owner's existing Docker Traefik.
+# Enable with COMPOSE_FILE=compose.yaml:compose.traefik.yaml on the Linux host.
+# Docker labels configure app routing; Traefik already defines the HTTPS
+# entrypoint and Let's Encrypt certificate resolver in its own startup config.
+services:
+  api:
+    # Keep the exact login/CSRF origin in sync with the Traefik Host rule.
+    environment:
+      AUTH_ENABLED: 'true'
+      PUBLIC_ORIGIN: https://${CLOG_HOST:?Set CLOG_HOST to the public hostname}
+
+  web:
+    networks:
+      - default
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - 'traefik.http.routers.clog.rule=Host(`${CLOG_HOST:?Set CLOG_HOST to the public hostname}`)'
+      - traefik.http.routers.clog.entrypoints=${TRAEFIK_HTTPS_ENTRYPOINT:-websecure}
+      - traefik.http.routers.clog.tls=true
+      - traefik.http.routers.clog.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.routers.clog.service=clog
+      - traefik.http.services.clog.loadbalancer.server.port=8080
+
+networks:
+  web:
+    external: true

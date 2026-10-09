@@ -54,47 +54,51 @@ so Nginx can still reach `api:3000`. The Traefik `socknet` socket-proxy
 network is not an application network; do **not** attach the clog services to it.
 Leave the API, PostgreSQL, bot and migrations off the proxy network.
 
-An illustrative, **opt-in** override (not deployed or created on the server
-by this PR) is:
+The repository includes the **opt-in**
+[compose.traefik.yaml](../compose.traefik.yaml) override with Docker labels
+for host routing, TLS, existing resolver selection, and service port. It
+uses only external `web` and the private application `default` networks;
+`socknet` is never connected to the app.
 
-```yaml
-# compose.traefik.yaml — local host file, reviewed before use
-services:
-  web:
-    networks:
-      - default
-      - web
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=web
-      - 'traefik.http.routers.clog.rule=Host(`${CLOG_HOST:?Set CLOG_HOST}`)'
-      - traefik.http.routers.clog.entrypoints=websecure
-      - traefik.http.routers.clog.tls=true
-      - traefik.http.routers.clog.tls.certresolver=letsencrypt
-      - traefik.http.routers.clog.service=clog
-      - traefik.http.services.clog.loadbalancer.server.port=8080
+On the production host, copy both Compose files from a reviewed release and
+configure these values in the private `.env`:
 
-networks:
-  web:
-    external: true
+```dotenv
+# Choose the hostname used by visitors (not a URL or /admin path).
+CLOG_HOST=YOUR_REAL_HOSTNAME
+# Must match names already configured in Traefik's startup config.
+TRAEFIK_HTTPS_ENTRYPOINT=websecure
+TRAEFIK_CERT_RESOLVER=letsencrypt
+# Activates the override for normal docker compose and deploy.sh commands.
+COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+ADMIN_PASSWORD=REPLACE_WITH_UNIQUE_STRONG_PASSWORD
+SESSION_SECRET=REPLACE_WITH_64_RANDOM_HEX_CHARACTERS
 ```
 
-In this example, **`websecure`** is a conventional HTTPS entrypoint label
-and **`letsencrypt`** a conventional certificate resolver label; verify their
-actual names on the installed Traefik before use. The owner confirmed the
-Let's Encrypt issuer, not specific Traefik label names. The router targets
-web-container port **8080**, not the host's `127.0.0.1:8088` loopback
-diagnostic port, and not API port 3000. The base Compose file still publishes
-a _loopback-only_ port for local diagnostics.
+The override sets `AUTH_ENABLED=true` and derives the API's
+`PUBLIC_ORIGIN=https://${CLOG_HOST}` from the same hostname as the
+Traefik router, avoiding an admin login **403** caused by an origin mismatch.
+It requires the admin password and session secret at startup. Its example
+`websecure` entrypoint and `letsencrypt` resolver are **names**, not
+additional Traefik setup; change the two values only if your existing
+Traefik uses different names. Port **8080** is Nginx inside the `web`
+container; the base stack's `127.0.0.1:8088` diagnostic binding remains
+loopback-only. No admin/API/database port is routed directly.
 
-When the actual hostname and DNS are verified, configure host `.env` with
-`CLOG_HOST` set to that hostname and `PUBLIC_ORIGIN=https://<host>` (no
-`/admin` path). `AUTH_ENABLED=true`, a unique `ADMIN_PASSWORD` and a
-generated `SESSION_SECRET` are required for admin login. The example direct
-admin URL `https://daybloom.net/admin` is not independent evidence that this
-is the live host. The login endpoint returns **403** if the browser sends an
-`Origin` that differs from `PUBLIC_ORIGIN`; do not bypass this check.
-Production HTTPS sessions use a Secure `__Host-clog-session` cookie.
+```bash
+docker compose config --quiet
+docker compose config --format json | jq '.services.web.labels'
+# After reviewing the resolved config, use the normal host deploy workflow.
+```
+
+The example admin URL `https://daybloom.net/admin` does not itself verify
+that the hostname is live. Traefik's entrypoints and Let's Encrypt resolver
+**definitions** are startup configuration, not application container
+labels; Docker labels **reference** those existing definitions. DNS records,
+certificate issuance and any host-specific proxy trust checks also remain
+external to Compose labels. Docker Compose supports `COMPOSE_FILE` in the
+host `.env`, so the existing deployment script can use the override without
+being modified.
 
 The API's `TRUSTED_PROXY_CIDRS` applies to Fastify's **immediate trusted
 proxy hops**, not the Traefik `socknet`. Nginx in the app's web container
