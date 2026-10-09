@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
-import { importBundledCatalog, readBundledSnapshot } from './catalog-import.js';
+import { readBundledSnapshot } from './catalog-import.js';
 import { snapshotId, type CatalogSnapshot } from './catalog-model.js';
 
 export interface ClueTaxonomy {
