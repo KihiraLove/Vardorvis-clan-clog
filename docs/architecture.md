@@ -23,7 +23,7 @@ flowchart TD
 
 The web container serves static assets and proxies `/api/` to the API. The external reverse proxy terminates TLS. Public endpoints return only catalog data and approved collection credits; proof links, pending claims, Discord IDs and audit metadata remain private.
 
-The bot connects outbound to Discord's gateway and the internal API. Submission writes use a dedicated service credential, restricted to bot routes. The credential must not authorize admin routes. Human admins use Discord OAuth, server-side sessions, a fixed redirect URL and an explicit ID allowlist. V1 does not require public visitors to log in.
+The bot connects outbound to Discord's gateway and the internal API. Submission writes use a dedicated service credential, restricted to bot routes. The credential must not authorize admin routes. Human admins use the configured shared password, exact site origin, expiring server-side sessions and CSRF protection; Discord OAuth is not an admin login method. V1 does not require public visitors to log in.
 
 Foundation API endpoints are `/healthz`, `/readyz` and `/api/v1/status`. Readiness checks that PostgreSQL is reachable and the migrated collection-state view exists; it does not indicate catalog/features are complete.
 
@@ -43,14 +43,14 @@ Initial schema: [001_initial.sql](../packages/database/migrations/001_initial.sq
 | `pages` / `page_items`  | Ordered slots; one occurrence of a canonical item per page                           |
 | `submissions`           | Unique Discord interaction ID; optional item while unmatched; approval requires item |
 | `audit_events`          | Before/after review values and authenticated actor                                   |
-| `collection_credits`    | Approved submissions only; all approved collectors retained                          |
+| `collection_credits`    | One current approved collector per canonical item and world mode; old claims remain private |
 | `item_collection_state` | Item collected iff at least one approved credit exists                               |
 
 ## Review transactions
 
 An approval endpoint must authenticate an allowlisted admin, validate all fields, lock the submission and verify the client's expected version, resolve a real item, change status and insert an audit event in one transaction. Return 409 for stale/concurrent reviews. Increment `version` on every change. Record the actor from the session, never from a request body.
 
-Rejecting a pending claim does not alter approved credits. Revoking an approval removes that credit from the derived public view. The item remains collected while another approved credit exists. Multiple legitimate collectors for the same item are allowed; Discord retries of the same interaction are not.
+Rejecting a pending claim does not alter approved credits. Revoking an approval removes that credit from the derived public view. The same item can still be collected in the other world mode, but a unique partial index permits only one **current approved** credit for each `(item_id, hardcore)` pair. Earlier claims, rejections, corrections and revocations remain in the private audit history; Discord retries of the same interaction are idempotent.
 
 The foundation SQL enforces basic foreign keys/status checks/idempotency uniqueness. Auth, input checks, review state transitions and append-only audit permissions are implementation tasks; the schema alone is not a complete review service.
 
@@ -86,6 +86,6 @@ The admin UI offers drag-and-drop plus keyboard-accessible move/position control
 
 ## Operational policy
 
-PostgreSQL is authoritative. Public reads may be cached with an ETag; approved/revoked writes invalidate that projection. Rate-limit bot writes and OAuth/review endpoints. Keep secrets and proof URLs out of logs. Use parameterized SQL, bounded request sizes, CSRF/origin validation on browser writes, secure session cookies behind TLS and escape names in the UI.
+PostgreSQL is authoritative. Public reads may be cached with an ETag; approved/revoked writes invalidate that projection. Rate-limit bot writes and password-login/review endpoints. Keep secrets and proof URLs out of logs. Use parameterized SQL, bounded request sizes, CSRF/origin validation on browser writes, secure session cookies behind TLS and escape names in the UI.
 
 Back up database and deployment configuration, and include the planned uploaded-icon volume in coordinated backups/restores once #30 ships. Test restores, then add least-privilege database roles before V1. The foundation Compose uses one database owner for migrations/runtime to keep setup executable; separating migrator and runtime privileges is a tracked hardening requirement.

@@ -9,15 +9,15 @@ Status: accepted for the project foundation, 2026-10-05. Open product questions 
 | PostgreSQL, SQL migrations                    | Foreign keys, transactional reviews, idempotency and auditable durable state                  |
 | Canonical item + ordered page membership      | One approval affects every repeated page occurrence while preserving source layout            |
 | Item collected from approved credits          | Pending/rejected claims cannot leak into public state; revocation remains consistent          |
-| Multiple approved collectors retained         | History remains available rather than silently replacing earlier claims                       |
-| Discord OAuth + user-ID allowlist for admins  | No custom passwords; explicit admin identities                                                |
+| One current collector per world mode          | Superseded multi-collector display; one active approved item/mode credit, private history retained |
+| Shared-password admin login                  | Supersedes Discord OAuth; exact origin, expiring server-side sessions and CSRF are required      |
 | Discord gateway bot → internal API            | Outbound connectivity suits home hosting; API owns business writes                            |
 | Autocomplete plus raw-text fallback           | A full log cannot fit a fixed 25-choice Discord list; admins resolve ambiguity                |
 | UTC submission-date default, admin correction | Requested command has no date input; actual collection day is kept distinct from receipt time |
 | Private GHCR, multi-architecture images       | Fits existing GitHub/private repo and ARM/AMD64 home servers                                  |
 | Manual validated-SHA home deployment          | Makes initial rollout/rollback reviewable before unattended deployments                       |
 
-Open decisions: the unnamed second Discord command; whether to add optional `collected-on`; final domain and proxy network; source snapshot/assets and reference-client sizing; whether the clan wants all approved collectors or a single first-credit display. The defaults above permit development to proceed; these decisions must be confirmed before their dependent public behavior is finalized.
+The 7 October mockup supersedes the initial multi-collector, admin-OAuth and display assumptions. [ADR 002](002-command-date-display.md) is the active DEC-01 record: the second command, optional slash collection date, exact proxy/TLS deployment, and final visual acceptance still require owner confirmation. The public display is already confirmed as one approved credit per canonical item and world mode.
 
 ## Planned extensions recorded 2026-10-05
 
