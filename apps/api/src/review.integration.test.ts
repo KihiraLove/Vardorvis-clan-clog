@@ -141,7 +141,8 @@ test(
         ),
         {
           status: 409,
-          message: /An approved credit already exists for this item and world mode/,
+          message:
+            /An approved credit already exists for this item and world mode/,
         },
       );
       assert.equal((await review.detail(second))?.submission.status, 'pending');
@@ -176,7 +177,10 @@ test(
         { status: 409 },
       );
       assert.equal((await review.detail(one))?.submission.hardcore, false);
-      assert.deepEqual((await backend.collections()).map((c) => c.hardcore), [false, true]);
+      assert.deepEqual(
+        (await backend.collections()).map((c) => c.hardcore),
+        [false, true],
+      );
       await assert.rejects(
         review.mutate(
           one,

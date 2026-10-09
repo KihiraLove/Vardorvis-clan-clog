@@ -37,15 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Format ADMIN-01 follow-up for validation
-        run: |
-          npx prettier --write apps/web/src/admin-model.ts apps/web/src/AdminQueue.tsx apps/web/src/SubmissionEditor.tsx apps/web/src/AdminProofLink.tsx apps/web/src/use-admin-action.ts apps/web/src/admin-api.ts apps/api/src/review-store.ts apps/web/tests/admin.spec.ts apps/web/src/admin-api.test.ts apps/web/src/admin-model.test.ts apps/api/src/review.integration.test.ts docs/admin-frontend-review.md
-          for file in apps/web/src/admin-model.ts apps/web/src/AdminQueue.tsx apps/web/src/SubmissionEditor.tsx apps/web/src/AdminProofLink.tsx apps/web/src/use-admin-action.ts apps/web/src/admin-api.ts apps/api/src/review-store.ts apps/web/tests/admin.spec.ts apps/web/src/admin-api.test.ts apps/web/src/admin-model.test.ts apps/api/src/review.integration.test.ts docs/admin-frontend-review.md; do
-            echo "ADMIN_FOLLOWUP_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "ADMIN_FOLLOWUP_END:$file"
-          done
       - run: npm run validate
 
   docker-smoke:

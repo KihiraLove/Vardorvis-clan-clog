@@ -481,7 +481,10 @@ export class PgReviewStore implements ReviewStore {
     } catch (e) {
       await client.query('ROLLBACK');
       if (e && typeof e === 'object' && 'code' in e && e.code === '23505') {
-        if ('constraint' in e && e.constraint === 'submissions_one_credit_per_world')
+        if (
+          'constraint' in e &&
+          e.constraint === 'submissions_one_credit_per_world'
+        )
           throw occupied();
         throw conflict();
       }

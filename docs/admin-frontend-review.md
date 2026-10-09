@@ -68,7 +68,7 @@ The live pending/unmatched/reviewed cards now display **submitted via**
 or admin correction) alongside the collection date. The detail editor uses the
 same source labels and limits collection dates to today (UTC).
 
-Proofless *manual* entries are shown as "No proof supplied (manual entry)",
+Proofless _manual_ entries are shown as "No proof supplied (manual entry)",
 rather than an invalid-proof warning; manual pending approvals still require
 explicit checkbox acknowledgment. Missing or unsafe evidence on **bot** claims
 continues to block approval. Stale reviews reload current state and clear the

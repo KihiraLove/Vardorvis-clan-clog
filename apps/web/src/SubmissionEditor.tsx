@@ -221,9 +221,7 @@ export function SubmissionEditor({
         </div>
         <div>
           <dt>Date source</dt>
-          <dd>
-            {dateSourceLabel(row.dateSource)}
-          </dd>
+          <dd>{dateSourceLabel(row.dateSource)}</dd>
         </div>
         <div>
           <dt>Submitted</dt>

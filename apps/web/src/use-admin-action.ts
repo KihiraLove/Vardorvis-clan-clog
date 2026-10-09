@@ -58,7 +58,8 @@ export function useAdminAction(onAccessLost: () => void) {
                 failure.message ===
                   'Another change was saved. Load the latest data before trying again.'
                   ? 'Another change was saved. The latest data is loaded; review it before trying again.'
-                  : failure.message + ' The latest data is loaded; review the credit before trying again.',
+                  : failure.message +
+                      ' The latest data is loaded; review the credit before trying again.',
               );
           } catch (failure) {
             if (

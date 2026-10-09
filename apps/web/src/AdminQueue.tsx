@@ -209,7 +209,11 @@ export function AdminQueue({
                     </div>
                     <div>
                       <dt>Submitted via</dt>
-                      <dd>{row.source === 'manual' ? 'Admin entry' : 'Discord bot'}</dd>
+                      <dd>
+                        {row.source === 'manual'
+                          ? 'Admin entry'
+                          : 'Discord bot'}
+                      </dd>
                     </div>
                     <div>
                       <dt>Claim</dt>

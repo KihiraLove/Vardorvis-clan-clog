@@ -783,17 +783,20 @@ test('ADMIN-01 live HTTP view shows claim date provenance and permits verified p
     dateSource: 'admin',
   };
   let approvals = 0;
-  await page.route('**/api/v1/admin/submissions/sample-hardcore/approve', (route) => {
-    approvals++;
-    expect(route.request().headers()['x-csrf-token']).toBe('csrf-test');
-    expect(route.request().postDataJSON()).toEqual({ expectedVersion: 1 });
-    state.detail.submission = {
-      ...state.detail.submission,
-      status: 'approved',
-      version: 2,
-    };
-    return route.fulfill({ json: state.detail.submission });
-  });
+  await page.route(
+    '**/api/v1/admin/submissions/sample-hardcore/approve',
+    (route) => {
+      approvals++;
+      expect(route.request().headers()['x-csrf-token']).toBe('csrf-test');
+      expect(route.request().postDataJSON()).toEqual({ expectedVersion: 1 });
+      state.detail.submission = {
+        ...state.detail.submission,
+        status: 'approved',
+        version: 2,
+      };
+      return route.fulfill({ json: state.detail.submission });
+    },
+  );
   await page.goto('/admin');
   const card = page.locator('.submission-card');
   await expect(card).toContainText('Admin correction');
@@ -806,8 +809,12 @@ test('ADMIN-01 live HTTP view shows claim date provenance and permits verified p
   const check = editor(page).getByLabel(/^I verified this manual claim/);
   await expect(check).toBeEnabled();
   await check.check();
-  await editor(page).getByRole('button', { name: 'Approve submission' }).click();
-  await expect(page.getByText('Saved submission state: approved.')).toBeVisible();
+  await editor(page)
+    .getByRole('button', { name: 'Approve submission' })
+    .click();
+  await expect(
+    page.getByText('Saved submission state: approved.'),
+  ).toBeVisible();
   expect(approvals).toBe(1);
 });
 
@@ -815,19 +822,23 @@ test('ADMIN-01 occupied-credit conflict retains the precise reason and reloads f
   page,
 }) => {
   await mockAdmin(page);
-  await page.route('**/api/v1/admin/submissions/sample-hardcore/approve', (route) =>
-    route.fulfill({
-      status: 409,
-      json: {
-        error:
-          'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.',
-      },
-    }),
+  await page.route(
+    '**/api/v1/admin/submissions/sample-hardcore/approve',
+    (route) =>
+      route.fulfill({
+        status: 409,
+        json: {
+          error:
+            'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.',
+        },
+      }),
   );
   await page.goto('/admin');
   await review(page, 'KihiraVD').click();
   await proofCheck(page).check();
-  await editor(page).getByRole('button', { name: 'Approve submission' }).click();
+  await editor(page)
+    .getByRole('button', { name: 'Approve submission' })
+    .click();
   await expect(editor(page).getByRole('alert')).toContainText(
     'An approved credit already exists for this item and world mode.',
   );
@@ -835,5 +846,7 @@ test('ADMIN-01 occupied-credit conflict retains the precise reason and reloads f
     'The latest data is loaded',
   );
   await expect(proofCheck(page)).not.toBeChecked();
-  await expect(editor(page).getByRole('button', { name: 'Approve submission' })).toBeDisabled();
+  await expect(
+    editor(page).getByRole('button', { name: 'Approve submission' }),
+  ).toBeDisabled();
 });
