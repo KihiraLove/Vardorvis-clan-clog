@@ -23,10 +23,10 @@
 - Pending, rejected or revoked claims never create a collected state. Revoking a credit affects only its mode and retains private audit history.
 - The implemented slash command has an optional `hardcore` boolean. See [ADR 002](decisions/002-command-date-display.md) for the still-open second-command and optional collection-date choices.
 
-## XP gained tab and page
+## XP gained tracker below the collection log
 
-- Add a site-navigation `XP gained` tab leading to a separate `/xp` page. Preserve the collection log's original five tabs inside its recreated window.
-- Track imported competition XP for clan participants by skill. Show the skill name/icon, cumulative site skill XP, each member's accumulated XP, and each imported competition's complete participant gains, including zero/unavailable rows.
+- Display the SOTW/competition XP tracker **below the collection log on the homepage**, not behind a separate public navigation tab. The `/xp` route may remain a compatibility alias; preserve the collection log's five in-window tabs.
+- Show site-aggregated skill XP and imported competition events with their titles, source links, and per-skill totals. Detailed participant records are retained for reconciled imports, but **not** presented as a public member table. Show zero or unavailable event values accurately.
 - An allowlisted admin supplies a Wise Old Man competition link to import/refresh results. The selected competition provides the participant roster; do not silently omit competitors or require a separate automatic clan sync.
 - Use competition gained XP for the appropriate skill, adding every valid competitor contribution to the site's existing total. This total is competition-accumulated XP, not each account's lifetime HiScores XP.
 - First import adds the full gains; refreshing the same competition applies only differences from the stored contribution. The same unchanged competition/link cannot add XP twice. Further competitions add their gains to the existing matching skill totals.
