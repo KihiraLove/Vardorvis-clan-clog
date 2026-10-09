@@ -114,11 +114,11 @@ The captured TempleOSRS source puts Gilded, Third Age and Mimic on separate
 pages. That taxonomy is inconsistent with the same pinned **OSRS Wiki
 collection log**, which uses:
 
-| New page | Exact pinned Wiki membership |
-| --- | ---: |
-| Hard Treasure Trails (Rare) | 24 |
-| Elite Treasure Trails (Rare) | 39 |
-| Master Treasure Trails (Rare) | 45 |
+| New page                      | Exact pinned Wiki membership |
+| ----------------------------- | ---------------------------: |
+| Hard Treasure Trails (Rare)   |                           24 |
+| Elite Treasure Trails (Rare)  |                           39 |
+| Master Treasure Trails (Rare) |                           45 |
 
 The obsolete `gilded`, `third_age` and `mimic` pages are retired. The
 **Ring of 3rd Age** (game item ID 23185) moves to both **regular** Elite and

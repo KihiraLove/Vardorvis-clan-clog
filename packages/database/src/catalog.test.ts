@@ -115,26 +115,43 @@ test('source-to-identity mapping refuses omissions, duplicates and dangling sour
 test('rare clue taxonomy exactly reproduces the pinned OSRS Wiki and shares canonical identities', async () => {
   const patch = await readClueTaxonomy();
   const wiki = JSON.parse(
-    (JSON.parse(await readFile(new URL('sources/wiki.json', root), 'utf8')) as {
-      query: { pages: { revisions: { slots: { main: { content: string } } }[] }[] };
-    }).query.pages[0]!.revisions[0]!.slots.main.content,
+    (
+      JSON.parse(
+        await readFile(new URL('sources/wiki.json', root), 'utf8'),
+      ) as {
+        query: {
+          pages: { revisions: { slots: { main: { content: string } } }[] }[];
+        };
+      }
+    ).query.pages[0]!.revisions[0]!.slots.main.content,
   ) as { id: number; name: string; tabs: string[] }[];
   const snapshot = await readBundledSnapshot();
   const idByGame = new Map(
-    snapshot.items.flatMap((item) => item.gameItemIds.map((id) => [id, item.id] as const)),
+    snapshot.items.flatMap((item) =>
+      item.gameItemIds.map((id) => [id, item.id] as const),
+    ),
   );
-  const totals = { hard_treasure_trails_rare: 24, elite_treasure_trails_rare: 39, master_treasure_trails_rare: 45 };
+  const totals = {
+    hard_treasure_trails_rare: 24,
+    elite_treasure_trails_rare: 39,
+    master_treasure_trails_rare: 45,
+  };
   for (const [id, rare] of Object.entries(patch.rarePages)) {
     assert.equal(rare.gameItemIds.length, totals[id as keyof typeof totals]);
     assert.deepEqual(
       rare.gameItemIds,
-      wiki.filter((item) => item.tabs.includes(rare.name)).map((item) => item.id),
+      wiki
+        .filter((item) => item.tabs.includes(rare.name))
+        .map((item) => item.id),
       id + ' must use every item and exact order from the pinned Wiki page',
     );
     assert.ok(rare.gameItemIds.every((gameId) => idByGame.has(gameId)));
   }
   const ring = wiki.find((item) => item.id === 23185)!;
-  assert.deepEqual(ring.tabs, ['Elite Treasure Trails', 'Master Treasure Trails']);
+  assert.deepEqual(ring.tabs, [
+    'Elite Treasure Trails',
+    'Master Treasure Trails',
+  ]);
   for (const [id, move] of Object.entries(patch.regularMoves)) {
     const basePage = snapshot.pages.find((page) => page.id === id)!;
     const current = basePage.itemIds;
@@ -145,15 +162,27 @@ test('rare clue taxonomy exactly reproduces the pinned OSRS Wiki and shares cano
         'Relocated item must exist on the respective rare page',
       );
       assert.ok(
-        !wiki.find((item) => item.id === gameId)!.tabs.includes(
-          id === 'elite_treasure_trails' ? 'Elite Treasure Trails' : 'Master Treasure Trails',
-        ),
+        !wiki
+          .find((item) => item.id === gameId)!
+          .tabs.includes(
+            id === 'elite_treasure_trails'
+              ? 'Elite Treasure Trails'
+              : 'Master Treasure Trails',
+          ),
       );
     }
     assert.deepEqual(move.addGameItemIds, [23185]);
     assert.ok(!current.includes(idByGame.get(23185)!));
   }
-  const original = snapshot.pages.filter((page) => patch.retiredPages.includes(page.id));
-  assert.deepEqual(original.map((page) => page.id), ['gilded', 'third_age', 'mimic']);
-  assert.equal(new Set(wiki.map((item) => item.id)).size, snapshot.items.length);
+  const original = snapshot.pages.filter((page) =>
+    patch.retiredPages.includes(page.id),
+  );
+  assert.deepEqual(
+    original.map((page) => page.id),
+    ['gilded', 'third_age', 'mimic'],
+  );
+  assert.equal(
+    new Set(wiki.map((item) => item.id)).size,
+    snapshot.items.length,
+  );
 });

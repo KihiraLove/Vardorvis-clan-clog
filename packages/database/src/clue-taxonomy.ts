@@ -38,7 +38,10 @@ const legacyIds = ['gilded', 'third_age', 'mimic'];
 
 export async function readClueTaxonomy(): Promise<ClueTaxonomy> {
   const patch = JSON.parse(
-    await readFile(new URL('../../../catalog/clue-taxonomy.json', import.meta.url), 'utf8'),
+    await readFile(
+      new URL('../../../catalog/clue-taxonomy.json', import.meta.url),
+      'utf8',
+    ),
   ) as ClueTaxonomy;
   assert.equal(patch.wikiRevision, 15347607);
   assert.deepEqual(patch.retiredPages, legacyIds);
@@ -48,7 +51,13 @@ export async function readClueTaxonomy(): Promise<ClueTaxonomy> {
     'master_treasure_trails',
   ]);
   for (const [id, page] of Object.entries(patch.rarePages)) {
-    assert.equal(page.name, id.replaceAll('_', ' ').replace(/\b[a-z]/gu, (s) => s.toUpperCase()).replace('Rare', '(Rare)'));
+    assert.equal(
+      page.name,
+      id
+        .replaceAll('_', ' ')
+        .replace(/\b[a-z]/gu, (s) => s.toUpperCase())
+        .replace('Rare', '(Rare)'),
+    );
     assert.ok(page.gameItemIds.length > 0);
     assert.equal(new Set(page.gameItemIds).size, page.gameItemIds.length);
   }
@@ -103,12 +112,17 @@ export async function applyClueTaxonomy(
       imported.rows.length !== 1 ||
       imported.rows[0]!.id !== snapshotId(snapshot)
     )
-      throw new Error('Clue correction requires the original pinned catalog import.');
+      throw new Error(
+        'Clue correction requires the original pinned catalog import.',
+      );
 
     // Verify that no legacy page has been manually edited or contains manual items.
     // Never erase user-curated memberships or reorder history automatically.
     const sourcePages = new Map(snapshot.pages.map((page) => [page.id, page]));
-    const expected = [...legacyIds, ...order.filter((id) => !rareIds.includes(id))];
+    const expected = [
+      ...legacyIds,
+      ...order.filter((id) => !rareIds.includes(id)),
+    ];
     const pages = await client.query<{
       id: string;
       category: string;
@@ -120,10 +134,15 @@ export async function applyClueTaxonomy(
     );
     if (
       pages.rows.length !== expected.length ||
-      (await client.query('SELECT id FROM pages WHERE id=ANY($1::text[])', [rareIds]))
-        .rowCount
+      (
+        await client.query('SELECT id FROM pages WHERE id=ANY($1::text[])', [
+          rareIds,
+        ])
+      ).rowCount
     )
-      throw new Error('Clue pages already differ; inspect the existing catalog before applying correction.');
+      throw new Error(
+        'Clue pages already differ; inspect the existing catalog before applying correction.',
+      );
     for (const pageId of legacyIds) {
       const saved = pages.rows.find((row) => row.id === pageId);
       const baseline = sourcePages.get(pageId);
@@ -143,18 +162,29 @@ export async function applyClueTaxonomy(
         JSON.stringify(slots.rows.map((row) => row.item_id)) !==
           JSON.stringify(baseline.itemIds)
       )
-        throw new Error('Manual item/order on legacy clue page ' + pageId + '; migrate it manually before retiring the page.');
+        throw new Error(
+          'Manual item/order on legacy clue page ' +
+            pageId +
+            '; migrate it manually before retiring the page.',
+        );
     }
     if (
-      (await client.query(
-        'SELECT id FROM catalog_audit WHERE page_id=ANY($1::text[]) LIMIT 1',
-        [legacyIds],
-      )).rowCount
+      (
+        await client.query(
+          'SELECT id FROM catalog_audit WHERE page_id=ANY($1::text[]) LIMIT 1',
+          [legacyIds],
+        )
+      ).rowCount
     )
-      throw new Error('Legacy clue pages have audit history; review before replacing them.');
+      throw new Error(
+        'Legacy clue pages have audit history; review before replacing them.',
+      );
 
     // Ensure the saved external aliases still point to the canonical identities.
-    const mapped = await client.query<{ game_item_id: number; item_id: number }>(
+    const mapped = await client.query<{
+      game_item_id: number;
+      item_id: number;
+    }>(
       'SELECT game_item_id,item_id FROM game_item_ids WHERE game_item_id=ANY($1::integer[])',
       [[...involved]],
     );
@@ -162,7 +192,9 @@ export async function applyClueTaxonomy(
       mapped.rows.length !== involved.size ||
       mapped.rows.some((row) => canonical(row.game_item_id) !== row.item_id)
     )
-      throw new Error('Clue item alias mappings changed; no taxonomy changes applied.');
+      throw new Error(
+        'Clue item alias mappings changed; no taxonomy changes applied.',
+      );
 
     // Remove four misplaced regular rewards, retaining relative order and all
     // manually added items on those pages. Add the same canonical ring to both.
@@ -193,11 +225,12 @@ export async function applyClueTaxonomy(
     }
 
     // Retire only the obsolete source pages; no items or approved credits are deleted.
-    await client.query(
-      'DELETE FROM page_items WHERE page_id=ANY($1::text[])',
-      [legacyIds],
-    );
-    await client.query('DELETE FROM pages WHERE id=ANY($1::text[])', [legacyIds]);
+    await client.query('DELETE FROM page_items WHERE page_id=ANY($1::text[])', [
+      legacyIds,
+    ]);
+    await client.query('DELETE FROM pages WHERE id=ANY($1::text[])', [
+      legacyIds,
+    ]);
     for (const [pageId, page] of Object.entries(patch.rarePages)) {
       await client.query(
         'INSERT INTO pages(id,category,name,sort_order) VALUES($1,$2,$3,$4)',
@@ -207,10 +240,12 @@ export async function applyClueTaxonomy(
         'INSERT INTO page_items(page_id,item_id,slot,origin) SELECT $1,item_id,slot,$3 FROM jsonb_to_recordset($2::jsonb) AS x(item_id integer,slot integer)',
         [
           pageId,
-          JSON.stringify(page.gameItemIds.map((gameId, slot) => ({
-            item_id: canonical(gameId),
-            slot,
-          }))),
+          JSON.stringify(
+            page.gameItemIds.map((gameId, slot) => ({
+              item_id: canonical(gameId),
+              slot,
+            })),
+          ),
           'source',
         ],
       );
@@ -230,7 +265,10 @@ export async function applyClueTaxonomy(
         JSON.stringify({
           wikiRevision: patch.wikiRevision,
           newPages: Object.fromEntries(
-            Object.entries(patch.rarePages).map(([id, page]) => [id, page.gameItemIds.length]),
+            Object.entries(patch.rarePages).map(([id, page]) => [
+              id,
+              page.gameItemIds.length,
+            ]),
           ),
           regularMoves: patch.regularMoves,
         }),
@@ -263,7 +301,13 @@ export async function applyBundledClueTaxonomy(
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
-  console.log('Clue taxonomy ' + (await applyBundledClueTaxonomy(process.env.DATABASE_URL)));
+  console.log(
+    'Clue taxonomy ' +
+      (await applyBundledClueTaxonomy(process.env.DATABASE_URL)),
+  );
 }

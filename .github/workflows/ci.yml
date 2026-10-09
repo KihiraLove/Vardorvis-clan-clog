@@ -37,15 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Format clue taxonomy review files for validation
-        run: |
-          npx prettier --write docs/catalog-import.md packages/database/src/catalog.integration.test.ts packages/database/src/catalog.test.ts packages/database/src/clue-taxonomy.ts
-          for file in docs/catalog-import.md packages/database/src/catalog.integration.test.ts packages/database/src/catalog.test.ts packages/database/src/clue-taxonomy.ts; do
-            echo "CLUE_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "CLUE_END:$file"
-          done
       - run: npm run validate
 
   docker-smoke:
@@ -74,6 +65,15 @@ jobs:
           curl --fail http://127.0.0.1:8088/api/v1/status
           curl --fail --output /tmp/catalog.json http://127.0.0.1:8088/api/v1/catalog
           jq -e '(.items | length) == 1717 and (.pages | length) == 124' /tmp/catalog.json
+          jq -e '
+            ([.pages[] | select(.id=="hard_treasure_trails_rare") | .itemIds | length] == [24]) and
+            ([.pages[] | select(.id=="elite_treasure_trails_rare") | .itemIds | length] == [39]) and
+            ([.pages[] | select(.id=="master_treasure_trails_rare") | .itemIds | length] == [45]) and
+            ([.pages[] | select(.id=="gilded" or .id=="third_age" or .id=="mimic")] | length == 0) and
+            (. as $catalog | ($catalog.items[] | select(.name=="Ring of 3rd Age") | .id) as $ring |
+             ([ $catalog.pages[] | select(.id=="elite_treasure_trails" or .id=="master_treasure_trails") |
+                select(.itemIds | index($ring)) ] | length) == 2)
+          ' /tmp/catalog.json
           curl --fail --output /dev/null http://127.0.0.1:8088/catalog/items/1249.png
           curl --fail --output /tmp/collections.json http://127.0.0.1:8088/api/v1/collections
           jq -e '.credits == []' /tmp/collections.json
