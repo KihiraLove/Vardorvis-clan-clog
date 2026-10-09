@@ -5,6 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { importCatalog, readBundledSnapshot } from './catalog-import.js';
+import { applyClueTaxonomy, readClueTaxonomy } from './clue-taxonomy.js';
 
 test(
   'concurrent full imports are atomic, uncollected and preserve later credits/manual edits',
@@ -184,6 +185,128 @@ test(
       const changed = structuredClone(snapshot);
       changed.items[0]!.name += ' changed';
       await assert.rejects(importCatalog(client, changed), /reviewed refresh/u);
+      // The separate correction runs after the immutable first import; a manually
+      // modified obsolete page must block the entire correction transaction.
+      const patch = await readClueTaxonomy();
+      await client.query(
+        "INSERT INTO page_items(page_id,item_id,slot,origin) VALUES('gilded',42,20,'manual')",
+      );
+      await assert.rejects(
+        applyClueTaxonomy(client, snapshot, patch),
+        /Manual item\/order on legacy clue page/,
+      );
+      assert.equal(
+        (
+          await client.query(
+            'SELECT count(*)::int AS n FROM catalog_taxonomy_updates',
+          )
+        ).rows[0].n,
+        0,
+      );
+      await client.query(
+        "DELETE FROM page_items WHERE page_id='gilded' AND item_id=42",
+      );
+
+      const creditedBefore = (
+        await client.query(
+          "SELECT item_id,hardcore,collector_name FROM submissions WHERE status='approved'",
+        )
+      ).rows;
+      const originalNames = (
+        await client.query('SELECT id,name FROM items ORDER BY id')
+      ).rows;
+      const legacyBefore = (
+        await client.query(
+          'SELECT count(*)::int AS n FROM pages WHERE id=ANY($1::text[])',
+          [patch.retiredPages],
+        )
+      ).rows[0].n;
+      assert.equal(legacyBefore, 3);
+      assert.equal(await applyClueTaxonomy(client, snapshot, patch), 'updated');
+      assert.equal(
+        await applyClueTaxonomy(client, snapshot, patch),
+        'unchanged',
+      );
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM pages')).rows[0].n,
+        124,
+      );
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM page_items'))
+          .rows[0].n,
+        1927, // Existing manual item on Abyssal Sire is retained in addition to 1,926 source-derived slots.
+      );
+      assert.equal(
+        (
+          await client.query(
+            'SELECT count(*)::int AS n FROM pages WHERE id=ANY($1::text[])',
+            [patch.retiredPages],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.deepEqual(
+        (await client.query('SELECT id,name FROM items ORDER BY id')).rows,
+        originalNames,
+      );
+      assert.deepEqual(
+        (
+          await client.query(
+            "SELECT item_id,hardcore,collector_name FROM submissions WHERE status='approved'",
+          )
+        ).rows,
+        creditedBefore,
+      );
+      const aliases = new Map(
+        snapshot.items.flatMap((item) =>
+          item.gameItemIds.map((gameId) => [gameId, item.id] as const),
+        ),
+      );
+      for (const [pageId, rarePage] of Object.entries(patch.rarePages)) {
+        assert.deepEqual(
+          (
+            await client.query<{ item_id: number }>(
+              'SELECT item_id FROM page_items WHERE page_id=$1 ORDER BY slot',
+              [pageId],
+            )
+          ).rows.map((row) => row.item_id),
+          rarePage.gameItemIds.map((id) => aliases.get(id)),
+        );
+      }
+      const ringId = aliases.get(23185)!;
+      assert.deepEqual(
+        (
+          await client.query<{ page_id: string }>(
+            'SELECT page_id FROM page_items WHERE item_id=$1 ORDER BY page_id',
+            [ringId],
+          )
+        ).rows.map((row) => row.page_id),
+        ['elite_treasure_trails', 'master_treasure_trails'],
+      );
+      assert.equal(
+        (
+          await client.query(
+            "SELECT count(*)::int AS n FROM catalog_audit WHERE action='taxonomy'",
+          )
+        ).rows[0].n,
+        1,
+      );
+      // A later administrator reorder is never reverted by a repeat bootstrap.
+      await client.query(
+        "UPDATE pages SET order_origin='manual' WHERE id='master_treasure_trails_rare'",
+      );
+      assert.equal(
+        await applyClueTaxonomy(client, snapshot, patch),
+        'unchanged',
+      );
+      assert.equal(
+        (
+          await client.query(
+            "SELECT order_origin FROM pages WHERE id='master_treasure_trails_rare'",
+          )
+        ).rows[0].order_origin,
+        'manual',
+      );
     } finally {
       await Promise.all(clients.map((client) => client.end()));
       await root.query('DROP SCHEMA ' + schema + ' CASCADE');

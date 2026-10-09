@@ -107,3 +107,45 @@ Created using intellectual property belonging to Jagex Limited under the terms o
 The database package tests full-source reproduction, exact slot order, stable shared mappings, distinct same-name variants, complete icon coverage, invalid aliases/references and prohibited credit fields. The real PostgreSQL test checks a late-conflict rollback, two simultaneous imports, zero initial credits, preserved manual items and later approvals, and refusal of changed snapshots. These tests require `TEST_DATABASE_URL` in CI and explicitly skip only PostgreSQL checks when that variable is absent locally.
 
 CI's existing validation job now runs `catalog:check`. The Docker job boots the catalog and requests the real public catalog/collections routes plus a bundled icon. Existing browser tests continue to exercise the separate preview and public API contracts. Startup does not require a live Temple, Wiki or RuneLite connection.
+
+## Clue rare reward page correction (9 October 2026)
+
+The captured TempleOSRS source puts Gilded, Third Age and Mimic on separate
+pages. That taxonomy is inconsistent with the same pinned **OSRS Wiki
+collection log**, which uses:
+
+| New page                      | Exact pinned Wiki membership |
+| ----------------------------- | ---------------------------: |
+| Hard Treasure Trails (Rare)   |                           24 |
+| Elite Treasure Trails (Rare)  |                           39 |
+| Master Treasure Trails (Rare) |                           45 |
+
+The obsolete `gilded`, `third_age` and `mimic` pages are retired. The
+**Ring of 3rd Age** (game item ID 23185) moves to both **regular** Elite and
+Master Treasure Trails. Four other items move from the regular pages to their
+proper rare tiers: Lava dragon mask and Ring of nature to Elite (Rare);
+Ring of coins and Bucket helm (g) to Master (Rare). Common gilded and 3rd age
+drops intentionally appear on multiple rare pages, with one shared canonical
+ID per item and unchanged ordinary/hardcore approval records.
+
+The original, audited TempleOSRS source bytes, pinned snapshot/checksum and
+1,717 item identities are **not rewritten**. After the normal first import,
+bootstrap runs an idempotent, single-transaction correction using
+[clue-taxonomy.json](../catalog/clue-taxonomy.json), checked against OSRS Wiki
+revision 15347607. Migration `009_clue_taxonomy.sql` adds the durable
+one-time completion marker and a taxonomy audit action. The corrected database
+contains 124 pages and 1,926 ordered appearances (up from the 1,864
+originally captured). Subsequent restarts never overwrite admin edits.
+
+If any of the three obsolete pages was manually reordered, has manual
+memberships, or appears in catalog audit, the correction **fails closed**:
+there is no automatic reassignment of user-authored page entries. Move or
+review those entries deliberately before retrying. No items, collection
+credits, aliases or existing admin item edits are deleted. The ordinary and
+hardcore logs continue to share the canonical item identities.
+
+To apply on an already imported installation, run the normal Compose
+bootstrap after a database backup. Or, after migrations and a successful
+base import, run `DATABASE_URL=... npm run catalog:correct-clues` on the host.
+The taxonomy correction runs **after** the immutable base import; running
+`catalog:import` by itself only verifies or imports the original source.
