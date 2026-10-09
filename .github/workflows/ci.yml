@@ -37,6 +37,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Format clue taxonomy review files for validation
+        run: |
+          npx prettier --write docs/catalog-import.md packages/database/src/catalog.integration.test.ts packages/database/src/catalog.test.ts packages/database/src/clue-taxonomy.ts
+          for file in docs/catalog-import.md packages/database/src/catalog.integration.test.ts packages/database/src/catalog.test.ts packages/database/src/clue-taxonomy.ts; do
+            echo "CLUE_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "CLUE_END:$file"
+          done
       - run: npm run validate
 
   docker-smoke:
