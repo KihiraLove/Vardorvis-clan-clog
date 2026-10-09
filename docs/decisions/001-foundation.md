@@ -17,7 +17,7 @@ Status: accepted for the project foundation, 2026-10-05. Open product questions 
 | Private GHCR, multi-architecture images     | Fits existing GitHub/private repo and ARM/AMD64 home servers                                       |
 | Manual validated-SHA home deployment        | Makes initial rollout/rollback reviewable before unattended deployments                            |
 
-The 7 October mockup supersedes the initial multi-collector, admin-OAuth and display assumptions. [ADR 002](002-command-date-display.md) is the active DEC-01 record: the single `/cc-clog submit` command and server-issued UTC receipt date are now confirmed. Proxy/TLS deployment and final visual acceptance still need owner review. The public display is already confirmed as one approved credit per canonical item and world mode.
+The 7 October mockup supersedes the initial multi-collector, admin-OAuth and display assumptions. [ADR 002](002-command-date-display.md) is the active DEC-01 record: the single `/cc-clog submit` command and server-issued UTC receipt date are now confirmed. The owner confirmed Traefik/Let's Encrypt on networks `web` and `socknet` and visually approved the frontend on 9 October 2026. Actual hostname/DNS, HTTPS routing/certificate issuance and live authenticated smoke tests remain unverified. The public display is already confirmed as one approved credit per canonical item and world mode.
 
 ## Planned extensions recorded 2026-10-05
 

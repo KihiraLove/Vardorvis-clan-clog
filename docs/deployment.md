@@ -43,21 +43,72 @@ The current containers deploy the foundation/status page, not a usable public co
 
 ## Reverse proxy / Traefik
 
-The owner has supplied `https://daybloom.net/admin` as the **direct admin
-navigation example**, not confirmation of a live deployment. When that is the
-actual production host, configure `PUBLIC_ORIGIN=https://daybloom.net`
-(**without** the `/admin` suffix) and make sure browser `Origin` is
-identical. Local development may instead use an HTTP loopback origin and
-must browse the exact matching hostname (`localhost` and `127.0.0.1` differ).
-Do not enable the passwordless local-admin override on an internet-accessible
-deployment. Confirm DNS, actual Traefik router/network/certificate resolver,
-TLS certificate issuance, trusted reverse-proxy CIDRs and owner visual
-acceptance before production rollout. These details remain open in
-[DEC-01 / ADR 002](decisions/002-command-date-display.md).
+**Confirmed by owner (9 October 2026):** existing Traefik provides TLS with
+Let's Encrypt and runs on Docker networks `web` and `socknet`. The owner
+has visually inspected and approved the frontend. Actual production host/DNS,
+HTTPS router and issued certificate have **not** been validated by this PR.
 
-A host-native reverse proxy can forward to `127.0.0.1:8088`. Terminate TLS there and preserve `X-Forwarded-Proto`. Later OAuth/session work must explicitly configure trusted proxy behavior; do not trust arbitrary forwarded headers from an internet-exposed API.
+For containerized Traefik, connect **only** the collection-log `web` service
+to external Docker network `web`; keep its internal Compose `default` network
+so Nginx can still reach `api:3000`. The Traefik `socknet` socket-proxy
+network is not an application network; do **not** attach the clog services to it.
+Leave the API, PostgreSQL, bot and migrations off the proxy network.
 
-If Traefik itself runs in Docker, its own loopback cannot reach the host loopback binding. Add a reviewed Compose override attaching **web only** to your existing external Traefik network; route to container port 8080 with `traefik.docker.network` and `traefik.http.services.clog.loadbalancer.server.port=8080`. Keep web on the app's default network too so it can reach API. Add your own hostname/router/TLS labels and remove the host port binding if appropriate. Do not attach the database to the external proxy network. The repository does not assume your domain, network name or certificate resolver.
+An illustrative, **opt-in** override (not deployed or created on the server
+by this PR) is:
+
+```yaml
+# compose.traefik.yaml — local host file, reviewed before use
+services:
+  web:
+    networks:
+      - default
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - 'traefik.http.routers.clog.rule=Host(`${CLOG_HOST:?Set CLOG_HOST}`)'
+      - traefik.http.routers.clog.entrypoints=websecure
+      - traefik.http.routers.clog.tls=true
+      - traefik.http.routers.clog.tls.certresolver=letsencrypt
+      - traefik.http.routers.clog.service=clog
+      - traefik.http.services.clog.loadbalancer.server.port=8080
+
+networks:
+  web:
+    external: true
+```
+
+In this example, **`websecure`** is a conventional HTTPS entrypoint label
+and **`letsencrypt`** a conventional certificate resolver label; verify their
+actual names on the installed Traefik before use. The owner confirmed the
+Let's Encrypt issuer, not specific Traefik label names. The router targets
+web-container port **8080**, not the host's `127.0.0.1:8088` loopback
+diagnostic port, and not API port 3000. The base Compose file still publishes
+a *loopback-only* port for local diagnostics.
+
+When the actual hostname and DNS are verified, configure host `.env` with
+`CLOG_HOST` set to that hostname and `PUBLIC_ORIGIN=https://<host>` (no
+`/admin` path). `AUTH_ENABLED=true`, a unique `ADMIN_PASSWORD` and a
+generated `SESSION_SECRET` are required for admin login. The example direct
+admin URL `https://daybloom.net/admin` is not independent evidence that this
+is the live host. The login endpoint returns **403** if the browser sends an
+`Origin` that differs from `PUBLIC_ORIGIN`; do not bypass this check.
+Production HTTPS sessions use a Secure `__Host-clog-session` cookie.
+
+The API's `TRUSTED_PROXY_CIDRS` applies to Fastify's **immediate trusted
+proxy hops**, not the Traefik `socknet`. Nginx in the app's web container
+proxies `/api/` over the private network and relays forwarded headers. Validate
+the real source CIDRs and which forwarded headers each hop trusts/overwrites
+before enabling proxy-derived client IPs; do not trust `0.0.0.0/0`. With
+unverified proxy addresses, leave this field empty rather than broadening it.
+
+Live release checklist: validate hostname/DNS, the actual HTTPS router and
+Let's Encrypt certificate, public page and `/api/v1/status`, direct
+`/admin` navigation, correct-password login and authenticated session,
+strict Origin rejection, CSRF-enforced admin writes and absence of public
+database/API ports. CI and visual inspection do not verify these host-specific
+checks. This documentation update makes no live network/deployment changes.
 
 ## Opt-in home CI/CD
 

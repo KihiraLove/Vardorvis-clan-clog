@@ -1,6 +1,6 @@
 # ADR 002: Discord commands, collection dates and collector display
 
-Status: **command and date confirmed; proxy/TLS and visual sign-off pending** (DEC-01 #14), 9 October 2026.
+Status: **command/date policy, Traefik TLS/network plan and frontend visuals confirmed; live deployment checks pending** (DEC-01 #14), 9 October 2026.
 
 This record distinguishes owner-approved requirements, shipped contracts, safe
 interim behavior, and recommendations. **Recommendations are not authorizations
@@ -19,7 +19,7 @@ assumptions in [ADR 001](001-foundation.md).
 | Submission date          | Server-issued UTC receipt date; never supplied by the submitting user or bot. The intake API records `submittedAt` and its UTC calendar date as `collectedOn` with source `submission_default`. A versioned, audited admin correction remains an exceptional separate review action.                    | Owner-confirmed 9 October; enforced by intake API                  |
 | Display date             | Public collected dates are formatted `DD/MM/YY` (for example, `16/10/26`). Collection dates are calendar values and never parsed as locale-dependent strings. Reject future dates on review.                                                                                                            | Implemented                                                        |
 | Admin access             | Direct `/admin` and `/admin/xp` URLs, no public Admin button. Site administration uses a server-side shared password, session cookie, exact `PUBLIC_ORIGIN` and CSRF; Discord OAuth is **not** used for admin login.                                                                                    | Owner-approved UI; implemented                                     |
-| Homepage                 | Supplied animated Mexicat GIF, 2× collection log, then XP tracker below the log.                                                                                                                                                                                                                        | Owner-approved layout; visual acceptance still open                |
+| Homepage                 | Supplied animated Mexicat GIF, 2× collection log, then XP tracker below the log.                                                                                                                                                                                                                        | Owner visually accepted frontend 9 October 2026                |
 
 ### Confirmed decisions — 9 October 2026
 
@@ -35,23 +35,33 @@ the original persisted receipt/date, not a new timestamp. Existing manual
 review date corrections remain a separate, authenticated, versioned and
 audited exception; no user may backdate a submitted claim.
 
-### Remaining deployment and visual acceptance
+### Owner-confirmed infrastructure and visual acceptance — 9 October 2026
 
-**Proxy/TLS and deployment:** The supplied direct-admin example is
-`https://daybloom.net/admin`, but this does not confirm DNS, an active
-deployment, Traefik's network/router/entrypoint/certificate resolver,
-or verified TLS. A production instance must set
-`PUBLIC_ORIGIN=https://daybloom.net` **only when** that is the actual public
-site origin (origin has no `/admin` path); require an HTTPS certificate,
-forwarded-protocol handling through a deliberately trusted proxy, and
-secure session cookies. Continue exposing only web to the proxy; do not
-publish database or admin API ports directly. Avoid a hardcoded proxy
-network/certificate-resolver name without owner confirmation.
+The existing Docker Traefik proxy issues HTTPS certificates through **Let's Encrypt**
+and uses the networks **`web`** and **`socknet`**. Attach only the app's web
+container to external `web`, retaining its separate internal application network.
+Do not attach app services to Traefik's `socknet` socket-proxy network, and do not
+publish the API, database, bot or migration ports. Refer to
+[Traefik deployment guidance](../deployment.md#reverse-proxy--traefik).
 
-**Final visual acceptance:** Owner review is still required for the supplied
-GIF, fixed 2× frame, responsive/clamped menus, skull/release behavior,
-collector text, 320px touch use, and XP section placement. Browser/CI tests
-are useful evidence but are not owner sign-off.
+The owner reports having visually inspected and approved the frontend.
+**DEC-01 visual sign-off is complete.** This does not assert that production
+DNS, TLS certificate issuance, login, or live interaction smoke tests have passed.
+
+### Remaining production verification
+
+The previously supplied `https://daybloom.net/admin` was an admin navigation
+example, not confirmation that this exact domain is live or configured in DNS.
+The HTTPS router entrypoint, resolver **label names**, real domain/DNS and
+deployed certificate have not been independently verified. Let's Encrypt is
+the confirmed certificate issuer; the example resolver label `letsencrypt`
+must still match the running Traefik configuration.
+
+At rollout, set `PUBLIC_ORIGIN` to the real exact HTTPS origin **without**
+`/admin`, verify trusted forwarded headers and Secure cookies, and smoke-test
+public routing, password login/session and CSRF protection. No DNS changes,
+Traefik deployment, application deployment or live production test is performed
+in PR #48.
 
 ## Acceptance checklist for DEC-01
 
@@ -60,7 +70,10 @@ are useful evidence but are not owner sign-off.
 - [x] Owner confirmed `/cc-clog submit` is the only Discord command.
 - [x] Owner confirmed server-issued UTC receipt date with no user-supplied date.
 - [x] Preserve audited admin corrections as a separate review operation.
-- [ ] Owner confirms production origin, proxy/TLS specifics and manual visual acceptance.
+- [x] Owner confirmed Traefik/Let's Encrypt and the existing `web` and `socknet` networks.
+- [x] Owner visually signed off the frontend (9 October 2026).
+- [ ] Verify actual production hostname/DNS, Traefik router/entrypoint/certificate resolver and issued certificate.
+- [ ] Verify the trusted-proxy chain, production login/session/CSRF and public routing in a live smoke test.
 
-Keep issue #14 open until deployment and visual acceptance are reviewed.
+Keep issue #14 open until the remaining deployment-specific checks are reviewed.
 Do not infer approval from passing CI or a draft PR.
