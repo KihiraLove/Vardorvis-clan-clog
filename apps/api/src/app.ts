@@ -1,4 +1,5 @@
 /** Public projections plus optional configured admin auth; unavailable services fail closed. */
+import { checkReadiness } from './readiness.js';
 import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
 import { catalogRoutes } from './catalog-routes.js';
@@ -13,6 +14,7 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  checkBotReady?: (() => Promise<void>) | undefined;
   catalog?: PgCatalogStore | undefined;
   icons?: IconStorage | undefined;
   store?: BackendStore | undefined;
@@ -104,7 +106,7 @@ export function createApp(
   app.get('/healthz', async () => ({ status: 'ok', service: 'api' }));
   app.get('/readyz', async (_request, reply) => {
     try {
-      await checkDatabase();
+      await checkReadiness(checkDatabase, options.checkBotReady);
       return { status: 'ready' };
     } catch {
       return reply.code(503).send({ status: 'not-ready' });

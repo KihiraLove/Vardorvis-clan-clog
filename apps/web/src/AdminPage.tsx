@@ -51,33 +51,34 @@ export function AdminPage({
     [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [password, setPassword] = useState('');
-  const [loggingIn, setLoggingIn] = useState(false);
-  const [loginError, setLoginError] = useState<string>();
   const accessLost = useCallback(() => setSession(null), []);
   const action = useAdminAction(accessLost);
+  const loginAction = useAdminAction(accessLost);
+  const loggingIn = loginAction.busy,
+    loginError = loginAction.error;
   const logIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (loggingIn) return;
-    setLoggingIn(true);
-    setLoginError(undefined);
-    const controller = new AbortController();
-    try {
-      await client.login(password, controller.signal);
-      const next = await client.session(controller.signal);
-      if (!next) throw new Error('Session not established.');
-      setSession(next);
-      setPassword('');
-    } catch (failure) {
-      setLoginError(
-        failure instanceof AdminRequestError && failure.status === 401
-          ? 'Incorrect password.'
-          : failure instanceof AdminRequestError && failure.status === 429
-            ? 'Too many attempts. Try again later.'
-            : 'Could not sign in. Check the password and server configuration.',
-      );
-    } finally {
-      setLoggingIn(false);
-    }
+    await loginAction.execute(async (signal) => {
+      try {
+        await client.login(password, signal);
+        if (signal.aborted) return;
+        const next = await client.session(signal);
+        if (signal.aborted) return;
+        if (!next) throw new Error('Session not established.');
+        setSession(next);
+        setPassword('');
+      } catch (failure) {
+        if (signal.aborted) throw failure;
+        throw new Error(
+          failure instanceof AdminRequestError && failure.status === 401
+            ? 'Incorrect password.'
+            : failure instanceof AdminRequestError && failure.status === 429
+              ? 'Too many attempts. Try again later.'
+              : 'Could not sign in. Check the password and server configuration.',
+          { cause: failure },
+        );
+      }
+    });
   };
   useEffect(() => {
     let active = true;

@@ -1,9 +1,12 @@
 /** Admin-authored drops use the same review and world-credit ledger as bot claims. */
+import { AdminRequestError } from './admin-api.ts';
+import { useAdminAction } from './use-admin-action.ts';
 import { useState } from 'react';
 import {
   safeProof,
   type AdminCatalog,
   type AdminClient,
+  type ManualSubmissionInput,
   type Submission,
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
@@ -32,8 +35,12 @@ export function ManualSubmissionForm({
   const [proofUrl, setProofUrl] = useState('');
   const [approve, setApprove] = useState(true);
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const action = useAdminAction(onAccessLost);
+  const { busy, error, setError } = action;
+  const [pending, setPending] = useState<{
+    fields: ManualSubmissionInput;
+    key: string;
+  }>();
   const options = catalog.items.filter(
     (item) =>
       item.name.toLowerCase().includes(search.toLowerCase().trim()) ||
@@ -56,11 +63,9 @@ export function ManualSubmissionForm({
       setError('Proof must be a supported HTTPS Imgur or Gyazo link.');
       return;
     }
-    setBusy(true);
-    const controller = new AbortController();
-    try {
-      const result = await client.addManual(
-        {
+    await action.execute(async (signal) => {
+      const request = pending ?? {
+        fields: {
           itemId: chosen.id,
           collectorName: collectorName.trim(),
           collectedOn,
@@ -69,43 +74,48 @@ export function ManualSubmissionForm({
           approve,
           reason: reason.trim(),
         },
-        session.csrfToken,
-        controller.signal,
-      );
+        key: crypto.randomUUID(),
+      };
+      setPending(request);
+      let result: Submission;
+      try {
+        result = await client.addManual(
+          request.fields,
+          request.key,
+          session.csrfToken,
+          signal,
+        );
+      } catch (failure) {
+        // Keep the exact request after a timeout, transport error or server failure.
+        if (
+          !signal.aborted &&
+          failure instanceof AdminRequestError &&
+          failure.status >= 400 &&
+          failure.status < 500 &&
+          ![408, 429].includes(failure.status)
+        ) {
+          setPending(undefined);
+          if (failure.status === 409 && request.fields.approve)
+            throw new Error(
+              chosen.name +
+                ' is already collected in ' +
+                (hardcore ? 'hardcore' : 'ordinary') +
+                ' worlds. Revoke or edit the existing approved entry instead.',
+              { cause: failure },
+            );
+        }
+        throw failure;
+      }
+      if (signal.aborted) return;
+      setPending(undefined);
       setOpen(false);
       setCollectorName('');
       setProofUrl('');
       setReason('');
       onCreated(result);
-    } catch (failure) {
-      if (
-        failure instanceof Error &&
-        'status' in failure &&
-        [401, 403].includes(Number(failure.status))
-      )
-        onAccessLost();
-      else if (
-        failure instanceof Error &&
-        'status' in failure &&
-        Number(failure.status) === 409 &&
-        approve
-      )
-        setError(
-          chosen.name +
-            ' is already collected in ' +
-            (hardcore ? 'hardcore' : 'ordinary') +
-            ' worlds. Revoke or edit the existing approved entry instead.',
-        );
-      else
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : 'Could not create manual submission.',
-        );
-    } finally {
-      setBusy(false);
-    }
+    });
   };
+
   return (
     <section className="admin-panel">
       <div className="admin-section-heading">
@@ -119,6 +129,7 @@ export function ManualSubmissionForm({
         <button
           className="site-button"
           type="button"
+          disabled={busy}
           onClick={() => setOpen(!open)}
         >
           {open ? 'Cancel manual entry' : 'Add manual submission'}
@@ -126,7 +137,10 @@ export function ManualSubmissionForm({
       </div>
       {open && (
         <form onSubmit={(event) => void submit(event)}>
-          <fieldset className="admin-fieldset" disabled={busy}>
+          <fieldset
+            className="admin-fieldset"
+            disabled={busy || Boolean(pending)}
+          >
             <div className="admin-form-grid">
               <label>
                 Search catalog items
@@ -211,15 +225,24 @@ export function ManualSubmissionForm({
               Uncheck immediate approval to add to the pending review queue.
               Each item can only have one approved credit per world.
             </p>
-            {error && (
-              <p role="alert" className="admin-error">
-                {error}
-              </p>
-            )}
-            <button className="site-button" type="submit">
-              {busy ? 'Saving…' : 'Create manual submission'}
-            </button>
           </fieldset>
+          {pending && (
+            <p className="admin-note">
+              Retry to confirm this submission before changing its details.
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="admin-error">
+              {error}
+            </p>
+          )}
+          <button className="site-button" type="submit" disabled={busy}>
+            {busy
+              ? 'Saving…'
+              : pending
+                ? 'Retry manual submission'
+                : 'Create manual submission'}
+          </button>
         </form>
       )}
     </section>

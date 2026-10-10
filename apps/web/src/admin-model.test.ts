@@ -420,6 +420,7 @@ test('proofless manual claims and audit snapshots parse without requiring XP tex
       hardcore: false,
       approve: true,
     },
+    '00000000-0000-4000-8000-000000000001',
     'preview-admin',
     signal(),
   );

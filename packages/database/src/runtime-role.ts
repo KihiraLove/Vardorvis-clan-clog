@@ -12,6 +12,7 @@ const appendOnly = new Set([
   'site_settings_audit',
   'catalog_audit',
   'xp_import_history',
+  'manual_submission_requests',
 ]);
 
 export function validateRuntimePassword(value: string | undefined): string {

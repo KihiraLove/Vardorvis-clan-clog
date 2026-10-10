@@ -263,6 +263,7 @@ test('manual create and password sign-in use private routes, CSRF and validated 
       proofUrl: '',
       approve: true,
     },
+    '00000000-0000-4000-8000-000000000001',
     'csrf',
     signal(),
   );
@@ -271,6 +272,12 @@ test('manual create and password sign-in use private routes, CSRF and validated 
   assert.deepEqual(JSON.parse(requests[0]!.options!.body as string), {
     password: 'test-only-password',
   });
+  assert.equal(
+    (requests[1]!.options?.headers as Record<string, string>)[
+      'Idempotency-Key'
+    ],
+    '00000000-0000-4000-8000-000000000001',
+  );
   assert.equal(requests[1]!.url, '/api/v1/admin/submissions');
   assert.equal(requests[1]!.options?.method, 'POST');
   assert.equal(
@@ -309,6 +316,7 @@ test('manual submission accepts a 201 response with no proof URL and preserves t
       hardcore: false,
       approve: true,
     },
+    '00000000-0000-4000-8000-000000000001',
     'csrf',
     signal(),
   );

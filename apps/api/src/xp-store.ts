@@ -15,6 +15,14 @@ import {
 } from './xp-types.js';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
+const maxEvents = 2000;
+function requireCapacity(count: number, existing: boolean) {
+  if (!existing && count >= maxEvents)
+    throw new ApiError(
+      409,
+      'The XP tracker has reached its 2000-event capacity. Existing events can still be refreshed.',
+    );
+}
 type Row = {
   competition_id: string;
   title: string;
@@ -46,10 +54,12 @@ export class PgXpStore implements XpStore {
   private async events(client: pg.PoolClient): Promise<Row[]> {
     const rows = (
       await client.query<Row>(
-        'SELECT competition_id::text,title,source_url,skills,gains,source_hash,source_snapshot FROM xp_events ORDER BY competition_id LIMIT 2001',
+        'SELECT competition_id::text,title,source_url,skills,gains,source_hash,source_snapshot FROM xp_events ORDER BY competition_id LIMIT $1',
+        [maxEvents + 1],
       )
     ).rows;
-    if (rows.length > 2000) throw new ApiError(503, 'XP event limit exceeded.');
+    if (rows.length > maxEvents)
+      throw new ApiError(503, 'XP event limit exceeded.');
     return rows;
   }
   async tracker() {
@@ -78,6 +88,7 @@ export class PgXpStore implements XpStore {
       const prior =
         events.find((x) => Number(x.competition_id) === snapshot.event.id) ??
         null;
+      requireCapacity(events.length, !!prior);
       if (
         prior &&
         JSON.stringify(prior.skills) !== JSON.stringify(snapshot.event.skills)
@@ -211,6 +222,8 @@ export class PgXpStore implements XpStore {
       const prior =
         all.find((x) => Number(x.competition_id) === row.snapshot.event.id) ??
         null;
+      // The state lock serializes consumption of the final slot; replays return above.
+      requireCapacity(all.length, !!prior);
       const changes = diffTotals(
         sumTotals(all.map(event)),
         prior ? event(prior) : null,

@@ -16,7 +16,7 @@ The routes marked as implemented in [backend phase one](backend-phase-one.md) an
 | Method/path          | Behavior                                                                |
 | -------------------- | ----------------------------------------------------------------------- |
 | `GET /healthz`       | API liveness; 200 with service status                                   |
-| `GET /readyz`        | 200 only if migrated database is available; otherwise 503               |
+| `GET /readyz`        | 200 if database and any enabled bot are ready; otherwise 503            |
 | `GET /api/v1/status` | `stage: foundation`, `catalogReady: false`, `submissionsEnabled: false` |
 
 ## Planned routes
@@ -73,6 +73,15 @@ interface ReviewAudit {
   after: Submission;
 }
 ```
+
+Manual creation POST requires a UUID `Idempotency-Key` alongside CSRF.
+The server records the normalized payload hash, submission, audit and original
+receipt in one transaction, scoped to the authenticated actor. Identical
+retries return that same 201 receipt, even after subsequent review changes or
+an API restart. Reusing a key with different fields returns 409. Missing or
+invalid keys return 400. The form preserves its key and fields after uncertain
+failures; retry before editing or creating another entry. Login and manual
+writes time out after 15 seconds and cancel when their views unmount.
 
 Queue GET accepts `status=pending|reviewed`, `limit=20`, optional opaque `cursor` and optional `unmatched=true` with pending. Pending includes matched and unmatched claims; Reviewed includes approved/rejected/revoked. Return `{ revision, submissions: Submission[], nextCursor: string | null }`, ordered deterministically without duplicate rows. A stale cursor returns 409; reload from the first page. Detail GET returns `{ submission: Submission, audit: ReviewAudit[] }`, newest audit events first. Reject inconsistent canonical references; expose no private fields through public collections.
 
@@ -289,3 +298,8 @@ Only the foundation endpoints listed at the top are implemented. Frontend consum
 - [Wise Old Man competition endpoint and metrics preview](https://docs.wiseoldman.net/api/competitions/competition-endpoints)
 - [Wise Old Man metrics and per-participant delta entities](https://docs.wiseoldman.net/api/competitions/competition-type-definitions)
 - [Wise Old Man supported skill/metric definitions](https://docs.wiseoldman.net/api/global-type-definitions)
+
+The XP tracker supports at most 2,000 distinct events. Preview and apply
+reject new events at capacity with 409; existing events can still be refreshed
+and receipt replays remain valid. Capacity rejection leaves totals, revision
+and import history unchanged.

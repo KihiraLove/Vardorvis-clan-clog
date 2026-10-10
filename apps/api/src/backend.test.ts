@@ -381,3 +381,56 @@ test('login rate limits and config fail closed without a valid admin password', 
     ['127.0.0.1', '172.18.0.0/16'],
   );
 });
+
+test('proxy login buckets distinguish clients and ignore spoofed forwarding prefixes', async () => {
+  for (const trusted of [['127.0.0.1/32'], ['127.0.0.1/32', '10.20.0.2/32']]) {
+    const buckets = new Map<string, number>();
+    const store: BackendStore = new MemoryStore();
+    store.allowLogin = async (hash) => {
+      const count = (buckets.get(hash) ?? 0) + 1;
+      buckets.set(hash, count);
+      return count <= 20;
+    };
+    const app = createApp(undefined, undefined, {
+      store,
+      auth: config,
+      trustProxy: trusted,
+      logger: false,
+    });
+    const forward = (client: string) =>
+      client + (trusted.length === 2 ? ', 10.20.0.2' : '');
+    const attempt = (
+      ip: string,
+      supplied = password,
+      remoteAddress = '127.0.0.1',
+    ) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        remoteAddress,
+        headers: { origin: config.origin, 'x-forwarded-for': ip },
+        payload: { password: supplied },
+      });
+    try {
+      for (let i = 0; i < 20; i++)
+        assert.equal(
+          (await attempt(forward('198.51.100.1'), 'wrong')).statusCode,
+          401,
+        );
+      assert.equal(
+        (await attempt(forward('203.0.113.99, 198.51.100.1'))).statusCode,
+        429,
+      );
+      assert.equal((await attempt(forward('198.51.100.2'))).statusCode, 200);
+      assert.equal(buckets.size, 2);
+      // An untrusted direct peer cannot select a different client's bucket.
+      assert.equal(
+        (await attempt('198.51.100.1', password, '192.0.2.10')).statusCode,
+        200,
+      );
+      assert.equal(buckets.size, 3);
+    } finally {
+      await app.close();
+    }
+  }
+});

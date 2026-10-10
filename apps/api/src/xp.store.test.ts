@@ -1,6 +1,6 @@
 /** Disposable PostgreSQL acceptance for atomic import, refresh, replay and projections. */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
@@ -244,6 +244,87 @@ test(
           .rows[0]?.count,
         2,
       );
+      // The last available slot is serialized, and a full tracker stays readable.
+      await pool.query(
+        "INSERT INTO xp_events(competition_id,title,source_url,skills,gains,source_hash,source_snapshot,imported_at) SELECT id,'Seed','https://wiseoldman.net/competitions/' || id,'[\"mining\"]','{\"mining\":\"0\"}',$1,$2,now() FROM generate_series(20000,21996) id",
+        ['f'.repeat(64), JSON.stringify(base(20000, 'mining', '0'))],
+      );
+      assert.equal((await store.tracker()).events.length, 1999);
+      const last = await Promise.all(
+        [30000, 30001].map((id) =>
+          store.preview(base(id, 'mining', '1'), actor),
+        ),
+      );
+      const attempts = await Promise.allSettled(
+        last.map((p) =>
+          store.apply(
+            p.previewToken,
+            p.expectedRevision,
+            key(),
+            actor,
+            'Admin',
+            false,
+          ),
+        ),
+      );
+      assert.equal(attempts.filter((r) => r.status === 'fulfilled').length, 1);
+      assert.equal(
+        attempts.filter(
+          (r) => r.status === 'rejected' && r.reason.status === 409,
+        ).length,
+        1,
+      );
+      const full = await store.tracker();
+      assert.equal(full.events.length, 2000);
+      await assert.rejects(store.preview(base(30002, 'mining', '1'), actor), {
+        status: 409,
+        message: /2000-event capacity/,
+      });
+      // Independently exercise the authoritative apply-time boundary with a saved preview.
+      const capacityToken = 'saved-capacity-preview';
+      await pool.query(
+        "INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at) VALUES($1,$2,$3,$4,now()+interval '1 minute')",
+        [
+          createHash('sha256').update(capacityToken).digest('hex'),
+          actor,
+          full.revision,
+          JSON.stringify(base(30002, 'mining', '1')),
+        ],
+      );
+      const beforeHistory = await store.history();
+      await assert.rejects(
+        store.apply(capacityToken, full.revision, key(), actor, 'Admin', false),
+        { status: 409, message: /2000-event capacity/ },
+      );
+      assert.deepEqual(await store.tracker(), full);
+      assert.deepEqual(await store.history(), beforeHistory);
+      const refresh = await store.preview(
+        { ...base(20000, 'mining', '2'), sourceHash: 'e'.repeat(64) },
+        actor,
+      );
+      const refreshKey = key();
+      const receipt = await store.apply(
+        refresh.previewToken,
+        refresh.expectedRevision,
+        refreshKey,
+        actor,
+        'Admin',
+        false,
+      );
+      assert.equal(receipt.outcome, 'applied');
+      assert.deepEqual(
+        await store.apply(
+          refresh.previewToken,
+          refresh.expectedRevision,
+          refreshKey,
+          actor,
+          'Admin',
+          false,
+        ),
+        receipt,
+      );
+      assert.equal((await app.inject('/api/v1/xp/tracker')).statusCode, 200);
+      assert.equal((await store.tracker()).events.length, 2000);
     } finally {
       await app.close();
       await pool.end();

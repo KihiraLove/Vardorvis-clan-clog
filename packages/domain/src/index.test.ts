@@ -107,3 +107,18 @@ test('manual canonical items may have no external game aliases', () => {
     [{ id: 'clan', itemIds: [1] }],
   );
 });
+
+test('mobile Imgur uses the shared proof policy', () => {
+  assert.equal(
+    validateProofUrl('https://m.imgur.com/a/proof'),
+    'https://m.imgur.com/a/proof',
+  );
+  for (const value of [
+    'https://m.imgur.com.evil.test/proof',
+    'https://m.imgur.com@evil.test/proof',
+    'http://m.imgur.com/proof',
+    'https://m.imgur.com/',
+    'https://m.imgur.com:8443/proof',
+  ])
+    assert.throws(() => validateProofUrl(value));
+});

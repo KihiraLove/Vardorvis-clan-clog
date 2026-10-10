@@ -55,9 +55,14 @@ export function reviewRoutes(
     },
     async (req, reply) => {
       const actor = await authorize(req, true);
+      const key = req.headers['idempotency-key'];
+      if (typeof key !== 'string')
+        throw new ApiError(400, 'A UUID Idempotency-Key is required.');
       return reply
         .code(201)
-        .send(await store.createManual(req.body, actor.id, actor.displayName));
+        .send(
+          await store.createManual(req.body, actor.id, actor.displayName, key),
+        );
     },
   );
   app.get<{

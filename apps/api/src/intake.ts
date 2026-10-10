@@ -1,4 +1,5 @@
 /** Dedicated service-token boundary for Discord bot intake; no admin authority. */
+import { validateProofUrl } from '@clog/domain';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BotConfig } from './config.js';
@@ -9,37 +10,10 @@ import {
 } from './types.js';
 
 const snowflake = '^\\d{17,20}$';
-const proofHosts = new Set([
-  'imgur.com',
-  'www.imgur.com',
-  'm.imgur.com',
-  'i.imgur.com',
-  'gyazo.com',
-  'www.gyazo.com',
-  'i.gyazo.com',
-]);
-function hasWhitespaceOrControl(value: string): boolean {
-  return (
-    /\s/u.test(value) ||
-    [...value].some((ch) => {
-      const code = ch.codePointAt(0)!;
-      return code < 32 || code === 127;
-    })
-  );
-}
 export function validProofUrl(value: string): boolean {
-  if (!value || value.length > 2048 || hasWhitespaceOrControl(value))
-    return false;
   try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      proofHosts.has(url.hostname) &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      url.pathname.length > 1
-    );
+    validateProofUrl(value);
+    return true;
   } catch {
     return false;
   }

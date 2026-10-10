@@ -116,6 +116,7 @@ export interface AdminClient {
   login(password: string, signal: AbortSignal): Promise<void>;
   addManual(
     fields: ManualSubmissionInput,
+    key: string,
     csrf: string,
     signal: AbortSignal,
   ): Promise<Submission>;

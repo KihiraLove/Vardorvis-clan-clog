@@ -139,12 +139,23 @@ export class PreviewAdminClient implements AdminClient {
     this.signedIn = true;
     this.changed(false);
   }
+  private manualReceipts = new Map<
+    string,
+    { payload: string; response: Submission }
+  >();
   async addManual(
     fields: ManualSubmissionInput,
+    key: string,
     _csrf: string,
     signal: AbortSignal,
   ) {
     this.access(signal);
+    const payload = JSON.stringify(fields);
+    const prior = this.manualReceipts.get(key);
+    if (prior) {
+      if (prior.payload !== payload) throw new AdminRequestError(409);
+      return structuredClone(prior.response);
+    }
     const item = this.data.items.find((row) => row.id === fields.itemId);
     if (!item) throw new AdminRequestError(422);
     if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
@@ -166,6 +177,7 @@ export class PreviewAdminClient implements AdminClient {
     };
     this.rows.unshift(row);
     this.record(row, row, 'create', fields.reason ?? '');
+    this.manualReceipts.set(key, { payload, response: structuredClone(row) });
     return structuredClone(row);
   }
   async session(signal: AbortSignal) {
