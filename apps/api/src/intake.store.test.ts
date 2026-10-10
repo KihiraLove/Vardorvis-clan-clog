@@ -54,16 +54,10 @@ test(
         payload: body,
       });
     try {
-      for (const migration of [
-        '001_initial.sql',
-        '002_world_modes.sql',
-        '003_admin_auth.sql',
-        '004_bot_intake.sql',
-      ])
-        await pool.query(
+            await pool.query(
           await readFile(
             new URL(
-              '../../../packages/database/migrations/' + migration,
+              '../../../packages/database/migrations/001_baseline.sql',
               import.meta.url,
             ),
             'utf8',
