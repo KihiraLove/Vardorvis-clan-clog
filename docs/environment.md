@@ -11,26 +11,29 @@ Copy `.env.example` to `.env` and keep it private (`chmod 600 .env`).
 Generate independent `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` and
 `SESSION_SECRET` with `openssl rand -hex 32`.
 
-| Variable | Purpose |
-| --- | --- |
-| `POSTGRES_PASSWORD` | DB owner, only the PostgreSQL and bootstrap jobs |
-| `APP_DB_PASSWORD` | Restricted `clog_runtime` role used by the running application |
-| `IMAGE_PREFIX`, `IMAGE_TAG` | One image named `<prefix>-app:<tag>`; successful main SHA tag in production |
-| `WEB_PORT` | Loopback diagnostics, default 8088 |
-| `AUTH_ENABLED` | Enable admin password login; Traefik override forces true |
-| `PUBLIC_ORIGIN` | Exact browser origin for admin login and CSRF, HTTPS in production |
-| `ADMIN_PASSWORD` | Shared private admin password (12-256 characters) |
-| `SESSION_SECRET` | 32+ random bytes encoded as hex |
-| `BOT_ENABLED` | Launch the Discord gateway inside `app`, default false |
-| `DISCORD_BOT_TOKEN` | Private Discord bot token |
-| `DISCORD_GUILD_ID` | Allowed Discord guild snowflake |
-| `BOT_API_TOKEN` | Independent 32-byte+ hex token for bot intake routes |
-| `DISCORD_APPLICATION_ID` | Explicit command registration |
-| `DISCORD_TEST_GUILD_ID` | Optional explicit test-guild registration |
-| `TRUSTED_PROXY_CIDRS` | Optional verified immediate proxy IP/CIDR list |
-| `CLOG_HOST` | Production hostname for Traefik Host rule and `PUBLIC_ORIGIN` |
-| `COMPOSE_FILE` | Set to `compose.yaml:compose.traefik.yaml` only on the public host |
-| `DATABASE_URL` | Host-side Node development connection URI; Compose supplies its own |
+**Database credentials:** `POSTGRES_PASSWORD` is used by PostgreSQL and
+the one-shot bootstrap; `APP_DB_PASSWORD` is the separate restricted runtime
+password. `DATABASE_URL` is for host-side Node development only.
+
+**Image and ports:** `IMAGE_PREFIX` and `IMAGE_TAG` select the one
+`<prefix>-app:<tag>` release image. `WEB_PORT` is the loopback diagnostic
+port (default 8088).
+
+**Admin authentication:** `AUTH_ENABLED` controls the shared-password
+login; `PUBLIC_ORIGIN` must exactly match the browser origin.
+`ADMIN_PASSWORD` must have 12–256 characters, and `SESSION_SECRET` must
+hold 32+ random bytes encoded as hex. `TRUSTED_PROXY_CIDRS` optionally lists
+verified immediate proxy IPs and CIDRs.
+
+**Discord:** `BOT_ENABLED` launches the gateway (default false).
+`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN` enable it;
+`DISCORD_APPLICATION_ID` and `DISCORD_TEST_GUILD_ID` are used for
+explicit command registration.
+
+**Traefik:** `CLOG_HOST` is the public hostname; production
+`COMPOSE_FILE` selects `compose.yaml:compose.traefik.yaml`.
+`TRAEFIK_HTTPS_ENTRYPOINT` and `TRAEFIK_CERT_RESOLVER` refer to names
+already configured in the existing proxy.
 
 The running application listens to API requests on localhost inside the
 container (`127.0.0.1:3000`); Nginx publishes only port 8080. The optional
