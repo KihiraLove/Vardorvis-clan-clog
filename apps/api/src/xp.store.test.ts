@@ -49,15 +49,15 @@ test(
     const key = () => randomUUID(),
       actor = '123456789012345678';
     try {
-            await pool.query(
-          await readFile(
-            new URL(
-              '../../../packages/database/migrations/001_baseline.sql',
-              import.meta.url,
-            ),
-            'utf8',
+      await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/001_baseline.sql',
+            import.meta.url,
           ),
-        );
+          'utf8',
+        ),
+      );
       const initial = await app.inject('/api/v1/xp/tracker');
       assert.equal(initial.statusCode, 200);
       assert.equal(initial.json().revision, 'xp-1');
