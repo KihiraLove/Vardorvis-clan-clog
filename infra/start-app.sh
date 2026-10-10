@@ -16,6 +16,15 @@ if [[ "${BOT_ENABLED:-false}" != true && "${BOT_ENABLED:-false}" != false ]]; th
   echo "BOT_ENABLED must be true or false" >&2
   exit 1
 fi
+if [[ "${BOT_ENABLED:-false}" == true ]]; then
+  for variable in DISCORD_BOT_TOKEN DISCORD_GUILD_ID BOT_API_TOKEN; do
+    if [[ -z "${!variable:-}" ]]; then
+      echo "BOT_ENABLED=true requires $variable" >&2
+      exit 1
+    fi
+  done
+fi
+
 node apps/api/dist/server.js &
 pids+=("$!")
 if [[ "${BOT_ENABLED:-false}" == true ]]; then
