@@ -20,7 +20,7 @@ test(
       );
       assert.deepEqual(
         migrationRows.rows.map((row) => row.name),
-        ['001_baseline.sql'],
+        ['001_baseline.sql', '002_manual_submission_requests.sql'],
       );
       // Roll back fixtures; migrations persist in the disposable test database.
       await client.query('BEGIN');

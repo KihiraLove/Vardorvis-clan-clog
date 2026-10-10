@@ -46,6 +46,15 @@ test(
         ),
       );
       await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/002_manual_submission_requests.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      );
+      await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES (42,'Vardorvis item','/items/42.png'),(43,'Shared item','/items/43.png')",
       );
       await pool.query(
@@ -69,7 +78,7 @@ test(
       const create = async (
         itemId: number | null,
         hardcore = false,
-        proof = 'https://imgur.com/acceptable',
+        proof = 'https://m.imgur.com/acceptable',
       ) => {
         const id = randomUUID();
         await pool.query(
@@ -303,6 +312,7 @@ test(
           cookie,
           origin: auth.origin,
           'x-csrf-token': session.csrfToken,
+          'idempotency-key': randomUUID(),
         },
         payload: { expectedVersion: 1, reason: 'Bad evidence' },
       });
@@ -325,6 +335,7 @@ test(
           cookie,
           origin: auth.origin,
           'x-csrf-token': session.csrfToken,
+          'idempotency-key': randomUUID(),
         },
         payload: {
           itemId: 42,
@@ -362,6 +373,7 @@ test(
           cookie,
           origin: auth.origin,
           'x-csrf-token': session.csrfToken,
+          'idempotency-key': randomUUID(),
         },
         payload: {
           itemId: 42,
@@ -383,6 +395,7 @@ test(
           cookie,
           origin: auth.origin,
           'x-csrf-token': session.csrfToken,
+          'idempotency-key': randomUUID(),
         },
         payload: {
           itemId: 43,
@@ -446,6 +459,121 @@ test(
         'pending',
       );
       assert.equal((await backend.collections()).length, 3);
+      // Lost replies and concurrent retries share a durable immutable receipt.
+      for (const approve of [false, true]) {
+        const fields = {
+          itemId: 43,
+          collectorName: 'Retry tester',
+          collectedOn: '2026-10-03',
+          hardcore: true,
+          approve,
+        };
+        const key = randomUUID();
+        const [first, replay] = await Promise.all([
+          review.createManual(fields, adminId, 'Reviewer', key),
+          new PgReviewStore(pool, backend).createManual(
+            fields,
+            adminId,
+            'Reviewer',
+            key,
+          ),
+        ]);
+        assert.deepEqual(replay, first);
+        assert.equal((await review.detail(first.id))?.audit.length, 1);
+        await review.mutate(
+          first.id,
+          1,
+          {
+            expectedVersion: 1,
+            action: approve ? 'revoke' : 'reject',
+            reason: 'Later review',
+          },
+          adminId,
+          'Reviewer',
+        );
+        assert.deepEqual(
+          await new PgReviewStore(pool, backend).createManual(
+            fields,
+            adminId,
+            'Reviewer',
+            key,
+          ),
+          first,
+        );
+        await assert.rejects(
+          review.createManual(
+            { ...fields, collectorName: 'Changed' },
+            adminId,
+            'Reviewer',
+            key,
+          ),
+          { status: 409 },
+        );
+        assert.equal(
+          (
+            await pool.query(
+              'SELECT count(*)::int AS n FROM manual_submission_requests WHERE actor_id=$1 AND request_key=$2',
+              [adminId, key],
+            )
+          ).rows[0].n,
+          1,
+        );
+        // The same key used by another actor is a distinct operation.
+        const other = await review.createManual(
+          fields,
+          'other-admin',
+          'Other',
+          key,
+        );
+        assert.notEqual(other.id, first.id);
+        if (approve)
+          await review.mutate(
+            other.id,
+            1,
+            { expectedVersion: 1, action: 'revoke', reason: 'Test cleanup' },
+            'other-admin',
+            'Other',
+          );
+      }
+      const retryFields = {
+        itemId: 43,
+        collectorName: 'Rollback tester',
+        collectedOn: '2026-10-03',
+        hardcore: false,
+        approve: false,
+      };
+      const retryKey = randomUUID();
+      await assert.rejects(
+        review.createManual(retryFields, adminId, 'Blocked', retryKey),
+      );
+      assert.equal(
+        (
+          await pool.query(
+            'SELECT count(*)::int AS n FROM manual_submission_requests WHERE request_key=$1',
+            [retryKey],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (await review.createManual(retryFields, adminId, 'Reviewer', retryKey))
+          .status,
+        'pending',
+      );
+      for (const key of [undefined, 'invalid']) {
+        const response: { statusCode: number } = await app.inject({
+          method: 'POST',
+          url: '/api/v1/admin/submissions',
+          headers: {
+            cookie,
+            origin: auth.origin,
+            'x-csrf-token': session.csrfToken,
+            ...(key ? { 'idempotency-key': key } : {}),
+          },
+          payload: retryFields,
+        });
+        assert.equal(response.statusCode, 400);
+      }
     } finally {
       await app?.close();
       await pool.end();

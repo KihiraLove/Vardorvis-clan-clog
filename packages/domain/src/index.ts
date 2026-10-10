@@ -84,6 +84,7 @@ export function validateCatalog(
 const proofHosts = new Set([
   'imgur.com',
   'www.imgur.com',
+  'm.imgur.com',
   'i.imgur.com',
   'gyazo.com',
   'www.gyazo.com',

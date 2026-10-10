@@ -23,7 +23,10 @@ port (default 8088).
 login; `PUBLIC_ORIGIN` must exactly match the browser origin.
 `ADMIN_PASSWORD` must have 12–256 characters, and `SESSION_SECRET` must
 hold 32+ random bytes encoded as hex. `TRUSTED_PROXY_CIDRS` optionally lists
-verified immediate proxy IPs and CIDRs.
+verified upstream proxy IPs and CIDRs (including Traefik). The bundled app
+always trusts its internal Nginx loopback hop, except in local unauthenticated
+admin mode. Leave the list empty only when no external reverse proxy is used;
+see [the trust-chain configuration](deployment.md#existing-traefik).
 
 **Discord:** `BOT_ENABLED` launches the gateway (default false).
 `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN` enable it;

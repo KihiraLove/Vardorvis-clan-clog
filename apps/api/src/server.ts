@@ -1,4 +1,5 @@
 /** Runtime composition: validated auth config, durable store and graceful shutdown. */
+import { checkBotReadiness } from './readiness.js';
 import pg from 'pg';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
@@ -33,6 +34,8 @@ const app = createApp(
   store ? () => store.settings() : undefined,
   {
     store,
+    checkBotReady:
+      process.env.BOT_ENABLED === 'true' ? checkBotReadiness : undefined,
     catalog,
     icons,
     xp: pool ? new PgXpStore(pool) : undefined,

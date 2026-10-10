@@ -204,3 +204,27 @@ test('live admin session recognizes only an explicit boolean local test marker',
     /Invalid admin session mode/,
   );
 });
+
+test('XP capacity errors explain the limit without displaying arbitrary server messages', async () => {
+  const capacity =
+    'The XP tracker has reached its 2000-event capacity. Existing events can still be refreshed.';
+  for (const error of [capacity, 'Untrusted server text']) {
+    const client = new LiveXpClient(
+      async () => new Response(JSON.stringify({ error }), { status: 409 }),
+    );
+    await assert.rejects(
+      client.preview(
+        'https://wiseoldman.net/competitions/1001',
+        'csrf',
+        signal(),
+      ),
+      {
+        status: 409,
+        message:
+          error === capacity
+            ? capacity
+            : 'This preview is out of date. Preview the competition again.',
+      },
+    );
+  }
+});

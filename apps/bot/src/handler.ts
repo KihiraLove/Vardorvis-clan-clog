@@ -1,4 +1,5 @@
 /** Discord is an adapter; only an API 200/201 may produce a saved receipt. */
+import { validateProofUrl } from '@clog/domain';
 import {
   MessageFlags,
   type AutocompleteInteraction,
@@ -7,36 +8,10 @@ import {
 } from 'discord.js';
 import { BotApiError, type BotApi, type Receipt } from './api.js';
 
-const hosts = new Set([
-  'imgur.com',
-  'www.imgur.com',
-  'm.imgur.com',
-  'i.imgur.com',
-  'gyazo.com',
-  'www.gyazo.com',
-  'i.gyazo.com',
-]);
 export function validProof(value: string): boolean {
-  if (
-    !value ||
-    value.length > 2048 ||
-    /\s/u.test(value) ||
-    [...value].some((c) => {
-      const code = c.codePointAt(0)!;
-      return code < 32 || code === 127;
-    })
-  )
-    return false;
   try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      hosts.has(url.hostname) &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      url.pathname.length > 1
-    );
+    validateProofUrl(value);
+    return true;
   } catch {
     return false;
   }

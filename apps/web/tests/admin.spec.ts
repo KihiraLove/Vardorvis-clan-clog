@@ -850,3 +850,204 @@ test('ADMIN-01 occupied-credit conflict retains the precise reason and reloads f
     editor(page).getByRole('button', { name: 'Approve submission' }),
   ).toBeDisabled();
 });
+
+test('mobile Imgur proof remains reviewable and can be approved', async ({
+  page,
+}) => {
+  const state = await mockAdmin(page);
+  state.detail.submission.proofUrl = 'https://m.imgur.com/a/evidence';
+  await page.route(
+    '**/api/v1/admin/submissions/sample-hardcore/approve',
+    (route) => {
+      state.detail.submission = {
+        ...state.detail.submission,
+        status: 'approved',
+        version: 2,
+      };
+      return route.fulfill({ json: state.detail.submission });
+    },
+  );
+  await page.goto('/admin');
+  await review(page, 'KihiraVD').click();
+  await expect(
+    editor(page).locator('a[href="https://m.imgur.com/a/evidence"]'),
+  ).toBeVisible();
+  await expect(proofCheck(page)).toBeEnabled();
+  await proofCheck(page).check();
+  await editor(page)
+    .getByRole('button', { name: 'Approve submission', exact: true })
+    .click();
+  await expect(
+    page.getByText('Saved submission state: approved.'),
+  ).toBeVisible();
+});
+
+test('stalled login times out, ignores a late reply, and cancels on navigation', async ({
+  page,
+}) => {
+  const state = await mockAdmin(page);
+  state.authenticated = false;
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = (input, options) => {
+      if (String(input).endsWith('/api/v1/auth/login')) {
+        document.documentElement.dataset.loginCalls = String(
+          Number(document.documentElement.dataset.loginCalls ?? 0) + 1,
+        );
+        options?.signal?.addEventListener(
+          'abort',
+          () => {
+            document.documentElement.dataset.loginAborts = String(
+              Number(document.documentElement.dataset.loginAborts ?? 0) + 1,
+            );
+          },
+          { once: true },
+        );
+        return new Promise<Response>((resolve) => {
+          window.addEventListener(
+            'release-login',
+            () => resolve(new Response('{}')),
+            { once: true },
+          );
+        });
+      }
+      return original(input, options);
+    };
+  });
+  await page.goto('/admin');
+  await page.clock.install();
+  await page.getByLabel('Admin password').fill('timeout-test-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Signing in…' }),
+  ).toBeDisabled();
+  await page.clock.fastForward(15001);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'timed out' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sign in', exact: true }),
+  ).toBeEnabled();
+  await page.evaluate(() => window.dispatchEvent(new Event('release-login')));
+  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-login-calls', '1');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
+    .click();
+  await expect(page.locator('html')).toHaveAttribute('data-login-aborts', '2');
+});
+
+for (const approveImmediately of [false, true]) {
+  test(
+    'manual timeout retries the original request and key: approve=' +
+      approveImmediately,
+    async ({ page }) => {
+      const state = await mockAdmin(page);
+      const requests: { key: string | undefined; body: unknown }[] = [];
+      await page.route('**/api/v1/admin/submissions', async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const body = route.request().postDataJSON();
+        requests.push({
+          key: route.request().headers()['idempotency-key'],
+          body,
+        });
+        if (requests.length === 1) return;
+        return route.fulfill({
+          status: 201,
+          json: {
+            ...state.detail.submission,
+            id: 'manual-retry',
+            version: 1,
+            source: 'manual',
+            ...body,
+            dateSource: 'admin',
+            status: approveImmediately ? 'approved' : 'pending',
+            submittedAt: '2026-10-06T12:00:00.000Z',
+            rawItemText: 'Virtus mask',
+          },
+        });
+      });
+      await page.goto('/admin');
+      await page.clock.install();
+      await page.getByRole('button', { name: 'Add manual submission' }).click();
+      const item = state.catalog.items.find((x) => x.name === 'Virtus mask')!;
+      await page
+        .getByLabel('Canonical item', { exact: true })
+        .selectOption(String(item.id));
+      await page
+        .getByLabel('Collector name', { exact: true })
+        .fill('Retry collector');
+      await page
+        .getByLabel('Collection date', { exact: true })
+        .fill('2026-10-06');
+      await page
+        .getByLabel('Approve immediately and show in the collection log')
+        .setChecked(approveImmediately);
+      await page
+        .getByRole('button', { name: 'Create manual submission' })
+        .click();
+      await expect.poll(() => requests.length).toBe(1);
+      await page.clock.fastForward(15001);
+      await expect(
+        page.getByRole('alert').filter({ hasText: 'timed out' }),
+      ).toBeVisible();
+      await expect(
+        page.getByLabel('Collector name', { exact: true }),
+      ).toBeDisabled();
+      await page
+        .getByRole('button', { name: 'Retry manual submission' })
+        .click();
+      await expect(
+        page.getByText(
+          'Manual submission created: ' +
+            (approveImmediately ? 'approved.' : 'pending.'),
+        ),
+      ).toBeVisible();
+      expect(requests).toHaveLength(2);
+      expect(requests[0]!.key).toMatch(/^[a-f0-9-]{36}$/);
+      expect(requests[1]).toEqual(requests[0]);
+    },
+  );
+}
+
+test('leaving the manual form aborts its pending request', async ({ page }) => {
+  await mockAdmin(page);
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = (input, options) => {
+      if (
+        String(input).endsWith('/api/v1/admin/submissions') &&
+        options?.method === 'POST'
+      ) {
+        options.signal?.addEventListener(
+          'abort',
+          () => {
+            document.documentElement.dataset.manualAborted = 'true';
+          },
+          { once: true },
+        );
+        return new Promise<Response>(() => {});
+      }
+      return original(input, options);
+    };
+  });
+  await page.goto('/admin');
+  await page.getByRole('button', { name: 'Add manual submission' }).click();
+  const f = await adminFixtures();
+  await page
+    .getByLabel('Canonical item', { exact: true })
+    .selectOption(String(f.catalog.items[0]!.id));
+  await page
+    .getByLabel('Collector name', { exact: true })
+    .fill('Cancel collector');
+  await page.getByRole('button', { name: 'Create manual submission' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Saving…', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('link', { name: 'Catalog items', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-manual-aborted',
+    'true',
+  );
+});

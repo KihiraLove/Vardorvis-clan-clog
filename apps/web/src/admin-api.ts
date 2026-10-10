@@ -132,13 +132,14 @@ export class LiveAdminClient implements AdminClient {
   }
   async addManual(
     fields: ManualSubmissionInput,
+    key: string,
     csrf: string,
     signal: AbortSignal,
   ) {
     const response = await this.response(
       '/api/v1/admin/submissions',
       signal,
-      this.write(csrf, fields),
+      this.write(csrf, fields, 'POST', key),
     );
     if (response.status !== 201)
       throw new Error('Unexpected manual submission status.');

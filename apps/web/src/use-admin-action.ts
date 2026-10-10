@@ -1,4 +1,5 @@
 /** Serialize form operations, bound their duration and centralize access/conflict errors. */
+import { withAbort } from './with-abort.ts';
 import { useEffect, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 
@@ -27,7 +28,7 @@ export function useAdminAction(onAccessLost: () => void) {
     setError(undefined);
     setMessage(undefined);
     try {
-      await work(current.signal);
+      await withAbort(work(current.signal), current.signal);
     } catch (failure) {
       if (controller.current !== current) return;
       if (

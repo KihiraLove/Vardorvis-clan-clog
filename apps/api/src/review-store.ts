@@ -118,7 +118,11 @@ export class PgReviewStore implements ReviewStore {
     fields: ManualSubmissionInput,
     actorId: string,
     actorName: string,
+    requestKey: string,
   ): Promise<ReviewSubmission> {
+    if (!uuid.test(requestKey))
+      throw new ApiError(400, 'A UUID Idempotency-Key is required.');
+    const key = requestKey.toLowerCase();
     if (
       !Number.isSafeInteger(fields.itemId) ||
       fields.itemId <= 0 ||
@@ -133,9 +137,43 @@ export class PgReviewStore implements ReviewStore {
       (fields.reason?.trim().length ?? 0) > 1000
     )
       throw new ApiError(422, 'Invalid manual submission fields.');
+    const payloadHash = digest(
+      JSON.stringify([
+        fields.itemId,
+        fields.collectorName.trim(),
+        fields.collectedOn,
+        fields.hardcore,
+        fields.proofUrl?.trim() ?? '',
+        fields.approve,
+        fields.reason?.trim() ?? '',
+      ]),
+    );
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // Serialize this actor/key across API processes before checking receipts.
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [JSON.stringify(['manual', actorId, key])],
+      );
+      const replay = (
+        await client.query<{
+          payload_hash: string;
+          response: ReviewSubmission;
+        }>(
+          'SELECT payload_hash,response FROM manual_submission_requests WHERE actor_id=$1 AND request_key=$2',
+          [actorId, key],
+        )
+      ).rows[0];
+      if (replay) {
+        if (replay.payload_hash !== payloadHash)
+          throw new ApiError(
+            409,
+            'Submission key already used for a different request.',
+          );
+        await client.query('COMMIT');
+        return replay.response;
+      }
       const validItem = await client.query<{ name: string }>(
         'SELECT name FROM items WHERE id=$1 AND active',
         [fields.itemId],
@@ -184,6 +222,10 @@ export class PgReviewStore implements ReviewStore {
           JSON.stringify(created),
           JSON.stringify(created),
         ],
+      );
+      await client.query(
+        'INSERT INTO manual_submission_requests(actor_id,request_key,payload_hash,submission_id,response) VALUES($1,$2,$3,$4,$5)',
+        [actorId, key, payloadHash, id, JSON.stringify(created)],
       );
       await client.query('COMMIT');
       return created;

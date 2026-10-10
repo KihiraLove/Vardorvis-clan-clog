@@ -9,7 +9,10 @@
 - `app`: a single image/container runs Nginx on 8080, Fastify on internal
   127.0.0.1:3000, and optionally the Discord gateway (`BOT_ENABLED=true`).
   An exit of any active process stops the others and restarts the container.
-  Only Nginx is reachable from Traefik; `/readyz` checks API/database readiness.
+  Only Nginx is reachable from Traefik. Both `/readyz` and the container health
+  check require the database and, when `BOT_ENABLED=true`, the bot readiness
+  probe (Discord gateway plus authenticated intake). Disabled bots are not
+  probed. Checks time out within 3.5 seconds and recover when dependencies recover.
 - `db`: PostgreSQL 17, privately networked with a persistent named volume.
 - `migrate`: an **exiting**, one-shot bootstrap job using the same `app`
   image. It alone receives the database owner password; the running app uses
@@ -75,7 +78,18 @@ Traefik labels select existing HTTPS entrypoint and certificate resolver; they
 cannot themselves define Traefik's static resolver or issue DNS records.
 Confirm live DNS, the actual certificate, `/admin` login, Origin/CSRF
 enforcement, bot connectivity and health before announcing release.
-`TRUSTED_PROXY_CIDRS` must only contain verified immediate proxy CIDRs.
+The bundled startup script trusts the fixed Nginx-to-API loopback hop.
+Set `TRUSTED_PROXY_CIDRS` to the verified Traefik IP/CIDR on the `web`
+network, for example `172.20.0.2/32` if that is its actual stable address.
+Only include trusted proxy addresses, never all clients or `0.0.0.0/0`.
+Nginx appends its immediate peer to the forwarded chain; Fastify walks it
+from the trusted loopback hop and stops at the first untrusted address.
+Traefik must likewise trust forwarded headers only from verified upstream
+proxies. This gives each client a separate login limit and prevents a client
+from bypassing it by supplying a forged forwarding prefix.
+With no external proxies configured, direct Nginx clients remain distinct.
+Host-run API development and local unauthenticated admin mode keep their
+existing explicit/no-proxy settings.
 
 ## Fresh-install database baseline (breaking change)
 
@@ -83,6 +97,9 @@ All nine pre-release SQL migration files are now
 [`001_baseline.sql`](../packages/database/migrations/001_baseline.sql).
 The bootstrap still records its SHA-256 in `schema_migrations`, verifies it on
 restart, imports source data and ensures correct runtime grants.
+The forward-only `002_manual_submission_requests.sql` migration adds durable
+manual-creation receipts without changing the applied baseline. Existing
+baseline databases upgrade through the normal bootstrap; no reset is needed.
 
 **There is no upgrade path from the old nine-migration test database.**
 The following reset is destructive and is appropriate ONLY for the disposable
@@ -95,7 +112,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: 001_baseline.sql
+# Expected: 001_baseline.sql and 002_manual_submission_requests.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose

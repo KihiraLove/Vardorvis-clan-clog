@@ -79,8 +79,8 @@ jobs:
       - name: Start and smoke test
         run: |
           docker compose -f compose.yaml -f compose.dev.yaml up -d --wait --wait-timeout 120
-          # Fresh install must apply only the single checksummed release baseline.
-          test "$(docker compose exec -T db psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations')" = "001_baseline.sql"
+          # Fresh install applies the immutable baseline and forward-only upgrades.
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql"
           curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8088/healthz
           curl --fail http://127.0.0.1:8088/api/v1/status
           curl --fail --output /tmp/catalog.json http://127.0.0.1:8088/api/v1/catalog
@@ -118,6 +118,8 @@ jobs:
               if (JSON.stringify(roles) !== JSON.stringify({ai:true,au:false,ad:false,cd:false,xu:false,ms:false,su:true})) throw Error('Unexpected runtime grants: '+JSON.stringify(roles));
             } finally { await client.end(); }
           "
+      - name: Proxy isolation and durable manual submission retries
+        run: docker compose exec -T -e REVIEW_SMOKE_TEST=1 app node --input-type=module < scripts/review-smoke.mjs
       - name: Admin catalog, durable icons and coordinated backup
         env:
           COMPOSE_FILE: compose.yaml:compose.dev.yaml

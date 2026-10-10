@@ -49,6 +49,7 @@ export interface ReviewStore {
     fields: ManualSubmissionInput,
     actorId: string,
     actorName: string,
+    requestKey: string,
   ): Promise<ReviewSubmission>;
   queue(
     status: 'pending' | 'reviewed',

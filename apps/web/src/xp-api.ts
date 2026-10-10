@@ -28,19 +28,23 @@ import {
 
 export class XpRequestError extends Error {
   readonly status: number;
-  constructor(status: number) {
+  constructor(status: number, detail?: string) {
     super(
-      status === 401
-        ? 'Sign in with the admin password to import competitions.'
-        : status === 403
-          ? 'Your account is not allowed to import competitions.'
-          : status === 409
-            ? 'This preview is out of date. Preview the competition again.'
-            : status === 429
-              ? 'The source is rate limited. Try again shortly.'
-              : [404, 501, 503].includes(status)
-                ? 'The XP service is not available yet.'
-                : 'Could not refresh XP. Your last successful results are preserved.',
+      status === 409 &&
+        detail ===
+          'The XP tracker has reached its 2000-event capacity. Existing events can still be refreshed.'
+        ? detail
+        : status === 401
+          ? 'Sign in with the admin password to import competitions.'
+          : status === 403
+            ? 'Your account is not allowed to import competitions.'
+            : status === 409
+              ? 'This preview is out of date. Preview the competition again.'
+              : status === 429
+                ? 'The source is rate limited. Try again shortly.'
+                : [404, 501, 503].includes(status)
+                  ? 'The XP service is not available yet.'
+                  : 'Could not refresh XP. Your last successful results are preserved.',
     );
     this.status = status;
   }
@@ -76,7 +80,24 @@ export class LiveXpClient implements XpClient {
       staged?.set(path, cached);
       return cached.data;
     }
-    if (!response.ok) throw new XpRequestError(response.status);
+    if (!response.ok) {
+      let detail: string | undefined;
+      if (response.status === 409) {
+        try {
+          const body: unknown = await response.json();
+          if (
+            body &&
+            typeof body === 'object' &&
+            'error' in body &&
+            typeof body.error === 'string'
+          )
+            detail = body.error;
+        } catch {
+          /* Fall back to the standard error for malformed responses. */
+        }
+      }
+      throw new XpRequestError(response.status, detail);
+    }
     const data: unknown = await response.json();
     staged?.set(path, { data, etag: response.headers.get('ETag') });
     return data;
