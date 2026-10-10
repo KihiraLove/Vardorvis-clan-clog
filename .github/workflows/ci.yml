@@ -64,21 +64,23 @@ jobs:
           docker compose -f compose.yaml -f compose.traefik.yaml config --quiet
           docker compose -f compose.yaml -f compose.traefik.yaml config --format json > /tmp/clog-traefik.json
           jq -e '
-            (.services.web.networks | keys | sort) == ["default", "web"] and
-            .services.api.environment.PUBLIC_ORIGIN == "https://clog.example.com" and
-            .services.api.environment.AUTH_ENABLED == "true" and
+            (.services.app.networks | keys | sort) == ["default", "web"] and
+            .services.app.environment.PUBLIC_ORIGIN == "https://clog.example.com" and
+            .services.app.environment.AUTH_ENABLED == "true" and
             .networks.web.external == true and
-            (.services.web.labels."traefik.docker.network" == "web") and
-            (.services.web.labels."traefik.http.services.clog.loadbalancer.server.port" == "8080") and
-            (.services.web.labels."traefik.http.routers.clog.tls.certresolver" == "letsencrypt") and
-            (.services.web.labels."traefik.http.routers.clog.entrypoints" == "websecure") and
-            ([.services | to_entries[] | select(.key != "web") | (.value.networks // {} | keys[])] | index("web") == null)
+            (.services.app.labels."traefik.docker.network" == "web") and
+            (.services.app.labels."traefik.http.services.clog.loadbalancer.server.port" == "8080") and
+            (.services.app.labels."traefik.http.routers.clog.tls.certresolver" == "letsencrypt") and
+            (.services.app.labels."traefik.http.routers.clog.entrypoints" == "websecure") and
+            ([.services | to_entries[] | select(.key != "app") | (.value.networks // {} | keys[])] | index("web") == null)
           ' /tmp/clog-traefik.json
-      - name: Build all service images
-        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot build
+      - name: Build the unified application image
+        run: docker compose -f compose.yaml -f compose.dev.yaml build
       - name: Start and smoke test
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml --profile bot up -d --wait --wait-timeout 120
+          docker compose -f compose.yaml -f compose.dev.yaml up -d --wait --wait-timeout 120
+          # Fresh install must apply only the single checksummed release baseline.
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations')" = "001_baseline.sql"
           curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8088/healthz
           curl --fail http://127.0.0.1:8088/api/v1/status
           curl --fail --output /tmp/catalog.json http://127.0.0.1:8088/api/v1/catalog
@@ -102,10 +104,10 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://clog.example.com' \
             -H 'Content-Type: application/json' -d '{"password":"wrong"}' \
             http://127.0.0.1:8088/api/v1/auth/login)" = "401"
-          docker compose exec -T bot node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+          docker compose exec -T app node -e "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       - name: Verify restricted database runtime and append-only audit privileges
         run: |
-          docker compose exec -T api node --input-type=module -e "
+          docker compose exec -T app node --input-type=module -e "
             import pg from 'pg';
             const client = new pg.Client({connectionString: process.env.DATABASE_URL});
             await client.connect();
@@ -120,12 +122,10 @@ jobs:
         env:
           COMPOSE_FILE: compose.yaml:compose.dev.yaml
         run: |
-          docker compose exec -T -e CATALOG_SMOKE_TEST=1 api node --input-type=module < scripts/catalog-smoke.mjs > /tmp/catalog-created.json
+          docker compose exec -T -e CATALOG_SMOKE_TEST=1 app node --input-type=module < scripts/catalog-smoke.mjs > /tmp/catalog-created.json
           icon_path="$(jq -r '.iconPath' /tmp/catalog-created.json)"
           curl --fail "http://127.0.0.1:8088$icon_path" --output /tmp/icon-before.png
-          docker compose up -d --no-deps --force-recreate --wait api
-          docker compose restart web
-          docker compose up -d --no-deps --wait --wait-timeout 60 web
+          docker compose up -d --no-deps --force-recreate --wait app
           curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://127.0.0.1:8088$icon_path" --output /tmp/icon-after.png
           cmp /tmp/icon-before.png /tmp/icon-after.png
           bash infra/backup.sh /tmp/catalog-backup
@@ -133,7 +133,7 @@ jobs:
           (cd /tmp/catalog-backup && sha256sum --check SHA256SUMS)
           tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
       - name: Stop default stack before local admin override
-        run: docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
+        run: docker compose -f compose.yaml -f compose.dev.yaml down --volumes
       - name: Verify passwordless local admin Compose override
         run: |
           docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml config --quiet
@@ -156,12 +156,12 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml --profile bot logs --no-color --tail 100 || true
+          docker compose -f compose.yaml -f compose.dev.yaml logs --no-color --tail 100 || true
           docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml logs --no-color --tail 100 || true
       - name: Clean up
         if: always()
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml --profile bot down --volumes
+          docker compose -f compose.yaml -f compose.dev.yaml down --volumes
           docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml down --volumes
 
   frontend-browser:
