@@ -82,6 +82,32 @@ export class HttpBotApi implements BotApi {
     private readonly submitTimeoutMs = 6500,
   ) {}
 
+  /** Readiness verifies the authenticated bot route and database-backed catalog. */
+  async checkReady(): Promise<boolean> {
+    try {
+      const url = new URL('/api/v1/bot/items', this.origin);
+      url.searchParams.set('q', '');
+      url.searchParams.set('limit', '1');
+      const response = await this.request(url, {
+        method: 'GET',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(this.searchTimeoutMs),
+        headers: { Authorization: 'Bearer ' + this.token },
+      });
+      if (!response.ok) return false;
+      const body: unknown = await response.json();
+      return (
+        record(body) &&
+        Array.isArray(body.items) &&
+        body.items.length <= 1 &&
+        body.items.every(candidate)
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async search(query: string): Promise<Candidate[]> {
     const url = new URL('/api/v1/bot/items', this.origin);
     url.searchParams.set('q', query.slice(0, 200));

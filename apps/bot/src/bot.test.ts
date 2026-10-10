@@ -422,3 +422,32 @@ test('gateway handlers survive reconnect; stop prevents new interactions and des
   assert.equal(fake.destroyed, 1);
   assert.equal(fake.listenerCount(Events.InteractionCreate), 1);
 });
+
+test('bot readiness probes authenticated intake and rejects unavailable or malformed responses', async () => {
+  const routes: string[] = [];
+  const healthy = new HttpBotApi('http://api:3000', token, (async (
+    url: URL,
+    init: RequestInit,
+  ) => {
+    routes.push(url.toString());
+    assert.equal(
+      (init.headers as Record<string, string>).Authorization,
+      'Bearer ' + token,
+    );
+    return Response.json({ items: [{ id: 42, name: 'Dragon axe' }] });
+  }) as typeof fetch);
+  assert.equal(await healthy.checkReady(), true);
+  assert.equal(routes[0], 'http://api:3000/api/v1/bot/items?q=&limit=1');
+  const unavailable = new HttpBotApi('http://api:3000', token, (async () =>
+    Response.json({ error: 'disabled' }, { status: 503 })) as typeof fetch);
+  assert.equal(await unavailable.checkReady(), false);
+  const malformed = new HttpBotApi('http://api:3000', token, (async () =>
+    Response.json({
+      items: [{ id: 'not-an-id', name: 'Bad' }],
+    })) as typeof fetch);
+  assert.equal(await malformed.checkReady(), false);
+  const refused = new HttpBotApi('http://api:3000', token, (async () => {
+    throw Error('Connection refused');
+  }) as typeof fetch);
+  assert.equal(await refused.checkReady(), false);
+});

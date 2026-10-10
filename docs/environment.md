@@ -9,7 +9,7 @@ Node 24 LTS, npm, Git, and Docker Engine/Desktop with a recent Compose v2 suppor
 ```bash
 cp .env.example .env
 openssl rand -hex 32
-# Paste the generated value into POSTGRES_PASSWORD and host DATABASE_URL.
+# Paste that value into POSTGRES_PASSWORD and host DATABASE_URL. Generate a second, independent 32-byte hex secret for APP_DB_PASSWORD; the API must not use the migrator account.
 chmod 600 .env
 npm ci
 npm run build
@@ -21,7 +21,8 @@ The example contains placeholders, never working production secrets. `.env` is i
 
 | Variable                 | Where          | Current/future purpose                                                           |
 | ------------------------ | -------------- | -------------------------------------------------------------------------------- |
-| `POSTGRES_PASSWORD`      | Compose        | Required database owner password; generate locally                               |
+| `POSTGRES_PASSWORD`      | Compose        | Migration/backup database owner password; generate locally                       |
+| `APP_DB_PASSWORD`        | Compose        | Independent hex secret for the restricted API runtime role; required at startup  |
 | `IMAGE_PREFIX`           | Compose        | Default `ghcr.io/kihiralove/vardorvis-clan-clog`; service suffix is appended     |
 | `IMAGE_TAG`              | Compose        | Production `sha-<full main commit SHA>`; placeholder allowed with local override |
 | `WEB_PORT`               | Compose        | Loopback host port, default 8088                                                 |
