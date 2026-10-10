@@ -15,6 +15,8 @@ test(
     const client = new pg.Client({ connectionString: url });
     await client.connect();
     try {
+      const migrationRows = await client.query<{ name: string }>('SELECT name FROM schema_migrations ORDER BY name');
+      assert.deepEqual(migrationRows.rows.map((row) => row.name), ['001_baseline.sql']);
       // Roll back fixtures; migrations persist in the disposable test database.
       await client.query('BEGIN');
       await client.query(
