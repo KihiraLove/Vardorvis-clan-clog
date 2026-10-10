@@ -36,15 +36,15 @@ test(
     });
     let app: ReturnType<typeof createApp> | undefined;
     try {
-            await pool.query(
-          await readFile(
-            new URL(
-              '../../../packages/database/migrations/001_baseline.sql',
-              import.meta.url,
-            ),
-            'utf8',
+      await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/001_baseline.sql',
+            import.meta.url,
           ),
-        );
+          'utf8',
+        ),
+      );
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES (42,'Vardorvis item','/items/42.png'),(43,'Shared item','/items/43.png')",
       );
