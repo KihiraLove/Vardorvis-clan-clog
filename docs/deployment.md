@@ -85,16 +85,25 @@ The bootstrap still records its SHA-256 in `schema_migrations`, verifies it on
 restart, imports source data and ensures correct runtime grants.
 
 **There is no upgrade path from the old nine-migration test database.**
-The following is destructive and is appropriate ONLY for the disposable test
-Compose project you have agreed to reset. It also deletes uploaded test icons:
+The following reset is destructive and is appropriate ONLY for the disposable
+test Compose project you have agreed to reset. It deletes the **database
+volume**, while preserving the separate icon volume by default:
 
 ```bash
-docker compose -f compose.yaml -f compose.dev.yaml down --volumes
+docker compose -f compose.yaml -f compose.dev.yaml down
+docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
 # Expected: 001_baseline.sql
 ```
+
+The volume name above assumes the default `vardorvis-clog` Compose
+project; verify the actual project/volume name before deletion.
+The preserved icon files will no longer be referenced by the new empty
+database; only remove that volume separately when its contents are
+explicitly disposable. CI uses `down --volumes` exclusively on its
+own isolated test data.
 
 Never run `down --volumes` on a production deployment. For later releases,
 add new forward-only migration files rather than editing this applied baseline.
