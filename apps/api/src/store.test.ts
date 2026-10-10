@@ -27,15 +27,15 @@ test(
       { store, logger: false },
     );
     try {
-            await pool.query(
-          await readFile(
-            new URL(
-              '../../../packages/database/migrations/001_baseline.sql',
-              import.meta.url,
-            ),
-            'utf8',
+      await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/001_baseline.sql',
+            import.meta.url,
           ),
-        );
+          'utf8',
+        ),
+      );
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
