@@ -1,4 +1,4 @@
-# Reusable workflow called after all CI gates succeed on a main push.
+# One multi-arch application image replaces the prior web/API/bot matrix.
 name: Images
 on:
   workflow_call:
@@ -9,13 +9,9 @@ permissions:
   packages: write
 jobs:
   build:
-    name: image-${{ matrix.service }}
+    name: image-app
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [web, api, bot]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,20 +28,18 @@ jobs:
         id: image
         env:
           REPOSITORY: ${{ github.repository }}
-          SERVICE: ${{ matrix.service }}
-        run: echo "name=ghcr.io/${REPOSITORY,,}-$SERVICE" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${REPOSITORY,,}-app" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        # Each service gets both CPU architectures under a full-commit tag and provenance.
         with:
           context: .
           file: Dockerfile
-          target: ${{ matrix.service }}
+          target: app
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.image.outputs.name }}:sha-${{ inputs.commit }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ inputs.commit }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
           provenance: true

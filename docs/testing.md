@@ -5,7 +5,7 @@
 ```bash
 npm ci
 npm run validate
-docker compose -f compose.yaml -f compose.dev.yaml --profile bot up -d --build --wait
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 curl --fail http://127.0.0.1:8088/api/v1/status
 ```
 

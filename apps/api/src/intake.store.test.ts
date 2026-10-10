@@ -54,21 +54,15 @@ test(
         payload: body,
       });
     try {
-      for (const migration of [
-        '001_initial.sql',
-        '002_world_modes.sql',
-        '003_admin_auth.sql',
-        '004_bot_intake.sql',
-      ])
-        await pool.query(
-          await readFile(
-            new URL(
-              '../../../packages/database/migrations/' + migration,
-              import.meta.url,
-            ),
-            'utf8',
+      await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/001_baseline.sql',
+            import.meta.url,
           ),
-        );
+          'utf8',
+        ),
+      );
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES (42,'Dragon axe','/42.png'),(43,'Dragon axe (or)','/43.png'),(44,'Mystic axe','/44.png')",
       );

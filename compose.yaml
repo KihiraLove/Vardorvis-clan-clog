@@ -1,6 +1,6 @@
 name: vardorvis-clog
 
-# Startup: healthy DB -> successful migrations/catalog import -> healthy API -> web/bot.
+# Long-lived services: application + PostgreSQL. One-shot migrator uses the app image.
 services:
   db:
     image: postgres:17-alpine
@@ -18,9 +18,8 @@ services:
       retries: 20
     security_opt: ['no-new-privileges:true']
 
-  # Apply migrations and the pinned catalog once; repeated starts preserve existing data.
   migrate:
-    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-api:${IMAGE_TAG:?Set IMAGE_TAG to a published sha tag}
+    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-app:${IMAGE_TAG:?Set IMAGE_TAG to a published sha tag}
     command: ['node', 'packages/database/dist/bootstrap.js']
     restart: 'no'
     environment:
@@ -30,14 +29,16 @@ services:
       db: { condition: service_healthy }
     security_opt: ['no-new-privileges:true']
 
-  api:
-    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-api:${IMAGE_TAG:?Set IMAGE_TAG}
+  app:
+    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-app:${IMAGE_TAG:?Set IMAGE_TAG}
     restart: unless-stopped
     init: true
     environment:
       DATABASE_URL: postgresql://clog_runtime:${APP_DB_PASSWORD:?Generate a distinct runtime database password}@db:5432/clog
-      HOST: 0.0.0.0
+      HOST: 127.0.0.1
       PORT: '3000'
+      API_BASE_URL: http://127.0.0.1:3000
+      BOT_ENABLED: ${BOT_ENABLED:-false}
       ICON_STORAGE_PATH: /data/catalog-icons
       NODE_ENV: production
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
@@ -46,38 +47,16 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
       BOT_API_TOKEN: ${BOT_API_TOKEN:-}
-      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
-    volumes:
-      - catalog-icons:/data/catalog-icons
-    depends_on:
-      migrate: { condition: service_completed_successfully }
-    security_opt: ['no-new-privileges:true']
-
-  # Loopback exposure expects an externally managed reverse proxy for public TLS.
-  web:
-    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-web:${IMAGE_TAG:?Set IMAGE_TAG}
-    restart: unless-stopped
-    ports:
-      - '127.0.0.1:${WEB_PORT:-8088}:8080'
-    depends_on:
-      api: { condition: service_healthy }
-    security_opt: ['no-new-privileges:true']
-
-  # Opt in with --profile bot. Discord login occurs only when all credentials are set.
-  bot:
-    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-bot:${IMAGE_TAG:?Set IMAGE_TAG}
-    profiles: ['bot']
-    restart: unless-stopped
-    init: true
-    environment:
-      API_BASE_URL: http://api:3000
-      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       DISCORD_TEST_GUILD_ID: ${DISCORD_TEST_GUILD_ID:-}
+    volumes:
+      - catalog-icons:/data/catalog-icons
+    ports:
+      - '127.0.0.1:${WEB_PORT:-8088}:8080'
     depends_on:
-      api: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     security_opt: ['no-new-privileges:true']
 
 volumes:

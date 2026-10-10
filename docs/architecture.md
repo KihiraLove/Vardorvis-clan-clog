@@ -1,3 +1,5 @@
+> **10 October 2026 release update:** The nine development migrations have been squashed to [001_baseline.sql](../packages/database/migrations/001_baseline.sql). The web proxy, API and optional bot share a single application container, separate from PostgreSQL. Historical implementation notes below may describe the old topology.
+
 # Architecture
 
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
@@ -21,7 +23,7 @@ flowchart TD
 
 ## Boundaries
 
-The web container serves static assets and proxies `/api/` to the API. The external reverse proxy terminates TLS. Public endpoints return only catalog data and approved collection credits; proof links, pending claims, Discord IDs and audit metadata remain private.
+The web proxy within the combined application container serves static assets and proxies `/api/` to the API. The external reverse proxy terminates TLS. Public endpoints return only catalog data and approved collection credits; proof links, pending claims, Discord IDs and audit metadata remain private.
 
 The bot connects outbound to Discord's gateway and the internal API. Submission writes use a dedicated service credential, restricted to bot routes. The credential must not authorize admin routes. Human admins use the configured shared password, exact site origin, expiring server-side sessions and CSRF protection; Discord OAuth is not an admin login method. V1 does not require public visitors to log in.
 
@@ -33,7 +35,7 @@ Foundation API endpoints are `/healthz`, `/readyz` and `/api/v1/status`. Readine
 
 `pages` describes the category and source page order. `page_items(page_id, item_id, slot)` supplies the many-to-many relationship and exact slot ordering. An item is stored once even when it occurs on multiple pages. All collection state is derived by canonical ID from approved submissions; no `collected` boolean is copied into page rows.
 
-Initial schema: [001_initial.sql](../packages/database/migrations/001_initial.sql). The schema has no catalog seed or fake approvals.
+Initial schema: [001_initial.sql](../packages/database/migrations/001_baseline.sql). The schema has no catalog seed or fake approvals.
 
 | Entity                  | Main invariant                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------------- |

@@ -1,3 +1,5 @@
+> **10 October 2026 release update:** The development migration series has been squashed to a fresh-install [001_baseline.sql](../packages/database/migrations/001_baseline.sql), and web/API/bot now ship in one application image. The detailed sections below are historical snapshots; use [deployment](deployment.md) for release procedures.
+
 # Project code, data model, architecture and CI guide
 
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
@@ -65,7 +67,7 @@ Models and parsers sit between untrusted JSON and React components. The live and
 
 ## 3. Persistent data model
 
-The schema is defined by [001_initial.sql](../packages/database/migrations/001_initial.sql) and [002_world_modes.sql](../packages/database/migrations/002_world_modes.sql). Migration 002 adds the hardcore claim column, per-mode approval uniqueness and default-off site settings. There is no seed catalog or XP persistence yet. The runner additionally creates `schema_migrations`.
+The schema is defined by [001_initial.sql](../packages/database/migrations/001_baseline.sql) and [002_world_modes.sql](../packages/database/migrations/001_baseline.sql). Migration 002 adds the hardcore claim column, per-mode approval uniqueness and default-off site settings. There is no seed catalog or XP persistence yet. The runner additionally creates `schema_migrations`.
 
 ```mermaid
 erDiagram

@@ -35,22 +35,20 @@ LABEL org.opencontainers.image.source="https://github.com/KihiraLove/Vardorvis-c
 RUN mkdir -p /data/catalog-icons && chown node:node /data/catalog-icons
 USER node
 
-# Readiness verifies the migrated database view, not feature completeness.
-FROM service-base AS api
-EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD node -e "fetch('http://127.0.0.1:3000/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "apps/api/dist/server.js"]
-
-# Liveness stays healthy in intentional disabled mode; /readyz checks real Discord readiness.
-FROM service-base AS bot
-EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD node -e "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "apps/bot/dist/index.js"]
-
-# Ship static assets and same-origin proxy configuration in an unprivileged web server.
-FROM nginxinc/nginx-unprivileged:stable-alpine AS web
+# Web proxy, API and optional bot use one deployment image.
+FROM service-base AS app
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends nginx-light \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /tmp/nginx /var/log/nginx /var/lib/nginx \
+  && chown -R node:node /tmp/nginx /var/log/nginx /var/lib/nginx
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY infra/nginx/default.conf /etc/nginx/conf.d/default.conf
-LABEL org.opencontainers.image.source="https://github.com/KihiraLove/Vardorvis-clan-clog"
+COPY infra/start-app.sh /usr/local/bin/start-app
+RUN chmod 755 /usr/local/bin/start-app
+USER node
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD node -e "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["/usr/local/bin/start-app"]

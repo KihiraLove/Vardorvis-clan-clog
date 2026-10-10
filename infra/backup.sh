@@ -10,12 +10,12 @@ fi
 backup_dir="${1:?Supply a new backup directory}"
 [[ ! -e "$backup_dir" ]] || { echo 'Backup directory already exists'; exit 1; }
 mkdir -p "$backup_dir"
-mapfile -t writers < <(docker compose --profile bot ps --status running --services | grep -E '^(api|bot)$' || true)
-resume() { if ((${#writers[@]})); then docker compose --profile bot start "${writers[@]}"; fi; }
+mapfile -t writers < <(docker compose ps --status running --services | grep -E '^app$' || true)
+resume() { if ((${#writers[@]})); then docker compose start "${writers[@]}"; fi; }
 trap resume EXIT
-if ((${#writers[@]})); then docker compose --profile bot stop "${writers[@]}"; fi
+if ((${#writers[@]})); then docker compose stop "${writers[@]}"; fi
 docker compose exec -T db pg_dump -U clog -d clog -Fc > "$backup_dir/database.dump.tmp"
-docker compose run --rm --no-deps -T --user 0 --entrypoint tar api -C /data/catalog-icons -czf - . > "$backup_dir/icons.tar.gz.tmp"
+docker compose run --rm --no-deps -T --user 0 --entrypoint tar app -C /data/catalog-icons -czf - . > "$backup_dir/icons.tar.gz.tmp"
 mv "$backup_dir/database.dump.tmp" "$backup_dir/database.dump"
 mv "$backup_dir/icons.tar.gz.tmp" "$backup_dir/icons.tar.gz"
 (cd "$backup_dir" && sha256sum database.dump icons.tar.gz > SHA256SUMS)

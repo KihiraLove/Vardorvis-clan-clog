@@ -1,3 +1,5 @@
+> **Release update:** Schema 008 is part of the consolidated fresh-install [baseline](../packages/database/migrations/001_baseline.sql), not a separate upgrade step.
+
 # Admin catalog backend (CAT-02)
 
 The existing `/admin/catalog` UI now uses authenticated storage for item creation, icon uploads and page ordering. No external game ID is required. A newly created item appears on all selected pages and in catalog search, uncollected in both world modes.
@@ -42,7 +44,7 @@ The ignored `.data/` directory is suitable for local development. Use a backed-u
 
 ## Transactions, identities and revisions
 
-[008_admin_catalog.sql](../packages/database/migrations/008_admin_catalog.sql) is a forward-only migration. Earlier migrations are unchanged.
+[008_admin_catalog.sql](../packages/database/migrations/001_baseline.sql) is a forward-only migration. Earlier migrations are unchanged.
 
 | Entity                                                   | Responsibility                                                                            |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
