@@ -1,18 +1,12 @@
-# Combine with compose.yaml; migrations and production topology stay identical.
+# Both runtime and bootstrap use the one application build.
 services:
   migrate:
-    image: clog-api:dev
-    build: { context: ., target: api }
-  api:
+    image: clog-app:dev
+    build: { context: ., target: app }
+  app:
+    image: clog-app:dev
+    build: { context: ., target: app }
     environment:
       NODE_ENV: development
-    image: clog-api:dev
-    build: { context: ., target: api }
-  web:
-    image: clog-web:dev
-    build: { context: ., target: web }
-  bot:
-    image: clog-bot:dev
-    build: { context: ., target: bot }
   db:
     ports: ['127.0.0.1:5432:5432']
