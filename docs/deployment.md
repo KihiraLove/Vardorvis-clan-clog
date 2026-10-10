@@ -1,148 +1,121 @@
-# CI/CD and self-hosting
+# Release deployment and operations
 
-> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
+> Release preparation (10 October 2026): the former three application images
+> (`web`, `api`, `bot`) are replaced by ONE `app` image. This document
+> describes the new Compose layout, not a deployed production instance.
 
-## Pipeline
+## Service topology
 
-`CI` runs on pull requests, pushes to `main`, and manual validation. `validate` installs the lockfile, checks formatting/lint, builds all workspaces, type-checks, runs unit/database tests and checks relative doc links. `docker-smoke` builds all three images, migrates a fresh disposable database, starts Compose and checks the web/API/bot paths. Both run on GitHub-hosted runners without deployment credentials.
+- `app`: a single image/container runs Nginx on 8080, Fastify on internal
+  127.0.0.1:3000, and optionally the Discord gateway (`BOT_ENABLED=true`).
+  An exit of any active process stops the others and restarts the container.
+  Only Nginx is reachable from Traefik; `/readyz` checks API/database readiness.
+- `db`: PostgreSQL 17, privately networked with a persistent named volume.
+- `migrate`: an **exiting**, one-shot bootstrap job using the same `app`
+  image. It alone receives the database owner password; the running app uses
+  restricted `clog_runtime` credentials. It creates the schema, imports the
+  pinned catalog, corrects clue taxonomy, and provisions the runtime role.
 
-Only a successful **push to main** invokes reusable `Images`. It publishes:
+Two long-lived containers plus a short-lived bootstrap job. Running Postgres
+inside the app container would make recovery, permissions and process lifetime
+unnecessarily fragile and is not supported.
 
-- `ghcr.io/kihiralove/vardorvis-clan-clog-web:sha-<full commit SHA>`
-- `ghcr.io/kihiralove/vardorvis-clan-clog-api:sha-<full commit SHA>`
-- `ghcr.io/kihiralove/vardorvis-clan-clog-bot:sha-<full commit SHA>`
+## Image build and release
 
-Each contains `linux/amd64` and `linux/arm64` variants. Newly published GHCR packages default to private; keep their visibility private and confirm their repository access association. Publishing uses the repository's `GITHUB_TOKEN`, never a stored push PAT. All three images must publish successfully before a release is eligible for the home workflow. A partial failed matrix is not a deployable release.
+GitHub CI validates workspaces, browser tests, a fresh PostgreSQL instance and
+Docker Compose smoke tests. A **successful push to main** publishes one
+`linux/amd64` + `linux/arm64` image:
 
-PR workflows never run on your home runner, publish packages, or use `pull_request_target`. Actions are pinned to verified commit SHAs and Dependabot tracks updates. npm dependencies are locked; base image tags receive Docker dependency updates. For tighter release reproducibility, record the produced image digests as well as SHA tags and pin deployment images by digest in a later release-manifest task.
+`ghcr.io/kihiralove/vardorvis-clan-clog-app:sha-<40-character-commit>`
 
-Recommended repository rules: require `validate` and `docker-smoke` before merging, disallow force pushes to main, and restrict workflow-file changes to reviewed PRs. These are setup instructions; branch protection has not been configured automatically.
+Pull requests do **not** deploy or publish images. The home deployment workflow
+uses successful main CI provenance and a manual dispatch. It calls
+`/srv/vardorvis-clan-clog/deploy.sh` on a labelled self-hosted runner, backs up
+existing DB and icon data, and only records a release tag after Compose health
+checks pass. Image rollback cannot reverse an incompatible schema automatically.
 
-## First server installation
-
-Install Docker/Compose on a 64-bit ARM or AMD64 Linux host. Use a dedicated directory and reverse proxy. The default web host binding is loopback, and the database/API/bot have no published ports.
+Copy reviewed `compose.yaml`, `compose.traefik.yaml`, `.env.example`
+and the `infra/` scripts into your server directory. Do not copy test secrets
+to production. Create `.env` with `chmod 600` and set unique independently
+generated 32-byte hex `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`,
+`SESSION_SECRET`, a strong `ADMIN_PASSWORD`, and the published `IMAGE_TAG`.
+Use `openssl rand -hex 32` for the three independent hex secrets.
 
 ```bash
-sudo mkdir -p /srv/vardorvis-clan-clog
-# Copy compose.yaml, .env.example and infra/deploy.sh from a reviewed main release.
-# Give the dedicated deploy user ownership/access as appropriate for your host.
 cd /srv/vardorvis-clan-clog
-cp .env.example .env
-chmod 600 .env
-# Generate POSTGRES_PASSWORD and set IMAGE_TAG to a successful published SHA tag.
-docker login ghcr.io -u KihiraLove
 docker compose config --quiet
 docker compose pull
 docker compose up -d --wait --wait-timeout 120
 curl --fail http://127.0.0.1:8088/api/v1/status
+curl --fail http://127.0.0.1:8088/readyz
 ```
 
-Install the deployment helper as `/srv/vardorvis-clan-clog/deploy.sh` and mark it executable. It expects Compose and `.env` in the same directory. Copy updated deployment files from a reviewed release when their configuration changes; the home workflow deliberately updates image versions only and does not silently overwrite host secrets or proxy configuration.
+Never publish the database, internal API or bot port. The default app binding
+is `127.0.0.1:8088` for diagnostics only.
 
-The current containers deploy the foundation/status page, not a usable public collection log. Complete the V1 issues before announcing the site or enabling real Discord submissions.
+## Existing Traefik
 
-## Reverse proxy / Traefik
-
-**Confirmed by owner (9 October 2026):** existing Traefik provides TLS with
-Let's Encrypt and runs on Docker networks `web` and `socknet`. The owner
-has visually inspected and approved the frontend. Actual production host/DNS,
-HTTPS router and issued certificate have **not** been validated by this PR.
-
-For containerized Traefik, connect **only** the collection-log `web` service
-to external Docker network `web`; keep its internal Compose `default` network
-so Nginx can still reach `api:3000`. The Traefik `socknet` socket-proxy
-network is not an application network; do **not** attach the clog services to it.
-Leave the API, PostgreSQL, bot and migrations off the proxy network.
-
-The repository includes the **opt-in**
-[compose.traefik.yaml](../compose.traefik.yaml) override with Docker labels
-for host routing, TLS, existing resolver selection, and service port. It
-uses only external `web` and the private application `default` networks;
-`socknet` is never connected to the app.
-
-On the production host, copy both Compose files from a reviewed release and
-configure these values in the private `.env`:
+The operator's Traefik uses Let's Encrypt and Docker networks `web` and
+`socknet`. **Only** the `app` service joins external `web`; the `db`
+and bootstrap job stay on Compose's private default network. No application
+container joins `socknet`, which is the proxy's socket network.
 
 ```dotenv
-# Choose the hostname used by visitors (not a URL or /admin path).
-CLOG_HOST=YOUR_REAL_HOSTNAME
-# Must match names already configured in Traefik's startup config.
+COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+CLOG_HOST=your-real-public-hostname.example
 TRAEFIK_HTTPS_ENTRYPOINT=websecure
 TRAEFIK_CERT_RESOLVER=letsencrypt
-# Activates the override for normal docker compose and deploy.sh commands.
-COMPOSE_FILE=compose.yaml:compose.traefik.yaml
-ADMIN_PASSWORD=REPLACE_WITH_UNIQUE_STRONG_PASSWORD
-SESSION_SECRET=REPLACE_WITH_64_RANDOM_HEX_CHARACTERS
+ADMIN_PASSWORD=replace-with-a-strong-unique-password
+SESSION_SECRET=replace-with-64-random-hex-characters
 ```
 
-The override sets `AUTH_ENABLED=true` and derives the API's
-`PUBLIC_ORIGIN=https://${CLOG_HOST}` from the same hostname as the
-Traefik router, avoiding an admin login **403** caused by an origin mismatch.
-It requires the admin password and session secret at startup. Its example
-`websecure` entrypoint and `letsencrypt` resolver are **names**, not
-additional Traefik setup; change the two values only if your existing
-Traefik uses different names. Port **8080** is Nginx inside the `web`
-container; the base stack's `127.0.0.1:8088` diagnostic binding remains
-loopback-only. No admin/API/database port is routed directly.
+The override enables `AUTH_ENABLED=true` and configures
+`PUBLIC_ORIGIN=https://<CLOG_HOST>` using the same hostname as the Host label.
+Traefik labels select existing HTTPS entrypoint and certificate resolver; they
+cannot themselves define Traefik's static resolver or issue DNS records.
+Confirm live DNS, the actual certificate, `/admin` login, Origin/CSRF
+enforcement, bot connectivity and health before announcing release.
+`TRUSTED_PROXY_CIDRS` must only contain verified immediate proxy CIDRs.
+
+## Fresh-install database baseline (breaking change)
+
+All nine pre-release SQL migration files are now
+[`001_baseline.sql`](../packages/database/migrations/001_baseline.sql).
+The bootstrap still records its SHA-256 in `schema_migrations`, verifies it on
+restart, imports source data and ensures correct runtime grants.
+
+**There is no upgrade path from the old nine-migration test database.**
+The following is destructive and is appropriate ONLY for the disposable test
+Compose project you have agreed to reset. It also deletes uploaded test icons:
 
 ```bash
-docker compose config --quiet
-docker compose config --format json | jq '.services.web.labels'
-# After reviewing the resolved config, use the normal host deploy workflow.
+docker compose -f compose.yaml -f compose.dev.yaml down --volumes
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
+docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
+  psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
+# Expected: 001_baseline.sql
 ```
 
-The example admin URL `https://daybloom.net/admin` does not itself verify
-that the hostname is live. Traefik's entrypoints and Let's Encrypt resolver
-**definitions** are startup configuration, not application container
-labels; Docker labels **reference** those existing definitions. DNS records,
-certificate issuance and any host-specific proxy trust checks also remain
-external to Compose labels. Docker Compose supports `COMPOSE_FILE` in the
-host `.env`, so the existing deployment script can use the override without
-being modified.
+Never run `down --volumes` on a production deployment. For later releases,
+add new forward-only migration files rather than editing this applied baseline.
 
-The API's `TRUSTED_PROXY_CIDRS` applies to Fastify's **immediate trusted
-proxy hops**, not the Traefik `socknet`. Nginx in the app's web container
-proxies `/api/` over the private network and relays forwarded headers. Validate
-the real source CIDRs and which forwarded headers each hop trusts/overwrites
-before enabling proxy-derived client IPs; do not trust `0.0.0.0/0`. With
-unverified proxy addresses, leave this field empty rather than broadening it.
+## Backups, Discord and release acceptance
 
-Live release checklist: validate hostname/DNS, the actual HTTPS router and
-Let's Encrypt certificate, public page and `/api/v1/status`, direct
-`/admin` navigation, correct-password login and authenticated session,
-strict Origin rejection, CSRF-enforced admin writes and absence of public
-database/API ports. CI and visual inspection do not verify these host-specific
-checks. This documentation update makes no live network/deployment changes.
+`infra/backup.sh /safe/new/backup-directory` stops the `app` writer, captures
+a PostgreSQL custom-format dump and all durable uploaded icons, writes
+checksums and a `COMPLETE` marker, then restarts the app. Store an encrypted
+copy off-host and rehearse an isolated restore before production approval.
 
-## Opt-in home CI/CD
+Enable Discord in the combined app with `BOT_ENABLED=true`,
+`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN`.
+Explicit command registration is still required and is never performed on
+start. See [bot operations](bot-operations.md).
 
-`Deploy home` is manual and restricted to the main workflow definition. A GitHub-hosted verification job requires a full lowercase 40-character SHA and proves that its main push CI run concluded successfully. Only then does a runner labelled `[self-hosted, Linux, clog-production]` call the already-installed local deploy script. There is no PR checkout or execution on the home runner.
-
-Install a dedicated runner with access to the local Docker service and GHCR pull credentials. Create the `home-production` environment, restrict who can dispatch deployments, and configure approval controls if supported by your plan. Run the workflow on main with the SHA from a successful CI run. The deploy script takes a database backup when a database is already running, pulls the selected images, waits for health and records current/previous successful release tags.
-
-After health checks pass, the helper atomically updates only `IMAGE_TAG` in the host `.env`, preserving other configuration. Later manual Compose commands then use the same successful release. If deploying a manually installed initial release before the helper is used, record its tag in `.current-release` so the next deployment can retain it as `.previous-release`.
-
-The workflow is opt-in: it cannot deploy until you install the runner and files. It needs no inbound SSH or open Docker socket. Automatic unattended deployment after publishing is deferred until restore/rollback and real feature health checks are proven.
-
-## Planned uploaded icon storage
-
-Admin-created item icons (#30/#31) need a dedicated persistent API-mounted asset volume, for example at `/data/catalog-icons`, with generated asset paths served through the API. The current foundation Compose files and deployment helper do not yet configure or back up this volume. Add its configuration and permissions when implementing the feature; never place uploaded icons only inside an image or disposable container filesystem.
-
-The database stores icon references, canonical manual item IDs, page memberships and saved order metadata. Back up that database together with the matching published icon files, using a consistent snapshot or a controlled write pause. Restore both to an isolated deployment and verify every referenced icon, manual item, page order and existing collection/hardcore credit before release acceptance. Source catalog refreshes and image replacements must leave manual overrides and uploaded files intact. The deployment/recovery tasks (#11/#13) must extend the helper accordingly; the database-only command below covers the shipped foundation.
-
-## Backups and rollback
-
-```bash
-mkdir -p backups
-chmod 700 backups
-docker compose exec -T db pg_dump -U clog -d clog -Fc > backups/clog.dump
-chmod 600 backups/clog.dump
-```
-
-Keep encrypted off-host copies and protect `.env` separately. External proof images are not archived by V1; database backups preserve links only. Test restores in an isolated database regularly. Do not rely on an untested dump as recovery.
-
-Image rollback: set `IMAGE_TAG` to the recorded previous successful tag, pull and start with the same Compose command. Migrations are forward-only and checksummed; never edit an already-applied migration. An older API may work only with compatible additive schema changes. If a schema change is incompatible, restore a tested backup to a separate volume/database and point the matching application release at it during a controlled recovery. Do not automatically run destructive down migrations.
-
-If health checks fail, the deployment helper reports failure and does not record the release as current. It does not claim automatic database rollback. Inspect logs, then choose a compatible older image or tested database restore. A later release-manifest issue will add coordinated digest/configuration rollout and more complete recovery automation.
-
-For shutdown, use `docker compose stop` to retain the database volume. Avoid `down --volumes` on the live server; that command is used only for disposable CI/test databases.
+Before release verify: clean schema initialization and repeat bootstrap;
+restricted database owner/runtime roles; nonempty catalog with correct
+Treasure Trails rare pages; public collections/XP defaults; correct admin
+password and wrong-password denial; session and CSRF writes; durable icon
+upload after app recreation; coordinated backup/restore; and actual Discord
+`/cc-clog submit` intake from the clan guild. CI covers many checks, but
+not live TLS or a Discord gateway login. Treat release approval as pending
+until host-specific checks have been completed.

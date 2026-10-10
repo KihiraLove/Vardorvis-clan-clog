@@ -1,3 +1,5 @@
+> **Release update:** Schema 002 is now part of the consolidated fresh-install [baseline](../packages/database/migrations/001_baseline.sql).
+
 # Mockup revision: collection log and SOTW tracker
 
 > **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, Discord sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
@@ -43,7 +45,7 @@ The live Fastify service now reads the public release setting from PostgreSQL. M
 - [xp-api.ts](../apps/web/src/xp-api.ts) adds conditional tracker reads, committing ETags only after validation. Older detailed adapters remain available but are no longer used by the public page.
 - [XpAdmin.tsx](../apps/web/src/XpAdmin.tsx) keeps guarded preview/apply but presents event/skill/gain information without participant tables. Internal import payloads still contain participant snapshots for reconciliation; public tracker payloads do not.
 - [style.css](../apps/web/src/style.css) contains the mockup layout, fixed 2× geometry, silhouette styling and responsive event grid.
-- [002_world_modes.sql](../packages/database/migrations/002_world_modes.sql) evolves the schema without changing migration 001's checksum.
+- [002_world_modes.sql](../packages/database/migrations/001_baseline.sql) evolves the schema without changing migration 001's checksum.
 
 ## Data model changes
 

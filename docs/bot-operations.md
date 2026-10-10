@@ -4,16 +4,22 @@ Implementation of [BOT-01 #6](https://github.com/KihiraLove/Vardorvis-clan-clog/
 
 ## Runtime
 
-Enable the optional bot Compose profile only after configuring:
+In the combined `app` container, set `BOT_ENABLED=true` and configure
+`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN` before starting
+the gateway. The internal API origin is `http://127.0.0.1:3000` and needs no
+separate service DNS name. Set `BOT_ENABLED=false` (the default) to run the
+web/API without attempting a Discord connection. Incorrect or partial bot
+credentials with the bot enabled cause container startup to fail and restart.
 
-- `DISCORD_BOT_TOKEN`: Discord bot token, kept on the host; never exposed in web assets.
-- `DISCORD_GUILD_ID`: the one clan guild allowed to submit (17–20 digit Discord snowflake).
-- `BOT_API_TOKEN`: a dedicated independent 32-byte-or-longer hex token, matching the value on the **API** container. Generate with `openssl rand -hex 32`.
-- `API_BASE_URL`: internal API origin (Compose defaults to `http://api:3000`).
+The Discord gateway exposes internal `127.0.0.1:3001/healthz` and
+`/readyz`; `/readyz` succeeds only when Discord and the bot's authenticated
+API route are available. No bot port is published. A child process crash
+causes the combined container to restart. Slash commands must still be
+registered explicitly, not during startup.
 
-For example `docker compose --profile bot up -d`. In the absence of **all** credentials the bot runs in explicit disabled mode (for CI/infrastructure smoke testing). A partially configured bot fails at startup. `/healthz` reports process liveness, configured state and Discord connection; `/readyz` returns 200 only when Discord's gateway client is connected, otherwise 503. This distinction allows an operator to distinguish an unconfigured or disconnected bot from a usable Discord service.
-
-The only gateway intent is `Guilds`; no privileged message-content or member intent is used. The command is rejected in DMs or any other guild. Reconnects are handled by discord.js without replacing interaction listeners. SIGINT/SIGTERM stop receiving new interactions and destroy the client. Discord OAuth admin credentials do not give the bot permission to approve claims or list the admin queue.
+The only gateway intent is Guilds; the command is rejected in DMs or other
+guilds. The adapter cannot approve submissions. Admin site login remains a
+shared password, not Discord OAuth.
 
 ## Explicit registration
 
@@ -22,7 +28,7 @@ Do not register or overwrite commands during normal container startup.
 1. Invite the bot application to the selected guild with `bot` and `applications.commands` scopes.
 2. Set `DISCORD_APPLICATION_ID` to the Discord application's numeric ID and `DISCORD_TEST_GUILD_ID` to an isolated test guild ID.
 3. For a real test submission, run the **test instance** of the bot and intake API with `DISCORD_GUILD_ID` set to that same test guild. Merely registering a command in a different guild does not bypass the runtime guild restriction.
-4. Build first, then explicitly run `npm run register:test -w @clog/bot` with those variables and the bot token in the environment. On Compose, use `docker compose --profile bot run --rm -e DISCORD_TEST_GUILD_ID=... bot node apps/bot/dist/register.js test`.
+4. Build first, then explicitly run `npm run register:test -w @clog/bot` with those variables and the bot token in the environment. On Compose, use `docker compose run --rm --no-deps -e DISCORD_TEST_GUILD_ID=... app node apps/bot/dist/register.js test`.
 5. Verify autocomplete and private receipts in the test guild. Once approved for the production clan guild, explicitly run `npm run register:guild -w @clog/bot` with `DISCORD_GUILD_ID` (or run the container with `node apps/bot/dist/register.js guild`).
 
 The registration script uses the per-command Discord POST **upsert**, not a bulk guild-command PUT. It therefore does not remove other commands, and it does not run on container restart.
@@ -43,4 +49,4 @@ The registration script uses the per-command Discord POST **upsert**, not a bulk
 
 `npm run validate` covers command serialization, token/guild config, collector fallback, autocomplete refresh, explicit canonical selections, raw/ambiguous submissions, proof validation, request timeouts and idempotent retries, occupied-credit warnings, registration route, and gateway teardown/reconnect state. No live Discord token is needed for CI.
 
-The Docker smoke workflow runs the bot **unconfigured**, verifying disabled-mode liveness without contacting Discord. A live configured guild/gateway test remains an environment-dependent release check; do not mistake CI mocks for an actual Discord login. Registration and deployment are deliberately opt-in.
+The Docker smoke workflow runs the combined application with `BOT_ENABLED=false`, without contacting Discord. Unit tests cover the bot's liveness/readiness states. A live configured guild/gateway test remains an environment-dependent release check; do not mistake CI mocks for an actual Discord login. Registration and deployment are deliberately opt-in.

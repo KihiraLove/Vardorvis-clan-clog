@@ -1,3 +1,5 @@
+> **Release update:** The previous individual pre-release SQL migrations are incorporated in [001_baseline.sql](../packages/database/migrations/001_baseline.sql).
+
 # Backend phase 1: public reads, admin password login and release settings
 
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
