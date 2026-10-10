@@ -49,17 +49,10 @@ test(
     const key = () => randomUUID(),
       actor = '123456789012345678';
     try {
-      for (const name of [
-        '001_initial.sql',
-        '002_world_modes.sql',
-        '003_admin_auth.sql',
-        '004_bot_intake.sql',
-        '005_xp_events.sql',
-      ])
-        await pool.query(
+            await pool.query(
           await readFile(
             new URL(
-              '../../../packages/database/migrations/' + name,
+              '../../../packages/database/migrations/001_baseline.sql',
               import.meta.url,
             ),
             'utf8',
