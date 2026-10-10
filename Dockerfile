@@ -41,8 +41,8 @@ USER root
 RUN apt-get update \
   && apt-get install -y --no-install-recommends nginx-light \
   && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /tmp/nginx /var/log/nginx \
-  && chown -R node:node /tmp/nginx /var/log/nginx
+  && mkdir -p /tmp/nginx /var/log/nginx /var/lib/nginx \
+  && chown -R node:node /tmp/nginx /var/log/nginx /var/lib/nginx
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY infra/nginx/default.conf /etc/nginx/conf.d/default.conf
