@@ -14,6 +14,14 @@
 - Global progress counts unique canonical items. Page progress counts the page's own slots. An item shared by two pages can increment both page counters but only once in the global total.
 - After an approval/revocation, an open public page refreshes within 30 seconds. Initial implementation uses ETag-aware polling; reassess push updates only if needed.
 
+## Clan branding
+
+The administrator can upload a clan logo and restore the bundled default.
+GIF and animated WebP logos animate, and the website icon uses the same image's
+first frame. Logo controls are administrator-only and images persist through
+restarts and coordinated backup/restore. See [clan branding](clan-branding.md)
+for supported image formats, limits and the API contract.
+
 ## Hardcore collection mode
 
 - `hardcore` belongs to an individual submission/approved credit and defaults to false; it is a reviewed condition, not a distinct item identity or inferred account type.

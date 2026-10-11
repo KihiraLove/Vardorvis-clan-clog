@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { adminFixtures } from './admin-fixtures.ts';
+import { defaultBranding } from '../src/branding.ts';
 
 async function mockAccounts(
   page: Page,
@@ -88,6 +89,8 @@ async function mockAccounts(
       }
       return route.fulfill({ json: { accounts: state.accounts } });
     }
+    if (path === '/api/v1/branding' || path === '/api/v1/admin/branding')
+      return route.fulfill({ json: defaultBranding });
     if (path === '/api/v1/admin/clan-api-key')
       return route.fulfill({
         json: {

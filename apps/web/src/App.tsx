@@ -10,6 +10,7 @@ import { CollectionLog } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
 import { parseSettings, type SiteSettings } from './site-settings.ts';
+import { defaultBranding, parseBranding } from './branding.ts';
 
 function LiveLog({
   preview,
@@ -113,6 +114,51 @@ export function App() {
   const [hardcore, setHardcore] = useState(false);
   const [liveEnabled, setLiveEnabled] = useState(false);
   const [liveClanName, setLiveClanName] = useState('');
+  const [liveBranding, setLiveBranding] = useState(defaultBranding);
+  useEffect(() => {
+    setLiveBranding(defaultBranding);
+    if (route.preview) return;
+    let stopped = false,
+      pending = false;
+    let controller: AbortController | undefined;
+    const load = async () => {
+      if (stopped || pending) return;
+      pending = true;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 10000);
+      try {
+        const response = await fetch('/api/v1/branding', {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('Branding unavailable');
+        const value = parseBranding(await response.json());
+        if (!stopped)
+          setLiveBranding((current) =>
+            Number(value.revision.slice(9)) >= Number(current.revision.slice(9))
+              ? value
+              : current,
+          );
+      } catch {
+        /* Keep the last verified logo while the service is unavailable. */
+      } finally {
+        clearTimeout(timeout);
+        pending = false;
+      }
+    };
+    void load();
+    const resume = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    const interval = setInterval(resume, 25000);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      stopped = true;
+      controller?.abort();
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, [route.preview]);
   useEffect(() => {
     const change = () => setRoute(location());
     window.addEventListener('popstate', change);
@@ -218,6 +264,20 @@ export function App() {
     adminClient instanceof PreviewAdminClient
       ? adminClient.publicSettings().clanName
       : liveClanName;
+  const branding =
+    adminClient instanceof PreviewAdminClient
+      ? adminClient.publicBranding()
+      : liveBranding;
+  useEffect(() => {
+    document
+      .querySelectorAll<HTMLLinkElement>(
+        'link[rel="icon"], link[rel="alternate icon"]',
+      )
+      .forEach((icon) => {
+        icon.type = 'image/png';
+        icon.href = branding.faviconPath;
+      });
+  }, [branding.faviconPath]);
   const settingsSaved = (value: SiteSettings) => {
     setLiveClanName(value.clanName);
     setLiveEnabled(value.hardcoreEnabled);
@@ -277,7 +337,7 @@ export function App() {
               (clanName ? clanName + ' ' : '') + 'clan collection log'
             }
           >
-            <img className="clan-logo" src="/brand/mexicat.gif" alt="" />
+            <img className="clan-logo" src={branding.logoPath} alt="" />
             <div>
               <span className="clan-name">{clanName || 'Clan'}</span>
               <span className="clan-subtitle">Clan Collection Log</span>
@@ -303,6 +363,7 @@ export function App() {
               client={adminClient}
               clanName={clanName}
               onSettingsSaved={settingsSaved}
+              onBrandingSaved={setLiveBranding}
               preview={route.preview}
               path={route.path}
               onMode={mode}

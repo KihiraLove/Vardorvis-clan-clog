@@ -1,6 +1,9 @@
 /** Runtime composition: validated auth config, durable store and graceful shutdown. */
 import { checkBotReadiness } from './readiness.js';
 import pg from 'pg';
+import { join } from 'node:path';
+import { BrandingStorage } from './branding-storage.js';
+import { PgBrandingStore } from './branding-store.js';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { PgStore } from './store.js';
@@ -29,6 +32,10 @@ const icons = config.iconDirectory
   ? new IconStorage(config.iconDirectory)
   : undefined;
 if (icons) await icons.initialize();
+const logos = config.iconDirectory
+  ? new BrandingStorage(join(config.iconDirectory, 'branding'))
+  : undefined;
+if (logos) await logos.initialize();
 const proofs = config.proofDirectory
   ? new ProofStorage(config.proofDirectory)
   : undefined;
@@ -52,6 +59,8 @@ const app = createApp(
       process.env.BOT_ENABLED === 'true' ? checkBotReadiness : undefined,
     catalog,
     icons,
+    logos,
+    branding: pool ? new PgBrandingStore(pool) : undefined,
     proofs,
     clanKeys,
     proofStore: pool ? new PgProofStore(pool) : undefined,

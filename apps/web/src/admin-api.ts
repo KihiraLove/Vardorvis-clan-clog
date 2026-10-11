@@ -1,6 +1,7 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
 import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
 import { parseSettings } from './site-settings.ts';
+import { parseBranding, validateLogoFile } from './branding.ts';
 import { LiveXpClient } from './xp-api.ts';
 import {
   list,
@@ -56,7 +57,7 @@ export class AdminRequestError extends Error {
               : status === 409
                 ? 'Another change was saved. Load the latest data before trying again.'
                 : status === 413
-                  ? 'The icon is too large.'
+                  ? 'The uploaded image is too large.'
                   : status === 422 || status === 400
                     ? 'The server could not validate these fields. Review them before retrying.'
                     : [404, 501, 503].includes(status)
@@ -263,6 +264,46 @@ export class LiveAdminClient implements AdminClient {
   }
   async settings(signal: AbortSignal) {
     return parseSettings(await this.json('/api/v1/admin/settings', signal));
+  }
+  async branding(signal: AbortSignal) {
+    return parseBranding(await this.json('/api/v1/admin/branding', signal));
+  }
+  async saveLogo(
+    file: File | null,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    let options: RequestInit;
+    if (file) {
+      validateLogoFile(file);
+      const data = new FormData();
+      data.set('logo', file);
+      options = {
+        method: 'PUT',
+        headers: { 'X-CSRF-Token': csrf, 'If-Match': revision },
+        body: data,
+      };
+    } else options = this.write(csrf, { expectedRevision: revision }, 'DELETE');
+    let payload: unknown;
+    try {
+      payload = await this.json('/api/v1/admin/branding/logo', signal, options);
+    } catch (failure) {
+      if (
+        file &&
+        failure instanceof AdminRequestError &&
+        failure.status === 400
+      )
+        throw new Error(
+          'The logo could not be decoded. Choose a supported image within the listed limits.',
+          { cause: failure },
+        );
+      throw failure;
+    }
+    const result = parseBranding(payload);
+    if (result.revision === revision)
+      throw new Error('Unexpected logo receipt.');
+    return result;
   }
   async saveSettings(
     hardcoreEnabled: boolean,

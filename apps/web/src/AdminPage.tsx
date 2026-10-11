@@ -5,6 +5,7 @@ import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import type { SiteSettings } from './site-settings.ts';
+import type { Branding } from './branding.ts';
 import { AdminSettings } from './AdminSettings.tsx';
 import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
@@ -54,10 +55,12 @@ export function AdminPage({
   children,
   clanName,
   onSettingsSaved,
+  onBrandingSaved,
 }: AdminRouteProps & {
   client: AdminClient;
   clanName: string;
   onSettingsSaved: (settings: SiteSettings) => void;
+  onBrandingSaved: (branding: Branding) => void;
   onMode: (next: boolean) => void;
   children?: React.ReactNode;
 }) {
@@ -186,6 +189,7 @@ export function AdminPage({
           session={session}
           onAccessLost={accessLost}
           onSaved={onSettingsSaved}
+          onBrandingSaved={onBrandingSaved}
         />
       )}
       {action.error && (
