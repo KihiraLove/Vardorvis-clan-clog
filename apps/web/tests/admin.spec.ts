@@ -54,6 +54,14 @@ async function mockAdmin(page: Page) {
       return route.fulfill({
         json: state.authenticated ? f.session : { authenticated: false },
       });
+    if (path === '/api/v1/admin/clan-api-key')
+      return route.fulfill({
+        json: {
+          revision: 'clan-key-1',
+          enabled: true,
+          key: 'mock-test-clan-key',
+        },
+      });
     if (path.startsWith('/api/v1/admin/')) state.privateReads++;
     if (path === '/api/v1/admin/catalog')
       return route.fulfill({ json: state.catalog });
@@ -721,6 +729,14 @@ test('live admin shows a password form and submits a password without Discord OA
       authenticated = true;
       return route.fulfill({ json: { authenticated: true } });
     }
+    if (path === '/api/v1/admin/clan-api-key')
+      return route.fulfill({
+        json: {
+          revision: 'clan-key-1',
+          enabled: true,
+          key: 'mock-test-clan-key',
+        },
+      });
     if (path === '/api/v1/admin/settings')
       return route.fulfill({
         json: {

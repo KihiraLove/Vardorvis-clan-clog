@@ -88,6 +88,14 @@ async function mockAccounts(
       }
       return route.fulfill({ json: { accounts: state.accounts } });
     }
+    if (path === '/api/v1/admin/clan-api-key')
+      return route.fulfill({
+        json: {
+          revision: 'clan-key-1',
+          enabled: true,
+          key: 'mock-test-clan-key',
+        },
+      });
     if (path === '/api/v1/admin/settings')
       return route.fulfill({
         json: {

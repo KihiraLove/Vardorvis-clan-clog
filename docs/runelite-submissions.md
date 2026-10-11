@@ -12,12 +12,16 @@ these fields (their order does not matter):
 
 ```bash
 curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
+  -H 'X-Clan-API-Key: YOUR_CLAN_SHARED_KEY' \
   -H 'Idempotency-Key: 00000000-0000-4000-8000-000000000001' \
   -F 'username=Collector' -F 'clanName=Vardorvis' -F 'itemId=4151' \
   -F 'screenshot=@drop.png;type=image/png'
 ```
 
-No API key is required. A trimmed, case-insensitive clan-name mismatch returns
+The shared clan API key is **required by default**, in the `X-Clan-API-Key`
+header. The API generates a cryptographically random 32-byte key on first startup
+and preserves it across restarts. An enabled requirement rejects missing/wrong
+keys with **401**, before reading uploads. A trimmed, case-insensitive clan-name mismatch returns
 **403** and creates no submission or image. This comparison validates the
 submitted clan string; it does not authenticate clan membership. All accepted
 claims are **pending** and need staff review before they grant credit.
@@ -45,7 +49,9 @@ The optional UUID `Idempotency-Key` should be generated once per drop and reused
 on retries. Identical fields and decoded PNG pixels return the original receipt,
 including after review/restart. Changing the payload with that key returns
 **409**. Without a key, each request creates a new pending claim. Replays must
-still match the currently configured clan. A future plugin should retain the
+still match the currently configured clan and, when required, use the current
+API key. Credentials are not part of the immutable submission payload, so a
+retry using a newly rotated key can recover its original receipt. A future plugin should retain the
 key, payload and PNG until it receives the receipt.
 
 Malformed multipart or invalid PNG returns **400**, oversize uploads **413**,
@@ -67,6 +73,26 @@ when returning to the tab. `GET /api/v1/settings` returns `revision`,
 Concurrent settings writes return **409**; both previous/new clan names are
 recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
+
+Admins can view the **Current shared API key**, toggle **Require clan API key**,
+click **Generate new key**, or enter their own text and click **Set API key**.
+All key controls remain visible and usable with the requirement disabled.
+Disabling preserves the saved key and accepts matching-clan submissions without
+checking their key header. The clan-name and normal payload/PNG checks still
+apply. Generating or supplying a key while disabled changes the visible saved
+key, without enabling enforcement. Re-enabling immediately requires that key.
+Rotations invalidate the previous key immediately, including uploads that
+started before rotation but have not committed.
+
+Admin-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
+CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
+`enabled`, `key`, or `generate: true`. `key` and `generate` are mutually exclusive.
+Custom keys allow 1–256 printable ASCII characters, without leading/trailing
+whitespace. Stale updates return **409**. Moderators and public settings endpoints
+cannot read or rotate keys; the shared key authorizes only RuneLite intake,
+not staff tools or Discord bot operations. The key header is redacted from API
+logging, and audits record actor, enabled changes and whether rotation occurred
+without storing the key value.
 
 Admins and moderators can optionally attach a PNG to manual submissions.
 `POST /api/v1/admin/submissions/upload` uses multipart fields `submission`
@@ -93,6 +119,17 @@ RuneLite receipts. Existing Discord/manual rows and receipts remain valid.
 Normal bootstrap applies it and reconciles runtime grants; no database reset
 is required.
 
+[`005_clan_api_keys.sql`](../packages/database/migrations/005_clan_api_keys.sql)
+adds the key singleton and append-only key audit. Startup creates the default
+enabled key only when absent, including on upgrades from clan-name-only intake.
+Existing keys and disabled settings are never reset by startup or bootstrap.
+The key is encrypted with AES-256-GCM in PostgreSQL. Its encryption root is
+created atomically as a private 32-byte file, `.clan-api-key.secret`, in the
+screenshot volume; the standard screenshot archive includes this file too.
+Database dumps alone do not contain the plaintext shared key. Public upload
+authentication compares key digests in constant time and rechecks the current
+requirement under a database lock when committing the pending submission.
+
 Compose supplies `PROOF_STORAGE_PATH=/data/submission-images` and a separate
 durable `submission-images` volume. For standalone API development set an
 absolute writable directory; it is required with staff authentication. A
@@ -107,6 +144,13 @@ stopped, preserving PNG filenames and node ownership of both image directories.
 Verify checksums before restoring and rehearse in a separate disposable Compose
 project. A backup made before this migration has no referenced screenshots;
 an empty screenshot archive is sufficient for that historical database.
+
+Preserve `.clan-api-key.secret` when moving/restoring a post-key-upgrade service,
+including if the API-key requirement was disabled. A missing/wrong root fails
+startup without silently replacing the shared key. A pre-key-upgrade backup
+has no encrypted key row and generates a new enabled key on its next startup.
+Images predating this key feature do not enforce the key requirement; use the
+matching image and coordinated database/screenshot-volume backup for recovery.
 
 An older image is incompatible with the new submission sources/settings once
 RuneLite claims exist. Recovery to such an image requires the coordinated

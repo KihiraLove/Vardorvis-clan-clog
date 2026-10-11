@@ -1874,3 +1874,15 @@ main {
   object-fit: contain;
   margin-bottom: 0.5rem;
 }
+
+.clan-api-key-settings {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--admin-border, #605849);
+  padding-top: 1rem;
+}
+.clan-api-key-settings form {
+  margin-block: 0.75rem;
+}
+.clan-api-key-value {
+  font-family: monospace;
+}

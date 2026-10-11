@@ -1,6 +1,7 @@
 /** PNG metadata and RuneLite receipts commit with the pending claim. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { requireClanKey } from './clan-api-key.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
 export const screenshotPath = (id: string) =>
@@ -29,16 +30,21 @@ export interface RuneLiteReceipt {
 }
 export interface ProofStore {
   allowIntake(ip: string): Promise<boolean>;
+  authorizeIntake(apiKey: string | undefined): Promise<void>;
   clanName(): Promise<string>;
   image(id: string): Promise<IconRecord | null>;
   createRuneLite(
     fields: RuneLiteFields,
     image: IconRecord,
     key: string,
+    apiKey?: string,
   ): Promise<{ receipt: RuneLiteReceipt; imageId: string }>;
 }
 export class PgProofStore implements ProofStore {
   constructor(private readonly pool: pg.Pool) {}
+  async authorizeIntake(apiKey: string | undefined) {
+    await requireClanKey(this.pool, apiKey);
+  }
   async clanName() {
     const row = (
       await this.pool.query<{ clan_name: string }>(
@@ -75,7 +81,12 @@ export class PgProofStore implements ProofStore {
     ).rows[0];
     return row ?? null;
   }
-  async createRuneLite(fields: RuneLiteFields, image: IconRecord, key: string) {
+  async createRuneLite(
+    fields: RuneLiteFields,
+    image: IconRecord,
+    key: string,
+    apiKey?: string,
+  ) {
     const hash = createHash('sha256')
       .update(
         JSON.stringify([
@@ -98,6 +109,7 @@ export class PgProofStore implements ProofStore {
       if (!settings) throw new ApiError(503, 'Settings unavailable.');
       if (!clanMatches(fields.clanName, settings.clan_name))
         throw new ApiError(403, 'Clan name does not match this website.');
+      await requireClanKey(client, apiKey, true);
       await client.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
         ['runelite:' + key.toLowerCase()],

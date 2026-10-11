@@ -1,5 +1,6 @@
 /** Admin-only release switch. Live persistence requires the authenticated settings API. */
 import { useEffect, useState } from 'react';
+import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 import { AdminRequestError } from './admin-api.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
@@ -143,6 +144,11 @@ export function AdminSettings({
       )}
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
+      <ClanApiKeySettings
+        client={client}
+        session={session}
+        onAccessLost={onAccessLost}
+      />
     </section>
   );
 }

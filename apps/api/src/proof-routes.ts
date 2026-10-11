@@ -147,6 +147,11 @@ export function proofRoutes(
               429,
               'Submission rate limit reached. Try again later.',
             );
+          await store.authorizeIntake(
+            typeof req.headers['x-clan-api-key'] === 'string'
+              ? req.headers['x-clan-api-key']
+              : undefined,
+          );
         },
       },
       async (req, reply) => {
@@ -180,6 +185,9 @@ export function proofRoutes(
             },
             image,
             key,
+            typeof req.headers['x-clan-api-key'] === 'string'
+              ? req.headers['x-clan-api-key']
+              : undefined,
           );
           if (result.imageId !== image.id) await discardUnreferenced(image);
           return reply.code(201).send(result.receipt);

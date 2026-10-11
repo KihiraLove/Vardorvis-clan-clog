@@ -8,6 +8,7 @@ import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
 import { PgXpStore } from './xp-store.js';
 import { ProofStorage } from './proof-storage.js';
+import { PgClanKeyStore, loadClanKeyRoot } from './clan-api-key.js';
 import { PgProofStore } from './proof-store.js';
 import { PgReviewStore } from './review-store.js';
 const config = readConfig();
@@ -36,6 +37,11 @@ if (config.auth && !proofs)
   throw new Error('PROOF_STORAGE_PATH is required when auth is enabled');
 if (config.auth && !icons)
   throw new Error('ICON_STORAGE_PATH is required when auth is enabled');
+const clanKeys =
+  pool && proofs
+    ? new PgClanKeyStore(pool, await loadClanKeyRoot(proofs.directory))
+    : undefined;
+if (clanKeys) await clanKeys.ensureDefault();
 const catalog = pool ? new PgCatalogStore(pool) : undefined;
 const app = createApp(
   store ? () => store.ready() : undefined,
@@ -47,6 +53,7 @@ const app = createApp(
     catalog,
     icons,
     proofs,
+    clanKeys,
     proofStore: pool ? new PgProofStore(pool) : undefined,
     xp: pool ? new PgXpStore(pool) : undefined,
     review: pool && store ? new PgReviewStore(pool, store) : undefined,

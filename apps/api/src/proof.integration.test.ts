@@ -12,6 +12,7 @@ import { PgStore } from './store.js';
 import { PgReviewStore } from './review-store.js';
 import { PgProofStore } from './proof-store.js';
 import { ProofStorage, MAX_SCREENSHOT_BYTES } from './proof-storage.js';
+import { PgClanKeyStore, loadClanKeyRoot } from './clan-api-key.js';
 import { hashPassword } from './passwords.js';
 
 test(
@@ -32,6 +33,8 @@ test(
       review = new PgReviewStore(pool, backend),
       store = new PgProofStore(pool),
       proofs = new ProofStorage(directory);
+    const clanKeys = new PgClanKeyStore(pool, await loadClanKeyRoot(directory));
+    let apiKey: string | undefined;
     const auth = {
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
@@ -45,6 +48,7 @@ test(
         review,
         proofs,
         proofStore: store,
+        clanKeys,
         auth,
         logger: false,
       },
@@ -62,6 +66,8 @@ test(
         "INSERT INTO items(id,name) VALUES(42,'Canonical fixture'); INSERT INTO game_item_ids(game_item_id,item_id) VALUES(900001,42),(900002,42)",
       );
       await proofs.initialize();
+      await clanKeys.ensureDefault();
+      apiKey = (await clanKeys.settings()).key;
       await app.ready();
       const admin = (await backend.accountByUsername('admin'))!;
       await backend.updateAccount(
@@ -153,6 +159,7 @@ test(
           headers: {
             ...multipart(fields).headers,
             ...(key ? { 'idempotency-key': key } : {}),
+            ...(apiKey === undefined ? {} : { 'x-clan-api-key': apiKey }),
           },
         });
       const fields: [string, string][] = [
@@ -160,6 +167,50 @@ test(
         ['clanName', ' vardorvis '],
         ['itemId', '900001'],
       ];
+      const generated = apiKey!;
+      assert.match(generated, /^[A-Za-z0-9_-]{43}$/u);
+      apiKey = undefined;
+      assert.equal((await runelite(fields)).statusCode, 401);
+      apiKey = 'wrong-key';
+      assert.equal((await runelite(fields)).statusCode, 401);
+      apiKey = generated;
+      assert.equal(
+        (await app.inject('/api/v1/admin/clan-api-key')).statusCode,
+        401,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/clan-api-key',
+            headers: moderator,
+          })
+        ).statusCode,
+        403,
+      );
+      const initialKey = await app.inject({
+        url: '/api/v1/admin/clan-api-key',
+        headers: owner,
+      });
+      assert.equal(initialKey.statusCode, 200, initialKey.body);
+      assert.deepEqual(initialKey.json(), {
+        revision: 'clan-key-1',
+        enabled: true,
+        key: generated,
+      });
+      assert.equal(initialKey.headers['cache-control'], 'no-store');
+      const publicSettings = (await app.inject('/api/v1/settings')).body;
+      assert.ok(
+        !publicSettings.includes(generated) &&
+          !publicSettings.includes('apiKey'),
+      );
+      await Promise.all(
+        Array.from({ length: 8 }, () => clanKeys.ensureDefault()),
+      );
+      assert.equal((await clanKeys.settings()).key, generated);
+      const encrypted = (
+        await pool.query('SELECT encrypted_key FROM clan_api_keys')
+      ).rows[0].encrypted_key as string;
+      assert.ok(encrypted.startsWith('v1:') && !encrypted.includes(generated));
       assert.equal(
         (
           await runelite(
@@ -196,7 +247,11 @@ test(
           .statusCode,
         413,
       );
-      assert.equal((await readdir(directory)).length, 0);
+      assert.equal(
+        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+          .length,
+        0,
+      );
       const key = randomUUID();
       const responses = await Promise.all([
         runelite(fields, png, key, 'image/png', true),
@@ -212,7 +267,11 @@ test(
           .n,
         1,
       );
-      assert.equal((await readdir(directory)).length, 1);
+      assert.equal(
+        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+          .length,
+        1,
+      );
       assert.equal(
         (
           await runelite(
@@ -300,7 +359,11 @@ test(
       const created = await create();
       assert.equal(created.statusCode, 201, created.body);
       assert.deepEqual((await create()).json(), created.json());
-      assert.equal((await readdir(directory)).length, 2);
+      assert.equal(
+        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+          .length,
+        2,
+      );
       const noImage = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/submissions',
@@ -309,6 +372,122 @@ test(
       });
       assert.equal(noImage.statusCode, 201, noImage.body);
       assert.equal(noImage.json().screenshotPath, null);
+      const keyUpdate = async (
+        changes: { enabled?: boolean; key?: string; generate?: true },
+        headers = owner,
+        revision?: string,
+      ) =>
+        app.inject({
+          method: 'PUT',
+          url: '/api/v1/admin/clan-api-key',
+          headers,
+          payload: {
+            expectedRevision: revision ?? (await clanKeys.settings()).revision,
+            ...changes,
+          },
+        });
+      assert.equal(
+        (await keyUpdate({ generate: true }, moderator)).statusCode,
+        403,
+      );
+      assert.equal(
+        (
+          await keyUpdate({ generate: true }, {
+            cookie: owner.cookie,
+          } as typeof owner)
+        ).statusCode,
+        403,
+      );
+      assert.equal(
+        (await keyUpdate({ generate: true, key: 'both-conflict' })).statusCode,
+        422,
+      );
+      assert.equal((await keyUpdate({ key: '   ' })).statusCode, 422);
+      const custom = 'custom clan key alpha 123';
+      const rotated = await keyUpdate({ key: custom });
+      assert.equal(rotated.statusCode, 200, rotated.body);
+      assert.equal(rotated.json().key, custom);
+      assert.equal((await runelite(fields, png, key)).statusCode, 401); // old generated key
+      apiKey = custom;
+      assert.deepEqual((await runelite(fields, png, key)).json(), receipt);
+      assert.equal(
+        (await keyUpdate({ generate: true }, owner, 'clan-key-1')).statusCode,
+        409,
+      );
+      const disabled = await keyUpdate({ enabled: false });
+      assert.equal(disabled.statusCode, 200, disabled.body);
+      assert.equal(disabled.json().key, custom);
+      apiKey = undefined;
+      assert.deepEqual((await runelite(fields, png, key)).json(), receipt);
+      apiKey = 'ignored-while-disabled';
+      assert.deepEqual((await runelite(fields, png, key)).json(), receipt);
+      assert.equal(
+        (
+          await runelite(
+            fields.map(([k, v]) => [k, k === 'clanName' ? 'Other' : v]),
+          )
+        ).statusCode,
+        403,
+      );
+      const generatedWhileOff = await keyUpdate({ generate: true });
+      assert.equal(generatedWhileOff.statusCode, 200, generatedWhileOff.body);
+      assert.equal(generatedWhileOff.json().enabled, false);
+      assert.notEqual(generatedWhileOff.json().key, custom);
+      const customWhileOff = await keyUpdate({
+        key: 'replacement while disabled',
+      });
+      assert.equal(customWhileOff.statusCode, 200, customWhileOff.body);
+      assert.equal(customWhileOff.json().enabled, false);
+      assert.equal(customWhileOff.json().key, 'replacement while disabled');
+      await new PgClanKeyStore(
+        pool,
+        await loadClanKeyRoot(directory),
+      ).ensureDefault();
+      assert.deepEqual(await clanKeys.settings(), customWhileOff.json());
+      const enabledKey = await keyUpdate({ enabled: true });
+      assert.equal(enabledKey.statusCode, 200, enabledKey.body);
+      assert.equal(enabledKey.json().key, customWhileOff.json().key);
+      apiKey = undefined;
+      assert.equal((await runelite(fields, png, key)).statusCode, 401);
+      apiKey = enabledKey.json().key;
+      assert.deepEqual((await runelite(fields, png, key)).json(), receipt);
+      // Rotate after the onRequest check but before transaction validation: no claim or file commits.
+      const createRuneLite = store.createRuneLite.bind(store);
+      store.createRuneLite = async (...args) => {
+        await clanKeys.update(
+          {
+            expectedRevision: (await clanKeys.settings()).revision,
+            generate: true,
+          },
+          admin.id,
+        );
+        return createRuneLite(...args);
+      };
+      try {
+        assert.equal(
+          (await runelite(fields, png, randomUUID())).statusCode,
+          401,
+        );
+      } finally {
+        store.createRuneLite = createRuneLite;
+      }
+      apiKey = (await clanKeys.settings()).key;
+      const audit = (
+        await pool.query(
+          'SELECT actor_id,old_enabled,new_enabled,key_rotated,version FROM clan_api_key_audit ORDER BY version',
+        )
+      ).rows;
+      assert.equal(audit.length, 6);
+      assert.ok(audit.every((row) => row.actor_id === admin.id));
+      assert.ok(
+        !JSON.stringify(audit).includes(custom) &&
+          !JSON.stringify(audit).includes(apiKey),
+      );
+      assert.equal(
+        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+          .length,
+        2,
+      );
       const rename = {
         hardcoreEnabled: false,
         expectedRevision: 'settings-1',

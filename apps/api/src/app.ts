@@ -17,6 +17,7 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  clanKeys?: import('./clan-api-key.js').ClanKeyStore | undefined;
   proofs?: ProofStorage | undefined;
   proofStore?: ProofStore | undefined;
   checkBotReady?: (() => Promise<void>) | undefined;
@@ -53,6 +54,7 @@ export function createApp(
         : {
             redact: [
               'req.headers.authorization',
+              'req.headers["x-clan-api-key"]',
               'req.headers.cookie',
               'res.headers.set-cookie',
             ],
@@ -176,6 +178,7 @@ export function createApp(
           options.xp,
           options.review,
           options.fetchWom ?? fetchWomCompetition,
+          options.clanKeys,
         )
       : undefined;
   if (!requireAdmin) {

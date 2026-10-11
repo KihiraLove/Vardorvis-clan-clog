@@ -138,6 +138,14 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
   ): Promise<AdminSession>;
+  clanApiKey(
+    signal: AbortSignal,
+  ): Promise<import('./clan-api-key.ts').ClanKeySettings>;
+  saveClanApiKey(
+    fields: import('./clan-api-key.ts').ClanKeyUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('./clan-api-key.ts').ClanKeySettings>;
   settings(
     signal: AbortSignal,
   ): Promise<import('./site-settings.ts').SiteSettings>;

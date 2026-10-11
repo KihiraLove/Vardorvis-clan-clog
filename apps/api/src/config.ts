@@ -100,6 +100,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       );
     return {
       iconDirectory,
+      proofDirectory,
       auth: {
         origin: origin.origin,
         secret: randomBytes(32).toString('hex'),

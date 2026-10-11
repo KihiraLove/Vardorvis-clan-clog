@@ -9,6 +9,7 @@ const ownerOnly = new Set(['schema_migrations', 'catalog_taxonomy_updates']);
 const readOnly = new Set(['catalog_versions']);
 const appendOnly = new Set([
   'staff_account_audit',
+  'clan_api_key_audit',
   'audit_events',
   'site_settings_audit',
   'catalog_audit',

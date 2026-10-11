@@ -1,4 +1,13 @@
 /** In-memory admin simulator shared with the public preview; all state is lost on reload. */
+import {
+  validClanKey,
+  type ClanKeySettings,
+  type ClanKeyUpdate,
+} from '../clan-api-key.ts';
+const generatePreviewKey = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 import { AdminRequestError } from '../admin-api.ts';
 import {
   safeProof,
@@ -27,6 +36,11 @@ import {
 } from './scenarios.ts';
 
 export class PreviewAdminClient implements AdminClient {
+  private keySettings: ClanKeySettings = {
+    revision: 'clan-key-1',
+    enabled: true,
+    key: generatePreviewKey(),
+  };
   private revision = 0;
   private queueRevision = 0;
   private setting = {
@@ -294,6 +308,36 @@ export class PreviewAdminClient implements AdminClient {
   }
   publicSettings() {
     return { ...this.setting };
+  }
+  async clanApiKey(signal: AbortSignal) {
+    this.access(signal);
+    return { ...this.keySettings };
+  }
+  async saveClanApiKey(
+    fields: ClanKeyUpdate,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (fields.expectedRevision !== this.keySettings.revision)
+      throw new AdminRequestError(409);
+    if (
+      (fields.key !== undefined && !validClanKey(fields.key)) ||
+      (fields.key !== undefined && fields.generate) ||
+      (fields.enabled === undefined &&
+        fields.key === undefined &&
+        fields.generate !== true)
+    )
+      throw new AdminRequestError(422);
+    this.keySettings = {
+      revision:
+        'clan-key-' + (Number(this.keySettings.revision.split('-').at(-1)) + 1),
+      enabled: fields.enabled ?? this.keySettings.enabled,
+      key: fields.generate
+        ? generatePreviewKey()
+        : (fields.key ?? this.keySettings.key),
+    };
+    return { ...this.keySettings };
   }
   async settings(signal: AbortSignal) {
     this.access(signal);
