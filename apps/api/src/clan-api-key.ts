@@ -10,6 +10,8 @@ import {
 import { link, open, readFile, unlink } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type pg from 'pg';
+import type { IncomingHttpHeaders } from 'node:http';
+import { TextDecoder } from 'node:util';
 import { ApiError } from './types.js';
 import { clanKeyBytes, validClanApiKey } from '@clog/domain';
 export { validClanApiKey as validClanKey } from '@clog/domain';
@@ -28,14 +30,33 @@ export interface ClanKeyStore {
   settings(): Promise<ClanKeySettings>;
   update(fields: ClanKeyUpdate, actorId: string): Promise<ClanKeySettings>;
 }
-const validStoredClanKey = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  /^[\x20-\x7e]{1,256}$/u.test(value) &&
-  value === value.trim() &&
-  value.length > 0;
 const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex');
 export const generateClanKey = () => randomBytes(clanKeyBytes).toString('hex');
+/** Encoded credentials carry Unicode, whitespace and controls safely through HTTP headers. */
+export function suppliedClanKey(
+  headers: IncomingHttpHeaders,
+): string | undefined {
+  const raw = headers['x-clan-api-key'];
+  const encoded = headers['x-clan-api-key-base64'];
+  if (encoded === undefined) return typeof raw === 'string' ? raw : undefined;
+  try {
+    if (
+      raw !== undefined ||
+      typeof encoded !== 'string' ||
+      !/^[A-Za-z0-9_-]+$/u.test(encoded)
+    )
+      throw new Error('Invalid key header');
+    const bytes = Buffer.from(encoded, 'base64url');
+    if (bytes.toString('base64url') !== encoded)
+      throw new Error('Invalid key encoding');
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+      bytes,
+    );
+  } catch {
+    return undefined;
+  }
+}
 /** Atomically publish the encryption root in the private, backed-up screenshot volume. */
 export async function loadClanKeyRoot(directory: string): Promise<Buffer> {
   if (!isAbsolute(directory))
@@ -119,7 +140,7 @@ function decrypt(value: string, root: Buffer) {
       cipher.update(Buffer.from(data, 'base64url')),
       cipher.final(),
     ]).toString('utf8');
-    if (!validStoredClanKey(key)) throw new Error('Invalid key');
+    if (!key.length) throw new Error('Invalid key');
     return key;
   } catch {
     throw new ApiError(503, 'Clan API key storage is unavailable.');
@@ -144,7 +165,7 @@ export class PgClanKeyStore implements ClanKeyStore {
       'INSERT INTO clan_api_keys(singleton,encrypted_key,key_hash) VALUES(true,$1,$2) ON CONFLICT(singleton) DO NOTHING',
       [encrypt(key, this.root), digest(key)],
     );
-    // Upgrade old encodings once under the row lock; preserve configured enablement.
+    // Preserve custom keys. Upgrade only historical keys shorter than the new minimum.
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -161,7 +182,7 @@ export class PgClanKeyStore implements ClanKeyStore {
           [encrypt(replacement, this.root), digest(replacement), version],
         );
         await client.query(
-          "INSERT INTO clan_api_key_audit(actor_id,old_enabled,new_enabled,key_rotated,version) VALUES('system:hex32-upgrade',$1,$1,true,$2)",
+          "INSERT INTO clan_api_key_audit(actor_id,old_enabled,new_enabled,key_rotated,version) VALUES('system:minimum-key-length-upgrade',$1,$1,true,$2)",
           [old.enabled, version],
         );
       }
@@ -178,7 +199,10 @@ export class PgClanKeyStore implements ClanKeyStore {
   private view(row: KeyRow): ClanKeySettings {
     const key = decrypt(row.encrypted_key, this.root);
     if (!validClanApiKey(key))
-      throw new ApiError(503, 'Clan API key requires a format upgrade.');
+      throw new ApiError(
+        503,
+        'Clan API key requires a minimum-length upgrade.',
+      );
     return {
       revision: 'clan-key-' + row.version,
       enabled: row.enabled,
@@ -204,7 +228,7 @@ export class PgClanKeyStore implements ClanKeyStore {
     )
       throw new ApiError(
         422,
-        'Supply an enabled setting, a key of exactly 32 hexadecimal characters, or generate a new key.',
+        'Supply an enabled setting, a key of at least 8 characters, or generate a new key.',
       );
     const client = await this.pool.connect();
     try {

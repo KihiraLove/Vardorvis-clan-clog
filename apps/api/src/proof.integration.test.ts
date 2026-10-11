@@ -166,6 +166,7 @@ test(
         ['username', 'Collector'],
         ['clanName', ' clan name '],
         ['itemId', '900001'],
+        ['worldType', 'MEMBERS'],
       ];
       const generated = apiKey!;
       assert.match(generated, /^[a-f0-9]{32}$/u);
@@ -403,7 +404,7 @@ test(
         422,
       );
       assert.equal((await keyUpdate({ key: '   ' })).statusCode, 422);
-      const custom = '0123456789abcdef0123456789abcdef';
+      const custom = 'my clan key!';
       const rotated = await keyUpdate({ key: custom });
       assert.equal(rotated.statusCode, 200, rotated.body);
       assert.equal(rotated.json().key, custom);
@@ -434,14 +435,11 @@ test(
       assert.equal(generatedWhileOff.json().enabled, false);
       assert.notEqual(generatedWhileOff.json().key, custom);
       const customWhileOff = await keyUpdate({
-        key: 'fedcba9876543210fedcba9876543210',
+        key: 'custom key rotated while off',
       });
       assert.equal(customWhileOff.statusCode, 200, customWhileOff.body);
       assert.equal(customWhileOff.json().enabled, false);
-      assert.equal(
-        customWhileOff.json().key,
-        'fedcba9876543210fedcba9876543210',
-      );
+      assert.equal(customWhileOff.json().key, 'custom key rotated while off');
       await new PgClanKeyStore(
         pool,
         await loadClanKeyRoot(directory),

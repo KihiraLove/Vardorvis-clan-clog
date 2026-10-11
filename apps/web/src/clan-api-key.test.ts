@@ -26,13 +26,13 @@ test('preview keys default on and can be viewed and rotated while the requiremen
   const custom = await client.saveClanApiKey(
     {
       expectedRevision: generated.revision,
-      key: '0123456789abcdef0123456789abcdef',
+      key: ' key! 😀\n123 ',
     },
     'csrf',
     signal(),
   );
   assert.equal(custom.enabled, false);
-  assert.equal(custom.key, '0123456789abcdef0123456789abcdef');
+  assert.equal(custom.key, ' key! 😀\n123 ');
   const enabled = await client.saveClanApiKey(
     { expectedRevision: custom.revision, enabled: true },
     'csrf',
@@ -59,7 +59,7 @@ test('private key reads/writes preserve CSRF, revisions and the supplied value, 
   const settings = {
     revision: 'clan-key-2',
     enabled: false,
-    key: '0123456789abcdef0123456789abcdef',
+    key: ' key! 😀\n123 ',
   };
   const client = new LiveAdminClient(async (path, options) => {
     assert.equal(path, '/api/v1/admin/clan-api-key');

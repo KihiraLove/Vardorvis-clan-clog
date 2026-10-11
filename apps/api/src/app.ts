@@ -60,6 +60,7 @@ export function createApp(
             redact: [
               'req.headers.authorization',
               'req.headers["x-clan-api-key"]',
+              'req.headers["x-clan-api-key-base64"]',
               'req.headers.cookie',
               'res.headers.set-cookie',
             ],

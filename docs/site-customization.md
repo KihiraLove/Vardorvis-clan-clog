@@ -29,8 +29,9 @@ main CI workflow status; release downloads do not count container pulls.
 ## Shared API key form
 
 The current key is a single editable field. **Generate new key** fills that field
-with 32 random hexadecimal characters locally. Custom keys must also contain
-exactly 32 hexadecimal characters. **Save API key settings** persists the field and
+with 32 random hexadecimal characters locally. Custom keys accept any characters
+and must contain at least 8; whitespace and line breaks are preserved.
+**Save API key settings** persists the field and
 the requirement checkbox together in one revision-checked, audited operation.
 Leaving without saving discards the draft. The field and generation remain
 available when the requirement is disabled. Requirement-only changes do not
@@ -84,9 +85,10 @@ from restoring access. Each action is audited without credentials.
 Migration `007_site_customization.sql` adds public copy, account lifecycle
 fields and audit action constraints. `008_default_clan_name.sql` changes the
 default to **Clan name** and upgrades the untouched Vardorvis default, preserving
-names administrators explicitly selected. Startup rotates older keys that are
-not 32 hexadecimal characters once, preserves enforcement, and audits the
-rotation. Update plugin configuration with the displayed replacement key.
+names administrators explicitly selected. Existing custom keys of at least 8
+characters survive startup unchanged. Historical shorter keys rotate once,
+preserving enforcement and recording an audit entry. Update clients with the
+displayed replacement if a short key was upgraded.
 No new volume or secret is needed. Existing
 database/image backups cover all of these settings; preserve the full database
 and image archives together during restore. Disabling moves the salted password

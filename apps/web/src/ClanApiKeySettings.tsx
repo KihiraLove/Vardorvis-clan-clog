@@ -5,7 +5,7 @@ import type { AdminSession } from './xp-model.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
-import { clanKeyBytes, clanKeyPattern } from '@clog/domain';
+import { clanKeyBytes, clanKeyMinLength } from '@clog/domain';
 
 export function ClanApiKeySettings({
   client,
@@ -65,7 +65,7 @@ export function ClanApiKeySettings({
     void action.execute(
       async (signal) => {
         const value = await client.saveClanApiKey(
-          { key: key.trim(), enabled, expectedRevision: saved.revision },
+          { key, enabled, expectedRevision: saved.revision },
           session.csrfToken,
           signal,
         );
@@ -112,29 +112,26 @@ export function ClanApiKeySettings({
             />
             Require clan API key
           </label>
-          <label>
-            Current shared API key
-            <input
-              className="clan-api-key-value"
-              type="text"
-              value={key}
-              required
-              minLength={32}
-              maxLength={32}
-              pattern={clanKeyPattern}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={action.busy}
-              onChange={(event) => {
-                setKey(event.target.value);
-                action.setMessage(undefined);
-              }}
-            />
-          </label>
+          <label htmlFor="clan-api-key-value">Current shared API key</label>
+          <textarea
+            id="clan-api-key-value"
+            className="clan-api-key-value"
+            value={key}
+            required
+            minLength={clanKeyMinLength}
+            rows={2}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={action.busy}
+            onChange={(event) => {
+              setKey(event.target.value);
+              action.setMessage(undefined);
+            }}
+          />
           <p className="admin-note">
-            Use exactly 32 hexadecimal characters. Generate or enter a key, then
-            save to apply the key and requirement together. Send the saved value
-            in the X-Clan-API-Key header.
+            Generated keys contain 32 hexadecimal characters. Custom keys can
+            use any characters and must contain at least 8. Save to apply the
+            key and requirement together.
           </p>
           <div className="admin-actions">
             <button
@@ -159,8 +156,8 @@ export function ClanApiKeySettings({
               className="site-button"
               disabled={
                 action.busy ||
-                !validClanKey(key.trim()) ||
-                (enabled === saved.enabled && key.trim() === saved.key)
+                !validClanKey(key) ||
+                (enabled === saved.enabled && key === saved.key)
               }
             >
               Save API key settings

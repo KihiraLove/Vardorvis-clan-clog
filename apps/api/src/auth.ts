@@ -497,7 +497,7 @@ export function authRoutes(
               maxLength: 30,
             },
             enabled: { type: 'boolean' },
-            key: { type: 'string', minLength: 1, maxLength: 256 },
+            key: { type: 'string' },
             generate: { const: true },
           },
         },

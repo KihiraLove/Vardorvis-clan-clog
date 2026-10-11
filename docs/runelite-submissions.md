@@ -3,18 +3,20 @@
 `POST /api/v1/runelite/submissions` accepts `multipart/form-data` with exactly
 these fields (their order does not matter):
 
-| Field        | Value                                        |
-| ------------ | -------------------------------------------- |
-| `username`   | Collector name, 1–80 characters              |
-| `clanName`   | Website clan name, 1–80 characters           |
-| `itemId`     | Positive OSRS game item ID, as decimal text  |
-| `screenshot` | One PNG file, MIME `image/png`, up to 10 MiB |
+| Field        | Value                                              |
+| ------------ | -------------------------------------------------- |
+| `username`   | Collector name, 1–80 characters                    |
+| `clanName`   | Website clan name, 1–80 characters                 |
+| `itemId`     | Positive OSRS game item ID, as decimal text        |
+| `worldType`  | World type identifier or JSON array of identifiers |
+| `screenshot` | One PNG file, MIME `image/png`, up to 10 MiB       |
 
 ```bash
 curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
   -H 'X-Clan-API-Key: YOUR_CLAN_SHARED_KEY' \
   -H 'Idempotency-Key: 00000000-0000-4000-8000-000000000001' \
   -F 'username=Collector' -F 'clanName=Clan name' -F 'itemId=4151' \
+  -F 'worldType=["MEMBERS"]' \
   -F 'screenshot=@drop.png;type=image/png'
 ```
 
@@ -31,8 +33,21 @@ The game ID resolves through `game_item_ids` to an active canonical catalog
 item. Variant IDs can resolve to the same item; unknown/inactive IDs return
 **422**. A canonical item without a game-ID mapping cannot be submitted by
 RuneLite. Receipt `itemId` is the **canonical** ID. The server records receipt
-time and UTC collection date; this four-field contract starts in normal worlds.
-Staff can correct date and world mode during review.
+time and UTC collection date. `worldType` is required. Use a single enum name
+such as `MEMBERS`, or a JSON array containing all world flags reported by
+[RuneLite](https://static.runelite.net/runelite-api/apidocs/net/runelite/api/WorldType.html).
+Use `[]` for a world without flags. Names are uppercase identifiers; up to 32
+flags of at most 64 characters are accepted. Duplicate flags and array order do
+not change the submission's identity.
+
+Any occurrence of `BETA_WORLD`, `DEADMAN`, `NOSAVE_MODE`, `PVP_ARENA`,
+`QUEST_SPEEDRUNNING`, `SEASONAL` or `TOURNAMENT_WORLD` returns **403** without
+storing a claim or screenshot. This also applies to mixed flags containing the
+HC placeholder. `HC_WORLD_PLACEHOLDER` sets `hardcore: true`; every other
+accepted type, including future identifiers, uses the regular log. Pending
+claims do not grant credit until reviewed. The HC visibility setting does not
+block intake or discard HC credit. Staff can correct date and world mode during
+review; the original flags remain private submission provenance.
 
 Success returns **201**, for example:
 
@@ -42,7 +57,8 @@ Success returns **201**, for example:
   "status": "pending",
   "itemId": 42,
   "submittedAt": "2026-10-11T12:00:00.000Z",
-  "collectedOn": "2026-10-11"
+  "collectedOn": "2026-10-11",
+  "hardcore": false
 }
 ```
 
@@ -50,7 +66,11 @@ The optional UUID `Idempotency-Key` should be generated once per drop and reused
 on retries. Identical fields and decoded PNG pixels return the original receipt,
 including after review/restart. Changing the payload with that key returns
 **409**. Without a key, each request creates a new pending claim. Replays must
-still match the currently configured clan and, when required, use the current
+use the same normalized world-type set; changing modes or any flag returns
+**409**. Historical receipts created before world-type support can replay as
+ordinary-world requests with the original payload; requesting HC with their
+key returns **409**. Their original receipt is retained and may omit `hardcore`.
+Replays must still match the currently configured clan and, when required, use the current
 API key. Credentials are not part of the immutable submission payload, so a
 retry using a newly rotated key can recover its original receipt. A future plugin should retain the
 key, payload and PNG until it receives the receipt.
@@ -76,7 +96,7 @@ recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
 
 Admins can view the **Current shared API key**, toggle **Require clan API key**,
-click **Generate new key**, or enter their own 32-character hexadecimal key.
+click **Generate new key**, or enter their own key of at least 8 characters.
 **Save API key settings** saves the field and requirement checkbox together;
 generating only fills the draft until it is saved.
 All key controls remain visible and usable with the requirement disabled.
@@ -90,12 +110,24 @@ started before rotation but have not committed.
 Admin-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
 CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
 `enabled`, `key`, or `generate: true`. `key` and `generate` are mutually exclusive.
-Custom keys require exactly 32 hexadecimal characters (`0–9`, `a–f`, `A–F`).
+Generated keys contain exactly 32 hexadecimal characters. Custom keys accept
+any valid Unicode characters, at least 8 code points, including symbols,
+whitespace and line breaks. Values are preserved exactly, without trimming.
+Keys shorter than 8 characters return **422**.
 Stale updates return **409**. Moderators and public settings endpoints
 cannot read or rotate keys; the shared key authorizes only RuneLite intake,
 not staff tools or Discord bot operations. The key header is redacted from API
 logging, and audits record actor, enabled changes and whether rotation occurred
-without storing the key value.
+without storing the key value. Both supported key headers are redacted.
+
+For a key containing characters that cannot travel literally in HTTP headers
+(Unicode, line breaks, leading/trailing whitespace or controls), send
+`X-Clan-API-Key-Base64` with the exact key encoded as UTF-8 then unpadded
+base64url. Send one key header only. For example, the Java plugin can use
+`Base64.getUrlEncoder().withoutPadding().encodeToString(key.getBytes(StandardCharsets.UTF_8))`.
+Existing `X-Clan-API-Key` clients continue working with ordinary header-safe
+keys. Wrong, ambiguous or malformed credentials return **401** when enforcement
+is enabled; disabled enforcement ignores key headers.
 
 Admins and moderators can optionally attach a PNG to manual submissions.
 `POST /api/v1/admin/submissions/upload` uses multipart fields `submission`
@@ -125,17 +157,22 @@ is required.
 [`005_clan_api_keys.sql`](../packages/database/migrations/005_clan_api_keys.sql)
 adds the key singleton and append-only key audit. Startup creates the default
 enabled key only when absent, including on upgrades from clan-name-only intake.
-Keys already in the 32-character hexadecimal format are preserved. Startup
-replaces an older-format key once, under a row lock, with a random key in the new
-format and records a `system:hex32-upgrade` audit entry. The enabled/disabled
-setting is preserved. Older-format keys stop working when enforcement is on;
-configure clients with the replacement displayed in Site settings.
+Existing keys of at least 8 characters are preserved, regardless of their
+format. Startup replaces only historical keys shorter than 8 characters once,
+under a row lock, and records a `system:minimum-key-length-upgrade` audit entry.
+The enabled/disabled setting is preserved. A previously short key stops working
+when enforcement is on; configure clients with the displayed replacement.
 The key is encrypted with AES-256-GCM in PostgreSQL. Its encryption root is
 created atomically as a private 32-byte file, `.clan-api-key.secret`, in the
 screenshot volume; the standard screenshot archive includes this file too.
 Database dumps alone do not contain the plaintext shared key. Public upload
 authentication compares key digests in constant time and rechecks the current
 requirement under a database lock when committing the pending submission.
+
+[`009_runelite_world_types.sql`](../packages/database/migrations/009_runelite_world_types.sql)
+adds nullable original world flags. Existing claims and immutable receipts
+remain valid and keep their current world mode; new claims retain normalized
+flags and include the mode in their receipt. No new volume or secret is needed.
 
 Compose supplies `PROOF_STORAGE_PATH=/data/submission-images` and a separate
 durable `submission-images` volume. For standalone API development set an
@@ -158,6 +195,10 @@ startup without silently replacing the shared key. A pre-key-upgrade backup
 has no encrypted key row and generates a new enabled key on its next startup.
 Images predating this key feature do not enforce the key requirement; use the
 matching image and coordinated database/screenshot-volume backup for recovery.
+
+Rolling back to an image that requires hex-only keys or lacks world-type intake
+requires its matching pre-upgrade database and image-volume backup. A hex-only
+image can replace a valid custom key during startup.
 
 An older image is incompatible with the new submission sources/settings once
 RuneLite claims exist. Recovery to such an image requires the coordinated
