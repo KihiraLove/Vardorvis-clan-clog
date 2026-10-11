@@ -33,6 +33,7 @@ export function ManualSubmissionForm({
   );
   const [hardcore, setHardcore] = useState(false);
   const [proofUrl, setProofUrl] = useState('');
+  const [screenshot, setScreenshot] = useState<File>();
   const [approve, setApprove] = useState(true);
   const [reason, setReason] = useState('');
   const action = useAdminAction(onAccessLost);
@@ -40,6 +41,7 @@ export function ManualSubmissionForm({
   const [pending, setPending] = useState<{
     fields: ManualSubmissionInput;
     key: string;
+    screenshot?: File | undefined;
   }>();
   const options = catalog.items.filter(
     (item) =>
@@ -63,6 +65,13 @@ export function ManualSubmissionForm({
       setError('Proof must be a supported HTTPS Imgur or Gyazo link.');
       return;
     }
+    if (
+      screenshot &&
+      (screenshot.type !== 'image/png' || screenshot.size > 10 * 1024 * 1024)
+    ) {
+      setError('Choose a PNG screenshot up to 10 MiB.');
+      return;
+    }
     await action.execute(async (signal) => {
       const request = pending ?? {
         fields: {
@@ -75,6 +84,7 @@ export function ManualSubmissionForm({
           reason: reason.trim(),
         },
         key: crypto.randomUUID(),
+        screenshot,
       };
       setPending(request);
       let result: Submission;
@@ -84,6 +94,7 @@ export function ManualSubmissionForm({
           request.key,
           session.csrfToken,
           signal,
+          request.screenshot,
         );
       } catch (failure) {
         // Keep the exact request after a timeout, transport error or server failure.
@@ -111,6 +122,7 @@ export function ManualSubmissionForm({
       setOpen(false);
       setCollectorName('');
       setProofUrl('');
+      setScreenshot(undefined);
       setReason('');
       onCreated(result);
     });
@@ -185,6 +197,17 @@ export function ManualSubmissionForm({
                   value={collectedOn}
                   onChange={(event) => setCollectedOn(event.target.value)}
                 />
+              </label>
+              <label>
+                PNG screenshot (optional)
+                <input
+                  type="file"
+                  accept="image/png,.png"
+                  onChange={(event) => setScreenshot(event.target.files?.[0])}
+                />
+                <span className="admin-note">
+                  Up to 10 MiB. Stored privately for staff review.
+                </span>
               </label>
               <label>
                 Proof URL (optional)

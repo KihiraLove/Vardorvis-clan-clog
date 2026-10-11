@@ -42,6 +42,14 @@ async function mockAdmin(page: Page) {
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    if (path === '/api/v1/settings')
+      return route.fulfill({
+        json: {
+          revision: 'settings-1',
+          clanName: 'Vardorvis',
+          hardcoreEnabled: false,
+        },
+      });
     if (path === '/api/v1/auth/session')
       return route.fulfill({
         json: state.authenticated ? f.session : { authenticated: false },
@@ -83,7 +91,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   await page.goto('/admin?preview=1');
   await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
   await page.getByRole('button', { name: 'Save site settings' }).click();
-  await expect(page.getByText('Hardcore visibility saved.')).toBeVisible();
+  await expect(page.getByText('Site settings saved.')).toBeVisible();
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await review(page, 'Iron Fern').click();
@@ -715,7 +723,11 @@ test('live admin shows a password form and submits a password without Discord OA
     }
     if (path === '/api/v1/admin/settings')
       return route.fulfill({
-        json: { revision: 'settings-1', hardcoreEnabled: false },
+        json: {
+          revision: 'settings-1',
+          clanName: 'Vardorvis',
+          hardcoreEnabled: false,
+        },
       });
     if (path === '/api/v1/admin/catalog')
       return route.fulfill({ json: fixture.catalog });

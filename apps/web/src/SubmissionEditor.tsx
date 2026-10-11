@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
   safeProof,
+  safeScreenshotPath,
   dateSourceLabel,
   validateCorrection,
   type AdminCatalog,
@@ -115,7 +116,7 @@ export function SubmissionEditor({
     draft.collectedOn !== row.collectedOn ||
     draft.hardcore !== row.hardcore;
   const locked = action.busy || disabled || Boolean(readError),
-    proof = safeProof(row.proofUrl);
+    proof = safeProof(row.proofUrl) || safeScreenshotPath(row.screenshotPath);
   const change = (fields: Partial<Correction>) => {
     setDraft({ ...draft, ...fields });
     setChecked(false);
@@ -202,7 +203,9 @@ export function SubmissionEditor({
             {row.status} ·{' '}
             {row.source === 'manual'
               ? 'Manual submission'
-              : 'Discord submission'}{' '}
+              : row.source === 'runelite'
+                ? 'RuneLite submission'
+                : 'Discord submission'}{' '}
             {row.id} · Version {row.version}
           </p>
         </div>
@@ -230,7 +233,12 @@ export function SubmissionEditor({
         <div>
           <dt>Proof</dt>
           <dd>
-            <ProofLink url={row.proofUrl} source={row.source} />
+            <ProofLink
+              url={row.proofUrl}
+              source={row.source}
+              screenshot={row.screenshotPath}
+              previewScreenshot={row.previewScreenshot}
+            />
           </dd>
         </div>
       </dl>

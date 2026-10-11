@@ -148,9 +148,15 @@ add new forward-only migration files rather than editing this applied baseline.
 ## Backups, Discord and release acceptance
 
 `infra/backup.sh /safe/new/backup-directory` stops the `app` writer, captures
-a PostgreSQL custom-format dump and all durable uploaded icons, writes
+a PostgreSQL custom-format dump and all durable uploaded icons and screenshots, writes
 checksums and a `COMPLETE` marker, then restarts the app. Store an encrypted
 copy off-host and rehearse an isolated restore before production approval.
+
+Migration `004_runelite_submissions.sql` adds the admin-editable clan name,
+private screenshot metadata and RuneLite intake receipts. Preserve the new
+`submission-images` volume across app recreations; restore `screenshots.tar.gz`
+with the database and icon archive from the same coordinated backup. See the
+[RuneLite API and recovery guide](runelite-submissions.md).
 
 Enable Discord in the combined app with `BOT_ENABLED=true`,
 `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN`.

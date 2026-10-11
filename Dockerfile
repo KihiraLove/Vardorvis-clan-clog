@@ -32,7 +32,7 @@ COPY --from=build --chown=node:node /app/packages/database/dist ./packages/datab
 COPY --from=build --chown=node:node /app/packages/database/migrations ./packages/database/migrations
 COPY --from=build --chown=node:node /app/catalog/snapshot.json /app/catalog/snapshot.sha256 /app/catalog/clue-taxonomy.json ./catalog/
 LABEL org.opencontainers.image.source="https://github.com/KihiraLove/Vardorvis-clan-clog"
-RUN mkdir -p /data/catalog-icons && chown node:node /data/catalog-icons
+RUN mkdir -p /data/catalog-icons /data/submission-images && chown node:node /data/catalog-icons /data/submission-images
 USER node
 
 # Web proxy, API and optional bot use one deployment image.

@@ -1,6 +1,8 @@
 /** Transactional review: one current approved credit per item/world, private audits. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import type { IconRecord } from './icon-storage.js';
+import { insertImage, screenshotPath } from './proof-store.js';
 import { validCollectionDate, validProofUrl } from './intake.js';
 import { ApiError, type BackendStore } from './types.js';
 import type {
@@ -15,7 +17,7 @@ import type {
 type Row = {
   id: string;
   version: number;
-  source: 'discord' | 'manual';
+  source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
   collectorName: string;
@@ -23,6 +25,7 @@ type Row = {
   dateSource: string;
   submittedAt: Date;
   proofUrl: string;
+  proofImageId: string | null;
   hardcore: boolean;
   status: ReviewSubmission['status'];
 };
@@ -30,9 +33,10 @@ const selection =
   'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",' +
   'collector_name AS "collectorName",to_char(collected_on,\'YYYY-MM-DD\') AS "collectedOn",' +
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
-  'proof_url AS "proofUrl",hardcore,status';
-const view = (row: Row): ReviewSubmission => ({
+  'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",hardcore,status';
+const view = ({ proofImageId, ...row }: Row): ReviewSubmission => ({
   ...row,
+  screenshotPath: proofImageId ? screenshotPath(proofImageId) : null,
   dateSource:
     row.dateSource === 'submission_default'
       ? 'submission'
@@ -119,6 +123,7 @@ export class PgReviewStore implements ReviewStore {
     actorId: string,
     actorName: string,
     requestKey: string,
+    image?: IconRecord,
   ): Promise<ReviewSubmission> {
     if (!uuid.test(requestKey))
       throw new ApiError(400, 'A UUID Idempotency-Key is required.');
@@ -146,6 +151,7 @@ export class PgReviewStore implements ReviewStore {
         fields.proofUrl?.trim() ?? '',
         fields.approve,
         fields.reason?.trim() ?? '',
+        ...(image ? [image.sha256] : []),
       ]),
     );
     const client = await this.pool.connect();
@@ -187,14 +193,15 @@ export class PgReviewStore implements ReviewStore {
       ).rows[0]!.today;
       if (!validCollectionDate(fields.collectedOn, now))
         throw new ApiError(422, 'Collection date is invalid or in the future.');
+      if (image) await insertImage(client, image);
       const id = randomUUID();
       const row = (
         await client.query<Row>(
           'INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,' +
             'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
-            "reviewed_by,review_reason) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
+            "reviewed_by,review_reason,proof_image_id) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
             "$6,$7,$8,CASE WHEN $8='approved' THEN now() ELSE NULL END," +
-            "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10) RETURNING " +
+            "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11) RETURNING " +
             selection,
           [
             id,
@@ -207,6 +214,7 @@ export class PgReviewStore implements ReviewStore {
             fields.approve ? 'approved' : 'pending',
             actorId,
             fields.reason?.trim() || null,
+            image?.id ?? null,
           ],
         )
       ).rows[0]!;
@@ -401,7 +409,9 @@ export class PgReviewStore implements ReviewStore {
             row.status !== 'pending' ||
             row.itemId === null ||
             !row.collectorName.trim() ||
-            (row.source !== 'manual' && !validProofUrl(row.proofUrl))
+            (row.source !== 'manual' &&
+              !row.proofImageId &&
+              !validProofUrl(row.proofUrl))
           )
             throw new ApiError(
               422,

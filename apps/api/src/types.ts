@@ -1,5 +1,6 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
+  clanName: string;
   revision: string;
   hardcoreEnabled: boolean;
 }
@@ -88,6 +89,7 @@ export interface BackendStore {
     enabled: boolean,
     revision: string,
     actor: string,
+    clanName?: string,
   ): Promise<Settings | null>;
   createState(hash: string, expiresAt: Date): Promise<void>;
   consumeState(hash: string): Promise<boolean>;

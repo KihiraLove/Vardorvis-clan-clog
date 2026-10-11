@@ -354,7 +354,13 @@ export function authRoutes(
     await requireOwner(request);
     return store.settings();
   });
-  app.put<{ Body: { hardcoreEnabled: boolean; expectedRevision: string } }>(
+  app.put<{
+    Body: {
+      hardcoreEnabled: boolean;
+      expectedRevision: string;
+      clanName?: string;
+    };
+  }>(
     '/api/v1/admin/settings',
     {
       schema: {
@@ -364,6 +370,12 @@ export function authRoutes(
           required: ['hardcoreEnabled', 'expectedRevision'],
           properties: {
             hardcoreEnabled: { type: 'boolean' },
+            clanName: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 80,
+              pattern: '\\S',
+            },
             expectedRevision: {
               type: 'string',
               pattern: '^settings-[1-9][0-9]*$',
@@ -383,6 +395,7 @@ export function authRoutes(
         request.body.hardcoreEnabled,
         request.body.expectedRevision,
         session.id,
+        request.body.clanName,
       );
       if (!saved)
         throw new ApiError(

@@ -1865,3 +1865,12 @@ main {
 .admin-account-list {
   margin-top: 1.5rem;
 }
+
+.submission-proof img {
+  display: block;
+  max-width: 100%;
+  width: 18rem;
+  max-height: 12rem;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
+}

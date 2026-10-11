@@ -10,6 +10,7 @@ import {
   parseQueue,
   parseSubmission,
   safeProof,
+  safeScreenshotPath,
   validateCorrection,
   validateIconFile,
   validateIconSize,
@@ -20,6 +21,43 @@ import {
 import { PreviewAdminClient } from './preview/admin.ts';
 
 const signal = () => new AbortController().signal;
+
+test('stored evidence accepts only generated private PNG paths and survives RuneLite parsing', async () => {
+  const client = new PreviewAdminClient();
+  const fixture = (await client.queue('pending', undefined, signal()))
+    .submissions[0]!;
+  const path =
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+  assert.equal(safeScreenshotPath(path), true);
+  for (const value of [
+    'https://evil.test/proof.png',
+    '//evil.test/proof.png',
+    '/api/v1/admin/submission-images/../../proof.png',
+    path + '?token=secret',
+    'data:image/png;base64,AAAA',
+  ]) {
+    assert.equal(safeScreenshotPath(value), false);
+    assert.throws(
+      () =>
+        parseSubmission({
+          ...fixture,
+          source: 'runelite',
+          proofUrl: '',
+          screenshotPath: value,
+        }),
+      /screenshot/u,
+    );
+  }
+  assert.equal(
+    parseSubmission({
+      ...fixture,
+      source: 'runelite',
+      proofUrl: '',
+      screenshotPath: path,
+    }).source,
+    'runelite',
+  );
+});
 const iconFile = () =>
   new File(
     [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])],

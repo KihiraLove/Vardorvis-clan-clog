@@ -19,6 +19,12 @@ password. `DATABASE_URL` is for host-side Node development only.
 `<prefix>-app:<tag>` release image. `WEB_PORT` is the loopback diagnostic
 port (default 8088).
 
+**Screenshots:** Compose sets `PROOF_STORAGE_PATH=/data/submission-images`
+on a durable private volume. Standalone API development must use an absolute
+writable directory (required when staff auth is enabled). Configured storage
+and a database enable [RuneLite submissions](runelite-submissions.md) without
+Discord credentials. Clan name is a database-backed admin setting.
+
 **Admin authentication:** `AUTH_ENABLED` controls staff-account
 login; `PUBLIC_ORIGIN` must exactly match the browser origin.
 `SESSION_SECRET` must

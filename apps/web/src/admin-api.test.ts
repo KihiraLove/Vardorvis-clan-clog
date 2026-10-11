@@ -355,3 +355,61 @@ test('409 occupied credit detail is shown only for the known server conflict mes
       'Another change was saved. Load the latest data before trying again.',
   });
 });
+
+test('manual PNG uploads use multipart with CSRF and a stable retry key', async () => {
+  const fixture = await adminFixtures();
+  const fields = {
+    itemId: fixture.detail.submission.itemId!,
+    collectorName: 'PNG Collector',
+    collectedOn: '2026-10-05',
+    hardcore: false,
+    approve: false,
+  };
+  const file = new File(
+    [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])],
+    'proof.png',
+    { type: 'image/png' },
+  );
+  const path =
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+  const client = new LiveAdminClient(async (url, options) => {
+    assert.equal(url, '/api/v1/admin/submissions/upload');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    assert.equal(
+      (options?.headers as Record<string, string>)['Idempotency-Key'],
+      '00000000-0000-4000-8000-000000000002',
+    );
+    assert.equal(
+      (options?.headers as Record<string, string>)['Content-Type'],
+      undefined,
+    );
+    assert.ok(options?.body instanceof FormData);
+    assert.deepEqual(
+      JSON.parse(String(options.body.get('submission'))),
+      fields,
+    );
+    assert.equal((options.body.get('screenshot') as File).name, 'proof.png');
+    return Response.json(
+      {
+        ...fixture.detail.submission,
+        ...fields,
+        source: 'manual',
+        status: 'pending',
+        proofUrl: '',
+        screenshotPath: path,
+      },
+      { status: 201 },
+    );
+  });
+  const result = await client.addManual(
+    fields,
+    '00000000-0000-4000-8000-000000000002',
+    'csrf',
+    signal(),
+    file,
+  );
+  assert.equal(result.screenshotPath, path);
+});

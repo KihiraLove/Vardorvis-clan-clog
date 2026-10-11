@@ -115,7 +115,11 @@ export class MemoryStore implements BackendStore {
   state = new Map<string, Date>();
   sessions = new Map<string, StoredSession>();
   attempts = 0;
-  setting: Settings = { revision: 'settings-1', hardcoreEnabled: false };
+  setting: Settings = {
+    revision: 'settings-1',
+    clanName: 'Vardorvis',
+    hardcoreEnabled: false,
+  };
   audits: { actor: string; enabled: boolean }[] = [];
   data: CatalogData = {
     items: [{ id: 42, name: 'Shared item', iconPath: '/items/42.png' }],
@@ -145,6 +149,7 @@ export class MemoryStore implements BackendStore {
     if (this.setting.revision !== revision) return null;
     this.setting = {
       revision: 'settings-' + (Number(revision.split('-')[1]) + 1),
+      clanName: 'Vardorvis',
       hardcoreEnabled: enabled,
     };
     this.audits.push({ actor, enabled });
@@ -352,6 +357,7 @@ test('settings require origin, CSRF, strict fields and current revision; every s
     });
     assert.deepEqual(saved.json(), {
       revision: 'settings-2',
+      clanName: 'Vardorvis',
       hardcoreEnabled: true,
     });
     assert.equal(saved.headers['cache-control'], 'no-store');

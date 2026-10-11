@@ -14,6 +14,9 @@ export interface BotConfig {
   guildId: string;
 }
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
+  const proofDirectory = env.PROOF_STORAGE_PATH?.trim() || undefined;
+  if (proofDirectory && !isAbsolute(proofDirectory))
+    throw new Error('PROOF_STORAGE_PATH must be absolute');
   const iconDirectory = env.ICON_STORAGE_PATH?.trim() || undefined;
   if (iconDirectory && !isAbsolute(iconDirectory))
     throw new Error('ICON_STORAGE_PATH must be absolute');
@@ -55,6 +58,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     return {
       auth: undefined,
       iconDirectory,
+      proofDirectory,
       bot,
       trustProxy: trusted.length ? trusted : (false as const),
     };
@@ -113,6 +117,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     );
   return {
     iconDirectory,
+    proofDirectory,
     auth: {
       origin: origin.origin,
       secret,

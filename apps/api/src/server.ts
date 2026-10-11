@@ -7,6 +7,8 @@ import { PgStore } from './store.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
 import { PgXpStore } from './xp-store.js';
+import { ProofStorage } from './proof-storage.js';
+import { PgProofStore } from './proof-store.js';
 import { PgReviewStore } from './review-store.js';
 const config = readConfig();
 if ((config.auth || config.bot) && !process.env.DATABASE_URL)
@@ -26,6 +28,12 @@ const icons = config.iconDirectory
   ? new IconStorage(config.iconDirectory)
   : undefined;
 if (icons) await icons.initialize();
+const proofs = config.proofDirectory
+  ? new ProofStorage(config.proofDirectory)
+  : undefined;
+if (proofs) await proofs.initialize();
+if (config.auth && !proofs)
+  throw new Error('PROOF_STORAGE_PATH is required when auth is enabled');
 if (config.auth && !icons)
   throw new Error('ICON_STORAGE_PATH is required when auth is enabled');
 const catalog = pool ? new PgCatalogStore(pool) : undefined;
@@ -38,6 +46,8 @@ const app = createApp(
       process.env.BOT_ENABLED === 'true' ? checkBotReadiness : undefined,
     catalog,
     icons,
+    proofs,
+    proofStore: pool ? new PgProofStore(pool) : undefined,
     xp: pool ? new PgXpStore(pool) : undefined,
     review: pool && store ? new PgReviewStore(pool, store) : undefined,
     ...config,

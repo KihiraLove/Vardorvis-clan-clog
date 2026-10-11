@@ -9,7 +9,7 @@ import { PreviewXpClient } from './preview/xp.ts';
 import { CollectionLog } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
-import { parseSettings } from './site-settings.ts';
+import { parseSettings, type SiteSettings } from './site-settings.ts';
 
 function LiveLog({
   preview,
@@ -112,6 +112,7 @@ export function App() {
   const [route, setRoute] = useState(location);
   const [hardcore, setHardcore] = useState(false);
   const [liveEnabled, setLiveEnabled] = useState(false);
+  const [liveClanName, setLiveClanName] = useState('');
   useEffect(() => {
     const change = () => setRoute(location());
     window.addEventListener('popstate', change);
@@ -138,6 +139,7 @@ export function App() {
         const value = parseSettings(await response.json());
         if (!stopped) {
           setLiveEnabled(value.hardcoreEnabled);
+          setLiveClanName(value.clanName);
           if (!value.hardcoreEnabled) setHardcore(false);
         }
       } catch {
@@ -204,6 +206,26 @@ export function App() {
         : new LiveXpClient(),
     [route.preview, adminClient],
   );
+  useSyncExternalStore(
+    adminClient instanceof PreviewAdminClient
+      ? adminClient.subscribe
+      : () => () => {},
+    adminClient instanceof PreviewAdminClient
+      ? adminClient.getRevision
+      : () => 0,
+  );
+  const clanName =
+    adminClient instanceof PreviewAdminClient
+      ? adminClient.publicSettings().clanName
+      : liveClanName;
+  const settingsSaved = (value: SiteSettings) => {
+    setLiveClanName(value.clanName);
+    setLiveEnabled(value.hardcoreEnabled);
+    if (!value.hardcoreEnabled) setHardcore(false);
+  };
+  useEffect(() => {
+    document.title = (clanName ? clanName + ' · ' : '') + 'Clan Collection Log';
+  }, [clanName]);
   return (
     <>
       <svg
@@ -251,11 +273,13 @@ export function App() {
             className="clan-brand"
             href={'/' + (route.preview ? '?preview=1' : '')}
             onClick={navigate}
-            aria-label="Vardorvis clan collection log"
+            aria-label={
+              (clanName ? clanName + ' ' : '') + 'clan collection log'
+            }
           >
             <img className="clan-logo" src="/brand/mexicat.gif" alt="" />
             <div>
-              <span className="clan-name">Vardorvis</span>
+              <span className="clan-name">{clanName || 'Clan'}</span>
               <span className="clan-subtitle">Clan Collection Log</span>
             </div>
           </a>
@@ -277,6 +301,8 @@ export function App() {
           {admin ? (
             <AdminPage
               client={adminClient}
+              clanName={clanName}
+              onSettingsSaved={settingsSaved}
               preview={route.preview}
               path={route.path}
               onMode={mode}
@@ -308,7 +334,7 @@ export function App() {
           )}
         </main>
         <footer className="site-footer">
-          <p>Vardorvis · One clan. Every collection.</p>
+          <p>{clanName && clanName + ' · '}One clan. Every collection.</p>
           <p>
             Created using intellectual property belonging to Jagex Limited under
             the terms of Jagex's{' '}

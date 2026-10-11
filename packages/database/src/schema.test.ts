@@ -24,6 +24,7 @@ test(
           '001_baseline.sql',
           '002_manual_submission_requests.sql',
           '003_staff_accounts.sql',
+          '004_runelite_submissions.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

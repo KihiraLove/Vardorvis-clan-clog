@@ -178,7 +178,11 @@ test('admin setting writes carry CSRF and revision and validate saved visibility
       hardcoreEnabled: true,
       expectedRevision: 'settings-1',
     });
-    return Response.json({ revision: 'settings-2', hardcoreEnabled: true });
+    return Response.json({
+      revision: 'settings-2',
+      clanName: 'Vardorvis',
+      hardcoreEnabled: true,
+    });
   });
   assert.equal(
     (await client.saveSettings(true, 'settings-1', 'csrf', signal()))

@@ -90,7 +90,11 @@ async function mockAccounts(
     }
     if (path === '/api/v1/admin/settings')
       return route.fulfill({
-        json: { revision: 'settings-1', hardcoreEnabled: false },
+        json: {
+          revision: 'settings-1',
+          clanName: 'Vardorvis',
+          hardcoreEnabled: false,
+        },
       });
     if (path === '/api/v1/admin/catalog')
       return route.fulfill({ json: fixture.catalog });

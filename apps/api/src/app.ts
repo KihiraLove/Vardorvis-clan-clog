@@ -1,4 +1,7 @@
 /** Public projections plus optional configured admin auth; unavailable services fail closed. */
+import { proofRoutes } from './proof-routes.js';
+import type { ProofStorage } from './proof-storage.js';
+import type { ProofStore } from './proof-store.js';
 import { checkReadiness } from './readiness.js';
 import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
@@ -14,6 +17,8 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  proofs?: ProofStorage | undefined;
+  proofStore?: ProofStore | undefined;
   checkBotReady?: (() => Promise<void>) | undefined;
   catalog?: PgCatalogStore | undefined;
   icons?: IconStorage | undefined;
@@ -32,6 +37,7 @@ export function createApp(
   },
   readSettings: () => Promise<Settings> = async () => ({
     revision: 'settings-disabled',
+    clanName: 'Vardorvis',
     hardcoreEnabled: false,
   }),
   options: Options = {},
@@ -65,7 +71,8 @@ export function createApp(
     if (
       request.url.startsWith('/api/v1/auth/') ||
       request.url.startsWith('/api/v1/admin/') ||
-      request.url.startsWith('/api/v1/bot/')
+      request.url.startsWith('/api/v1/bot/') ||
+      request.url.startsWith('/api/v1/runelite/')
     )
       reply.header('Cache-Control', 'no-store');
   });
@@ -155,6 +162,7 @@ export function createApp(
       stage: store ? 'backend' : 'foundation',
       catalogReady,
       submissionsEnabled: !!(store && options.bot),
+      runeliteSubmissionsEnabled: !!(options.proofs && options.proofStore),
       adminAuthEnabled: !!(store && options.auth),
     };
   });
@@ -191,6 +199,14 @@ export function createApp(
         options.catalog
           ? options.catalog.catalog()
           : options.review!.adminCatalog(),
+    );
+  if (options.proofs && options.proofStore)
+    proofRoutes(
+      app,
+      options.proofStore,
+      options.proofs,
+      options.review,
+      requireAdmin,
     );
   if (options.catalog && options.icons)
     catalogRoutes(app, options.catalog, options.icons, requireAdmin);

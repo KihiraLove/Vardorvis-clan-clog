@@ -14,6 +14,7 @@ const appendOnly = new Set([
   'catalog_audit',
   'xp_import_history',
   'manual_submission_requests',
+  'runelite_submission_requests',
 ]);
 
 export function validateRuntimePassword(value: string | undefined): string {

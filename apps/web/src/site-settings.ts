@@ -1,6 +1,7 @@
 /** Versioned release visibility; missing public settings must fail closed. */
 export interface SiteSettings {
   revision: string;
+  clanName: string;
   hardcoreEnabled: boolean;
 }
 export function parseSettings(value: unknown): SiteSettings {
@@ -10,8 +11,15 @@ export function parseSettings(value: unknown): SiteSettings {
   if (
     typeof data.revision !== 'string' ||
     !data.revision.trim() ||
-    typeof data.hardcoreEnabled !== 'boolean'
+    typeof data.hardcoreEnabled !== 'boolean' ||
+    typeof data.clanName !== 'string' ||
+    !data.clanName.trim() ||
+    data.clanName.length > 80
   )
     throw new Error('Invalid site settings.');
-  return { revision: data.revision, hardcoreEnabled: data.hardcoreEnabled };
+  return {
+    revision: data.revision,
+    hardcoreEnabled: data.hardcoreEnabled,
+    clanName: data.clanName,
+  };
 }
