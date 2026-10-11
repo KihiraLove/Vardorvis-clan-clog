@@ -7,6 +7,8 @@ import { useAdminAction } from './use-admin-action.ts';
 import { AdminSettings } from './AdminSettings.tsx';
 import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
+import { AccountSettings } from './AccountSettings.tsx';
+import { AdminAccounts } from './AdminAccounts.tsx';
 
 export interface AdminRouteProps {
   preview: boolean;
@@ -17,13 +19,18 @@ export function AdminNavigation({
   preview,
   path,
   onNavigate,
-}: AdminRouteProps) {
+  session,
+}: AdminRouteProps & { session?: AdminSession | null | undefined }) {
   return (
     <nav className="admin-navigation" aria-label="Admin navigation">
       {[
         ['/admin', 'Submissions'],
         ['/admin/catalog', 'Catalog items'],
         ['/admin/xp', 'XP imports'],
+        ...(!session?.development ? [['/admin/account', 'Your account']] : []),
+        ...(session?.role === 'admin' && !session.development
+          ? [['/admin/accounts', 'Moderator accounts']]
+          : []),
       ].map(([url, label]) => (
         <a
           key={url}
@@ -43,14 +50,17 @@ export function AdminPage({
   path,
   onMode,
   onNavigate,
+  children,
 }: AdminRouteProps & {
   client: AdminClient;
   onMode: (next: boolean) => void;
+  children?: React.ReactNode;
 }) {
   const [session, setSession] = useState<AdminSession | null>(),
     [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const accessLost = useCallback(() => setSession(null), []);
   const action = useAdminAction(accessLost);
   const loginAction = useAdminAction(accessLost);
@@ -60,7 +70,7 @@ export function AdminPage({
     event.preventDefault();
     await loginAction.execute(async (signal) => {
       try {
-        await client.login(password, signal);
+        await client.login(username, password, signal);
         if (signal.aborted) return;
         const next = await client.session(signal);
         if (signal.aborted) return;
@@ -71,10 +81,10 @@ export function AdminPage({
         if (signal.aborted) throw failure;
         throw new Error(
           failure instanceof AdminRequestError && failure.status === 401
-            ? 'Incorrect password.'
+            ? 'Incorrect username or password.'
             : failure instanceof AdminRequestError && failure.status === 429
               ? 'Too many attempts. Try again later.'
-              : 'Could not sign in. Check the password and server configuration.',
+              : 'Could not sign in. Check your credentials and try again.',
           { cause: failure },
         );
       }
@@ -157,8 +167,15 @@ export function AdminPage({
           </div>
         )}
       </div>
-      <AdminNavigation preview={preview} path={path} onNavigate={onNavigate} />
-      {session && (
+      {!session?.mustChangePassword && (
+        <AdminNavigation
+          preview={preview}
+          path={path}
+          onNavigate={onNavigate}
+          session={session}
+        />
+      )}
+      {session?.role === 'admin' && !session.mustChangePassword && (
         <AdminSettings
           client={client}
           session={session}
@@ -193,9 +210,21 @@ export function AdminPage({
       ) : session === null ? (
         <section className="admin-panel">
           <h2>Admin sign-in required</h2>
-          <p>Enter the admin password configured in the server .env file.</p>
-          <form onSubmit={(event) => void logIn(event)}>
-            <label htmlFor="admin-password">Admin password</label>
+          <p>Sign in with your administrator or moderator account.</p>
+          <form
+            className="admin-credential-form"
+            onSubmit={(event) => void logIn(event)}
+          >
+            <label htmlFor="admin-username">Username</label>
+            <input
+              id="admin-username"
+              autoComplete="username"
+              required
+              maxLength={32}
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
+            <label htmlFor="admin-password">Password</label>
             <input
               id="admin-password"
               type="password"
@@ -219,6 +248,31 @@ export function AdminPage({
             </p>
           )}
         </section>
+      ) : session.mustChangePassword || path === '/admin/account' ? (
+        session.development ? (
+          <p>Account settings are unavailable in local test mode.</p>
+        ) : (
+          <AccountSettings
+            client={client}
+            session={session}
+            onSaved={setSession}
+            onAccessLost={accessLost}
+          />
+        )
+      ) : path === '/admin/accounts' ? (
+        session.role === 'admin' && !session.development ? (
+          <AdminAccounts
+            client={client}
+            session={session}
+            onAccessLost={accessLost}
+          />
+        ) : (
+          <p role="alert">
+            Only the administrator can create moderator accounts.
+          </p>
+        )
+      ) : children ? (
+        children
       ) : path === '/admin/catalog' ? (
         <AdminCatalogPage
           client={client}

@@ -12,10 +12,128 @@ import {
   type PublicCredit,
   type Settings,
   type StoredSession,
+  type StaffAccount,
+  type StoredAccount,
 } from './types.js';
 const unavailable = () => new ApiError(503, 'The catalog is not ready.');
+const accountFields = `id, username, role, must_change_password AS "mustChangePassword"`;
+const credentialFields = `${accountFields}, password_hash AS "passwordHash", credential_version AS "credentialVersion"`;
+const duplicateUsername = (error: unknown) => {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === '23505'
+  )
+    throw new ApiError(409, 'That username is already in use.');
+  throw error;
+};
 export class PgStore implements BackendStore {
   constructor(private readonly pool: pg.Pool) {}
+
+  async ensureDefaultAdmin(passwordHash: string) {
+    await this.pool.query(
+      `INSERT INTO staff_accounts(id,username,role,password_hash)
+       VALUES('00000000-0000-4000-8000-000000000001','admin','admin',$1)
+       ON CONFLICT DO NOTHING`,
+      [passwordHash],
+    );
+  }
+  async accountByUsername(username: string): Promise<StoredAccount | null> {
+    return (
+      (
+        await this.pool.query<StoredAccount>(
+          `SELECT ${credentialFields} FROM staff_accounts WHERE lower(username)=lower($1)`,
+          [username],
+        )
+      ).rows[0] ?? null
+    );
+  }
+  async accountById(id: string): Promise<StoredAccount | null> {
+    // Old shared/Discord session IDs are not UUIDs.
+    if (!/^[a-f0-9-]{36}$/iu.test(id)) return null;
+    return (
+      (
+        await this.pool.query<StoredAccount>(
+          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1`,
+          [id],
+        )
+      ).rows[0] ?? null
+    );
+  }
+  async accounts(): Promise<StaffAccount[]> {
+    return (
+      await this.pool.query<StaffAccount>(
+        `SELECT ${accountFields} FROM staff_accounts ORDER BY role, lower(username)`,
+      )
+    ).rows;
+  }
+  async createModerator(
+    username: string,
+    passwordHash: string,
+    actor: string,
+  ): Promise<StaffAccount> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const account = (
+        await client.query<StaffAccount>(
+          `INSERT INTO staff_accounts(id,username,role,password_hash) VALUES($1,$2,'moderator',$3) RETURNING ${accountFields}`,
+          [randomUUID(), username, passwordHash],
+        )
+      ).rows[0]!;
+      await client.query(
+        `INSERT INTO staff_account_audit(actor_id,account_id,action,username) VALUES($1,$2,'create',$3)`,
+        [actor, account.id, account.username],
+      );
+      await client.query('COMMIT');
+      return account;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      return duplicateUsername(error);
+    } finally {
+      client.release();
+    }
+  }
+  async updateAccount(
+    id: string,
+    expectedVersion: number,
+    username: string,
+    passwordHash?: string,
+  ): Promise<StoredAccount> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const account = (
+        await client.query<StoredAccount>(
+          `UPDATE staff_accounts SET username=$3, password_hash=COALESCE($4,password_hash),
+         must_change_password=CASE WHEN $4 IS NULL THEN must_change_password ELSE false END,
+         credential_version=credential_version+1
+         WHERE id=$1 AND credential_version=$2 RETURNING ${credentialFields}`,
+          [id, expectedVersion, username, passwordHash ?? null],
+        )
+      ).rows[0];
+      if (!account)
+        throw new ApiError(
+          409,
+          'Your account changed. Sign in again before retrying.',
+        );
+      await client.query('DELETE FROM admin_sessions WHERE account_id=$1', [
+        id,
+      ]);
+      await client.query(
+        `INSERT INTO staff_account_audit(actor_id,account_id,action,username) VALUES($1,$1,'update',$2)`,
+        [id, username],
+      );
+      await client.query('COMMIT');
+      return account;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      return duplicateUsername(error);
+    } finally {
+      client.release();
+    }
+  }
 
   private async matchItems(client: pg.PoolClient): Promise<MatchItem[]> {
     const items = (
@@ -328,15 +446,22 @@ export class PgStore implements BackendStore {
   async createSession(hash: string, identity: AdminIdentity, expiresAt: Date) {
     await this.pool.query('DELETE FROM admin_sessions WHERE expires_at<=now()');
     await this.pool.query(
-      'INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at) VALUES($1,$2,$3,$4)',
-      [hash, identity.id, identity.displayName, expiresAt],
+      'INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at,account_id,credential_version) VALUES($1,$2,$3,$4,$5,$6)',
+      [
+        hash,
+        identity.id,
+        identity.displayName,
+        expiresAt,
+        identity.accountVersion ? identity.id : null,
+        identity.accountVersion ?? null,
+      ],
     );
   }
   async session(hash: string): Promise<StoredSession | null> {
     return (
       (
         await this.pool.query<StoredSession>(
-          'SELECT discord_user_id AS id, display_name AS "displayName", expires_at AS "expiresAt" FROM admin_sessions WHERE token_hash=$1 AND expires_at>now()',
+          'SELECT discord_user_id AS id, display_name AS "displayName", expires_at AS "expiresAt", credential_version AS "accountVersion" FROM admin_sessions WHERE token_hash=$1 AND expires_at>now()',
           [hash],
         )
       ).rows[0] ?? null

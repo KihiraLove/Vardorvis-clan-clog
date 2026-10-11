@@ -18,6 +18,17 @@ export interface PublicCredit {
 export interface AdminIdentity {
   id: string;
   displayName: string;
+  accountVersion?: number;
+}
+export interface StaffAccount {
+  id: string;
+  username: string;
+  role: 'admin' | 'moderator';
+  mustChangePassword: boolean;
+}
+export interface StoredAccount extends StaffAccount {
+  passwordHash: string;
+  credentialVersion: number;
 }
 export interface StoredSession extends AdminIdentity {
   expiresAt: Date;
@@ -46,6 +57,21 @@ export interface BotReceipt {
   creditOccupied: boolean;
 }
 export interface BackendStore {
+  ensureDefaultAdmin(passwordHash: string): Promise<void>;
+  accountByUsername(username: string): Promise<StoredAccount | null>;
+  accountById(id: string): Promise<StoredAccount | null>;
+  accounts(): Promise<StaffAccount[]>;
+  createModerator(
+    username: string,
+    passwordHash: string,
+    actor: string,
+  ): Promise<StaffAccount>;
+  updateAccount(
+    id: string,
+    expectedVersion: number,
+    username: string,
+    passwordHash?: string,
+  ): Promise<StoredAccount>;
   botItems(
     query: string,
     limit: number,

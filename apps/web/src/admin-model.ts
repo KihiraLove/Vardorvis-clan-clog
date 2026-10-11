@@ -102,7 +102,39 @@ export interface CreatedItem {
   pageIds: string[];
   catalogRevision: string;
 }
+export interface StaffAccount {
+  id: string;
+  username: string;
+  role: 'admin' | 'moderator';
+  mustChangePassword: boolean;
+}
+export function parseStaffAccount(input: unknown): StaffAccount {
+  const value = object(input);
+  if (
+    !['admin', 'moderator'].includes(String(value.role)) ||
+    typeof value.mustChangePassword !== 'boolean'
+  )
+    throw new Error('Invalid staff account.');
+  return {
+    id: text(value.id),
+    username: text(value.username),
+    role: value.role as StaffAccount['role'],
+    mustChangePassword: value.mustChangePassword,
+  };
+}
 export interface AdminClient {
+  accounts(signal: AbortSignal): Promise<StaffAccount[]>;
+  createModerator(
+    username: string,
+    password: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<StaffAccount>;
+  updateAccount(
+    fields: { username: string; currentPassword: string; newPassword?: string },
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<AdminSession>;
   settings(
     signal: AbortSignal,
   ): Promise<import('./site-settings.ts').SiteSettings>;
@@ -113,7 +145,7 @@ export interface AdminClient {
     signal: AbortSignal,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
-  login(password: string, signal: AbortSignal): Promise<void>;
+  login(username: string, password: string, signal: AbortSignal): Promise<void>;
   addManual(
     fields: ManualSubmissionInput,
     key: string,

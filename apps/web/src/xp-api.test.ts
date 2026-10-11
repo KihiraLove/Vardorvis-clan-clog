@@ -182,19 +182,32 @@ test('live admin session recognizes only an explicit boolean local test marker',
     json({
       authenticated: true,
       displayName: 'Local test admin',
+      username: 'local-admin',
+      role: 'admin',
+      mustChangePassword: false,
       csrfToken: 'token',
       development: true,
     }),
   );
   assert.equal((await live.session(signal()))?.development, true);
   const production = new LiveXpClient(async () =>
-    json({ authenticated: true, displayName: 'Admin', csrfToken: 'token' }),
+    json({
+      authenticated: true,
+      displayName: 'Admin',
+      csrfToken: 'token',
+      username: 'admin',
+      role: 'admin',
+      mustChangePassword: false,
+    }),
   );
   assert.equal((await production.session(signal()))?.development, undefined);
   const malformed = new LiveXpClient(async () =>
     json({
       authenticated: true,
       displayName: 'Admin',
+      username: 'admin',
+      role: 'admin',
+      mustChangePassword: false,
       csrfToken: 'token',
       development: 'true',
     }),

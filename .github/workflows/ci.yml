@@ -50,7 +50,6 @@ jobs:
       IMAGE_TAG: ci
       AUTH_ENABLED: 'true'
       PUBLIC_ORIGIN: https://clog.example.com
-      ADMIN_PASSWORD: ci-only-test-admin-password
       SESSION_SECRET: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,7 +79,7 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.dev.yaml up -d --wait --wait-timeout 120
           # Fresh install applies the immutable baseline and forward-only upgrades.
-          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql"
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql"
           curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8088/healthz
           curl --fail http://127.0.0.1:8088/api/v1/status
           curl --fail --output /tmp/catalog.json http://127.0.0.1:8088/api/v1/catalog
@@ -102,7 +101,7 @@ jobs:
           jq -e '(.revision == "xp-1") and (.events == []) and (.totals | .mining == "0")' /tmp/xp.json
           curl --fail http://127.0.0.1:8088/api/v1/auth/session
           test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://clog.example.com' \
-            -H 'Content-Type: application/json' -d '{"password":"wrong"}' \
+            -H 'Content-Type: application/json' -d '{"username":"admin","password":"wrong"}' \
             http://127.0.0.1:8088/api/v1/auth/login)" = "401"
           docker compose exec -T app node -e "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       - name: Verify restricted database runtime and append-only audit privileges

@@ -156,7 +156,13 @@ export class PreviewXpClient implements XpClient {
     signal = new AbortController().signal,
   ): Promise<AdminSession | null> {
     if (this.getSession) return this.getSession(signal);
-    return { csrfToken: 'preview-only', displayName: 'Preview admin' };
+    return {
+      csrfToken: 'preview-only',
+      displayName: 'Preview admin',
+      username: 'preview-admin',
+      role: 'admin',
+      mustChangePassword: false,
+    };
   }
   async preview(
     url: string,

@@ -1,6 +1,6 @@
 /** Public log and event tracker share one page; admin routes remain directly addressable. */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AdminPage, AdminNavigation } from './AdminPage.tsx';
+import { AdminPage } from './AdminPage.tsx';
 import { LiveAdminClient } from './admin-api.ts';
 import { PreviewAdminClient } from './preview/admin.ts';
 import { XpPage } from './XpPage.tsx';
@@ -275,29 +275,22 @@ export function App() {
         </header>
         <main id={admin ? 'admin-main' : 'collection-log'}>
           {admin ? (
-            route.path === '/admin/xp' ? (
-              <>
-                <AdminNavigation
-                  preview={route.preview}
-                  path={route.path}
-                  onNavigate={navigate}
-                />
+            <AdminPage
+              client={adminClient}
+              preview={route.preview}
+              path={route.path}
+              onMode={mode}
+              onNavigate={navigate}
+            >
+              {route.path === '/admin/xp' && (
                 <XpPage
                   client={xpClient}
                   admin
                   preview={route.preview}
                   onMode={mode}
                 />
-              </>
-            ) : (
-              <AdminPage
-                client={adminClient}
-                preview={route.preview}
-                path={route.path}
-                onMode={mode}
-                onNavigate={navigate}
-              />
-            )
+              )}
+            </AdminPage>
           ) : (
             <>
               {adminClient instanceof PreviewAdminClient ? (

@@ -1,7 +1,14 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
 import { parseSettings } from './site-settings.ts';
 import { LiveXpClient } from './xp-api.ts';
-import { list, object, text, timestamp, unique } from './xp-model.ts';
+import {
+  list,
+  object,
+  text,
+  timestamp,
+  unique,
+  parseAdminSession,
+} from './xp-model.ts';
 import {
   parseAdminCatalog,
   parseAdminItem,
@@ -9,6 +16,7 @@ import {
   parseDetail,
   parseQueue,
   parseSubmission,
+  parseStaffAccount,
   validateIconFile,
   type AdminCatalog,
   type AdminClient,
@@ -25,23 +33,33 @@ export class AdminRequestError extends Error {
   readonly status: number;
   constructor(status: number, serverConflict?: string) {
     super(
-      status === 409 &&
-        serverConflict ===
-          'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.'
+      [400, 409].includes(status) &&
+        serverConflict &&
+        [
+          'That username is already in use.',
+          'The current password is incorrect.',
+          'Choose a new password to finish account setup.',
+          'Choose a password different from your current password.',
+          'Your account changed. Sign in again before retrying.',
+        ].includes(serverConflict)
         ? serverConflict
-        : status === 401
-          ? 'Your session expired. Sign in again.'
-          : status === 403
-            ? 'Your account is not allowed to administer the clan.'
-            : status === 409
-              ? 'Another change was saved. Load the latest data before trying again.'
-              : status === 413
-                ? 'The icon is too large.'
-                : status === 422 || status === 400
-                  ? 'The server could not validate these fields. Review them before retrying.'
-                  : [404, 501, 503].includes(status)
-                    ? 'The admin service is not available yet.'
-                    : 'The request could not be completed. Reload or retry to check the current result.',
+        : status === 409 &&
+            serverConflict ===
+              'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.'
+          ? serverConflict
+          : status === 401
+            ? 'Your session expired. Sign in again.'
+            : status === 403
+              ? 'Your account is not allowed to administer the clan.'
+              : status === 409
+                ? 'Another change was saved. Load the latest data before trying again.'
+                : status === 413
+                  ? 'The icon is too large.'
+                  : status === 422 || status === 400
+                    ? 'The server could not validate these fields. Review them before retrying.'
+                    : [404, 501, 503].includes(status)
+                      ? 'The admin service is not available yet.'
+                      : 'The request could not be completed. Reload or retry to check the current result.',
     );
     this.status = status;
   }
@@ -66,7 +84,7 @@ export class LiveAdminClient implements AdminClient {
     });
     if (!response.ok) {
       let serverConflict: string | undefined;
-      if (response.status === 409) {
+      if ([400, 409].includes(response.status)) {
         try {
           const body: unknown = await response.json();
           if (
@@ -123,12 +141,64 @@ export class LiveAdminClient implements AdminClient {
       throw failure;
     }
   }
-  async login(password: string, signal: AbortSignal): Promise<void> {
+  async login(
+    username: string,
+    password: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     await this.response('/api/v1/auth/login', signal, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     });
+  }
+  async accounts(signal: AbortSignal) {
+    const result = object(await this.json('/api/v1/admin/accounts', signal));
+    const accounts = list(result.accounts).map(parseStaffAccount);
+    unique(accounts.map((account) => account.id));
+    return accounts;
+  }
+  async createModerator(
+    username: string,
+    password: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const response = await this.response(
+      '/api/v1/admin/accounts',
+      signal,
+      this.write(csrf, { username, password }),
+    );
+    if (response.status !== 201)
+      throw new Error('Unexpected account creation status.');
+    const account = parseStaffAccount(await response.json());
+    if (
+      account.username !== username ||
+      account.role !== 'moderator' ||
+      !account.mustChangePassword
+    )
+      throw new Error('Unexpected moderator account receipt.');
+    return account;
+  }
+  async updateAccount(
+    fields: { username: string; currentPassword: string; newPassword?: string },
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const session = parseAdminSession(
+      await this.json(
+        '/api/v1/auth/account',
+        signal,
+        this.write(csrf, fields, 'PATCH'),
+      ),
+    );
+    if (
+      !session ||
+      session.username !== fields.username ||
+      (fields.newPassword && session.mustChangePassword)
+    )
+      throw new Error('Unexpected account update receipt.');
+    return session;
   }
   async addManual(
     fields: ManualSubmissionInput,

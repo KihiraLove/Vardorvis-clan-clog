@@ -1846,3 +1846,22 @@ main {
     font-size: 15px;
   }
 }
+.admin-credential-form {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 28rem;
+}
+.admin-credential-form input {
+  width: 100%;
+  min-width: 0;
+}
+.admin-credential-form .admin-note {
+  margin: 0 0 0.25rem;
+}
+.admin-credential-form button {
+  justify-self: start;
+  margin-top: 0.5rem;
+}
+.admin-account-list {
+  margin-top: 1.5rem;
+}

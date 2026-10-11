@@ -1,6 +1,7 @@
 /** Real API + PostgreSQL + filesystem acceptance tests. CI always supplies TEST_DATABASE_URL. */
 import assert from 'node:assert/strict';
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { hashPassword } from './passwords.js';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,14 +19,10 @@ import {
 import { IconStorage, MAX_ICON_BYTES } from './icon-storage.js';
 import type { AuthConfig } from './config.js';
 
-const actor = 'password-admin';
+const actor = '00000000-0000-4000-8000-000000000001';
 const password = 'catalog-fixture-password';
 const config: AuthConfig = {
   origin: 'https://daybloom.net',
-  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:')
-    .update(password)
-    .digest(),
   secret: 'a'.repeat(64),
   secure: true,
 };
@@ -79,6 +76,8 @@ test(
         .sort())
         await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       await icons.initialize();
+      await store.ensureDefaultAdmin(await hashPassword(password));
+      await pool.query('UPDATE staff_accounts SET must_change_password=false');
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES(1000001,'Source one','/catalog/items/1249.png'),(1000002,'Source two','/catalog/items/3140.png')",
       );
@@ -95,7 +94,7 @@ test(
         method: 'POST',
         url: '/api/v1/auth/login',
         headers: { origin: config.origin },
-        payload: { password },
+        payload: { username: 'admin', password },
       });
       assert.equal(login.statusCode, 200, login.body);
       const headers = {

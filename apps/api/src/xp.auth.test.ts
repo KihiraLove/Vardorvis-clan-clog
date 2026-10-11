@@ -1,7 +1,7 @@
 /** Route integration uses a fake provider and in-memory store; no live WOM/Discord. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createHmac } from 'node:crypto';
+import { hashPassword } from './passwords.js';
 import { createApp } from './app.js';
 import { type AuthConfig } from './config.js';
 import type { BackendStore, AdminIdentity, StoredSession } from './types.js';
@@ -9,13 +9,17 @@ import { parseWomSnapshot } from './wom.js';
 import type { XpStore } from './xp-types.js';
 
 const password = 'test-password-not-for-production';
+const account = {
+  id: '00000000-0000-4000-8000-000000000001',
+  username: 'admin',
+  role: 'admin',
+  mustChangePassword: false,
+  credentialVersion: 1,
+  passwordHash: await hashPassword(password),
+};
 const auth: AuthConfig = {
   origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
-  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:')
-    .update(password)
-    .digest(),
   secure: true,
 };
 const source = {
@@ -42,6 +46,13 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     applied = 0,
     history = 0;
   const store = {
+    async ensureDefaultAdmin() {},
+    async accountByUsername() {
+      return account;
+    },
+    async accountById(id: string) {
+      return id === account.id ? account : null;
+    },
     async createState(k: string, d: Date) {
       states.set(k, d);
     },
@@ -142,7 +153,7 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
       method: 'POST',
       url: '/api/v1/auth/login',
       headers: { origin: auth.origin },
-      payload: { password },
+      payload: { username: 'admin', password },
     });
     assert.equal(login.statusCode, 200);
     const sessionCookie = String(login.headers['set-cookie']).split(';')[0]!;

@@ -21,22 +21,25 @@ The routes marked as implemented in [backend phase one](backend-phase-one.md) an
 
 ## Planned routes
 
-| Method/path                                    | Authorization                     | Purpose                                                         |
-| ---------------------------------------------- | --------------------------------- | --------------------------------------------------------------- |
-| `GET /api/v1/catalog`                          | Public                            | Versioned items, tabs/pages, ordered slot IDs; ETag             |
-| `GET /api/v1/collections`                      | Public                            | Approved item credits and revision; excludes evidence/actor IDs |
-| `GET /api/v1/bot/items?q=...`                  | Bot credential                    | Ranked canonical autocomplete candidates                        |
-| `POST /api/v1/bot/submissions`                 | Bot credential + configured guild | Idempotent intake and resolution suggestions                    |
-| `POST /api/v1/auth/login`                      | Password + matching Origin        | Create an expiring admin session                                |
-| `GET /api/v1/auth/session`                     | Browser session                   | Report admin access and a session-bound CSRF token              |
-| `POST /api/v1/auth/logout`                     | Session + CSRF                    | Destroy session                                                 |
-| `POST /api/v1/admin/submissions`               | Admin session + CSRF              | Insert manual pending or immediately approved claim             |
-| `GET /api/v1/admin/submissions?status=pending` | Admin session                     | Paginated queue including unmatched submissions                 |
-| `GET /api/v1/admin/submissions/:id`            | Admin session                     | Current claim and private before/after audit history            |
-| `PATCH /api/v1/admin/submissions/:id`          | Admin session + CSRF              | Resolve/edit item, collector or date with expected version      |
-| `POST /api/v1/admin/submissions/:id/approve`   | Admin session + CSRF              | Atomic approval and audit event                                 |
-| `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF              | Reject with reason                                              |
-| `POST /api/v1/admin/submissions/:id/revoke`    | Admin session + CSRF              | Revoke approved credit with reason                              |
+| Method/path                                    | Authorization                           | Purpose                                                         |
+| ---------------------------------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `GET /api/v1/catalog`                          | Public                                  | Versioned items, tabs/pages, ordered slot IDs; ETag             |
+| `GET /api/v1/collections`                      | Public                                  | Approved item credits and revision; excludes evidence/actor IDs |
+| `GET /api/v1/bot/items?q=...`                  | Bot credential                          | Ranked canonical autocomplete candidates                        |
+| `POST /api/v1/bot/submissions`                 | Bot credential + configured guild       | Idempotent intake and resolution suggestions                    |
+| `POST /api/v1/auth/login`                      | Username/password + matching Origin     | Create an expiring staff session                                |
+| `GET /api/v1/auth/session`                     | Browser session                         | Report admin access and a session-bound CSRF token              |
+| `POST /api/v1/auth/logout`                     | Session + CSRF                          | Destroy session                                                 |
+| `PATCH /api/v1/auth/account`                   | Staff session + CSRF + current password | Change own username/password and rotate sessions                |
+| `GET /api/v1/admin/accounts`                   | Administrator session                   | List account usernames, roles and first-login status            |
+| `POST /api/v1/admin/accounts`                  | Administrator session + CSRF            | Create a moderator requiring first-login password setup         |
+| `POST /api/v1/admin/submissions`               | Admin session + CSRF                    | Insert manual pending or immediately approved claim             |
+| `GET /api/v1/admin/submissions?status=pending` | Admin session                           | Paginated queue including unmatched submissions                 |
+| `GET /api/v1/admin/submissions/:id`            | Admin session                           | Current claim and private before/after audit history            |
+| `PATCH /api/v1/admin/submissions/:id`          | Admin session + CSRF                    | Resolve/edit item, collector or date with expected version      |
+| `POST /api/v1/admin/submissions/:id/approve`   | Admin session + CSRF                    | Atomic approval and audit event                                 |
+| `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF                    | Reject with reason                                              |
+| `POST /api/v1/admin/submissions/:id/revoke`    | Admin session + CSRF                    | Revoke approved credit with reason                              |
 
 Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false). The bot-only endpoint rejects any `collectedOn` field. The API assigns the UTC receipt timestamp/date; exact retries retain the original. The bot cannot send approval state or reviewer identity.
 
@@ -256,7 +259,9 @@ All public wrappers use the same global projection revision, and each route has 
 
 Missing gains use `null` as their explicit unavailable state; never coerce them to valid zero XP. Member cumulative amounts sum known stored contributions, with `null` when none are usable. Total skill XP sums known contributions and remains an unsigned exact integer. No fractional values, negative source sentinel values, duplicate skill/player IDs, missing selected metrics or unknown metrics are accepted. UTC timestamps include seconds and optional 1–3 fractional digits. Display dates are UTC; labels truncate to two million decimals and tooltips show the original exact amount.
 
-`GET /api/v1/auth/session` returns `{ authenticated: true, displayName, csrfToken }` for an allowlisted admin, or `{ authenticated: false }`/401 for no usable admin session. The browser retains the token in component memory only and sends cookies with `credentials: same-origin`. Return no reusable token to an unauthorized account. Keep session cookies HttpOnly/Secure/SameSite and enforce authorization/CSRF on the server.
+`GET /api/v1/auth/session` returns `{ authenticated: true, displayName, username, role, mustChangePassword, csrfToken }` for a staff account, or `{ authenticated: false }`/401 for no usable session. `role` is `admin` or `moderator`. A session with `mustChangePassword: true` may only update its account or sign out. Both roles can use review, submission, catalog and XP routes after setup; `/api/v1/admin/settings` and `/api/v1/admin/accounts` require the administrator. The browser retains the CSRF token in component memory only and sends cookies with `credentials: same-origin`. Keep session cookies HttpOnly/Secure/SameSite and enforce authorization/CSRF on the server.
+
+Login accepts `{ username, password }`. Account updates accept `{ currentPassword, username?, newPassword? }`, requiring at least one changed field. New passwords contain 12–256 characters and must differ from the current password. Usernames match `[A-Za-z0-9_.-]{3,32}` and are case-insensitively unique. Moderator creation accepts only `{ username, password }`; callers cannot assign roles. Account reads and receipts never include hashes. Credential changes revoke existing sessions and return a replacement cookie and updated session receipt.
 
 Preview body: `{ "competitionUrl": "https://wiseoldman.net/competitions/1001" }`. The browser strips queries/fragments, rejects non-HTTPS/spoofed/credentialed URLs and verifies returned source ID equals the requested ID. The server must repeat input validation, use its fixed WOM API origin, and bind the short-lived token to the authorized actor, validated source snapshot and expected projection revision.
 

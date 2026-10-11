@@ -170,7 +170,14 @@ test('direct admin imports require access, review corrections and send CSRF plus
   );
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill({
-      json: { authenticated: true, csrfToken: 'csrf', displayName: 'Reviewer' },
+      json: {
+        authenticated: true,
+        csrfToken: 'csrf',
+        displayName: 'Reviewer',
+        username: 'reviewer',
+        role: 'moderator',
+        mustChangePassword: false,
+      },
     }),
   );
   await page.route('**/api/v1/admin/xp/imports', (route) =>

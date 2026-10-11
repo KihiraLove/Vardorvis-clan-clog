@@ -39,4 +39,4 @@ The explicit disposable `compose.local-admin.yaml` override allows direct `/admi
 
 ## Admin authentication and manually entered drops
 
-The shared `ADMIN_PASSWORD` replaces Discord OAuth for the admin interface. `AUTH_ENABLED=true` and a strong `SESSION_SECRET` are required for password sign-in; the existing loopback-only disposable test bypass remains opt-in. Manual submissions are saved and audited through the live review API, can be pending or immediately approved, and observe the existing one-approved-credit-per-item/world rule. See [environment setup](environment.md#password-protected-admin).
+Individual staff accounts replace the shared admin password. `AUTH_ENABLED=true` and a strong `SESSION_SECRET` are required for sign-in; the existing loopback-only disposable test bypass remains opt-in. Manual submissions are saved and audited through the live review API, can be pending or immediately approved, and observe the existing one-approved-credit-per-item/world rule. See [environment setup](environment.md#required-secrets-and-configuration).

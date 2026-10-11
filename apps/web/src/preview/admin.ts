@@ -17,6 +17,7 @@ import {
   type QueueView,
   type StagedIcon,
   type Submission,
+  type StaffAccount,
 } from '../admin-model.ts';
 import type { LogData } from '../model.ts';
 import {
@@ -31,6 +32,15 @@ export class PreviewAdminClient implements AdminClient {
   private setting = { revision: 'settings-0', hardcoreEnabled: false };
   private settingsVersion = 0;
   private signedIn = true;
+  private username = 'preview-admin';
+  private staff: StaffAccount[] = [
+    {
+      id: 'preview-admin',
+      username: 'preview-admin',
+      role: 'admin',
+      mustChangePassword: false,
+    },
+  ];
   private listeners = new Set<() => void>();
   private pageVersions = new Map(
     previewCatalog.pages.map((page) => [page.id, 1]),
@@ -134,7 +144,11 @@ export class PreviewAdminClient implements AdminClient {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!this.signedIn) throw new AdminRequestError(401);
   }
-  async login(_password: string, signal: AbortSignal): Promise<void> {
+  async login(
+    _username: string,
+    _password: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     this.signedIn = true;
     this.changed(false);
@@ -183,8 +197,58 @@ export class PreviewAdminClient implements AdminClient {
   async session(signal: AbortSignal) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     return this.signedIn
-      ? { csrfToken: 'preview-admin', displayName: 'Preview admin' }
+      ? {
+          csrfToken: 'preview-admin',
+          displayName: 'Preview admin',
+          username: this.username,
+          role: 'admin' as const,
+          mustChangePassword: false,
+        }
       : null;
+  }
+  async accounts(signal: AbortSignal) {
+    this.access(signal);
+    return structuredClone(this.staff);
+  }
+  async createModerator(
+    username: string,
+    _password: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (
+      this.staff.some(
+        (account) => account.username.toLowerCase() === username.toLowerCase(),
+      )
+    )
+      throw new AdminRequestError(409, 'That username is already in use.');
+    const account: StaffAccount = {
+      id: crypto.randomUUID(),
+      username,
+      role: 'moderator',
+      mustChangePassword: true,
+    };
+    this.staff.push(account);
+    return structuredClone(account);
+  }
+  async updateAccount(
+    fields: { username: string; currentPassword: string; newPassword?: string },
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (
+      this.staff.some(
+        (account) =>
+          account.id !== 'preview-admin' &&
+          account.username.toLowerCase() === fields.username.toLowerCase(),
+      )
+    )
+      throw new AdminRequestError(409, 'That username is already in use.');
+    this.username = fields.username;
+    this.staff[0]!.username = fields.username;
+    return (await this.session(signal))!;
   }
   publicSettings() {
     return { ...this.setting };

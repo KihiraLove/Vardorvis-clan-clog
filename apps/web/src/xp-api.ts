@@ -17,6 +17,7 @@ import {
   unique,
   zeroTotals,
   type AdminSession,
+  parseAdminSession,
   type ApplyResult,
   type ImportEntry,
   type ImportPreview,
@@ -201,20 +202,7 @@ export class LiveXpClient implements XpClient {
   }
   async session(signal: AbortSignal): Promise<AdminSession | null> {
     try {
-      const value = object(await this.json('/api/v1/auth/session', signal));
-      if (value.authenticated === false) return null;
-      if (value.authenticated !== true)
-        throw new Error('Invalid admin session.');
-      if (
-        value.development !== undefined &&
-        typeof value.development !== 'boolean'
-      )
-        throw new Error('Invalid admin session mode.');
-      return {
-        csrfToken: text(value.csrfToken),
-        displayName: text(value.displayName),
-        ...(value.development === true ? { development: true } : {}),
-      };
+      return parseAdminSession(await this.json('/api/v1/auth/session', signal));
     } catch (error) {
       if (error instanceof XpRequestError && error.status === 401) return null;
       throw error;

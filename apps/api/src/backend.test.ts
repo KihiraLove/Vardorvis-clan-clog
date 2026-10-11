@@ -4,7 +4,11 @@ import { test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { createApp } from './app.js';
 import { readConfig, type AuthConfig } from './config.js';
-import { createHmac } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { hashPassword } from './passwords.js';
+import { ApiError, type StoredAccount, type StaffAccount } from './types.js';
+import type { ReviewStore } from './review-types.js';
+import type { XpStore } from './xp-types.js';
 import type {
   AdminIdentity,
   BackendStore,
@@ -13,18 +17,101 @@ import type {
   Settings,
   StoredSession,
 } from './types.js';
-const admin = 'password-admin';
+const admin = '00000000-0000-4000-8000-000000000001';
 const password = 'test-password-not-for-production';
+const testPasswordHash = await hashPassword(password);
 const config: AuthConfig = {
   origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
-  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:')
-    .update(password)
-    .digest(),
   secure: true,
 };
 export class MemoryStore implements BackendStore {
+  staff = new Map<string, StoredAccount>([
+    [
+      admin,
+      {
+        id: admin,
+        username: 'admin',
+        role: 'admin',
+        mustChangePassword: false,
+        credentialVersion: 1,
+        passwordHash: testPasswordHash,
+      },
+    ],
+  ]);
+  async ensureDefaultAdmin(passwordHash: string) {
+    if (![...this.staff.values()].some((account) => account.role === 'admin'))
+      this.staff.set(admin, {
+        id: admin,
+        username: 'admin',
+        role: 'admin',
+        passwordHash,
+        credentialVersion: 1,
+        mustChangePassword: true,
+      });
+  }
+  async accountByUsername(username: string) {
+    return (
+      [...this.staff.values()].find(
+        (account) => account.username.toLowerCase() === username.toLowerCase(),
+      ) ?? null
+    );
+  }
+  async accountById(id: string) {
+    return this.staff.get(id) ?? null;
+  }
+  async accounts(): Promise<StaffAccount[]> {
+    return [...this.staff.values()].map(
+      ({ id, username, role, mustChangePassword }) => ({
+        id,
+        username,
+        role,
+        mustChangePassword,
+      }),
+    );
+  }
+  async createModerator(username: string, passwordHash: string) {
+    if (await this.accountByUsername(username))
+      throw new ApiError(409, 'That username is already in use.');
+    const account: StoredAccount = {
+      id: randomUUID(),
+      username,
+      role: 'moderator',
+      passwordHash,
+      credentialVersion: 1,
+      mustChangePassword: true,
+    };
+    this.staff.set(account.id, account);
+    const { id, role, mustChangePassword } = account;
+    return { id, username, role, mustChangePassword };
+  }
+  async updateAccount(
+    id: string,
+    expectedVersion: number,
+    username: string,
+    passwordHash?: string,
+  ) {
+    const account = this.staff.get(id);
+    if (!account || account.credentialVersion !== expectedVersion)
+      throw new ApiError(
+        409,
+        'Your account changed. Sign in again before retrying.',
+      );
+    const existing = await this.accountByUsername(username);
+    if (existing && existing.id !== id)
+      throw new ApiError(409, 'That username is already in use.');
+    const next = {
+      ...account,
+      username,
+      passwordHash: passwordHash ?? account.passwordHash,
+      mustChangePassword: passwordHash ? false : account.mustChangePassword,
+      credentialVersion: expectedVersion + 1,
+    };
+    this.staff.set(id, next);
+    for (const [key, session] of this.sessions)
+      if (session.id === id) this.sessions.delete(key);
+    return next;
+  }
   state = new Map<string, Date>();
   sessions = new Map<string, StoredSession>();
   attempts = 0;
@@ -100,7 +187,7 @@ async function login(app: FastifyInstance) {
     method: 'POST',
     url: '/api/v1/auth/login',
     headers: { origin: config.origin },
-    payload: { password },
+    payload: { username: 'admin', password },
   });
   assert.equal(response.statusCode, 200);
   const cookie = String(response.headers['set-cookie']).split(';')[0]!;
@@ -189,7 +276,7 @@ test('password login rejects missing origin, bad credentials and anonymous admin
         await app.inject({
           method: 'POST',
           url: '/api/v1/auth/login',
-          payload: { password },
+          payload: { username: 'admin', password },
         })
       ).statusCode,
       403,
@@ -200,7 +287,7 @@ test('password login rejects missing origin, bad credentials and anonymous admin
           method: 'POST',
           url: '/api/v1/auth/login',
           headers: { origin: config.origin },
-          payload: { password: 'wrong' },
+          payload: { username: 'admin', password: 'wrong' },
         })
       ).statusCode,
       401,
@@ -342,7 +429,7 @@ test('logout revokes the password session and expired or changed identities fail
     await app.close();
   }
 });
-test('login rate limits and config fail closed without a valid admin password', async () => {
+test('login rate limits and config fail closed without valid session configuration', async () => {
   const { app, store } = fixture();
   try {
     store.attempts = 20;
@@ -350,7 +437,7 @@ test('login rate limits and config fail closed without a valid admin password', 
       method: 'POST',
       url: '/api/v1/auth/login',
       headers: { origin: config.origin },
-      payload: { password },
+      payload: { username: 'admin', password },
     });
     assert.equal(blocked.statusCode, 429);
     assert.equal(blocked.headers['retry-after'], '60');
@@ -361,7 +448,6 @@ test('login rate limits and config fail closed without a valid admin password', 
     NODE_ENV: 'production',
     AUTH_ENABLED: 'true',
     PUBLIC_ORIGIN: config.origin,
-    ADMIN_PASSWORD: password,
     SESSION_SECRET: config.secret,
   };
   assert.equal(readConfig(env).auth?.secure, true);
@@ -369,8 +455,6 @@ test('login rate limits and config fail closed without a valid admin password', 
   for (const patch of [
     { PUBLIC_ORIGIN: 'http://clog.example.com' },
     { SESSION_SECRET: 'weak' },
-    { ADMIN_PASSWORD: 'short' },
-    { ADMIN_PASSWORD: '' },
     { AUTH_ENABLED: 'maybe' },
     { TRUSTED_PROXY_CIDRS: 'true' },
   ])
@@ -409,7 +493,7 @@ test('proxy login buckets distinguish clients and ignore spoofed forwarding pref
         url: '/api/v1/auth/login',
         remoteAddress,
         headers: { origin: config.origin, 'x-forwarded-for': ip },
-        payload: { password: supplied },
+        payload: { username: 'admin', password: supplied },
       });
     try {
       for (let i = 0; i < 20; i++)
@@ -432,5 +516,334 @@ test('proxy login buckets distinguish clients and ignore spoofed forwarding pref
     } finally {
       await app.close();
     }
+  }
+});
+
+test('default admin setup, moderator permissions and self-service credentials are enforced server-side', async () => {
+  const store = new MemoryStore();
+  store.staff.clear();
+  const actors: string[] = [];
+  const review = {
+    async queue() {
+      return { revision: 'queue-1', submissions: [], nextCursor: null };
+    },
+    async adminCatalog() {
+      return { items: [], pages: [] };
+    },
+    async createManual(_fields: unknown, actor: string) {
+      actors.push(actor);
+      return { id: 'created' };
+    },
+    async mutate(
+      _id: string,
+      _version: number,
+      _command: unknown,
+      actor: string,
+    ) {
+      actors.push(actor);
+      return { id: 'reviewed' };
+    },
+  } as unknown as ReviewStore;
+  const xp = {
+    async history() {
+      return { imports: [] };
+    },
+  } as unknown as XpStore;
+  const app = createApp(undefined, undefined, {
+    store,
+    auth: config,
+    review,
+    xp,
+    logger: false,
+  });
+  const credentials = async (username: string, supplied: string) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: config.origin },
+      payload: { username, password: supplied },
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    return {
+      response,
+      headers: {
+        cookie: String(response.headers['set-cookie']).split(';')[0]!,
+        origin: config.origin,
+        'x-csrf-token': response.json().csrfToken as string,
+      },
+    };
+  };
+  const change = (
+    headers: Record<string, string>,
+    payload: Record<string, unknown>,
+  ) =>
+    app.inject({
+      method: 'PATCH',
+      url: '/api/v1/auth/account',
+      headers,
+      payload,
+    });
+  try {
+    const first = await credentials('admin', 'admin');
+    assert.equal(first.response.json().mustChangePassword, true);
+    assert.deepEqual(await store.accounts(), [
+      { id: admin, username: 'admin', role: 'admin', mustChangePassword: true },
+    ]);
+    for (const url of [
+      '/api/v1/admin/settings',
+      '/api/v1/admin/accounts',
+      '/api/v1/admin/submissions',
+      '/api/v1/admin/xp/imports',
+    ])
+      assert.equal(
+        (await app.inject({ url, headers: first.headers })).statusCode,
+        403,
+        url,
+      );
+    assert.equal(
+      (
+        await change(first.headers, {
+          currentPassword: 'admin',
+          username: 'owner',
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(
+      (
+        await change(first.headers, {
+          currentPassword: 'wrong',
+          newPassword: password,
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(
+      (
+        await change(
+          { cookie: first.headers.cookie },
+          { currentPassword: 'admin', newPassword: password },
+        )
+      ).statusCode,
+      403,
+    );
+    assert.equal(
+      (
+        await change(first.headers, {
+          currentPassword: 'admin',
+          newPassword: 'short',
+        })
+      ).statusCode,
+      400,
+    );
+    const saved = await change(first.headers, {
+      currentPassword: 'admin',
+      newPassword: password,
+      username: 'owner',
+    });
+    assert.equal(saved.statusCode, 200, saved.body);
+    assert.equal(saved.json().mustChangePassword, false);
+    assert.equal(saved.json().username, 'owner');
+    const owner = {
+      cookie: String(saved.headers['set-cookie']).split(';')[0]!,
+      origin: config.origin,
+      'x-csrf-token': saved.json().csrfToken as string,
+    };
+    assert.notEqual(owner.cookie, first.headers.cookie);
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/auth/session',
+          headers: first.headers,
+        })
+      ).json().authenticated,
+      false,
+    );
+    const create = (payload: Record<string, unknown>, headers = owner) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/accounts',
+        headers,
+        payload,
+      });
+    assert.equal(
+      (await create({ username: 'moderator', password, role: 'admin' }))
+        .statusCode,
+      400,
+    );
+    const created = await create({ username: 'moderator', password });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(created.json().role, 'moderator');
+    assert.equal(created.json().mustChangePassword, true);
+    assert.equal(created.body.includes('passwordHash'), false);
+    assert.equal(created.body.includes(password), false);
+    assert.equal(
+      (await create({ username: 'MODERATOR', password })).statusCode,
+      409,
+    );
+    const listed = await app.inject({
+      url: '/api/v1/admin/accounts',
+      headers: owner,
+    });
+    assert.equal(listed.json().accounts.length, 2);
+    assert.equal(listed.body.includes('passwordHash'), false);
+    const mod = await credentials('MODERATOR', password);
+    assert.equal(mod.response.json().role, 'moderator');
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/admin/submissions',
+          headers: mod.headers,
+        })
+      ).statusCode,
+      403,
+    );
+    assert.equal(
+      (
+        await change(mod.headers, {
+          currentPassword: password,
+          newPassword: password,
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(
+      (
+        await change(mod.headers, {
+          currentPassword: password,
+          newPassword: 'new-moderator-password',
+          username: 'OWNER',
+        })
+      ).statusCode,
+      409,
+    );
+    assert.equal(
+      (await store.accountByUsername('moderator'))?.mustChangePassword,
+      true,
+    );
+    const modSaved = await change(mod.headers, {
+      currentPassword: password,
+      newPassword: 'new-moderator-password',
+    });
+    assert.equal(modSaved.statusCode, 200, modSaved.body);
+    const moderator = {
+      cookie: String(modSaved.headers['set-cookie']).split(';')[0]!,
+      origin: config.origin,
+      'x-csrf-token': modSaved.json().csrfToken as string,
+    };
+    for (const url of [
+      '/api/v1/admin/submissions',
+      '/api/v1/admin/catalog',
+      '/api/v1/admin/xp/imports',
+    ])
+      assert.equal(
+        (await app.inject({ url, headers: moderator })).statusCode,
+        200,
+        url,
+      );
+    for (const url of ['/api/v1/admin/settings', '/api/v1/admin/accounts'])
+      assert.equal(
+        (await app.inject({ url, headers: moderator })).statusCode,
+        403,
+        url,
+      );
+    assert.equal(
+      (await create({ username: 'another', password }, moderator)).statusCode,
+      403,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/v1/admin/settings',
+          headers: moderator,
+          payload: { hardcoreEnabled: true, expectedRevision: 'settings-1' },
+        })
+      ).statusCode,
+      403,
+    );
+    const submission = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/submissions',
+      headers: { ...moderator, 'idempotency-key': randomUUID() },
+      payload: {
+        itemId: 42,
+        collectorName: 'Collector',
+        collectedOn: '2026-10-01',
+        hardcore: false,
+        approve: false,
+      },
+    });
+    assert.equal(submission.statusCode, 201, submission.body);
+    const decision = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/submissions/00000000-0000-4000-8000-000000000099/approve',
+      headers: moderator,
+      payload: { expectedVersion: 1 },
+    });
+    assert.equal(decision.statusCode, 200, decision.body);
+    assert.deepEqual(actors, [created.json().id, created.json().id]);
+    // A username-only edit also rotates sessions and preserves the password/role.
+    const second = await credentials('moderator', 'new-moderator-password');
+    const renamed = await change(moderator, {
+      currentPassword: 'new-moderator-password',
+      username: 'reviewer',
+    });
+    assert.equal(renamed.statusCode, 200, renamed.body);
+    assert.equal(renamed.json().role, 'moderator');
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/auth/session',
+          headers: second.headers,
+        })
+      ).json().authenticated,
+      false,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          headers: { origin: config.origin },
+          payload: {
+            username: 'moderator',
+            password: 'new-moderator-password',
+          },
+        })
+      ).statusCode,
+      401,
+    );
+    await credentials('reviewer', 'new-moderator-password');
+    // Late session creation from an older credential snapshot fails closed.
+    const staleAccount = await store.accountByUsername('reviewer');
+    await store.updateAccount(
+      staleAccount!.id,
+      staleAccount!.credentialVersion,
+      'reviewer',
+      await hashPassword('yet-another-password'),
+    );
+    for (const session of store.sessions.values())
+      if (session.id === staleAccount!.id)
+        assert.fail('Credential changes must revoke all sessions.');
+    const restarted = createApp(undefined, undefined, {
+      store,
+      auth: config,
+      logger: false,
+    });
+    await restarted.ready();
+    assert.equal(
+      (await store.accounts()).filter((account) => account.role === 'admin')
+        .length,
+      1,
+    );
+    assert.equal(await store.accountByUsername('admin'), null);
+    assert.equal(
+      (await store.accountByUsername('owner'))?.mustChangePassword,
+      false,
+    );
+    await restarted.close();
+  } finally {
+    await app.close();
   }
 });

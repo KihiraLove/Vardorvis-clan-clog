@@ -253,7 +253,7 @@ test('manual create and password sign-in use private routes, CSRF and validated 
       { status: 201, headers: { 'Content-Type': 'application/json' } },
     );
   });
-  await client.login('test-only-password', signal());
+  await client.login('admin', 'test-only-password', signal());
   const created = await client.addManual(
     {
       itemId: row.itemId!,
@@ -270,6 +270,7 @@ test('manual create and password sign-in use private routes, CSRF and validated 
   assert.equal(created.source, 'manual');
   assert.equal(requests[0]!.url, '/api/v1/auth/login');
   assert.deepEqual(JSON.parse(requests[0]!.options!.body as string), {
+    username: 'admin',
     password: 'test-only-password',
   });
   assert.equal(
