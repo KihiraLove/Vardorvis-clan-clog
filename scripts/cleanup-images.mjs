@@ -63,7 +63,12 @@ async function main() {
     if (!packageResponse.ok)
       throw new Error(`${name}: HTTP ${packageResponse.status}`);
     const pkg = await packageResponse.json();
-    if (pkg.repository?.full_name.toLowerCase() !== repository.toLowerCase())
+    // GHCR may omit repository metadata even for linked private packages.
+    // The owner + exact package allowlist above remains the deletion boundary.
+    if (
+      pkg.repository?.full_name &&
+      pkg.repository.full_name.toLowerCase() !== repository.toLowerCase()
+    )
       throw new Error(`${name}: package is not linked to ${repository}`);
     const versions = [];
     for (let page = 1; ; page++) {
