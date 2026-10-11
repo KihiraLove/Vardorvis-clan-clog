@@ -91,7 +91,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await page.goto('/admin?preview=1');
   await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
   await page.getByRole('button', { name: 'Save site settings' }).click();
-  await expect(page.getByText('Hardcore visibility saved.')).toBeVisible();
+  await expect(page.getByText('Site settings saved.')).toBeVisible();
   await page
     .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();
@@ -137,7 +137,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await page.goBack();
   await page.getByLabel('Enable hardcore worlds', { exact: true }).uncheck();
   await page.getByRole('button', { name: 'Save site settings' }).click();
-  await expect(page.getByText('Hardcore visibility saved.')).toBeVisible();
+  await expect(page.getByText('Site settings saved.')).toBeVisible();
   await page
     .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
     .click();

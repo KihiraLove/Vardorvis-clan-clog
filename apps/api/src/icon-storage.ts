@@ -70,8 +70,11 @@ export class IconStorage {
     );
     await this.remove(probe.id);
   }
+  protected decode(input: Buffer, mime: string) {
+    return decodeIcon(input, mime);
+  }
   async save(input: Buffer, mime: string): Promise<IconRecord> {
-    const decoded = await decodeIcon(input, mime);
+    const decoded = await this.decode(input, mime);
     const id = randomUUID(),
       destination = this.path(id),
       temporary = destination + '.tmp';
@@ -96,7 +99,7 @@ export class IconStorage {
     } catch {
       await unlink(temporary).catch(() => {});
       await unlink(destination).catch(() => {});
-      throw new ApiError(503, 'Icon storage is unavailable. Try again later.');
+      throw new ApiError(503, 'Image storage is unavailable. Try again later.');
     }
     return {
       id,

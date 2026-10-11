@@ -13,6 +13,7 @@ import type { ReviewStore } from './review-types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
+import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -35,6 +36,7 @@ export function authRoutes(
   xp?: XpStore,
   review?: ReviewStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
+  clanKeys?: ClanKeyStore,
 ) {
   let dummyHash: string;
   app.addHook('onReady', async () => {
@@ -354,7 +356,13 @@ export function authRoutes(
     await requireOwner(request);
     return store.settings();
   });
-  app.put<{ Body: { hardcoreEnabled: boolean; expectedRevision: string } }>(
+  app.put<{
+    Body: {
+      hardcoreEnabled: boolean;
+      expectedRevision: string;
+      clanName?: string;
+    };
+  }>(
     '/api/v1/admin/settings',
     {
       schema: {
@@ -364,6 +372,12 @@ export function authRoutes(
           required: ['hardcoreEnabled', 'expectedRevision'],
           properties: {
             hardcoreEnabled: { type: 'boolean' },
+            clanName: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 80,
+              pattern: '\\S',
+            },
             expectedRevision: {
               type: 'string',
               pattern: '^settings-[1-9][0-9]*$',
@@ -383,6 +397,7 @@ export function authRoutes(
         request.body.hardcoreEnabled,
         request.body.expectedRevision,
         session.id,
+        request.body.clanName,
       );
       if (!saved)
         throw new ApiError(
@@ -390,6 +405,43 @@ export function authRoutes(
           'Settings changed. Reload before saving again.',
         );
       return saved;
+    },
+  );
+  app.get('/api/v1/admin/clan-api-key', async (request) => {
+    await requireOwner(request);
+    if (!clanKeys)
+      throw new ApiError(503, 'Clan API key storage is unavailable.');
+    return clanKeys.settings();
+  });
+  app.put<{ Body: ClanKeyUpdate }>(
+    '/api/v1/admin/clan-api-key',
+    {
+      onRequest: async (request) => {
+        await requireOwner(request, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['expectedRevision'],
+          properties: {
+            expectedRevision: {
+              type: 'string',
+              pattern: '^clan-key-[1-9][0-9]*$',
+              maxLength: 30,
+            },
+            enabled: { type: 'boolean' },
+            key: { type: 'string', minLength: 1, maxLength: 256 },
+            generate: { const: true },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await requireOwner(request, true);
+      if (!clanKeys)
+        throw new ApiError(503, 'Clan API key storage is unavailable.');
+      return clanKeys.update(request.body, actor.id);
     },
   );
   return requireAdmin;

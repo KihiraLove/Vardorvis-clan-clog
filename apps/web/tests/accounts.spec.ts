@@ -88,9 +88,21 @@ async function mockAccounts(
       }
       return route.fulfill({ json: { accounts: state.accounts } });
     }
+    if (path === '/api/v1/admin/clan-api-key')
+      return route.fulfill({
+        json: {
+          revision: 'clan-key-1',
+          enabled: true,
+          key: 'mock-test-clan-key',
+        },
+      });
     if (path === '/api/v1/admin/settings')
       return route.fulfill({
-        json: { revision: 'settings-1', hardcoreEnabled: false },
+        json: {
+          revision: 'settings-1',
+          clanName: 'Vardorvis',
+          hardcoreEnabled: false,
+        },
       });
     if (path === '/api/v1/admin/catalog')
       return route.fulfill({ json: fixture.catalog });

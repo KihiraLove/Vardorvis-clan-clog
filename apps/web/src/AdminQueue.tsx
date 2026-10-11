@@ -212,7 +212,9 @@ export function AdminQueue({
                       <dd>
                         {row.source === 'manual'
                           ? 'Admin entry'
-                          : 'Discord bot'}
+                          : row.source === 'runelite'
+                            ? 'RuneLite'
+                            : 'Discord bot'}
                       </dd>
                     </div>
                     <div>
@@ -227,7 +229,12 @@ export function AdminQueue({
                     </div>
                   </dl>
                   <div className="admin-actions">
-                    <ProofLink url={row.proofUrl} source={row.source} />
+                    <ProofLink
+                      url={row.proofUrl}
+                      source={row.source}
+                      screenshot={row.screenshotPath}
+                      previewScreenshot={row.previewScreenshot}
+                    />
                     <button
                       type="button"
                       className="site-button"

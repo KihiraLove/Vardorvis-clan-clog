@@ -45,10 +45,20 @@ test(
           'utf8',
         ),
       );
+      await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/004_runelite_submissions.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      );
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
         revision: 'settings-1',
+        clanName: 'Vardorvis',
         hardcoreEnabled: false,
       });
       await pool.query(

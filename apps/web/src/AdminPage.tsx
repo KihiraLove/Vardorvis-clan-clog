@@ -4,6 +4,7 @@ import { AdminRequestError } from './admin-api.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import type { SiteSettings } from './site-settings.ts';
 import { AdminSettings } from './AdminSettings.tsx';
 import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
@@ -51,8 +52,12 @@ export function AdminPage({
   onMode,
   onNavigate,
   children,
+  clanName,
+  onSettingsSaved,
 }: AdminRouteProps & {
   client: AdminClient;
+  clanName: string;
+  onSettingsSaved: (settings: SiteSettings) => void;
   onMode: (next: boolean) => void;
   children?: React.ReactNode;
 }) {
@@ -144,7 +149,7 @@ export function AdminPage({
       )}
       <div className="admin-heading">
         <div>
-          <p className="xp-eyebrow">Vardorvis clan</p>
+          <p className="xp-eyebrow">{clanName} clan</p>
           <h1>Clan administration</h1>
         </div>
         {session && (
@@ -180,6 +185,7 @@ export function AdminPage({
           client={client}
           session={session}
           onAccessLost={accessLost}
+          onSaved={onSettingsSaved}
         />
       )}
       {action.error && (

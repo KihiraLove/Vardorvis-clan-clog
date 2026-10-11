@@ -40,6 +40,7 @@ services:
       API_BASE_URL: http://127.0.0.1:3000
       BOT_ENABLED: ${BOT_ENABLED:-false}
       ICON_STORAGE_PATH: /data/catalog-icons
+      PROOF_STORAGE_PATH: /data/submission-images
       NODE_ENV: production
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
@@ -52,6 +53,7 @@ services:
       DISCORD_TEST_GUILD_ID: ${DISCORD_TEST_GUILD_ID:-}
     volumes:
       - catalog-icons:/data/catalog-icons
+      - submission-images:/data/submission-images
     ports:
       - '127.0.0.1:${WEB_PORT:-8088}:8080'
     depends_on:
@@ -61,3 +63,4 @@ services:
 volumes:
   postgres-data:
   catalog-icons:
+  submission-images:

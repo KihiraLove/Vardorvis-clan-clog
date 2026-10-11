@@ -381,27 +381,42 @@ export class PgStore implements BackendStore {
   }
   async settings(): Promise<Settings> {
     const row = (
-      await this.pool.query<{ hardcore_enabled: boolean; version: number }>(
-        'SELECT hardcore_enabled, version FROM site_settings WHERE singleton=true',
+      await this.pool.query<{
+        hardcore_enabled: boolean;
+        version: number;
+        clan_name: string;
+      }>(
+        'SELECT hardcore_enabled, version, clan_name FROM site_settings WHERE singleton=true',
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Settings unavailable.');
     return {
       revision: 'settings-' + row.version,
       hardcoreEnabled: row.hardcore_enabled,
+      clanName: row.clan_name,
     };
   }
   async saveSettings(
     enabled: boolean,
     revision: string,
     actor: string,
+    clanName?: string,
   ): Promise<Settings | null> {
+    if (
+      clanName !== undefined &&
+      (!clanName.trim() || clanName.trim().length > 80)
+    )
+      throw new ApiError(422, 'Clan name must contain 1–80 characters.');
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       const old = (
-        await client.query<{ hardcore_enabled: boolean; version: number }>(
-          'SELECT hardcore_enabled, version FROM site_settings WHERE singleton=true FOR UPDATE',
+        await client.query<{
+          hardcore_enabled: boolean;
+          version: number;
+          clan_name: string;
+        }>(
+          'SELECT hardcore_enabled, version, clan_name FROM site_settings WHERE singleton=true FOR UPDATE',
         )
       ).rows[0];
       if (!old || 'settings-' + old.version !== revision) {
@@ -409,16 +424,21 @@ export class PgStore implements BackendStore {
         return null;
       }
       const version = old.version + 1;
+      const name = clanName?.trim() ?? old.clan_name;
       await client.query(
-        'UPDATE site_settings SET hardcore_enabled=$1, version=$2 WHERE singleton=true',
-        [enabled, version],
+        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3 WHERE singleton=true',
+        [enabled, version, name],
       );
       await client.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version) VALUES($1,$2,$3,$4)',
-        [actor, old.hardcore_enabled, enabled, version],
+        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name) VALUES($1,$2,$3,$4,$5,$6)',
+        [actor, old.hardcore_enabled, enabled, version, old.clan_name, name],
       );
       await client.query('COMMIT');
-      return { revision: 'settings-' + version, hardcoreEnabled: enabled };
+      return {
+        revision: 'settings-' + version,
+        hardcoreEnabled: enabled,
+        clanName: name,
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

@@ -1865,3 +1865,24 @@ main {
 .admin-account-list {
   margin-top: 1.5rem;
 }
+
+.submission-proof img {
+  display: block;
+  max-width: 100%;
+  width: 18rem;
+  max-height: 12rem;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
+}
+
+.clan-api-key-settings {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--admin-border, #605849);
+  padding-top: 1rem;
+}
+.clan-api-key-settings form {
+  margin-block: 0.75rem;
+}
+.clan-api-key-value {
+  font-family: monospace;
+}

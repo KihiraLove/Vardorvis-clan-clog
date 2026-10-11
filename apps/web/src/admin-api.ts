@@ -1,4 +1,5 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
+import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
 import { parseSettings } from './site-settings.ts';
 import { LiveXpClient } from './xp-api.ts';
 import {
@@ -17,6 +18,7 @@ import {
   parseQueue,
   parseSubmission,
   parseStaffAccount,
+  safeScreenshotPath,
   validateIconFile,
   type AdminCatalog,
   type AdminClient,
@@ -205,22 +207,58 @@ export class LiveAdminClient implements AdminClient {
     key: string,
     csrf: string,
     signal: AbortSignal,
+    screenshot?: File,
   ) {
+    const upload = screenshot ? new FormData() : undefined;
+    if (upload && screenshot) {
+      upload.append('submission', JSON.stringify(fields));
+      upload.append('screenshot', screenshot);
+    }
     const response = await this.response(
-      '/api/v1/admin/submissions',
+      upload ? '/api/v1/admin/submissions/upload' : '/api/v1/admin/submissions',
       signal,
-      this.write(csrf, fields, 'POST', key),
+      upload
+        ? {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrf, 'Idempotency-Key': key },
+            body: upload,
+          }
+        : this.write(csrf, fields, 'POST', key),
     );
     if (response.status !== 201)
       throw new Error('Unexpected manual submission status.');
     const result = parseSubmission(await response.json());
     if (
       result.source !== 'manual' ||
+      (screenshot && !safeScreenshotPath(result.screenshotPath)) ||
       result.itemId !== fields.itemId ||
       result.hardcore !== fields.hardcore ||
       result.status !== (fields.approve ? 'approved' : 'pending')
     )
       throw new Error('Unexpected manual submission receipt.');
+    return result;
+  }
+  async clanApiKey(signal: AbortSignal) {
+    return parseClanKey(await this.json('/api/v1/admin/clan-api-key', signal));
+  }
+  async saveClanApiKey(
+    fields: ClanKeyUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseClanKey(
+      await this.json(
+        '/api/v1/admin/clan-api-key',
+        signal,
+        this.write(csrf, fields, 'PUT'),
+      ),
+    );
+    if (
+      result.revision === fields.expectedRevision ||
+      (fields.enabled !== undefined && result.enabled !== fields.enabled) ||
+      (fields.key !== undefined && result.key !== fields.key)
+    )
+      throw new Error('Unexpected API key receipt.');
     return result;
   }
   async settings(signal: AbortSignal) {
@@ -231,16 +269,26 @@ export class LiveAdminClient implements AdminClient {
     expectedRevision: string,
     csrf: string,
     signal: AbortSignal,
+    clanName?: string,
   ) {
     const result = parseSettings(
       await this.json(
         '/api/v1/admin/settings',
         signal,
-        this.write(csrf, { hardcoreEnabled, expectedRevision }, 'PUT'),
+        this.write(
+          csrf,
+          {
+            hardcoreEnabled,
+            expectedRevision,
+            ...(clanName === undefined ? {} : { clanName }),
+          },
+          'PUT',
+        ),
       ),
     );
     if (
       result.hardcoreEnabled !== hardcoreEnabled ||
+      (clanName !== undefined && result.clanName !== clanName.trim()) ||
       result.revision === expectedRevision
     )
       throw new Error('Unexpected settings receipt.');

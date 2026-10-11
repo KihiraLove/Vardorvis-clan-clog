@@ -29,7 +29,7 @@ export function dateSourceLabel(source: Submission['dateSource']): string {
 export interface Submission {
   id: string;
   version: number;
-  source: 'discord' | 'manual';
+  source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
   collectorName: string;
@@ -37,6 +37,9 @@ export interface Submission {
   dateSource: 'submission' | 'claim' | 'admin';
   submittedAt: string;
   proofUrl: string;
+  screenshotPath?: string | null;
+  /** Locally generated PNG in the in-memory preview only; never read from API payloads. */
+  previewScreenshot?: string;
   hardcore: boolean;
   status: SubmissionStatus;
 }
@@ -135,6 +138,14 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
   ): Promise<AdminSession>;
+  clanApiKey(
+    signal: AbortSignal,
+  ): Promise<import('./clan-api-key.ts').ClanKeySettings>;
+  saveClanApiKey(
+    fields: import('./clan-api-key.ts').ClanKeyUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('./clan-api-key.ts').ClanKeySettings>;
   settings(
     signal: AbortSignal,
   ): Promise<import('./site-settings.ts').SiteSettings>;
@@ -143,6 +154,7 @@ export interface AdminClient {
     revision: string,
     csrf: string,
     signal: AbortSignal,
+    clanName?: string,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
   login(username: string, password: string, signal: AbortSignal): Promise<void>;
@@ -151,6 +163,7 @@ export interface AdminClient {
     key: string,
     csrf: string,
     signal: AbortSignal,
+    screenshot?: File,
   ): Promise<Submission>;
   logout(csrf: string, signal: AbortSignal): Promise<void>;
   catalog(signal: AbortSignal): Promise<AdminCatalog>;
@@ -203,6 +216,18 @@ function choice<T extends string>(value: unknown, allowed: readonly T[]): T {
   if (!allowed.includes(value as T)) throw new Error('Invalid admin response.');
   return value as T;
 }
+export function safeScreenshotPath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^\/api\/v1\/admin\/submission-images\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.png$/u.test(
+      value,
+    )
+  );
+}
+function parseScreenshotPath(value: unknown) {
+  if (value === null || safeScreenshotPath(value)) return value;
+  throw new Error('Invalid screenshot path.');
+}
 export function parseSubmission(value: unknown): Submission {
   const row = object(value);
   if (
@@ -217,7 +242,7 @@ export function parseSubmission(value: unknown): Submission {
     source:
       row.source === undefined
         ? 'discord'
-        : choice(row.source, ['discord', 'manual']),
+        : choice(row.source, ['discord', 'manual', 'runelite']),
     itemId: row.itemId === null ? null : identity(row.itemId),
     rawItemText: row.rawItemText,
     collectorName: text(row.collectorName),
@@ -226,6 +251,9 @@ export function parseSubmission(value: unknown): Submission {
     submittedAt: timestamp(row.submittedAt),
     // Manual submissions may have no proof; bot claims must provide evidence.
     proofUrl: row.proofUrl,
+    ...(row.screenshotPath === undefined
+      ? {}
+      : { screenshotPath: parseScreenshotPath(row.screenshotPath) }),
     hardcore: row.hardcore,
     status: choice(row.status, ['pending', 'approved', 'rejected', 'revoked']),
   };

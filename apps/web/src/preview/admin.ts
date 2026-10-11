@@ -1,4 +1,13 @@
 /** In-memory admin simulator shared with the public preview; all state is lost on reload. */
+import {
+  validClanKey,
+  type ClanKeySettings,
+  type ClanKeyUpdate,
+} from '../clan-api-key.ts';
+const generatePreviewKey = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 import { AdminRequestError } from '../admin-api.ts';
 import {
   safeProof,
@@ -27,9 +36,18 @@ import {
 } from './scenarios.ts';
 
 export class PreviewAdminClient implements AdminClient {
+  private keySettings: ClanKeySettings = {
+    revision: 'clan-key-1',
+    enabled: true,
+    key: generatePreviewKey(),
+  };
   private revision = 0;
   private queueRevision = 0;
-  private setting = { revision: 'settings-0', hardcoreEnabled: false };
+  private setting = {
+    revision: 'settings-0',
+    hardcoreEnabled: false,
+    clanName: 'Vardorvis',
+  };
   private settingsVersion = 0;
   private signedIn = true;
   private username = 'preview-admin';
@@ -162,9 +180,23 @@ export class PreviewAdminClient implements AdminClient {
     key: string,
     _csrf: string,
     signal: AbortSignal,
+    screenshot?: File,
   ) {
     this.access(signal);
-    const payload = JSON.stringify(fields);
+    const bytes = screenshot
+      ? new Uint8Array(await screenshot.arrayBuffer())
+      : undefined;
+    if (
+      screenshot &&
+      (screenshot.type !== 'image/png' ||
+        screenshot.size > 10 * 1024 * 1024 ||
+        bytes?.slice(0, 8).join(',') !== '137,80,78,71,13,10,26,10')
+    )
+      throw new AdminRequestError(
+        400,
+        'Choose a valid PNG screenshot up to 10 MiB.',
+      );
+    const payload = JSON.stringify([fields, bytes ? Array.from(bytes) : null]);
     const prior = this.manualReceipts.get(key);
     if (prior) {
       if (prior.payload !== payload) throw new AdminRequestError(409);
@@ -175,7 +207,31 @@ export class PreviewAdminClient implements AdminClient {
     if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
     if (fields.proofUrl && !safeProof(fields.proofUrl))
       throw new AdminRequestError(422);
+    let previewScreenshot: string | undefined;
+    if (screenshot) {
+      const bitmap = await createImageBitmap(screenshot);
+      try {
+        if (
+          bitmap.width > 8192 ||
+          bitmap.height > 8192 ||
+          bitmap.width * bitmap.height > 32 * 1024 * 1024
+        )
+          throw new AdminRequestError(
+            400,
+            'Screenshot dimensions are too large.',
+          );
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+        previewScreenshot = canvas.toDataURL('image/png');
+      } finally {
+        bitmap.close();
+      }
+    }
+    this.access(signal);
     const row: Submission = {
+      ...(previewScreenshot ? { previewScreenshot } : {}),
       id: crypto.randomUUID(),
       version: 1,
       source: 'manual',
@@ -253,6 +309,36 @@ export class PreviewAdminClient implements AdminClient {
   publicSettings() {
     return { ...this.setting };
   }
+  async clanApiKey(signal: AbortSignal) {
+    this.access(signal);
+    return { ...this.keySettings };
+  }
+  async saveClanApiKey(
+    fields: ClanKeyUpdate,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (fields.expectedRevision !== this.keySettings.revision)
+      throw new AdminRequestError(409);
+    if (
+      (fields.key !== undefined && !validClanKey(fields.key)) ||
+      (fields.key !== undefined && fields.generate) ||
+      (fields.enabled === undefined &&
+        fields.key === undefined &&
+        fields.generate !== true)
+    )
+      throw new AdminRequestError(422);
+    this.keySettings = {
+      revision:
+        'clan-key-' + (Number(this.keySettings.revision.split('-').at(-1)) + 1),
+      enabled: fields.enabled ?? this.keySettings.enabled,
+      key: fields.generate
+        ? generatePreviewKey()
+        : (fields.key ?? this.keySettings.key),
+    };
+    return { ...this.keySettings };
+  }
   async settings(signal: AbortSignal) {
     this.access(signal);
     return this.publicSettings();
@@ -262,12 +348,14 @@ export class PreviewAdminClient implements AdminClient {
     expectedRevision: string,
     _csrf: string,
     signal: AbortSignal,
+    clanName?: string,
   ) {
     this.access(signal);
     if (expectedRevision !== this.setting.revision)
       throw new AdminRequestError(409);
     this.setting = {
       hardcoreEnabled,
+      clanName: clanName?.trim() ?? this.setting.clanName,
       revision: 'settings-' + ++this.settingsVersion,
     };
     this.changed(false);

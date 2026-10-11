@@ -2,7 +2,7 @@
 export interface ReviewSubmission {
   id: string;
   version: number;
-  source: 'discord' | 'manual';
+  source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
   collectorName: string;
@@ -10,6 +10,7 @@ export interface ReviewSubmission {
   dateSource: 'submission' | 'claim' | 'admin';
   submittedAt: string;
   proofUrl: string;
+  screenshotPath?: string | null;
   hardcore: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
 }
@@ -50,6 +51,7 @@ export interface ReviewStore {
     actorId: string,
     actorName: string,
     requestKey: string,
+    image?: import('./icon-storage.js').IconRecord,
   ): Promise<ReviewSubmission>;
   queue(
     status: 'pending' | 'reviewed',

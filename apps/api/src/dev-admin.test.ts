@@ -18,7 +18,11 @@ const config = {
 };
 function disposableStore() {
   const sessions = new Map<string, StoredSession>();
-  let settings: Settings = { revision: 'settings-1', hardcoreEnabled: false };
+  let settings: Settings = {
+    revision: 'settings-1',
+    clanName: 'Vardorvis',
+    hardcoreEnabled: false,
+  };
   const audits: string[] = [];
   const store: BackendStore = {
     ensureDefaultAdmin: async () => {},
@@ -46,6 +50,7 @@ function disposableStore() {
       if (revision !== settings.revision) return null;
       settings = {
         revision: 'settings-' + (Number(revision.split('-')[1]) + 1),
+        clanName: 'Vardorvis',
         hardcoreEnabled: enabled,
       };
       audits.push(actor);
