@@ -31,6 +31,24 @@ Docker Compose smoke tests. A **successful push to main** publishes one
 
 `ghcr.io/kihiralove/vardorvis-clan-clog-app:sha-<40-character-commit>`
 
+SHA-only images are development builds. The hourly **Clean up development
+images** workflow deletes versions older than 24 hours (measured from the later
+of creation/update), including old `web`, `api` and `bot` images. GitHub scheduling
+can delay deletion past that threshold. Only images tagged exactly `release` or
+with a `release-` prefix are retained indefinitely. Their untagged architecture
+and provenance manifests are retained too, as are dependencies of recent builds.
+The home deployment workflow adds `release-<full SHA>` before deployment, keeping
+the existing `sha-<full SHA>` pull reference usable for deployment and rollback.
+Promote a development build within 24 hours or rebuild it before deployment.
+Release tags must not be removed while that release is needed.
+
+Cleanup runs immediately when its workflow/script changes on main. Manual runs
+default to a dry run; turn off `dry_run` to apply deletion. The workflow needs
+package admin access through the repository's `GITHUB_TOKEN`; packages must be
+linked to this repository. It stops on manifest/API failures and preserves
+dependencies shared with retained images. Publishing, promotion and cleanup
+share one concurrency group. Do not retag packages externally during cleanup.
+
 Pull requests do **not** deploy or publish images. The home deployment workflow
 uses successful main CI provenance and a manual dispatch. It calls
 `/srv/vardorvis-clan-clog/deploy.sh` on a labelled self-hosted runner, backs up

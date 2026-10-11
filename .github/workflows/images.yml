@@ -10,6 +10,9 @@ permissions:
 jobs:
   build:
     name: image-app
+    concurrency:
+      group: container-package-maintenance
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
