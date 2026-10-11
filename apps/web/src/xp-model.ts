@@ -89,7 +89,30 @@ export interface ImportEntry {
 export interface AdminSession {
   csrfToken: string;
   displayName: string;
+  username: string;
+  role: 'admin' | 'moderator';
+  mustChangePassword: boolean;
   development?: boolean;
+}
+export function parseAdminSession(input: unknown): AdminSession | null {
+  const value = object(input);
+  if (value.authenticated === false) return null;
+  if (
+    value.authenticated !== true ||
+    !['admin', 'moderator'].includes(String(value.role)) ||
+    typeof value.mustChangePassword !== 'boolean'
+  )
+    throw new Error('Invalid admin session.');
+  if (value.development !== undefined && typeof value.development !== 'boolean')
+    throw new Error('Invalid admin session mode.');
+  return {
+    csrfToken: text(value.csrfToken),
+    displayName: text(value.displayName),
+    username: text(value.username),
+    role: value.role as AdminSession['role'],
+    mustChangePassword: value.mustChangePassword,
+    ...(value.development === true ? { development: true } : {}),
+  };
 }
 export interface ApplyResult {
   outcome: 'applied' | 'unchanged';

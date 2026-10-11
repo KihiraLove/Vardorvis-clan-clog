@@ -7,7 +7,10 @@ const origin = process.env.PUBLIC_ORIGIN;
 const login = await fetch('http://127.0.0.1:3000/api/v1/auth/login', {
   method: 'POST',
   headers: { Origin: origin, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }),
+  body: JSON.stringify({
+    username: 'admin',
+    password: 'ci-only-test-admin-password',
+  }),
 });
 assert.equal(login.status, 200, 'CI admin password login must succeed');
 const session = await login.json();

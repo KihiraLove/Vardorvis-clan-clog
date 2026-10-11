@@ -373,7 +373,7 @@ test('anonymous access makes no private reads and forbidden review clears privat
   const state = await mockAdmin(page);
   state.authenticated = false;
   await page.goto('/admin');
-  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   expect(state.privateReads).toBe(0);
   await expect(page.locator('.submission-card')).toHaveCount(0);
   state.authenticated = true;
@@ -396,7 +396,7 @@ test('anonymous access makes no private reads and forbidden review clears privat
   await editor(page)
     .getByRole('button', { name: 'Approve submission', exact: true })
     .click();
-  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(
     page.locator('.submission-editor, .submission-card'),
   ).toHaveCount(0);
@@ -645,7 +645,7 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await page.goto('/admin?preview=1');
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(page.locator('.submission-card')).toHaveCount(0);
   await page.getByRole('link', { name: 'XP imports', exact: true }).click();
   await expect(
@@ -724,11 +724,14 @@ test('live admin shows a password form and submits a password without Discord OA
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto('/admin');
-  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Sign in with Discord' }),
   ).toHaveCount(0);
-  await page.getByLabel('Admin password').fill('browser-test-password');
+  await page.getByLabel('Username', { exact: true }).fill('admin');
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill('browser-test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Submissions' }),
@@ -916,7 +919,10 @@ test('stalled login times out, ignores a late reply, and cancels on navigation',
   });
   await page.goto('/admin');
   await page.clock.install();
-  await page.getByLabel('Admin password').fill('timeout-test-password');
+  await page.getByLabel('Username', { exact: true }).fill('admin');
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill('timeout-test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Signing in…' }),
@@ -929,7 +935,7 @@ test('stalled login times out, ignores a late reply, and cancels on navigation',
     page.getByRole('button', { name: 'Sign in', exact: true }),
   ).toBeEnabled();
   await page.evaluate(() => window.dispatchEvent(new Event('release-login')));
-  await expect(page.getByLabel('Admin password')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-login-calls', '1');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page

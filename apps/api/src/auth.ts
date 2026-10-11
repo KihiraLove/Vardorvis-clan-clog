@@ -1,4 +1,4 @@
-/** Shared-password login, expiring sessions and same-origin CSRF for admin routes. */
+/** Individual staff accounts, expiring sessions, roles and same-origin CSRF. */
 import {
   createHash,
   createHmac,
@@ -13,6 +13,7 @@ import type { ReviewStore } from './review-types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
+import { hashPassword, verifyPassword } from './passwords.js';
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
 const nonce = () => randomBytes(32).toString('base64url');
@@ -35,6 +36,12 @@ export function authRoutes(
   review?: ReviewStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
 ) {
+  let dummyHash: string;
+  app.addHook('onReady', async () => {
+    if (config.devOnly) return;
+    dummyHash = await hashPassword('admin');
+    await store.ensureDefaultAdmin(dummyHash);
+  });
   const sessionName = config.secure ? '__Host-clog-session' : 'clog-session';
   const cookie = (value: string, seconds: number) =>
     `${sessionName}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${config.secure ? '; Secure' : ''}`;
@@ -64,14 +71,34 @@ export function authRoutes(
     if (!token) return null;
     const session = await store.session(key(token));
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
-    if (session.id !== (config.devOnly ? 'local-dev-admin' : 'password-admin'))
+    if (config.devOnly)
+      return session.id === 'local-dev-admin'
+        ? {
+            token,
+            ...session,
+            role: 'admin' as const,
+            mustChangePassword: false,
+          }
+        : null;
+    const account = await store.accountById(session.id);
+    if (!account || account.credentialVersion !== session.accountVersion)
       return null;
-    return { token, ...session };
+    return {
+      token,
+      ...session,
+      displayName: account.username,
+      role: account.role,
+      mustChangePassword: account.mustChangePassword,
+    };
   }
-  async function requireAdmin(request: FastifyRequest, write = false) {
+  async function requireAdmin(
+    request: FastifyRequest,
+    write = false,
+    allowSetup = false,
+  ) {
     const session = await current(request);
     if (!session)
-      throw new ApiError(401, 'Enter the admin password to continue.');
+      throw new ApiError(401, 'Sign in with your staff account to continue.');
     if (write) {
       const supplied = request.headers['x-csrf-token'];
       if (
@@ -85,19 +112,59 @@ export function authRoutes(
           'The request could not be verified. Reload and try again.',
         );
     }
+    if (session.mustChangePassword && !allowSetup)
+      throw new ApiError(403, 'Change your password before using staff tools.');
     return session;
+  }
+  async function requireOwner(request: FastifyRequest, write = false) {
+    const session = await requireAdmin(request, write);
+    if (session.role !== 'admin')
+      throw new ApiError(403, 'Only the administrator can use this tool.');
+    return session;
+  }
+  const receipt = (session: {
+    token: string;
+    displayName: string;
+    role: 'admin' | 'moderator';
+    mustChangePassword: boolean;
+  }) => ({
+    authenticated: true,
+    displayName: session.displayName,
+    username: session.displayName,
+    role: session.role,
+    mustChangePassword: session.mustChangePassword,
+    csrfToken: csrf(session.token),
+    ...(config.devOnly ? { development: true } : {}),
+  });
+  async function signIn(account: {
+    id: string;
+    username: string;
+    credentialVersion: number;
+  }) {
+    const token = nonce();
+    await store.createSession(
+      key(token),
+      {
+        id: account.id,
+        displayName: account.username,
+        accountVersion: account.credentialVersion,
+      },
+      new Date(Date.now() + 8 * 60 * 60 * 1000),
+    );
+    return token;
   }
   if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
   if (review) reviewRoutes(app, review, requireAdmin);
-  app.post<{ Body: { password: string } }>(
+  app.post<{ Body: { username: string; password: string } }>(
     '/api/v1/auth/login',
     {
       schema: {
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['password'],
+          required: ['username', 'password'],
           properties: {
+            username: { type: 'string', minLength: 1, maxLength: 32 },
             password: { type: 'string', minLength: 1, maxLength: 256 },
           },
         },
@@ -122,28 +189,24 @@ export function authRoutes(
           429,
           'Too many sign-in attempts. Try again in a minute.',
         );
-      const digest = createHmac('sha256', Buffer.from(config.secret, 'hex'))
-        .update('admin-password:')
-        .update(request.body.password)
-        .digest();
-      if (
-        !config.passwordDigest ||
-        !timingSafeEqual(digest, config.passwordDigest)
-      )
-        throw new ApiError(401, 'Incorrect admin password.');
+      const account = await store.accountByUsername(request.body.username);
+      const valid = await verifyPassword(
+        request.body.password,
+        account?.passwordHash ?? dummyHash,
+      );
+      if (!account || !valid)
+        throw new ApiError(401, 'Incorrect username or password.');
       const old = cookieValue(request, sessionName);
       if (old) await store.deleteSession(key(old));
-      const token = nonce();
-      await store.createSession(
-        key(token),
-        { id: 'password-admin', displayName: 'Clan admin' },
-        new Date(Date.now() + 8 * 60 * 60 * 1000),
+      const token = await signIn(account);
+      return reply.header('Set-Cookie', cookie(token, 8 * 60 * 60)).send(
+        receipt({
+          token,
+          displayName: account.username,
+          role: account.role,
+          mustChangePassword: account.mustChangePassword,
+        }),
       );
-      return reply.header('Set-Cookie', cookie(token, 8 * 60 * 60)).send({
-        authenticated: true,
-        displayName: 'Clan admin',
-        csrfToken: csrf(token),
-      });
     },
   );
   app.get('/api/v1/auth/session', async (request, reply) => {
@@ -157,24 +220,138 @@ export function authRoutes(
       const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
       await store.createSession(key(token), identity, expiresAt);
       reply.header('Set-Cookie', cookie(token, 8 * 60 * 60));
-      session = { ...identity, token, expiresAt };
+      session = {
+        ...identity,
+        token,
+        expiresAt,
+        role: 'admin',
+        mustChangePassword: false,
+      };
     }
-    return session
-      ? {
-          authenticated: true,
-          displayName: session.displayName,
-          csrfToken: csrf(session.token),
-          ...(config.devOnly ? { development: true } : {}),
-        }
-      : { authenticated: false };
+    return session ? receipt(session) : { authenticated: false };
   });
   app.post('/api/v1/auth/logout', async (request, reply) => {
-    const session = await requireAdmin(request, true);
+    const session = await requireAdmin(request, true, true);
     await store.deleteSession(key(session.token));
     return reply.header('Set-Cookie', cookie('', 0)).code(204).send();
   });
+  const usernameField = {
+    type: 'string',
+    pattern: '^[A-Za-z0-9_.-]{3,32}$',
+    maxLength: 32,
+  };
+  const passwordField = { type: 'string', minLength: 12, maxLength: 256 };
+  app.patch<{
+    Body: { username?: string; currentPassword: string; newPassword?: string };
+  }>(
+    '/api/v1/auth/account',
+    {
+      onRequest: async (request) => {
+        await requireAdmin(request, true, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['currentPassword'],
+          anyOf: [{ required: ['username'] }, { required: ['newPassword'] }],
+          properties: {
+            username: usernameField,
+            currentPassword: { type: 'string', minLength: 1, maxLength: 256 },
+            newPassword: passwordField,
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await requireAdmin(request, true, true);
+      if (config.devOnly)
+        throw new ApiError(
+          404,
+          'Account settings are unavailable in local test mode.',
+        );
+      if (!(await store.allowLogin(hash('account:' + session.id))))
+        throw new ApiError(
+          429,
+          'Too many password attempts. Try again in a minute.',
+        );
+      const account = await store.accountById(session.id);
+      if (!account || account.credentialVersion !== session.accountVersion)
+        throw new ApiError(401, 'Sign in again before changing your account.');
+      if (
+        !(await verifyPassword(
+          request.body.currentPassword,
+          account.passwordHash,
+        ))
+      )
+        throw new ApiError(400, 'The current password is incorrect.');
+      const { newPassword } = request.body;
+      if (account.mustChangePassword && !newPassword)
+        throw new ApiError(
+          400,
+          'Choose a new password to finish account setup.',
+        );
+      if (
+        newPassword &&
+        (await verifyPassword(newPassword, account.passwordHash))
+      )
+        throw new ApiError(
+          400,
+          'Choose a password different from your current password.',
+        );
+      const saved = await store.updateAccount(
+        account.id,
+        account.credentialVersion,
+        request.body.username ?? account.username,
+        newPassword ? await hashPassword(newPassword) : undefined,
+      );
+      const token = await signIn(saved);
+      return reply.header('Set-Cookie', cookie(token, 8 * 60 * 60)).send(
+        receipt({
+          token,
+          displayName: saved.username,
+          role: saved.role,
+          mustChangePassword: saved.mustChangePassword,
+        }),
+      );
+    },
+  );
+  app.get('/api/v1/admin/accounts', async (request) => {
+    await requireOwner(request);
+    return { accounts: await store.accounts() };
+  });
+  app.post<{ Body: { username: string; password: string } }>(
+    '/api/v1/admin/accounts',
+    {
+      onRequest: async (request) => {
+        await requireOwner(request, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['username', 'password'],
+          properties: { username: usernameField, password: passwordField },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await requireOwner(request, true);
+      if (config.devOnly)
+        throw new ApiError(
+          404,
+          'Account creation is unavailable in local test mode.',
+        );
+      const saved = await store.createModerator(
+        request.body.username,
+        await hashPassword(request.body.password),
+        session.id,
+      );
+      return reply.code(201).send(saved);
+    },
+  );
   app.get('/api/v1/admin/settings', async (request) => {
-    await requireAdmin(request);
+    await requireOwner(request);
     return store.settings();
   });
   app.put<{ Body: { hardcoreEnabled: boolean; expectedRevision: string } }>(
@@ -197,11 +374,11 @@ export function authRoutes(
       },
       // Authenticate before schema validation to avoid exposing private request behavior.
       onRequest: async (request) => {
-        await requireAdmin(request, true);
+        await requireOwner(request, true);
       },
     },
     async (request) => {
-      const session = await requireAdmin(request, true);
+      const session = await requireOwner(request, true);
       const saved = await store.saveSettings(
         request.body.hardcoreEnabled,
         request.body.expectedRevision,

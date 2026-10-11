@@ -13,6 +13,9 @@ export async function adminFixtures() {
       authenticated: true,
       displayName: 'KihiraVD',
       csrfToken: 'csrf-test',
+      username: 'KihiraVD',
+      role: 'admin',
+      mustChangePassword: false,
     },
   };
 }

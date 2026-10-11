@@ -1,12 +1,11 @@
-/** Read a shared admin password from .env. No Discord OAuth credentials are needed. */
+/** Validate account-session configuration. Credentials live only in PostgreSQL. */
 import { isIP } from 'node:net';
 import { isAbsolute } from 'node:path';
-import { createHmac, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 export interface AuthConfig {
   origin: string;
   secret: string;
-  passwordDigest: Buffer | null;
   secure: boolean;
   devOnly?: true;
 }
@@ -100,7 +99,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       auth: {
         origin: origin.origin,
         secret: randomBytes(32).toString('hex'),
-        passwordDigest: null,
         secure: false,
         devOnly: true as const,
       } satisfies AuthConfig,
@@ -113,26 +111,11 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     throw new Error(
       'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
     );
-  const password = env.ADMIN_PASSWORD ?? '';
-  if (
-    password.length < 12 ||
-    password.length > 256 ||
-    password.trim() !== password
-  )
-    throw new Error(
-      'ADMIN_PASSWORD must contain 12–256 characters without surrounding whitespace',
-    );
-  // Store only a keyed verifier in memory, never the plaintext credential.
-  const passwordDigest = createHmac('sha256', Buffer.from(secret, 'hex'))
-    .update('admin-password:')
-    .update(password)
-    .digest();
   return {
     iconDirectory,
     auth: {
       origin: origin.origin,
       secret,
-      passwordDigest,
       secure: origin.protocol === 'https:',
     } satisfies AuthConfig,
     bot,

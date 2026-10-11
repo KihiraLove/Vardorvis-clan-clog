@@ -7,7 +7,7 @@ import pg from 'pg';
 if (process.env.REVIEW_SMOKE_TEST !== '1')
   throw new Error('For disposable CI databases only');
 const origin = process.env.PUBLIC_ORIGIN;
-const password = process.env.ADMIN_PASSWORD;
+const password = 'admin';
 function request(
   path,
   { ip = '127.0.0.3', method = 'GET', headers = {}, body } = {},
@@ -54,7 +54,7 @@ for (let i = 0; i < 20; i++) {
   const result = await request('/api/v1/auth/login', {
     ip: '127.0.0.2',
     method: 'POST',
-    body: { password: 'wrong-password' },
+    body: { username: 'admin', password: 'wrong-password' },
   });
   assert.equal(result.status, 401);
 }
@@ -64,14 +64,14 @@ assert.equal(
       ip: '127.0.0.2',
       method: 'POST',
       headers: { 'X-Forwarded-For': '203.0.113.9' },
-      body: { password },
+      body: { username: 'admin', password },
     })
   ).status,
   429,
 );
 const login = await request('/api/v1/auth/login', {
   method: 'POST',
-  body: { password },
+  body: { username: 'admin', password },
 });
 assert.equal(
   login.status,
@@ -83,6 +83,23 @@ const headers = {
   'X-CSRF-Token': login.body.csrfToken,
   'Idempotency-Key': randomUUID(),
 };
+assert.equal(login.body.mustChangePassword, true);
+assert.equal(
+  (await request('/api/v1/admin/accounts', { headers })).status,
+  403,
+);
+const setup = await request('/api/v1/auth/account', {
+  method: 'PATCH',
+  headers,
+  body: {
+    currentPassword: password,
+    newPassword: 'ci-only-test-admin-password',
+  },
+});
+assert.equal(setup.status, 200);
+headers.Cookie = setup.headers['set-cookie'][0].split(';')[0];
+headers['X-CSRF-Token'] = setup.body.csrfToken;
+assert.equal(setup.body.mustChangePassword, false);
 const catalog = await request('/api/v1/catalog');
 assert.equal(catalog.status, 200);
 const body = {

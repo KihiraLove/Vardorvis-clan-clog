@@ -21,6 +21,16 @@ function disposableStore() {
   let settings: Settings = { revision: 'settings-1', hardcoreEnabled: false };
   const audits: string[] = [];
   const store: BackendStore = {
+    ensureDefaultAdmin: async () => {},
+    accountByUsername: async () => null,
+    accountById: async () => null,
+    accounts: async () => [],
+    createModerator: async () => {
+      throw new Error('Unavailable in local test mode.');
+    },
+    updateAccount: async () => {
+      throw new Error('Unavailable in local test mode.');
+    },
     ready: async () => {},
     botItems: async () => [],
     submitClaim: async () => {

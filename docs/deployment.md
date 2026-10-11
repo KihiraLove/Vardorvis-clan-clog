@@ -59,7 +59,7 @@ Copy reviewed `compose.yaml`, `compose.traefik.yaml`, `.env.example`
 and the `infra/` scripts into your server directory. Do not copy test secrets
 to production. Create `.env` with `chmod 600` and set unique independently
 generated 32-byte hex `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`,
-`SESSION_SECRET`, a strong `ADMIN_PASSWORD`, and the published `IMAGE_TAG`.
+`SESSION_SECRET` and the published `IMAGE_TAG`.
 Use `openssl rand -hex 32` for the three independent hex secrets.
 
 ```bash
@@ -86,12 +86,14 @@ COMPOSE_FILE=compose.yaml:compose.traefik.yaml
 CLOG_HOST=your-real-public-hostname.example
 TRAEFIK_HTTPS_ENTRYPOINT=websecure
 TRAEFIK_CERT_RESOLVER=letsencrypt
-ADMIN_PASSWORD=replace-with-a-strong-unique-password
 SESSION_SECRET=replace-with-64-random-hex-characters
 ```
 
 The override enables `AUTH_ENABLED=true` and configures
 `PUBLIC_ORIGIN=https://<CLOG_HOST>` using the same hostname as the Host label.
+On the first account-enabled startup, sign in with `admin` / `admin` and change
+the password. Subsequent credentials persist in PostgreSQL; see
+[staff-account setup and upgrades](environment.md#required-secrets-and-configuration).
 Traefik labels select existing HTTPS entrypoint and certificate resolver; they
 cannot themselves define Traefik's static resolver or issue DNS records.
 Confirm live DNS, the actual certificate, `/admin` login, Origin/CSRF

@@ -1,6 +1,7 @@
 /** Database-backed REVIEW-01 / HC-01 integration, with no live Discord credentials. */
 import assert from 'node:assert/strict';
-import { randomUUID, createHmac } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { hashPassword } from './passwords.js';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
@@ -9,15 +10,11 @@ import { PgStore } from './store.js';
 import { PgReviewStore } from './review-store.js';
 import type { AuthConfig } from './config.js';
 
-const adminId = 'password-admin';
+const adminId = '00000000-0000-4000-8000-000000000001';
 const password = 'integration-test-password-only';
 const auth: AuthConfig = {
   origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
-  passwordDigest: createHmac('sha256', Buffer.from('a'.repeat(64), 'hex'))
-    .update('admin-password:')
-    .update(password)
-    .digest(),
   secure: true,
 };
 test(
@@ -57,6 +54,18 @@ test(
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES (42,'Vardorvis item','/items/42.png'),(43,'Shared item','/items/43.png')",
       );
+      await pool.query(
+        await readFile(
+          new URL(
+            '../../../packages/database/migrations/003_staff_accounts.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      );
+      const accountStore = new PgStore(pool);
+      await accountStore.ensureDefaultAdmin(await hashPassword(password));
+      await pool.query('UPDATE staff_accounts SET must_change_password=false');
       await pool.query(
         "INSERT INTO pages(id,name,category,sort_order) VALUES ('v','Vardorvis','bosses',0),('x','Other','other',1)",
       );
@@ -264,7 +273,7 @@ test(
         method: 'POST',
         url: '/api/v1/auth/login',
         headers: { origin: auth.origin },
-        payload: { password },
+        payload: { username: 'admin', password },
       });
       assert.equal(login.statusCode, 200);
       const cookie = String(login.headers['set-cookie']).split(';')[0]!;
@@ -365,7 +374,7 @@ test(
       });
       const manualAudit = await review.detail(manualId);
       assert.equal(manualAudit?.audit[0]?.action, 'create');
-      assert.equal(manualAudit?.audit[0]?.actorName, 'Clan admin');
+      assert.equal(manualAudit?.audit[0]?.actorName, 'admin');
       const collision = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/submissions',

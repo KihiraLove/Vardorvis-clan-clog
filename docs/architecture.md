@@ -25,7 +25,19 @@ flowchart TD
 
 The web proxy within the combined application container serves static assets and proxies `/api/` to the API. The external reverse proxy terminates TLS. Public endpoints return only catalog data and approved collection credits; proof links, pending claims, Discord IDs and audit metadata remain private.
 
-The bot connects outbound to Discord's gateway and the internal API. Submission writes use a dedicated service credential, restricted to bot routes. The credential must not authorize admin routes. Human admins use the configured shared password, exact site origin, expiring server-side sessions and CSRF protection; Discord OAuth is not an admin login method. V1 does not require public visitors to log in.
+The bot connects outbound to Discord's gateway and the internal API. Submission writes use a dedicated service credential, restricted to bot routes. The credential must not authorize staff routes. Human staff use individual administrator/moderator accounts, exact site origin, expiring server-side sessions and CSRF protection; Discord OAuth is not an admin login method. V1 does not require public visitors to log in.
+
+`staff_accounts` stores permanent actor IDs, case-insensitively unique usernames,
+roles, salted scrypt verifiers and a mandatory first-login password-change flag.
+An additive migration extends sessions with account IDs and credential versions;
+old shared sessions are invalidated. Password/username changes atomically advance
+the credential version, revoke sessions and append an audit record without any
+credential material. The current browser receives a replacement session. Each
+request verifies its account version, preventing a late login from restoring
+access with old credentials. The sole administrator is seeded as `admin/admin`
+once and survives renaming/restarts. Only that role can manage accounts or the
+hardcore release flag; both staff roles can use review, submission, catalog and
+XP tools after completing password setup.
 
 Foundation API endpoints are `/healthz`, `/readyz` and `/api/v1/status`. Readiness checks that PostgreSQL is reachable and the migrated collection-state view exists; it does not indicate catalog/features are complete.
 

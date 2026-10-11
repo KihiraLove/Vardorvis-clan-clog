@@ -27,18 +27,17 @@ Public reads are bounded at 10,000 items, 2,000 pages, 50,000 memberships and 20
 
 ## Authentication and configuration
 
-The site administration password is loaded only by the API from `.env`. Discord OAuth is no longer a login mechanism; the independent Discord bot uses separate credentials for claim intake. Enable password login with:
+Staff account credentials live in PostgreSQL. Discord OAuth is no longer a login mechanism; the independent Discord bot uses separate credentials for claim intake. Enable account login with:
 
 ```dotenv
 AUTH_ENABLED=true
-ADMIN_PASSWORD=REPLACE_WITH_A_STRONG_RANDOM_PASSWORD
 SESSION_SECRET=REPLACE_WITH_64_RANDOM_HEX_CHARACTERS
 PUBLIC_ORIGIN=https://clog.example.com
 ```
 
-Generate the session secret with `openssl rand -hex 32`. The admin password must be 12–256 characters. HTTP is permitted only on `localhost` / `127.0.0.1` in `NODE_ENV=development`, including the `compose.dev.yaml` override. Production requires HTTPS. No sign-up or OAuth credentials are needed.
+Generate the session secret with `openssl rand -hex 32`. The initial account is `admin/admin`; its first login requires a new 12–256 character password. The administrator creates moderator accounts, which must also change their temporary password at first login. See [account setup](environment.md#required-secrets-and-configuration). HTTP is permitted only on `localhost` / `127.0.0.1` in `NODE_ENV=development`, including the `compose.dev.yaml` override. Production requires HTTPS. No public sign-up or OAuth credentials are needed.
 
-The API stores only a keyed password verifier in process memory, compares credentials in constant time and applies the shared PostgreSQL per-IP login rate limiter. Successful login returns a random eight-hour, HttpOnly, SameSite=Lax session cookie. HTTPS uses Secure and the `__Host-` prefix. Browser writes require both an exact `Origin` and session-bound `X-CSRF-Token`. Logout revokes the session. Rotating `SESSION_SECRET` invalidates all existing cookies. No passwords or tokens are exposed to frontend assets or public API responses.
+The API stores independently salted scrypt verifiers in PostgreSQL, compares derived keys in constant time and applies the shared PostgreSQL per-IP login rate limiter. Successful login returns a random eight-hour, HttpOnly, SameSite=Lax session cookie. HTTPS uses Secure and the `__Host-` prefix. Browser writes require both an exact `Origin` and session-bound `X-CSRF-Token`. Logout revokes the session. Credential edits revoke other sessions; rotating `SESSION_SECRET` invalidates all existing cookies. No passwords or hashes are exposed to frontend assets or public API responses.
 
 `DEV_ADMIN_MODE=true` is a separate, explicitly selected loopback-only, passwordless test workflow documented in [environment setup](environment.md#local-admin-testing-without-discord-login). It requires development mode, disabled password auth and an isolated local Compose project; never expose it publicly.
 

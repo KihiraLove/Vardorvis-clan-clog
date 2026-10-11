@@ -19,14 +19,35 @@ password. `DATABASE_URL` is for host-side Node development only.
 `<prefix>-app:<tag>` release image. `WEB_PORT` is the loopback diagnostic
 port (default 8088).
 
-**Admin authentication:** `AUTH_ENABLED` controls the shared-password
+**Admin authentication:** `AUTH_ENABLED` controls staff-account
 login; `PUBLIC_ORIGIN` must exactly match the browser origin.
-`ADMIN_PASSWORD` must have 12–256 characters, and `SESSION_SECRET` must
+`SESSION_SECRET` must
 hold 32+ random bytes encoded as hex. `TRUSTED_PROXY_CIDRS` optionally lists
 verified upstream proxy IPs and CIDRs (including Traefik). The bundled app
 always trusts its internal Nginx loopback hop, except in local unauthenticated
 admin mode. Leave the list empty only when no external reverse proxy is used;
 see [the trust-chain configuration](deployment.md#existing-traefik).
+
+The first authenticated startup creates one administrator with username `admin`
+and password `admin`, and no moderators. Sign in at `/admin` and choose a new
+12–256 character password before staff tools become available. The administrator
+can create moderators under **Moderator accounts**; each receives a temporary
+password and must replace it on first login. Both roles can change their own
+username and password under **Your account**, confirming the current password.
+Usernames are case-insensitively unique and use 3–32 letters, numbers, dots,
+underscores or hyphens. Credential changes revoke other sessions.
+
+Passwords are stored only as independently salted scrypt verifiers in PostgreSQL;
+the API never returns hashes. `ADMIN_PASSWORD` is no longer used. Renaming the
+administrator or restarting the app does not restore the default credentials.
+Moderators can review, submit, maintain the catalog and import XP; only the
+administrator can access the hardcore release switch and account creation.
+
+Migration `003_staff_accounts.sql` is additive and invalidates previous shared
+sessions. Back up before upgrading, apply migrations and reconcile runtime
+permissions with the one-shot bootstrap. Database backups now include account
+hashes and must remain private. The old shared-password image does not support
+these accounts; restore the coordinated pre-upgrade backup when rolling back.
 
 **Discord:** `BOT_ENABLED` launches the gateway (default false).
 `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN` enable it;
