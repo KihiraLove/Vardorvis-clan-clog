@@ -39,8 +39,8 @@ test(
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
-        revision: 'settings-1',
-        clanName: 'Vardorvis',
+        revision: 'settings-2',
+        clanName: 'Clan name',
         hardcoreEnabled: false,
         copy: defaultSiteCopy,
       });
@@ -98,12 +98,16 @@ test(
       assert.equal(revised.json().credits[0].hardcore, true);
       assert.equal(revised.json().credits.length, 1);
       const results = await Promise.all([
-        store.saveSettings(true, 'settings-1', 'admin-one'),
-        store.saveSettings(false, 'settings-1', 'admin-two'),
+        store.saveSettings(true, 'settings-2', 'admin-one'),
+        store.saveSettings(false, 'settings-2', 'admin-two'),
       ]);
       assert.equal(results.filter(Boolean).length, 1);
       assert.equal(
-        (await pool.query('SELECT * FROM site_settings_audit')).rows.length,
+        (
+          await pool.query(
+            "SELECT * FROM site_settings_audit WHERE actor_discord_id IN ('admin-one','admin-two')",
+          )
+        ).rows.length,
         1,
       );
       // A failure in the audit insert must roll back the setting, too.

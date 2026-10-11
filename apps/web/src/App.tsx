@@ -358,7 +358,7 @@ export function App() {
           >
             <img className="clan-logo" src={branding.logoPath} alt="" />
             <div>
-              <span className="clan-name">{clanName || 'Clan'}</span>
+              <span className="clan-name">{clanName || 'Clan name'}</span>
               <span className="clan-subtitle">{copy.collectionTitle}</span>
             </div>
           </a>
@@ -426,10 +426,12 @@ export function App() {
           <div className="footer-support">
             <a
               href="https://github.com/KihiraLove"
+              className="github-support"
               target="_blank"
               rel="noopener noreferrer"
             >
-              GitHub · KihiraLove
+              <img src="/brand/github-mark.svg" alt="" width="22" height="22" />
+              <span>GitHub · KihiraLove</span>
             </a>
             <a
               href="https://ko-fi.com/kihiralove"

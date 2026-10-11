@@ -11,8 +11,11 @@ test('a single editable key and save apply the key and requirement together, inc
     exact: true,
   });
   const initial = await current.inputValue();
+  expect(initial).toMatch(/^[a-f0-9]{32}$/u);
   await expect(required).toBeChecked();
   await required.uncheck();
+  await current.fill('not hex');
+  await expect(save).toBeDisabled();
   await page
     .getByRole('button', { name: 'Generate new key', exact: true })
     .click();
@@ -26,18 +29,19 @@ test('a single editable key and save apply the key and requirement together, inc
   await expect(required).toBeChecked();
   await expect(current).toHaveValue(initial);
   await required.uncheck();
-  await current.fill('custom supplied clan key');
+  await current.fill('0123456789abcdef0123456789abcdef');
   await save.click();
   await expect(page.getByText('Clan API key settings saved.')).toBeVisible();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('link', { name: 'Site settings', exact: true }).click();
   await expect(required).not.toBeChecked();
-  await expect(current).toHaveValue('custom supplied clan key');
+  await expect(current).toHaveValue('0123456789abcdef0123456789abcdef');
   await page
     .getByRole('button', { name: 'Generate new key', exact: true })
     .click();
   await save.click();
-  await expect(current).not.toHaveValue('custom supplied clan key');
+  await expect(current).not.toHaveValue('0123456789abcdef0123456789abcdef');
+  expect(await current.inputValue()).toMatch(/^[a-f0-9]{32}$/u);
   await expect(required).not.toBeChecked();
   await required.check();
   await save.click();

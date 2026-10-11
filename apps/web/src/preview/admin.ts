@@ -5,11 +5,16 @@ import {
   type ClanKeyUpdate,
 } from '../clan-api-key.ts';
 const generatePreviewKey = () =>
-  Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+  Array.from(crypto.getRandomValues(new Uint8Array(clanKeyBytes)), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
 import { AdminRequestError } from '../admin-api.ts';
-import { defaultSiteCopy, parseSiteCopy, type SiteCopy } from '@clog/domain';
+import {
+  defaultSiteCopy,
+  parseSiteCopy,
+  type SiteCopy,
+  clanKeyBytes,
+} from '@clog/domain';
 import {
   defaultBranding,
   validateLogoFile,
@@ -121,7 +126,7 @@ export class PreviewAdminClient implements AdminClient {
     copy: { ...defaultSiteCopy },
     revision: 'settings-0',
     hardcoreEnabled: false,
-    clanName: 'Vardorvis',
+    clanName: 'Clan name',
   };
   private settingsVersion = 0;
   private signedIn = true;
@@ -367,26 +372,30 @@ export class PreviewAdminClient implements AdminClient {
         : this.staff.map((row) => (row.id === id ? saved : row));
     return saved;
   }
-  async deleteItem(
+  async removePageItem(
+    pageId: string,
     id: number,
     revision: string,
+    expectedVersion: string,
     _csrf: string,
     signal: AbortSignal,
   ) {
     this.access(signal);
     if (revision !== this.data.revision) throw new AdminRequestError(409);
-    if (!this.data.items.some((row) => row.id === id))
-      throw new AdminRequestError(404);
-    this.data.items = this.data.items.filter((row) => row.id !== id);
-    for (const page of this.data.pages)
-      if (page.itemIds.includes(id)) {
-        page.itemIds = page.itemIds.filter((itemId) => itemId !== id);
-        const version = this.pageVersions.get(page.id)! + 1;
-        this.pageVersions.set(page.id, version);
-        page.version = 'page-' + version;
-      }
+    const page = this.data.pages.find((row) => row.id === pageId);
+    if (!page || !page.itemIds.includes(id)) throw new AdminRequestError(404);
+    if (page.version !== expectedVersion) throw new AdminRequestError(409);
+    page.itemIds = page.itemIds.filter((itemId) => itemId !== id);
+    const version = this.pageVersions.get(page.id)! + 1;
+    this.pageVersions.set(page.id, version);
+    page.version = 'page-' + version;
+    page.orderOrigin = 'manual';
+    const retired = !this.data.pages.some((row) => row.itemIds.includes(id));
+    if (retired)
+      this.data.items = this.data.items.filter((row) => row.id !== id);
     this.changed();
     this.data.revision = 'preview-catalog-' + this.revision;
+    return { retired };
   }
   async createModerator(
     username: string,

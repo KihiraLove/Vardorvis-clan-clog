@@ -189,7 +189,7 @@ export function ItemCreator({
         )
           throw failure;
         action.setError(
-          'The item was created, but the catalog could not be refreshed. Refresh before adding another item.',
+          'The item was created, but the catalog could not be refreshed. Reload the page before adding another item.',
         );
       }
     });
@@ -248,16 +248,15 @@ export function ItemCreator({
               onChange={(event) => setName(event.target.value)}
             />
           </label>
-          <label>
-            Find collection-log pages
+          <fieldset className="page-picker">
+            <legend>Collection-log pages (required)</legend>
             <input
               type="search"
+              aria-label="Search collection-log pages"
+              placeholder="Search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-          </label>
-          <fieldset className="page-picker">
-            <legend>Collection-log pages (required)</legend>
             {catalog.pages
               .filter(
                 (page) =>

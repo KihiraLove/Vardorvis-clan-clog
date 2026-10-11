@@ -150,7 +150,10 @@ test(
       assert.equal((await save(owner, fields)).statusCode, 409);
       assert.deepEqual((await new PgStore(pool).settings()).copy, copy);
       const settingsAudit = (
-        await pool.query('SELECT * FROM site_settings_audit')
+        await pool.query(
+          'SELECT * FROM site_settings_audit WHERE actor_discord_id=$1',
+          [admin.id],
+        )
       ).rows[0];
       assert.equal(settingsAudit.actor_discord_id, admin.id);
       assert.deepEqual(settingsAudit.old_public_copy, defaultSiteCopy);
@@ -187,21 +190,52 @@ test(
       const remove = (
         headers: Record<string, string>,
         expectedRevision = before.revision,
+        pageId = 'custom-a',
+        expectedVersion = before.pages[0]!.version,
       ) =>
         app.inject({
           method: 'DELETE',
-          url: '/api/v1/admin/catalog/items/42',
+          url: '/api/v1/admin/catalog/pages/' + pageId + '/items/42',
           headers,
-          payload: { expectedRevision },
+          payload: { expectedRevision, expectedVersion },
         });
       assert.equal((await remove({})).statusCode, 401);
       assert.equal(
         (await remove({ ...moderator, 'x-csrf-token': 'bad' })).statusCode,
         403,
       );
-      const deleted = await remove(moderator);
-      assert.equal(deleted.statusCode, 200, deleted.body);
+      const removedPage = await remove(moderator);
+      assert.equal(removedPage.statusCode, 200, removedPage.body);
+      assert.equal(removedPage.json().retired, false);
       assert.equal((await remove(moderator)).statusCode, 409);
+      const shared = await catalog.catalog();
+      assert.deepEqual(
+        shared.items.map((item) => item.id),
+        [42, 43],
+      );
+      assert.deepEqual(
+        shared.pages.map((page) => page.itemIds),
+        [[43], [42]],
+      );
+      assert.notEqual(shared.pages[0]!.version, before.pages[0]!.version);
+      assert.equal(shared.pages[1]!.version, before.pages[1]!.version);
+      assert.equal((await backend.collections()).length, 2);
+      assert.ok(
+        (await backend.botItems('', 25)).some((item) => item.id === 42),
+      );
+      assert.equal(
+        (await remove(moderator, shared.revision, 'custom-b', 'page-999'))
+          .statusCode,
+        409,
+      );
+      const deleted = await remove(
+        moderator,
+        shared.revision,
+        'custom-b',
+        shared.pages[1]!.version,
+      );
+      assert.equal(deleted.statusCode, 200, deleted.body);
+      assert.equal(deleted.json().retired, true);
       const after = await catalog.catalog();
       assert.deepEqual(
         after.items.map((item) => item.id),
@@ -211,7 +245,6 @@ test(
         after.pages.map((page) => page.itemIds),
         [[43], []],
       );
-      assert.notEqual(after.pages[0]!.version, before.pages[0]!.version);
       assert.deepEqual(
         (await backend.catalog()).items.map((item) => item.id),
         [43],
@@ -237,11 +270,31 @@ test(
         ).rows,
         [{ slot: 0 }],
       );
-      const itemAudit = (
-        await pool.query("SELECT * FROM catalog_audit WHERE action='delete'")
-      ).rows[0];
+      const audits = (
+        await pool.query(
+          "SELECT * FROM catalog_audit WHERE action='delete' ORDER BY id",
+        )
+      ).rows;
+      assert.deepEqual(
+        audits.map((row) => row.page_id),
+        ['custom-a', 'custom-b'],
+      );
+      assert.equal(audits[0].after_value.active, true);
+      assert.equal(audits[1].after_value.active, false);
+      const itemAudit = audits[1];
       assert.equal(itemAudit.actor_discord_id, mod.id);
       assert.equal(itemAudit.item_id, 42);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'DELETE',
+            url: '/api/v1/admin/catalog/items/42',
+            headers: moderator,
+            payload: { expectedRevision: after.revision },
+          })
+        ).statusCode,
+        404,
+      );
       const approval = await app.inject({
         method: 'POST',
         url: `/api/v1/admin/submissions/${claims[2]}/approve`,

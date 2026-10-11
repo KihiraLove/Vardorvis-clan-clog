@@ -137,8 +137,11 @@ export function catalogRoutes(
       return reply.code(201).send(result);
     },
   );
-  app.delete<{ Params: { id: string }; Body: { expectedRevision: string } }>(
-    '/api/v1/admin/catalog/items/:id',
+  app.delete<{
+    Params: { pageId: string; id: string };
+    Body: { expectedRevision: string; expectedVersion: string };
+  }>(
+    '/api/v1/admin/catalog/pages/:pageId/items/:id',
     {
       onRequest: async (request) => {
         await admin(request, true);
@@ -146,16 +149,22 @@ export function catalogRoutes(
       schema: {
         params: {
           type: 'object',
-          required: ['id'],
+          required: ['pageId', 'id'],
           properties: {
+            pageId: { type: 'string', minLength: 1, maxLength: 200 },
             id: { type: 'string', pattern: '^[1-9][0-9]*$', maxLength: 10 },
           },
         },
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['expectedRevision'],
+          required: ['expectedRevision', 'expectedVersion'],
           properties: {
+            expectedVersion: {
+              type: 'string',
+              pattern: '^page-[1-9][0-9]*$',
+              maxLength: 30,
+            },
             expectedRevision: {
               type: 'string',
               pattern: '^catalog-[1-9][0-9]*$',
@@ -170,7 +179,13 @@ export function catalogRoutes(
         id = Number(request.params.id);
       if (id > 2147483647)
         throw new ApiError(400, 'Choose an existing catalog item.');
-      return store.deleteItem(id, request.body.expectedRevision, actor.id);
+      return store.removePageItem(
+        request.params.pageId,
+        id,
+        request.body.expectedRevision,
+        request.body.expectedVersion,
+        actor.id,
+      );
     },
   );
   app.put<{

@@ -14,12 +14,13 @@ these fields (their order does not matter):
 curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
   -H 'X-Clan-API-Key: YOUR_CLAN_SHARED_KEY' \
   -H 'Idempotency-Key: 00000000-0000-4000-8000-000000000001' \
-  -F 'username=Collector' -F 'clanName=Vardorvis' -F 'itemId=4151' \
+  -F 'username=Collector' -F 'clanName=Clan name' -F 'itemId=4151' \
   -F 'screenshot=@drop.png;type=image/png'
 ```
 
 The shared clan API key is **required by default**, in the `X-Clan-API-Key`
-header. The API generates a cryptographically random 32-byte key on first startup
+header. The API generates a cryptographically random 16-byte key written as
+32 hexadecimal characters on first startup
 and preserves it across restarts. An enabled requirement rejects missing/wrong
 keys with **401**, before reading uploads. A trimmed, case-insensitive clan-name mismatch returns
 **403** and creates no submission or image. This comparison validates the
@@ -64,8 +65,8 @@ re-encoded, discarding metadata and original filenames.
 
 ## Website settings and manual submissions
 
-The admin's **Site settings → Clan name** defaults to `Vardorvis`. Saving updates
-the public header, footer, admin heading and document title, and immediately
+The admin's **Site settings → Clan name** defaults to `Clan name`. Saving updates
+the public header, admin heading and document title, and immediately
 changes intake validation. Public tabs refresh settings every 25 seconds or
 when returning to the tab. `GET /api/v1/settings` returns `revision`,
 `hardcoreEnabled` and `clanName`. Admin-only, CSRF-protected
@@ -75,7 +76,9 @@ recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
 
 Admins can view the **Current shared API key**, toggle **Require clan API key**,
-click **Generate new key**, or enter their own text and click **Set API key**.
+click **Generate new key**, or enter their own 32-character hexadecimal key.
+**Save API key settings** saves the field and requirement checkbox together;
+generating only fills the draft until it is saved.
 All key controls remain visible and usable with the requirement disabled.
 Disabling preserves the saved key and accepts matching-clan submissions without
 checking their key header. The clan-name and normal payload/PNG checks still
@@ -87,8 +90,8 @@ started before rotation but have not committed.
 Admin-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
 CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
 `enabled`, `key`, or `generate: true`. `key` and `generate` are mutually exclusive.
-Custom keys allow 1–256 printable ASCII characters, without leading/trailing
-whitespace. Stale updates return **409**. Moderators and public settings endpoints
+Custom keys require exactly 32 hexadecimal characters (`0–9`, `a–f`, `A–F`).
+Stale updates return **409**. Moderators and public settings endpoints
 cannot read or rotate keys; the shared key authorizes only RuneLite intake,
 not staff tools or Discord bot operations. The key header is redacted from API
 logging, and audits record actor, enabled changes and whether rotation occurred
@@ -122,7 +125,11 @@ is required.
 [`005_clan_api_keys.sql`](../packages/database/migrations/005_clan_api_keys.sql)
 adds the key singleton and append-only key audit. Startup creates the default
 enabled key only when absent, including on upgrades from clan-name-only intake.
-Existing keys and disabled settings are never reset by startup or bootstrap.
+Keys already in the 32-character hexadecimal format are preserved. Startup
+replaces an older-format key once, under a row lock, with a random key in the new
+format and records a `system:hex32-upgrade` audit entry. The enabled/disabled
+setting is preserved. Older-format keys stop working when enforcement is on;
+configure clients with the replacement displayed in Site settings.
 The key is encrypted with AES-256-GCM in PostgreSQL. Its encryption root is
 created atomically as a private 32-byte file, `.clan-api-key.secret`, in the
 screenshot volume; the standard screenshot archive includes this file too.

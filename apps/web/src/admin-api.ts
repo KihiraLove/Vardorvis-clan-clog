@@ -185,21 +185,33 @@ export class LiveAdminClient implements AdminClient {
       throw new Error('Unexpected moderator account receipt.');
     return result;
   }
-  async deleteItem(
+  async removePageItem(
+    pageId: string,
     id: number,
     revision: string,
+    version: string,
     csrf: string,
     signal: AbortSignal,
   ) {
     const result = object(
       await this.json(
-        `/api/v1/admin/catalog/items/${id}`,
+        `/api/v1/admin/catalog/pages/${encodeURIComponent(pageId)}/items/${id}`,
         signal,
-        this.write(csrf, { expectedRevision: revision }, 'DELETE'),
+        this.write(
+          csrf,
+          { expectedRevision: revision, expectedVersion: version },
+          'DELETE',
+        ),
       ),
     );
-    if (result.itemId !== id || text(result.catalogRevision) === revision)
+    if (
+      result.itemId !== id ||
+      result.pageId !== pageId ||
+      typeof result.retired !== 'boolean' ||
+      text(result.catalogRevision) === revision
+    )
       throw new Error('Unexpected catalog deletion receipt.');
+    return { retired: result.retired };
   }
   async createModerator(
     username: string,

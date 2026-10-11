@@ -321,8 +321,14 @@ export class PgCatalogStore {
       return { page, catalogRevision: await this.revision(client) };
     });
   }
-  /** Remove active memberships and visibility while preserving stable IDs and claim history. */
-  async deleteItem(id: number, expectedRevision: string, actor: string) {
+  /** Remove one page membership; retire the stable item only after its final membership. */
+  async removePageItem(
+    pageId: string,
+    id: number,
+    expectedRevision: string,
+    expectedVersion: string,
+    actor: string,
+  ) {
     return this.transaction(true, async (client) => {
       if ((await this.revision(client)) !== expectedRevision)
         throw new ApiError(
@@ -342,49 +348,68 @@ export class PgCatalogStore {
           [id],
         )
       ).rows;
-      await client.query(
-        'SELECT id FROM pages WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE',
-        [memberships.map((row) => row.page_id)],
-      );
-      for (const { page_id: pageId } of memberships) {
-        const rows = (
-          await client.query<{ item_id: number; origin: string; slot: number }>(
-            'DELETE FROM page_items WHERE page_id=$1 RETURNING item_id,origin,slot',
-            [pageId],
-          )
-        ).rows;
-        // Preserve every remaining origin and relative order, compacting slots without collisions.
-        const ordered = rows
-          .sort((a, b) => a.slot - b.slot)
-          .filter((row) => row.item_id !== id);
-        await client.query(
-          `INSERT INTO page_items(page_id,item_id,slot,origin) SELECT $1,item_id,slot,origin FROM jsonb_to_recordset($2::jsonb) AS x(item_id integer,slot integer,origin text)`,
-          [
-            pageId,
-            JSON.stringify(
-              ordered.map((row, slot) => ({
-                item_id: row.item_id,
-                origin: row.origin,
-                slot,
-              })),
-            ),
-          ],
+      if (!memberships.some((row) => row.page_id === pageId))
+        throw new ApiError(404, 'Item not found on this page.');
+      await client.query('SELECT id FROM pages WHERE id=$1 FOR UPDATE', [
+        pageId,
+      ]);
+      const pageBefore = await this.page(client, pageId);
+      if (pageBefore.version !== expectedVersion)
+        throw new ApiError(
+          409,
+          'Page membership or order changed. Reload before deleting.',
         );
-      }
-      await client.query('UPDATE items SET active=false WHERE id=$1', [id]);
+      const rows = (
+        await client.query<{ item_id: number; origin: string; slot: number }>(
+          'DELETE FROM page_items WHERE page_id=$1 RETURNING item_id,origin,slot',
+          [pageId],
+        )
+      ).rows;
+      // Preserve every remaining origin and relative order, compacting slots without collisions.
+      const ordered = rows
+        .sort((a, b) => a.slot - b.slot)
+        .filter((row) => row.item_id !== id);
       await client.query(
-        "INSERT INTO catalog_audit(actor_discord_id,action,item_id,before_value,after_value) VALUES($1,'delete',$2,$3,$4)",
+        `INSERT INTO page_items(page_id,item_id,slot,origin) SELECT $1,item_id,slot,origin FROM jsonb_to_recordset($2::jsonb) AS x(item_id integer,slot integer,origin text)`,
+        [
+          pageId,
+          JSON.stringify(
+            ordered.map((row, slot) => ({
+              item_id: row.item_id,
+              origin: row.origin,
+              slot,
+            })),
+          ),
+        ],
+      );
+      const remainingPageIds = memberships
+        .filter((row) => row.page_id !== pageId)
+        .map((row) => row.page_id);
+      const retired = remainingPageIds.length === 0;
+      if (retired)
+        await client.query('UPDATE items SET active=false WHERE id=$1', [id]);
+      await client.query("UPDATE pages SET order_origin='manual' WHERE id=$1", [
+        pageId,
+      ]);
+      await client.query(
+        "INSERT INTO catalog_audit(actor_discord_id,action,item_id,page_id,before_value,after_value) VALUES($1,'delete',$2,$3,$4,$5)",
         [
           actor,
           id,
+          pageId,
           JSON.stringify({
             ...before,
             pageIds: memberships.map((row) => row.page_id),
           }),
-          JSON.stringify({ id, active: false, pageIds: [] }),
+          JSON.stringify({ id, active: !retired, pageIds: remainingPageIds }),
         ],
       );
-      return { itemId: id, catalogRevision: await this.revision(client) };
+      return {
+        itemId: id,
+        pageId,
+        retired,
+        catalogRevision: await this.revision(client),
+      };
     });
   }
   /** Explicit identity reconciliation for a future source entry; never reassign another item's alias. */

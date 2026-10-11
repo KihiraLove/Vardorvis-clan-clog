@@ -43,7 +43,7 @@ export function createApp(
   },
   readSettings: () => Promise<Settings> = async () => ({
     revision: 'settings-disabled',
-    clanName: 'Vardorvis',
+    clanName: 'Clan name',
     hardcoreEnabled: false,
   }),
   options: Options = {},

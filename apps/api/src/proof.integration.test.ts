@@ -164,11 +164,11 @@ test(
         });
       const fields: [string, string][] = [
         ['username', 'Collector'],
-        ['clanName', ' vardorvis '],
+        ['clanName', ' clan name '],
         ['itemId', '900001'],
       ];
       const generated = apiKey!;
-      assert.match(generated, /^[A-Za-z0-9_-]{43}$/u);
+      assert.match(generated, /^[a-f0-9]{32}$/u);
       apiKey = undefined;
       assert.equal((await runelite(fields)).statusCode, 401);
       apiKey = 'wrong-key';
@@ -232,7 +232,7 @@ test(
           await runelite([
             ['username', 'First'],
             ['username', 'Duplicate'],
-            ['clanName', 'Vardorvis'],
+            ['clanName', 'Clan name'],
           ])
         ).statusCode,
         400,
@@ -403,7 +403,7 @@ test(
         422,
       );
       assert.equal((await keyUpdate({ key: '   ' })).statusCode, 422);
-      const custom = 'custom clan key alpha 123';
+      const custom = '0123456789abcdef0123456789abcdef';
       const rotated = await keyUpdate({ key: custom });
       assert.equal(rotated.statusCode, 200, rotated.body);
       assert.equal(rotated.json().key, custom);
@@ -434,11 +434,14 @@ test(
       assert.equal(generatedWhileOff.json().enabled, false);
       assert.notEqual(generatedWhileOff.json().key, custom);
       const customWhileOff = await keyUpdate({
-        key: 'replacement while disabled',
+        key: 'fedcba9876543210fedcba9876543210',
       });
       assert.equal(customWhileOff.statusCode, 200, customWhileOff.body);
       assert.equal(customWhileOff.json().enabled, false);
-      assert.equal(customWhileOff.json().key, 'replacement while disabled');
+      assert.equal(
+        customWhileOff.json().key,
+        'fedcba9876543210fedcba9876543210',
+      );
       await new PgClanKeyStore(
         pool,
         await loadClanKeyRoot(directory),
@@ -490,7 +493,7 @@ test(
       );
       const rename = {
         hardcoreEnabled: false,
-        expectedRevision: 'settings-1',
+        expectedRevision: 'settings-2',
         clanName: 'New Clan',
       };
       assert.equal(
@@ -527,10 +530,11 @@ test(
       assert.deepEqual(
         (
           await pool.query(
-            'SELECT old_clan_name,new_clan_name FROM site_settings_audit',
+            'SELECT old_clan_name,new_clan_name FROM site_settings_audit WHERE actor_discord_id=$1',
+            [admin.id],
           )
         ).rows,
-        [{ old_clan_name: 'Vardorvis', new_clan_name: 'New Clan' }],
+        [{ old_clan_name: 'Clan name', new_clan_name: 'New Clan' }],
       );
       for (let i = 0; i < 10; i++)
         assert.equal(await store.allowIntake('192.0.2.200'), true);

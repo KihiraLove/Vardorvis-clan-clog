@@ -9,7 +9,7 @@ test('preview keys default on and can be viewed and rotated while the requiremen
   const client = new PreviewAdminClient();
   const initial = await client.clanApiKey(signal());
   assert.equal(initial.enabled, true);
-  assert.match(initial.key, /^[a-f0-9]{64}$/u);
+  assert.match(initial.key, /^[a-f0-9]{32}$/u);
   const disabled = await client.saveClanApiKey(
     { expectedRevision: initial.revision, enabled: false },
     'csrf',
@@ -24,12 +24,15 @@ test('preview keys default on and can be viewed and rotated while the requiremen
   assert.equal(generated.enabled, false);
   assert.notEqual(generated.key, initial.key);
   const custom = await client.saveClanApiKey(
-    { expectedRevision: generated.revision, key: 'custom test clan key' },
+    {
+      expectedRevision: generated.revision,
+      key: '0123456789abcdef0123456789abcdef',
+    },
     'csrf',
     signal(),
   );
   assert.equal(custom.enabled, false);
-  assert.equal(custom.key, 'custom test clan key');
+  assert.equal(custom.key, '0123456789abcdef0123456789abcdef');
   const enabled = await client.saveClanApiKey(
     { expectedRevision: custom.revision, enabled: true },
     'csrf',
@@ -56,7 +59,7 @@ test('private key reads/writes preserve CSRF, revisions and the supplied value, 
   const settings = {
     revision: 'clan-key-2',
     enabled: false,
-    key: 'custom test key',
+    key: '0123456789abcdef0123456789abcdef',
   };
   const client = new LiveAdminClient(async (path, options) => {
     assert.equal(path, '/api/v1/admin/clan-api-key');

@@ -5,6 +5,7 @@ import type { AdminSession } from './xp-model.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { clanKeyBytes, clanKeyPattern } from '@clog/domain';
 
 export function ClanApiKeySettings({
   client,
@@ -117,7 +118,10 @@ export function ClanApiKeySettings({
               className="clan-api-key-value"
               type="text"
               value={key}
-              maxLength={256}
+              required
+              minLength={32}
+              maxLength={32}
+              pattern={clanKeyPattern}
               autoComplete="off"
               spellCheck={false}
               disabled={action.busy}
@@ -128,8 +132,9 @@ export function ClanApiKeySettings({
             />
           </label>
           <p className="admin-note">
-            Generate or enter a key, then save to apply the key and requirement
-            together. Send the saved value in the X-Clan-API-Key header.
+            Use exactly 32 hexadecimal characters. Generate or enter a key, then
+            save to apply the key and requirement together. Send the saved value
+            in the X-Clan-API-Key header.
           </p>
           <div className="admin-actions">
             <button
@@ -137,7 +142,9 @@ export function ClanApiKeySettings({
               className="site-button"
               disabled={action.busy}
               onClick={() => {
-                const bytes = crypto.getRandomValues(new Uint8Array(32));
+                const bytes = crypto.getRandomValues(
+                  new Uint8Array(clanKeyBytes),
+                );
                 setKey(
                   Array.from(bytes, (byte) =>
                     byte.toString(16).padStart(2, '0'),

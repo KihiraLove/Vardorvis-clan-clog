@@ -35,7 +35,7 @@ test('public settings are disabled by default, expose only visibility, and fail 
   const app = createApp();
   assert.deepEqual((await app.inject('/api/v1/settings')).json(), {
     revision: 'settings-disabled',
-    clanName: 'Vardorvis',
+    clanName: 'Clan name',
     hardcoreEnabled: false,
   });
   await app.close();

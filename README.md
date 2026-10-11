@@ -63,7 +63,7 @@ Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` fo
 
 ## Documentation
 
-- [Site settings, catalog maintenance and moderator management](docs/site-customization.md)
+- [Site settings, item management and moderator management](docs/site-customization.md)
 
 - [Admin catalog backend, durable storage and coordinated backups](docs/admin-catalog-backend.md)
 

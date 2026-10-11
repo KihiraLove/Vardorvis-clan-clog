@@ -1,4 +1,4 @@
-/** Edit a complete page permutation locally, then publish it against the saved page version. */
+/** Manage one page's memberships and publish complete order drafts against the saved version. */
 import { useEffect, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import {
@@ -64,10 +64,11 @@ export function PageOrderEditor({
       className="admin-panel page-order-editor"
       aria-labelledby="page-order-title"
     >
-      <h2 id="page-order-title">Page item order</h2>
+      <h2 id="page-order-title">Item management</h2>
       <p>
         Drag an item, use its move buttons, or focus a row and press Alt + ↑ /
-        ↓. Save to publish the full arrangement.
+        ↓. Save to publish the full arrangement. Delete removes an item from
+        this page; deleting its last page removes it from the catalog.
       </p>
       <div className="order-page-picker">
         <label htmlFor="order-page">Collection-log page</label>
@@ -139,7 +140,7 @@ export function PageOrderEditor({
           const item = catalog.items.find((item) => item.id === id);
           if (!item)
             return (
-              <li key={id}>Item #{id} is unavailable. Refresh this page.</li>
+              <li key={id}>Item #{id} is unavailable. Reload this page.</li>
             );
           return (
             <li
@@ -209,6 +210,55 @@ export function PageOrderEditor({
                 >
                   ↓
                 </button>
+                <button
+                  type="button"
+                  className="site-button"
+                  disabled={action.busy || dirty || stale || !saved}
+                  aria-label={`Delete ${item.name} from ${saved?.name ?? 'this page'}`}
+                  onClick={() => {
+                    if (!saved || action.busy || dirty || stale) return;
+                    const lastPage =
+                      catalog.pages.filter((page) => page.itemIds.includes(id))
+                        .length === 1;
+                    if (
+                      !window.confirm(
+                        `Are you sure you want to delete ${item.name} from ${saved.name}? ` +
+                          (lastPage
+                            ? 'This is its last page, so the item will be removed from the catalog. Submission and review history will be preserved.'
+                            : 'The item will remain on its other pages.'),
+                      )
+                    )
+                      return;
+                    void action.execute(
+                      async (signal) => {
+                        const { retired } = await client.removePageItem(
+                          pageId,
+                          id,
+                          catalog.revision,
+                          saved.version,
+                          session.csrfToken,
+                          signal,
+                        );
+                        if (signal.aborted) return;
+                        const next = await refresh(signal);
+                        if (signal.aborted) return;
+                        accept(next.pages.find((page) => page.id === pageId));
+                        action.setMessage(
+                          retired
+                            ? `${item.name} deleted from its last page and the catalog.`
+                            : `${item.name} deleted from ${saved.name}. Other pages are unchanged.`,
+                        );
+                      },
+                      async (signal) => {
+                        const next = await refresh(signal);
+                        if (!signal.aborted)
+                          accept(next.pages.find((page) => page.id === pageId));
+                      },
+                    );
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             </li>
           );
@@ -217,7 +267,8 @@ export function PageOrderEditor({
       {!ids.length && <p className="admin-empty">No items on this page.</p>}
       {dirty && (
         <p className="admin-note">
-          Unsaved order. Save or discard before switching pages.
+          Unsaved order. Save or discard before switching pages or deleting
+          items.
         </p>
       )}
       <div className="admin-actions">
@@ -249,7 +300,7 @@ export function PageOrderEditor({
                   )
                     throw failure;
                   action.setError(
-                    'Order saved, but the catalog could not be refreshed. Refresh it before continuing.',
+                    'Order saved, but the catalog could not be refreshed. Reload the page before continuing.',
                   );
                 }
               },

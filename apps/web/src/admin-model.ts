@@ -144,12 +144,14 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
   ): Promise<StaffAccount>;
-  deleteItem(
+  removePageItem(
+    pageId: string,
     id: number,
     revision: string,
+    version: string,
     csrf: string,
     signal: AbortSignal,
-  ): Promise<void>;
+  ): Promise<{ retired: boolean }>;
   branding(signal: AbortSignal): Promise<import('./branding.ts').Branding>;
   saveLogo(
     file: File | null,
