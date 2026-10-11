@@ -1,3 +1,7 @@
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-72A5F2?logo=kofi&logoColor=white)](https://ko-fi.com/kihiralove)
+[![Downloads](https://img.shields.io/github/downloads/KihiraLove/Vardorvis-clan-clog/total)](https://github.com/KihiraLove/Vardorvis-clan-clog/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/KihiraLove/Vardorvis-clan-clog/ci.yml?branch=main&label=CI)](https://github.com/KihiraLove/Vardorvis-clan-clog/actions/workflows/ci.yml)
+
 # Vardorvis Clan Collection Log
 
 Monorepo for a public OSRS collection log, an admin submission queue, a Discord submission bot, and an inline clan XP event tracker. The public log starts entirely uncollected. Approved evidence credits the canonical item everywhere it appears in the selected world mode.
@@ -6,7 +10,7 @@ Monorepo for a public OSRS collection log, an admin submission queue, a Discord 
 
 **Release preparation:** one unified web/API/Discord app image plus a separate PostgreSQL container; pre-release SQL migrations are consolidated into a fresh-install baseline. See [release deployment](docs/deployment.md).
 
-The backend serves PostgreSQL-backed catalog/collections, password-protected admin login and persistent versioned hardcore settings. Configure an HTTPS origin, admin password and session secret to enable production auth. The [complete catalog importer](docs/catalog-import.md) bootstraps 1,717 items across 124 pages with verified local icons. The [admin catalog backend](docs/admin-catalog-backend.md) adds manual items, durable icons and page ordering alongside the [review backend](docs/integration-01-review.md), [Discord bot](docs/bot-operations.md) and [WOM event import](docs/xp-import.md).
+The backend serves PostgreSQL-backed catalog/collections, individual administrator/moderator logins and persistent versioned site settings. Configure an HTTPS origin and session secret to enable production auth; the initial `admin` / `admin` account requires a password change on first login. The [complete catalog importer](docs/catalog-import.md) bootstraps 1,717 items across 124 pages with verified local icons. The [admin catalog backend](docs/admin-catalog-backend.md) adds manual items, durable icons and page ordering alongside the [review backend](docs/integration-01-review.md), [Discord bot](docs/bot-operations.md) and [WOM event import](docs/xp-import.md). See [site customization](docs/site-customization.md) for editable labels, clan branding/API keys, catalog deletion and moderator management.
 
 This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. Further backend feature routes and release approval remain pending.
 
@@ -58,6 +62,8 @@ The zero-initialized XP event tracker is below the log (legacy `/xp?preview=1` s
 Review `http://127.0.0.1:5173/admin?preview=1` and `/admin/catalog?preview=1` for submission review, item creation and page ordering. The brand and admin links share the in-memory preview ledger, so approvals and new items appear in the public preview. Reload resets it. The [admin review guide](docs/admin-frontend-review.md) covers the steps and backend boundaries. ADMIN-01 #8 and ADMIN-02 #31 are assigned to KihiraLove and remain open for manual review in the same draft PR #33.
 
 ## Documentation
+
+- [Site settings, catalog maintenance and moderator management](docs/site-customization.md)
 
 - [Admin catalog backend, durable storage and coordinated backups](docs/admin-catalog-backend.md)
 

@@ -1,3 +1,5 @@
+> **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](site-customization.md). Earlier visual notes below are historical.
+
 # INTEGRATION-01 implementation and review log
 
 Umbrella: [#43](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/43) coordinates [REVIEW-01 #7](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/7), [HC-01 #26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26), [UI-01 #3](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/3), [UI-02 #9](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/9), [XP-02 #28](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/28) and [ADMIN-01 #8](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/8).

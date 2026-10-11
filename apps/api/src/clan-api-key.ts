@@ -206,7 +206,7 @@ export class PgClanKeyStore implements ClanKeyStore {
       );
       await client.query(
         'INSERT INTO clan_api_key_audit(actor_id,old_enabled,new_enabled,key_rotated,version) VALUES($1,$2,$3,$4,$5)',
-        [actorId, old.enabled, enabled, key !== undefined, version],
+        [actorId, old.enabled, enabled, hash !== old.key_hash, version],
       );
       await client.query('COMMIT');
       return response;

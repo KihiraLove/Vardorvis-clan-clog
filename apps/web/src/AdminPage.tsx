@@ -33,6 +33,9 @@ export function AdminNavigation({
         ...(session?.role === 'admin' && !session.development
           ? [['/admin/accounts', 'Moderator accounts']]
           : []),
+        ...(session?.role === 'admin'
+          ? [['/admin/settings', 'Site settings']]
+          : []),
       ].map(([url, label]) => (
         <a
           key={url}
@@ -183,15 +186,17 @@ export function AdminPage({
           session={session}
         />
       )}
-      {session?.role === 'admin' && !session.mustChangePassword && (
-        <AdminSettings
-          client={client}
-          session={session}
-          onAccessLost={accessLost}
-          onSaved={onSettingsSaved}
-          onBrandingSaved={onBrandingSaved}
-        />
-      )}
+      {session?.role === 'admin' &&
+        !session.mustChangePassword &&
+        path === '/admin/settings' && (
+          <AdminSettings
+            client={client}
+            session={session}
+            onAccessLost={accessLost}
+            onSaved={onSettingsSaved}
+            onBrandingSaved={onBrandingSaved}
+          />
+        )}
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}
@@ -280,6 +285,10 @@ export function AdminPage({
           <p role="alert">
             Only the administrator can create moderator accounts.
           </p>
+        )
+      ) : path === '/admin/settings' ? (
+        session.role === 'admin' ? null : (
+          <p role="alert">Only the administrator can change site settings.</p>
         )
       ) : children ? (
         children

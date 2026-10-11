@@ -27,6 +27,7 @@ test(
           '004_runelite_submissions.sql',
           '005_clan_api_keys.sql',
           '006_clan_logos.sql',
+          '007_site_customization.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

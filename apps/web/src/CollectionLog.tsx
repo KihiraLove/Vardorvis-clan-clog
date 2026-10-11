@@ -17,6 +17,7 @@ import {
   type Item,
 } from './model.ts';
 import { ItemMenu, type OpenItem } from './ItemMenu.tsx';
+import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 
 /** Hover/focus opens transient history; clicking or tapping pins it until dismissal. */
 function ItemSlot({
@@ -88,6 +89,7 @@ export function CollectionLog({
   retry,
   hardcore = false,
   onPreview,
+  copy = defaultSiteCopy,
 }: {
   data?: LogData | undefined;
   loading?: boolean;
@@ -96,6 +98,7 @@ export function CollectionLog({
   preview?: boolean;
   hardcore?: boolean;
   onPreview?: (() => void) | undefined;
+  copy?: SiteCopy;
 }) {
   const requestedPage = new URLSearchParams(window.location.search).get('page');
   const firstPage =
@@ -405,9 +408,8 @@ export function CollectionLog({
         </p>
       )}
       <p className="log-help">
-        {hardcore
-          ? 'Collected on hardcore worlds during BOTW events'
-          : 'Collected during BOTW events'}
+        {copy.collectionCaption}
+        {hardcore && ' · Hardcore worlds'}
       </p>
       {open &&
         itemState(open.item.id, credits).collected &&

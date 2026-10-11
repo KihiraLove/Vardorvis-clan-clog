@@ -6,6 +6,7 @@ import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { ItemCreator } from './ItemCreator.tsx';
 import { PageOrderEditor } from './PageOrderEditor.tsx';
+import { CatalogItemDeletion } from './CatalogItemDeletion.tsx';
 
 export function AdminCatalogPage({
   client,
@@ -70,7 +71,9 @@ export function AdminCatalogPage({
             <h2>Catalog maintenance</h2>
             <p>
               Add new drops to existing collection-log pages and save deliberate
-              item arrangements.
+              item arrangements. Deleting an item removes it from all active
+              pages while preserving submission history. Refresh catalog reloads
+              saved data; it does not import a new game catalog.
             </p>
           </div>
           <button
@@ -110,6 +113,15 @@ export function AdminCatalogPage({
           </div>
         )}
       </section>
+      {catalog && (
+        <CatalogItemDeletion
+          client={client}
+          catalog={catalog}
+          session={session}
+          onAccessLost={onAccessLost}
+          refresh={refresh}
+        />
+      )}
       {catalog && (
         <div className="catalog-editor-layout">
           <ItemCreator

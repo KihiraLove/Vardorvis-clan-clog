@@ -39,6 +39,7 @@ test('preview keys default on and can be viewed and rotated while the requiremen
   assert.equal(enabled.enabled, true);
   assert.deepEqual(Object.keys(client.publicSettings()).sort(), [
     'clanName',
+    'copy',
     'hardcoreEnabled',
     'revision',
   ]);

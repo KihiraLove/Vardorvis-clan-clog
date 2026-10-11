@@ -1,9 +1,10 @@
 /** Real PostgreSQL contract checks, mandatory in CI via TEST_DATABASE_URL. */
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
+import { defaultSiteCopy } from '@clog/domain';
 import { PgStore } from './store.js';
 import { createApp } from './app.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -27,39 +28,21 @@ test(
       { store, logger: false },
     );
     try {
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/001_baseline.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
+      const migrations = new URL(
+        '../../../packages/database/migrations/',
+        import.meta.url,
       );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/003_staff_accounts.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
-      );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/004_runelite_submissions.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
-      );
+      for (const file of (await readdir(migrations))
+        .filter((file) => file.endsWith('.sql'))
+        .sort())
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
         revision: 'settings-1',
         clanName: 'Vardorvis',
         hardcoreEnabled: false,
+        copy: defaultSiteCopy,
       });
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES(42,'Shared item','/items/42.png'),(43,'Manual item','/items/43.png')",

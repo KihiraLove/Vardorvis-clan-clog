@@ -1,3 +1,5 @@
+> **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](site-customization.md). Earlier visual notes below are historical.
+
 > **Release update:** Schema 002 is now part of the consolidated fresh-install [baseline](../packages/database/migrations/001_baseline.sql).
 
 # Mockup revision: collection log and SOTW tracker

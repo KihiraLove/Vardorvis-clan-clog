@@ -1,5 +1,7 @@
 # Release deployment and operations
 
+Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and catalog item deletion are described in [site customization](site-customization.md). Migration `007_site_customization.sql` preserves existing histories.
+
 > Release preparation (10 October 2026): the former three application images
 > (`web`, `api`, `bot`) are replaced by ONE `app` image. This document
 > describes the new Compose layout, not a deployed production instance.

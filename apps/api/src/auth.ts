@@ -15,6 +15,7 @@ import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
 import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
 import { hashPassword, verifyPassword } from './passwords.js';
+import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
 const nonce = () => randomBytes(32).toString('base64url');
@@ -83,7 +84,11 @@ export function authRoutes(
           }
         : null;
     const account = await store.accountById(session.id);
-    if (!account || account.credentialVersion !== session.accountVersion)
+    if (
+      !account ||
+      account.disabled ||
+      account.credentialVersion !== session.accountVersion
+    )
       return null;
     return {
       token,
@@ -194,9 +199,9 @@ export function authRoutes(
       const account = await store.accountByUsername(request.body.username);
       const valid = await verifyPassword(
         request.body.password,
-        account?.passwordHash ?? dummyHash,
+        account && !account.disabled ? account.passwordHash : dummyHash,
       );
-      if (!account || !valid)
+      if (!account || account.disabled || !valid)
         throw new ApiError(401, 'Incorrect username or password.');
       const old = cookieValue(request, sessionName);
       if (old) await store.deleteSession(key(old));
@@ -352,6 +357,48 @@ export function authRoutes(
       return reply.code(201).send(saved);
     },
   );
+  for (const action of ['disable', 'enable', 'delete'] as const)
+    app.post<{
+      Params: { id: string };
+      Body: { expectedVersion: number };
+    }>(
+      `/api/v1/admin/accounts/:id/${action}`,
+      {
+        onRequest: async (request) => {
+          await requireOwner(request, true);
+        },
+        schema: {
+          params: {
+            type: 'object',
+            required: ['id'],
+            properties: { id: { type: 'string', format: 'uuid' } },
+          },
+          body: {
+            type: 'object',
+            required: ['expectedVersion'],
+            additionalProperties: false,
+            properties: {
+              expectedVersion: {
+                type: 'integer',
+                minimum: 1,
+                maximum: 2147483647,
+              },
+            },
+          },
+        },
+      },
+      async (request) => {
+        const actor = await requireOwner(request, true);
+        if (!store.manageModerator)
+          throw new ApiError(503, 'Account management unavailable.');
+        return store.manageModerator(
+          request.params.id,
+          request.body.expectedVersion,
+          action,
+          actor.id,
+        );
+      },
+    );
   app.get('/api/v1/admin/settings', async (request) => {
     await requireOwner(request);
     return store.settings();
@@ -361,6 +408,7 @@ export function authRoutes(
       hardcoreEnabled: boolean;
       expectedRevision: string;
       clanName?: string;
+      copy?: SiteCopy;
     };
   }>(
     '/api/v1/admin/settings',
@@ -372,6 +420,23 @@ export function authRoutes(
           required: ['hardcoreEnabled', 'expectedRevision'],
           properties: {
             hardcoreEnabled: { type: 'boolean' },
+            copy: {
+              type: 'object',
+              additionalProperties: false,
+              required: Object.keys(defaultSiteCopy),
+              properties: Object.fromEntries(
+                Object.keys(defaultSiteCopy).map((key) => [
+                  key,
+                  {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 160,
+                    pattern:
+                      '^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$',
+                  },
+                ]),
+              ),
+            },
             clanName: {
               type: 'string',
               minLength: 1,
@@ -398,6 +463,7 @@ export function authRoutes(
         request.body.expectedRevision,
         session.id,
         request.body.clanName,
+        request.body.copy,
       );
       if (!saved)
         throw new ApiError(

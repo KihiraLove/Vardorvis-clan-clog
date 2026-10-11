@@ -137,6 +137,42 @@ export function catalogRoutes(
       return reply.code(201).send(result);
     },
   );
+  app.delete<{ Params: { id: string }; Body: { expectedRevision: string } }>(
+    '/api/v1/admin/catalog/items/:id',
+    {
+      onRequest: async (request) => {
+        await admin(request, true);
+      },
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', pattern: '^[1-9][0-9]*$', maxLength: 10 },
+          },
+        },
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['expectedRevision'],
+          properties: {
+            expectedRevision: {
+              type: 'string',
+              pattern: '^catalog-[1-9][0-9]*$',
+              maxLength: 30,
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await admin(request, true),
+        id = Number(request.params.id);
+      if (id > 2147483647)
+        throw new ApiError(400, 'Choose an existing catalog item.');
+      return store.deleteItem(id, request.body.expectedRevision, actor.id);
+    },
+  );
   app.put<{
     Params: { id: string };
     Body: { orderedItemIds: number[]; expectedVersion: string };

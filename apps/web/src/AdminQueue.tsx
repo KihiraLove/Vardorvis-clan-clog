@@ -47,14 +47,8 @@ export function AdminQueue({
       client.queue(view, cursor, controller.signal),
     ])
       .then(([catalog, queue]) => {
-        if (
-          queue.submissions.some(
-            (row) =>
-              row.itemId !== null &&
-              !catalog.items.some((item) => item.id === row.itemId),
-          ) ||
-          (queue.nextCursor !== null && queue.nextCursor === cursor)
-        )
+        // Historical claims may reference an item removed from the active catalog.
+        if (queue.nextCursor !== null && queue.nextCursor === cursor)
           throw new Error('Inconsistent review snapshot.');
         if (active) setSnapshot({ catalog, queue, view, cursor });
       })
@@ -183,11 +177,20 @@ export function AdminQueue({
                   <div className="submission-card__item">
                     {item && <img src={item.iconPath} alt="" />}
                     <div>
-                      <strong>{item?.name ?? 'Needs item match'}</strong>
+                      <strong>
+                        {item?.name ??
+                          (row.itemId === null
+                            ? 'Needs item match'
+                            : 'Item unavailable in active catalog')}
+                      </strong>
                       <span>
                         {item
                           ? 'Item #' + item.id
-                          : 'Submitted: ' + row.rawItemText}
+                          : (row.itemId === null
+                              ? ''
+                              : `Item #${row.itemId} · `) +
+                            'Submitted: ' +
+                            row.rawItemText}
                       </span>
                     </div>
                     <span className={'admin-badge admin-badge--' + row.status}>

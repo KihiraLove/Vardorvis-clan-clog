@@ -135,7 +135,7 @@ export class PgProofStore implements ProofStore {
       }
       const item = (
         await client.query<{ id: number; name: string }>(
-          'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active',
+          'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active FOR SHARE OF i',
           [fields.itemId],
         )
       ).rows[0];

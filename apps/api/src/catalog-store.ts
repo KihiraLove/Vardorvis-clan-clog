@@ -88,7 +88,7 @@ export class PgCatalogStore {
     return this.transaction(false, async (client) => {
       const items = (
         await client.query<AdminItem>(
-          'SELECT id, name, icon_path AS "iconPath", origin, overrides FROM items ORDER BY id LIMIT 10001',
+          'SELECT id, name, icon_path AS "iconPath", origin, overrides FROM items WHERE active ORDER BY id LIMIT 10001',
         )
       ).rows;
       const pageRows = (
@@ -100,7 +100,7 @@ export class PgCatalogStore {
         throw new ApiError(503, 'Catalog exceeds the supported size.');
       const slots = (
         await client.query<{ page_id: string; item_id: number }>(
-          'SELECT page_id,item_id FROM page_items ORDER BY page_id,slot LIMIT 50001',
+          'SELECT p.page_id,p.item_id FROM page_items p JOIN items i ON i.id=p.item_id WHERE i.active ORDER BY p.page_id,p.slot LIMIT 50001',
         )
       ).rows;
       if (slots.length > 50000)
@@ -319,6 +319,72 @@ export class PgCatalogStore {
         [actor, pageId, JSON.stringify(before), JSON.stringify(page)],
       );
       return { page, catalogRevision: await this.revision(client) };
+    });
+  }
+  /** Remove active memberships and visibility while preserving stable IDs and claim history. */
+  async deleteItem(id: number, expectedRevision: string, actor: string) {
+    return this.transaction(true, async (client) => {
+      if ((await this.revision(client)) !== expectedRevision)
+        throw new ApiError(
+          409,
+          'The catalog changed. Reload before deleting an item.',
+        );
+      const before = (
+        await client.query(
+          'SELECT id,name,origin,active FROM items WHERE id=$1 AND active FOR UPDATE',
+          [id],
+        )
+      ).rows[0];
+      if (!before) throw new ApiError(404, 'Catalog item not found.');
+      const memberships = (
+        await client.query<{ page_id: string }>(
+          'SELECT page_id FROM page_items WHERE item_id=$1 ORDER BY page_id',
+          [id],
+        )
+      ).rows;
+      await client.query(
+        'SELECT id FROM pages WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE',
+        [memberships.map((row) => row.page_id)],
+      );
+      for (const { page_id: pageId } of memberships) {
+        const rows = (
+          await client.query<{ item_id: number; origin: string; slot: number }>(
+            'DELETE FROM page_items WHERE page_id=$1 RETURNING item_id,origin,slot',
+            [pageId],
+          )
+        ).rows;
+        // Preserve every remaining origin and relative order, compacting slots without collisions.
+        const ordered = rows
+          .sort((a, b) => a.slot - b.slot)
+          .filter((row) => row.item_id !== id);
+        await client.query(
+          `INSERT INTO page_items(page_id,item_id,slot,origin) SELECT $1,item_id,slot,origin FROM jsonb_to_recordset($2::jsonb) AS x(item_id integer,slot integer,origin text)`,
+          [
+            pageId,
+            JSON.stringify(
+              ordered.map((row, slot) => ({
+                item_id: row.item_id,
+                origin: row.origin,
+                slot,
+              })),
+            ),
+          ],
+        );
+      }
+      await client.query('UPDATE items SET active=false WHERE id=$1', [id]);
+      await client.query(
+        "INSERT INTO catalog_audit(actor_discord_id,action,item_id,before_value,after_value) VALUES($1,'delete',$2,$3,$4)",
+        [
+          actor,
+          id,
+          JSON.stringify({
+            ...before,
+            pageIds: memberships.map((row) => row.page_id),
+          }),
+          JSON.stringify({ id, active: false, pageIds: [] }),
+        ],
+      );
+      return { itemId: id, catalogRevision: await this.revision(client) };
     });
   }
   /** Explicit identity reconciliation for a future source entry; never reassign another item's alias. */

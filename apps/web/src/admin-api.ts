@@ -161,6 +161,46 @@ export class LiveAdminClient implements AdminClient {
     unique(accounts.map((account) => account.id));
     return accounts;
   }
+  async manageModerator(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseStaffAccount(
+      await this.json(
+        `/api/v1/admin/accounts/${encodeURIComponent(id)}/${action}`,
+        signal,
+        this.write(csrf, { expectedVersion }),
+      ),
+    );
+    if (
+      result.id !== id ||
+      result.role !== 'moderator' ||
+      !result.version ||
+      result.version <= expectedVersion ||
+      result.disabled !== (action !== 'enable')
+    )
+      throw new Error('Unexpected moderator account receipt.');
+    return result;
+  }
+  async deleteItem(
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json(
+        `/api/v1/admin/catalog/items/${id}`,
+        signal,
+        this.write(csrf, { expectedRevision: revision }, 'DELETE'),
+      ),
+    );
+    if (result.itemId !== id || text(result.catalogRevision) === revision)
+      throw new Error('Unexpected catalog deletion receipt.');
+  }
   async createModerator(
     username: string,
     password: string,
@@ -311,6 +351,7 @@ export class LiveAdminClient implements AdminClient {
     csrf: string,
     signal: AbortSignal,
     clanName?: string,
+    copy?: import('@clog/domain').SiteCopy,
   ) {
     const result = parseSettings(
       await this.json(
@@ -322,6 +363,7 @@ export class LiveAdminClient implements AdminClient {
             hardcoreEnabled,
             expectedRevision,
             ...(clanName === undefined ? {} : { clanName }),
+            ...(copy === undefined ? {} : { copy }),
           },
           'PUT',
         ),
@@ -330,6 +372,8 @@ export class LiveAdminClient implements AdminClient {
     if (
       result.hardcoreEnabled !== hardcoreEnabled ||
       (clanName !== undefined && result.clanName !== clanName.trim()) ||
+      (copy !== undefined &&
+        JSON.stringify(result.copy) !== JSON.stringify(copy)) ||
       result.revision === expectedRevision
     )
       throw new Error('Unexpected settings receipt.');

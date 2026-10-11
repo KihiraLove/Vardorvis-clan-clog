@@ -1,8 +1,8 @@
 # Clan logo and website icon
 
 After completing first-login password setup, the administrator can upload a
-logo from **Site settings → Clan logo** on `/admin`. Moderators cannot use
-these controls or their private API endpoints. The bundled Mexicat logo is
+logo from **Site settings → Clan logo** on `/admin/settings`. Moderators cannot use
+these controls or their private API endpoints. The bundled clan logo is
 the default; **Restore default logo** restores it without erasing the history.
 
 The service detects image content instead of trusting extensions or browser

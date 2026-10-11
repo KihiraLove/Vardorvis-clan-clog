@@ -1,5 +1,6 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
+  copy?: import('@clog/domain').SiteCopy;
   clanName: string;
   revision: string;
   hardcoreEnabled: boolean;
@@ -22,6 +23,8 @@ export interface AdminIdentity {
   accountVersion?: number;
 }
 export interface StaffAccount {
+  disabled?: boolean;
+  version?: number;
   id: string;
   username: string;
   role: 'admin' | 'moderator';
@@ -58,6 +61,12 @@ export interface BotReceipt {
   creditOccupied: boolean;
 }
 export interface BackendStore {
+  manageModerator?(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    actor: string,
+  ): Promise<StaffAccount>;
   ensureDefaultAdmin(passwordHash: string): Promise<void>;
   accountByUsername(username: string): Promise<StoredAccount | null>;
   accountById(id: string): Promise<StoredAccount | null>;
@@ -90,6 +99,7 @@ export interface BackendStore {
     revision: string,
     actor: string,
     clanName?: string,
+    copy?: import('@clog/domain').SiteCopy,
   ): Promise<Settings | null>;
   createState(hash: string, expiresAt: Date): Promise<void>;
   consumeState(hash: string): Promise<boolean>;

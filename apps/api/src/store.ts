@@ -1,5 +1,6 @@
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
+import { parseSiteCopy, type SiteCopy } from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import {
@@ -16,7 +17,7 @@ import {
   type StoredAccount,
 } from './types.js';
 const unavailable = () => new ApiError(503, 'The catalog is not ready.');
-const accountFields = `id, username, role, must_change_password AS "mustChangePassword"`;
+const accountFields = `id, username, role, must_change_password AS "mustChangePassword", disabled, credential_version AS version`;
 const credentialFields = `${accountFields}, password_hash AS "passwordHash", credential_version AS "credentialVersion"`;
 const duplicateUsername = (error: unknown) => {
   if (
@@ -43,7 +44,7 @@ export class PgStore implements BackendStore {
     return (
       (
         await this.pool.query<StoredAccount>(
-          `SELECT ${credentialFields} FROM staff_accounts WHERE lower(username)=lower($1)`,
+          `SELECT ${credentialFields} FROM staff_accounts WHERE lower(username)=lower($1) AND deleted_at IS NULL`,
           [username],
         )
       ).rows[0] ?? null
@@ -55,7 +56,7 @@ export class PgStore implements BackendStore {
     return (
       (
         await this.pool.query<StoredAccount>(
-          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1`,
+          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1 AND deleted_at IS NULL`,
           [id],
         )
       ).rows[0] ?? null
@@ -64,7 +65,7 @@ export class PgStore implements BackendStore {
   async accounts(): Promise<StaffAccount[]> {
     return (
       await this.pool.query<StaffAccount>(
-        `SELECT ${accountFields} FROM staff_accounts ORDER BY role, lower(username)`,
+        `SELECT ${accountFields} FROM staff_accounts WHERE deleted_at IS NULL ORDER BY role, lower(username)`,
       )
     ).rows;
   }
@@ -109,7 +110,7 @@ export class PgStore implements BackendStore {
           `UPDATE staff_accounts SET username=$3, password_hash=COALESCE($4,password_hash),
          must_change_password=CASE WHEN $4 IS NULL THEN must_change_password ELSE false END,
          credential_version=credential_version+1
-         WHERE id=$1 AND credential_version=$2 RETURNING ${credentialFields}`,
+         WHERE id=$1 AND credential_version=$2 AND NOT disabled AND deleted_at IS NULL RETURNING ${credentialFields}`,
           [id, expectedVersion, username, passwordHash ?? null],
         )
       ).rows[0];
@@ -135,6 +136,58 @@ export class PgStore implements BackendStore {
     }
   }
 
+  async manageModerator(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    actor: string,
+  ): Promise<StaffAccount> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const old = (
+        await client.query<StoredAccount>(
+          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+          [id],
+        )
+      ).rows[0];
+      if (!old) throw new ApiError(404, 'Moderator account not found.');
+      if (old.role !== 'moderator')
+        throw new ApiError(
+          403,
+          'The administrator account cannot be disabled or deleted.',
+        );
+      if (old.credentialVersion !== expectedVersion)
+        throw new ApiError(
+          409,
+          'This account changed. Reload the account list.',
+        );
+      const saved = (
+        await client.query<StaffAccount>(
+          `UPDATE staff_accounts SET disabled=$2,
+        deleted_at=CASE WHEN $3 THEN now() ELSE NULL END,
+        password_hash=CASE WHEN $3 THEN '' WHEN $4='enable' THEN COALESCE(disabled_password_hash,password_hash) ELSE '' END,
+        disabled_password_hash=CASE WHEN $4='disable' THEN COALESCE(disabled_password_hash,password_hash) ELSE NULL END,
+        credential_version=credential_version+1 WHERE id=$1 RETURNING ${accountFields}`,
+          [id, action !== 'enable', action === 'delete', action],
+        )
+      ).rows[0]!;
+      await client.query('DELETE FROM admin_sessions WHERE account_id=$1', [
+        id,
+      ]);
+      await client.query(
+        'INSERT INTO staff_account_audit(actor_id,account_id,action,username) VALUES($1,$2,$3,$4)',
+        [actor, id, action, old.username],
+      );
+      await client.query('COMMIT');
+      return saved;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   private async matchItems(client: pg.PoolClient): Promise<MatchItem[]> {
     const items = (
       await client.query<{ id: number; name: string }>(
@@ -223,6 +276,16 @@ export class PgStore implements BackendStore {
         throw new ApiError(422, 'Selected canonical item is unavailable.');
       const matched = resolveMatch(matches, input.rawItemText, input.itemId);
       const itemId = matched.itemId;
+      if (
+        itemId !== null &&
+        (
+          await client.query(
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+            [itemId],
+          )
+        ).rowCount !== 1
+      )
+        throw new ApiError(422, 'Selected canonical item is unavailable.');
       const creditOccupied =
         itemId !== null &&
         (
@@ -311,7 +374,6 @@ export class PgStore implements BackendStore {
         )
       ).rows;
       if (
-        !items.length ||
         !pages.length ||
         items.length > 10000 ||
         pages.length > 2000 ||
@@ -385,8 +447,9 @@ export class PgStore implements BackendStore {
         hardcore_enabled: boolean;
         version: number;
         clan_name: string;
+        public_copy: SiteCopy;
       }>(
-        'SELECT hardcore_enabled, version, clan_name FROM site_settings WHERE singleton=true',
+        'SELECT hardcore_enabled, version, clan_name, public_copy FROM site_settings WHERE singleton=true',
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Settings unavailable.');
@@ -394,6 +457,7 @@ export class PgStore implements BackendStore {
       revision: 'settings-' + row.version,
       hardcoreEnabled: row.hardcore_enabled,
       clanName: row.clan_name,
+      copy: parseSiteCopy(row.public_copy),
     };
   }
   async saveSettings(
@@ -401,6 +465,7 @@ export class PgStore implements BackendStore {
     revision: string,
     actor: string,
     clanName?: string,
+    copy?: SiteCopy,
   ): Promise<Settings | null> {
     if (
       clanName !== undefined &&
@@ -415,8 +480,9 @@ export class PgStore implements BackendStore {
           hardcore_enabled: boolean;
           version: number;
           clan_name: string;
+          public_copy: SiteCopy;
         }>(
-          'SELECT hardcore_enabled, version, clan_name FROM site_settings WHERE singleton=true FOR UPDATE',
+          'SELECT hardcore_enabled, version, clan_name, public_copy FROM site_settings WHERE singleton=true FOR UPDATE',
         )
       ).rows[0];
       if (!old || 'settings-' + old.version !== revision) {
@@ -425,19 +491,30 @@ export class PgStore implements BackendStore {
       }
       const version = old.version + 1;
       const name = clanName?.trim() ?? old.clan_name;
+      const text = parseSiteCopy(copy ?? old.public_copy);
       await client.query(
-        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3 WHERE singleton=true',
-        [enabled, version, name],
+        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4 WHERE singleton=true',
+        [enabled, version, name, JSON.stringify(text)],
       );
       await client.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name) VALUES($1,$2,$3,$4,$5,$6)',
-        [actor, old.hardcore_enabled, enabled, version, old.clan_name, name],
+        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+        [
+          actor,
+          old.hardcore_enabled,
+          enabled,
+          version,
+          old.clan_name,
+          name,
+          JSON.stringify(old.public_copy),
+          JSON.stringify(text),
+        ],
       );
       await client.query('COMMIT');
       return {
         revision: 'settings-' + version,
         hardcoreEnabled: enabled,
         clanName: name,
+        copy: text,
       };
     } catch (error) {
       await client.query('ROLLBACK');

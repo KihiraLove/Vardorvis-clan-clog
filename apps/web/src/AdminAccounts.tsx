@@ -1,4 +1,4 @@
-/** Administrator-only moderator creation; temporary passwords are never redisplayed. */
+/** Administrator-only moderator management; temporary passwords are never redisplayed. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import type { AdminClient, StaffAccount } from './admin-model.ts';
@@ -19,6 +19,7 @@ export function AdminAccounts({
   const [refresh, setRefresh] = useState(0);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [deleting, setDeleting] = useState<StaffAccount>();
   const action = useAdminAction(onAccessLost);
   useEffect(() => {
     const controller = new AbortController();
@@ -45,6 +46,40 @@ export function AdminAccounts({
       clearTimeout(timer);
     };
   }, [client, refresh, onAccessLost]);
+  const manage = (
+    account: StaffAccount,
+    change: 'disable' | 'enable' | 'delete',
+  ) => {
+    void action.execute(
+      async (signal) => {
+        const value = await client.manageModerator(
+          account.id,
+          account.version ?? 1,
+          change,
+          session.csrfToken,
+          signal,
+        );
+        if (!signal.aborted) {
+          setAccounts((rows) =>
+            change === 'delete'
+              ? rows?.filter((row) => row.id !== account.id)
+              : rows?.map((row) => (row.id === account.id ? value : row)),
+          );
+          setDeleting(undefined);
+          action.setMessage(
+            `Moderator ${account.username} ${change === 'enable' ? 'enabled' : change === 'disable' ? 'disabled' : 'deleted'}.`,
+          );
+        }
+      },
+      async (signal) => {
+        const rows = await client.accounts(signal);
+        if (!signal.aborted) {
+          setAccounts(rows);
+          setDeleting(undefined);
+        }
+      },
+    );
+  };
   return (
     <section className="admin-panel">
       <h2>Moderator accounts</h2>
@@ -127,12 +162,62 @@ export function AdminAccounts({
             {accounts.map((account) => (
               <li key={account.id}>
                 <strong>{account.username}</strong> · {account.role} ·{' '}
-                {account.mustChangePassword
-                  ? 'Password change required'
-                  : 'Active'}
+                {account.disabled
+                  ? 'Disabled'
+                  : account.mustChangePassword
+                    ? 'Password change required'
+                    : 'Active'}
+                {account.role === 'moderator' && (
+                  <div className="admin-actions">
+                    <button
+                      className="site-button"
+                      aria-label={`${account.disabled ? 'Enable' : 'Disable'} ${account.username}`}
+                      disabled={action.busy}
+                      onClick={() =>
+                        manage(account, account.disabled ? 'enable' : 'disable')
+                      }
+                    >
+                      {account.disabled ? 'Enable' : 'Disable'}
+                    </button>
+                    <button
+                      className="site-button"
+                      aria-label={`Delete ${account.username}`}
+                      disabled={action.busy}
+                      onClick={() => setDeleting(account)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
+          {deleting && (
+            <div
+              className="admin-delete-confirm"
+              role="group"
+              aria-label="Confirm moderator deletion"
+            >
+              <p>
+                Delete {deleting.username}? Their access ends immediately. Past
+                submissions and review history are preserved.
+              </p>
+              <button
+                className="site-button"
+                disabled={action.busy}
+                onClick={() => manage(deleting, 'delete')}
+              >
+                Confirm delete moderator
+              </button>
+              <button
+                className="site-button"
+                disabled={action.busy}
+                onClick={() => setDeleting(undefined)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           {accounts.every((account) => account.role !== 'moderator') && (
             <p>No moderator accounts have been created.</p>
           )}

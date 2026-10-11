@@ -8,6 +8,7 @@ import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import type { SiteSettings } from './site-settings.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { defaultSiteCopy, parseSiteCopy, type SiteCopy } from '@clog/domain';
 export function AdminSettings({
   client,
   session,
@@ -24,6 +25,7 @@ export function AdminSettings({
   const [saved, setSaved] = useState<SiteSettings>();
   const [enabled, setEnabled] = useState(false);
   const [clanName, setClanName] = useState('');
+  const [copy, setCopy] = useState<SiteCopy>({ ...defaultSiteCopy });
   const [readError, setReadError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
@@ -40,6 +42,7 @@ export function AdminSettings({
           setSaved(value);
           setEnabled(value.hardcoreEnabled);
           setClanName(value.clanName);
+          setCopy(value.copy ?? { ...defaultSiteCopy });
           setReadError(undefined);
         }
       })
@@ -90,11 +93,13 @@ export function AdminSettings({
                   session.csrfToken,
                   signal,
                   clanName.trim(),
+                  parseSiteCopy(copy),
                 );
                 if (!signal.aborted) {
                   setSaved(value);
                   setEnabled(value.hardcoreEnabled);
                   setClanName(value.clanName);
+                  setCopy(value.copy ?? { ...defaultSiteCopy });
                   onSaved?.(value);
                   action.setMessage('Site settings saved.');
                 }
@@ -105,6 +110,7 @@ export function AdminSettings({
                   setSaved(value);
                   setEnabled(value.hardcoreEnabled);
                   setClanName(value.clanName);
+                  setCopy(value.copy ?? { ...defaultSiteCopy });
                   onSaved?.(value);
                 }
               },
@@ -133,13 +139,43 @@ export function AdminSettings({
             />
             Enable hardcore worlds
           </label>
+          <fieldset className="site-copy-fields">
+            <legend>Website text</legend>
+            {(
+              [
+                ['collectionTitle', 'Collection log title'],
+                ['collectionCaption', 'Collection log caption'],
+                ['xpTitle', 'XP section title'],
+                ['xpTotalCaption', 'XP total caption'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key}>
+                {label}
+                <input
+                  required
+                  maxLength={160}
+                  disabled={action.busy}
+                  value={copy[key]}
+                  onChange={(event) =>
+                    setCopy((current) => ({
+                      ...current,
+                      [key]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </fieldset>
           <button
             className="site-button"
             disabled={
               action.busy ||
               !clanName.trim() ||
+              Object.values(copy).some((text) => !text.trim()) ||
               (enabled === saved.hardcoreEnabled &&
-                clanName.trim() === saved.clanName)
+                clanName.trim() === saved.clanName &&
+                JSON.stringify(copy) ===
+                  JSON.stringify(saved.copy ?? defaultSiteCopy))
             }
           >
             Save site settings

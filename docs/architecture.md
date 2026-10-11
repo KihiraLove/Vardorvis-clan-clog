@@ -1,5 +1,7 @@
 > **10 October 2026 release update:** The nine development migrations have been squashed to [001_baseline.sql](../packages/database/migrations/001_baseline.sql). The web proxy, API and optional bot share a single application container, separate from PostgreSQL. Historical implementation notes below may describe the old topology.
 
+Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and catalog item deletion are described in [site customization](site-customization.md). Migration `007_site_customization.sql` preserves existing histories.
+
 # Architecture
 
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.

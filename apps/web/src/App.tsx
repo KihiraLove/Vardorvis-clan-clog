@@ -11,23 +11,35 @@ import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
 import { parseSettings, type SiteSettings } from './site-settings.ts';
 import { defaultBranding, parseBranding } from './branding.ts';
+import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 
 function LiveLog({
   preview,
   hardcore,
+  copy,
 }: {
   preview: () => void;
   hardcore: boolean;
+  copy: SiteCopy;
 }) {
   const state = usePublicLog();
-  return <CollectionLog {...state} hardcore={hardcore} onPreview={preview} />;
+  return (
+    <CollectionLog
+      {...state}
+      hardcore={hardcore}
+      onPreview={preview}
+      copy={copy}
+    />
+  );
 }
 function PreviewLog({
   client,
   hardcore,
+  copy,
 }: {
   client: PreviewAdminClient;
   hardcore: boolean;
+  copy: SiteCopy;
 }) {
   const [scenario, setScenario] = useState<Scenario | 'reviewed'>('reviewed');
   const revision = useSyncExternalStore(client.subscribe, client.getRevision);
@@ -59,7 +71,7 @@ function PreviewLog({
           Review fixtures only. Reload resets changes; no clan data is changed.
         </p>
       </details>
-      <CollectionLog preview data={data} hardcore={hardcore} />
+      <CollectionLog preview data={data} hardcore={hardcore} copy={copy} />
     </>
   );
 }
@@ -114,6 +126,7 @@ export function App() {
   const [hardcore, setHardcore] = useState(false);
   const [liveEnabled, setLiveEnabled] = useState(false);
   const [liveClanName, setLiveClanName] = useState('');
+  const [liveCopy, setLiveCopy] = useState<SiteCopy>(defaultSiteCopy);
   const [liveBranding, setLiveBranding] = useState(defaultBranding);
   useEffect(() => {
     setLiveBranding(defaultBranding);
@@ -186,6 +199,7 @@ export function App() {
         if (!stopped) {
           setLiveEnabled(value.hardcoreEnabled);
           setLiveClanName(value.clanName);
+          setLiveCopy(value.copy ?? defaultSiteCopy);
           if (!value.hardcoreEnabled) setHardcore(false);
         }
       } catch {
@@ -278,14 +292,19 @@ export function App() {
         icon.href = branding.faviconPath;
       });
   }, [branding.faviconPath]);
+  const copy =
+    adminClient instanceof PreviewAdminClient
+      ? adminClient.publicSettings().copy
+      : liveCopy;
   const settingsSaved = (value: SiteSettings) => {
+    setLiveCopy(value.copy ?? defaultSiteCopy);
     setLiveClanName(value.clanName);
     setLiveEnabled(value.hardcoreEnabled);
     if (!value.hardcoreEnabled) setHardcore(false);
   };
   useEffect(() => {
-    document.title = (clanName ? clanName + ' · ' : '') + 'Clan Collection Log';
-  }, [clanName]);
+    document.title = (clanName ? clanName + ' · ' : '') + copy.collectionTitle;
+  }, [clanName, copy.collectionTitle]);
   return (
     <>
       <svg
@@ -340,7 +359,7 @@ export function App() {
             <img className="clan-logo" src={branding.logoPath} alt="" />
             <div>
               <span className="clan-name">{clanName || 'Clan'}</span>
-              <span className="clan-subtitle">Clan Collection Log</span>
+              <span className="clan-subtitle">{copy.collectionTitle}</span>
             </div>
           </a>
           {!admin &&
@@ -381,13 +400,22 @@ export function App() {
           ) : (
             <>
               {adminClient instanceof PreviewAdminClient ? (
-                <PreviewLog client={adminClient} hardcore={hardcore} />
+                <PreviewLog
+                  client={adminClient}
+                  hardcore={hardcore}
+                  copy={copy}
+                />
               ) : (
-                <LiveLog preview={() => mode(true)} hardcore={hardcore} />
+                <LiveLog
+                  preview={() => mode(true)}
+                  hardcore={hardcore}
+                  copy={copy}
+                />
               )}
               <XpPage
                 client={xpClient}
                 admin={false}
+                copy={copy}
                 preview={route.preview}
                 onMode={mode}
               />
@@ -395,7 +423,26 @@ export function App() {
           )}
         </main>
         <footer className="site-footer">
-          <p>{clanName && clanName + ' · '}One clan. Every collection.</p>
+          <div className="footer-support">
+            <a
+              href="https://github.com/KihiraLove"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub · KihiraLove
+            </a>
+            <a
+              href="https://ko-fi.com/kihiralove"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="/brand/ko-fi-blue.png"
+                alt="Support me on Ko-fi"
+                width="180"
+              />
+            </a>
+          </div>
           <p>
             Created using intellectual property belonging to Jagex Limited under
             the terms of Jagex's{' '}

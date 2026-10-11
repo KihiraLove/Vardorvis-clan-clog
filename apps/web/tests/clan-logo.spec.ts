@@ -1,21 +1,24 @@
 import { expect, test } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { adminFixtures } from './admin-fixtures.ts';
 
 test('admin uploads GIF and animated WebP logos, updates the website icon and restores the default', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await page.goto('/admin/settings?preview=1');
   const logo = page.locator('.clan-logo').first();
-  await expect(logo).toHaveAttribute('src', '/brand/mexicat.gif');
+  await expect(logo).toHaveAttribute('src', '/brand/clan-logo.png');
   const webp = await sharp(Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]), {
     raw: { width: 1, height: 2, pageHeight: 1, channels: 4 },
   })
     .webp({ lossless: true, delay: [120, 230] })
     .toBuffer();
   for (const [name, mimeType, buffer] of [
-    ['logo.gif', 'image/gif', await readFile('public/brand/mexicat.gif')],
+    [
+      'logo.gif',
+      'image/gif',
+      await sharp(webp, { animated: true }).gif().toBuffer(),
+    ],
     ['logo.webp', 'image/webp', webp],
   ] as const) {
     await page
@@ -60,7 +63,7 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
     .locator('.clan-logo-settings')
     .screenshot({ path: test.info().outputPath('clan-logo-controls.png') });
   await page.getByRole('button', { name: 'Restore default logo' }).click();
-  await expect(logo).toHaveAttribute('src', '/brand/mexicat.gif');
+  await expect(logo).toHaveAttribute('src', '/brand/clan-logo.png');
   expect(await page.locator('link[rel="icon"]').getAttribute('href')).toBe(
     '/favicon.png',
   );

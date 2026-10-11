@@ -9,6 +9,7 @@ const generatePreviewKey = () =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
 import { AdminRequestError } from '../admin-api.ts';
+import { defaultSiteCopy, parseSiteCopy, type SiteCopy } from '@clog/domain';
 import {
   defaultBranding,
   validateLogoFile,
@@ -117,6 +118,7 @@ export class PreviewAdminClient implements AdminClient {
   private revision = 0;
   private queueRevision = 0;
   private setting = {
+    copy: { ...defaultSiteCopy },
     revision: 'settings-0',
     hardcoreEnabled: false,
     clanName: 'Vardorvis',
@@ -152,6 +154,8 @@ export class PreviewAdminClient implements AdminClient {
     })),
   };
   private rows: Submission[];
+  private nextItemId =
+    Math.max(0, ...previewCatalog.items.map((item) => item.id)) + 1;
   private audit = new Map<string, AuditEntry[]>();
   private assets = new Map<string, StagedIcon>();
   private receipts = new Map<string, { fields: string; result: CreatedItem }>();
@@ -339,6 +343,51 @@ export class PreviewAdminClient implements AdminClient {
     this.access(signal);
     return structuredClone(this.staff);
   }
+  async manageModerator(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const account = this.staff.find((row) => row.id === id);
+    if (!account) throw new AdminRequestError(404);
+    if (account.role !== 'moderator') throw new AdminRequestError(403);
+    if ((account.version ?? 1) !== expectedVersion)
+      throw new AdminRequestError(409);
+    const saved = {
+      ...account,
+      disabled: action !== 'enable',
+      version: expectedVersion + 1,
+    };
+    this.staff =
+      action === 'delete'
+        ? this.staff.filter((row) => row.id !== id)
+        : this.staff.map((row) => (row.id === id ? saved : row));
+    return saved;
+  }
+  async deleteItem(
+    id: number,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    if (!this.data.items.some((row) => row.id === id))
+      throw new AdminRequestError(404);
+    this.data.items = this.data.items.filter((row) => row.id !== id);
+    for (const page of this.data.pages)
+      if (page.itemIds.includes(id)) {
+        page.itemIds = page.itemIds.filter((itemId) => itemId !== id);
+        const version = this.pageVersions.get(page.id)! + 1;
+        this.pageVersions.set(page.id, version);
+        page.version = 'page-' + version;
+      }
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+  }
   async createModerator(
     username: string,
     _password: string,
@@ -422,11 +471,13 @@ export class PreviewAdminClient implements AdminClient {
     _csrf: string,
     signal: AbortSignal,
     clanName?: string,
+    copy?: SiteCopy,
   ) {
     this.access(signal);
     if (expectedRevision !== this.setting.revision)
       throw new AdminRequestError(409);
     this.setting = {
+      copy: copy ? parseSiteCopy(copy) : this.setting.copy,
       hardcoreEnabled,
       clanName: clanName?.trim() ?? this.setting.clanName,
       revision: 'settings-' + ++this.settingsVersion,
@@ -476,7 +527,11 @@ export class PreviewAdminClient implements AdminClient {
           ? {
               revision: 'preview-credits-' + this.revision,
               credits: this.rows
-                .filter((row) => row.status === 'approved')
+                .filter(
+                  (row) =>
+                    row.status === 'approved' &&
+                    this.data.items.some((item) => item.id === row.itemId),
+                )
                 .map((row) => ({
                   submissionId: row.id,
                   itemId: row.itemId!,
@@ -594,7 +649,7 @@ export class PreviewAdminClient implements AdminClient {
         ? row.status !== 'approved'
         : row.status !== 'pending') ||
       (action === 'approve'
-        ? row.itemId === null ||
+        ? !this.data.items.some((item) => item.id === row.itemId) ||
           (row.source !== 'manual' && !safeProof(row.proofUrl))
         : !reason.trim())
     )
@@ -640,7 +695,7 @@ export class PreviewAdminClient implements AdminClient {
       throw new AdminRequestError(422);
     // This allocator is safe only in this single in-memory simulator, not a concurrent API.
     const item = {
-      id: Math.max(0, ...this.data.items.map((i) => i.id)) + 1,
+      id: this.nextItemId++,
       name: clean.name,
       iconPath: asset.iconPath,
       origin: 'manual' as const,

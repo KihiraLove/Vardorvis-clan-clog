@@ -106,6 +106,8 @@ export interface CreatedItem {
   catalogRevision: string;
 }
 export interface StaffAccount {
+  disabled?: boolean;
+  version?: number;
   id: string;
   username: string;
   role: 'admin' | 'moderator';
@@ -115,7 +117,10 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   const value = object(input);
   if (
     !['admin', 'moderator'].includes(String(value.role)) ||
-    typeof value.mustChangePassword !== 'boolean'
+    typeof value.mustChangePassword !== 'boolean' ||
+    (value.disabled !== undefined && typeof value.disabled !== 'boolean') ||
+    (value.version !== undefined &&
+      (!Number.isInteger(value.version) || Number(value.version) < 1))
   )
     throw new Error('Invalid staff account.');
   return {
@@ -123,9 +128,28 @@ export function parseStaffAccount(input: unknown): StaffAccount {
     username: text(value.username),
     role: value.role as StaffAccount['role'],
     mustChangePassword: value.mustChangePassword,
+    ...(value.disabled === undefined
+      ? {}
+      : { disabled: value.disabled as boolean }),
+    ...(value.version === undefined
+      ? {}
+      : { version: value.version as number }),
   };
 }
 export interface AdminClient {
+  manageModerator(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<StaffAccount>;
+  deleteItem(
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
   branding(signal: AbortSignal): Promise<import('./branding.ts').Branding>;
   saveLogo(
     file: File | null,
@@ -162,6 +186,7 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
     clanName?: string,
+    copy?: import('@clog/domain').SiteCopy,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
   login(username: string, password: string, signal: AbortSignal): Promise<void>;

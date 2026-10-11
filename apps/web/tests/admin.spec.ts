@@ -100,9 +100,11 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   const f = await adminFixtures(),
     maskId = f.detail.submission.itemId!;
   await page.goto('/admin?preview=1');
+  await page.getByRole('link', { name: 'Site settings', exact: true }).click();
   await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
   await page.getByRole('button', { name: 'Save site settings' }).click();
   await expect(page.getByText('Site settings saved.')).toBeVisible();
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await review(page, 'Iron Fern').click();

@@ -1,39 +1,51 @@
 import { expect, test } from '@playwright/test';
 
-test('admin can view, generate and supply a key while API-key enforcement is off', async ({
+test('a single editable key and save apply the key and requirement together, including while disabled', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
-  const requireKey = page.getByLabel('Require clan API key', { exact: true });
+  await page.goto('/admin/settings?preview=1');
+  const required = page.getByLabel('Require clan API key', { exact: true });
   const current = page.getByLabel('Current shared API key', { exact: true });
-  await expect(requireKey).toBeChecked();
-  const initial = await current.inputValue();
-  expect(initial).toMatch(/^[a-f0-9]{64}$/);
-  await requireKey.uncheck();
-  await page.getByRole('button', { name: 'Save API key requirement' }).click();
-  await expect(page.getByText('API key requirement saved.')).toBeVisible();
-  await expect(current).toHaveValue(initial);
-  const generate = page.getByRole('button', {
-    name: 'Generate new key',
+  const save = page.getByRole('button', {
+    name: 'Save API key settings',
     exact: true,
   });
-  await expect(generate).toBeEnabled();
-  await generate.click();
-  await expect(page.getByText('Clan API key rotated.')).toBeVisible();
-  await expect(current).not.toHaveValue(initial);
-  await expect(requireKey).not.toBeChecked();
+  const initial = await current.inputValue();
+  await expect(required).toBeChecked();
+  await required.uncheck();
   await page
-    .getByLabel('New shared API key', { exact: true })
-    .fill('custom supplied clan key');
-  await page.getByRole('button', { name: 'Set API key', exact: true }).click();
+    .getByRole('button', { name: 'Generate new key', exact: true })
+    .click();
+  await expect(current).not.toHaveValue(initial);
+  await expect(
+    page.getByText('New key generated. Save to apply it.'),
+  ).toBeVisible();
+  // Navigating away before saving leaves both persisted values untouched.
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
+  await page.getByRole('link', { name: 'Site settings', exact: true }).click();
+  await expect(required).toBeChecked();
+  await expect(current).toHaveValue(initial);
+  await required.uncheck();
+  await current.fill('custom supplied clan key');
+  await save.click();
+  await expect(page.getByText('Clan API key settings saved.')).toBeVisible();
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
+  await page.getByRole('link', { name: 'Site settings', exact: true }).click();
+  await expect(required).not.toBeChecked();
   await expect(current).toHaveValue('custom supplied clan key');
-  await expect(requireKey).not.toBeChecked();
-  await requireKey.check();
-  await page.getByRole('button', { name: 'Save API key requirement' }).click();
-  await expect(requireKey).toBeChecked();
-  await expect(current).toHaveValue('custom supplied clan key');
+  await page
+    .getByRole('button', { name: 'Generate new key', exact: true })
+    .click();
+  await save.click();
+  await expect(current).not.toHaveValue('custom supplied clan key');
+  await expect(required).not.toBeChecked();
+  await required.check();
+  await save.click();
+  await expect(required).toBeChecked();
+  await expect(
+    page.getByLabel('New shared API key', { exact: true }),
+  ).toHaveCount(0);
   await page.setViewportSize({ width: 320, height: 850 });
-  await expect(generate).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
