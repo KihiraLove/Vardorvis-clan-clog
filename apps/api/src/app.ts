@@ -1,5 +1,8 @@
 /** Public projections plus optional configured admin auth; unavailable services fail closed. */
 import { proofRoutes } from './proof-routes.js';
+import { brandingRoutes } from './branding-routes.js';
+import type { BrandingStorage } from './branding-storage.js';
+import type { BrandingStore } from './branding-store.js';
 import type { ProofStorage } from './proof-storage.js';
 import type { ProofStore } from './proof-store.js';
 import { checkReadiness } from './readiness.js';
@@ -17,6 +20,8 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  branding?: BrandingStore | undefined;
+  logos?: BrandingStorage | undefined;
   clanKeys?: import('./clan-api-key.js').ClanKeyStore | undefined;
   proofs?: ProofStorage | undefined;
   proofStore?: ProofStore | undefined;
@@ -187,6 +192,7 @@ export function createApp(
       throw new ApiError(503, 'Admin password sign-in is not configured.');
     });
   }
+  brandingRoutes(app, options.branding, options.logos, requireAdmin);
   // Review and catalog editing share one private catalog projection and auth boundary.
   if (options.catalog || options.review)
     app.get(

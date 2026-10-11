@@ -23,6 +23,12 @@ flowchart TD
 
 ## Boundaries
 
+Administrator-managed [clan branding](clan-branding.md) uses its own revision,
+immutable raster logo/favicon pairs and an audited current pointer. Files live
+in the existing icon volume. Public pages poll the branding projection, while
+authenticated, CSRF-protected administrator writes preserve GIF/WebP animation
+and generate a first-frame PNG favicon. Source images are never served directly.
+
 The web proxy within the combined application container serves static assets and proxies `/api/` to the API. The external reverse proxy terminates TLS. Public endpoints return only catalog data and approved collection credits; proof links, pending claims, Discord IDs and audit metadata remain private.
 
 The bot connects outbound to Discord's gateway and the internal API. Submission writes use a dedicated service credential, restricted to bot routes. The credential must not authorize staff routes. Human staff use individual administrator/moderator accounts, exact site origin, expiring server-side sessions and CSRF protection; Discord OAuth is not an admin login method. V1 does not require public visitors to log in.

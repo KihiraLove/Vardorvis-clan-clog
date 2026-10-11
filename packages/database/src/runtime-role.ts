@@ -8,6 +8,8 @@ export const runtimeRole = 'clog_runtime';
 const ownerOnly = new Set(['schema_migrations', 'catalog_taxonomy_updates']);
 const readOnly = new Set(['catalog_versions']);
 const appendOnly = new Set([
+  'clan_logo_assets',
+  'clan_branding_audit',
   'staff_account_audit',
   'clan_api_key_audit',
   'audit_events',

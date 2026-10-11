@@ -1,6 +1,8 @@
 /** Admin-only release switch. Live persistence requires the authenticated settings API. */
 import { useEffect, useState } from 'react';
 import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
+import { ClanLogoSettings } from './ClanLogoSettings.tsx';
+import type { Branding } from './branding.ts';
 import { AdminRequestError } from './admin-api.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
@@ -11,11 +13,13 @@ export function AdminSettings({
   session,
   onAccessLost,
   onSaved,
+  onBrandingSaved,
 }: {
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
   onSaved?: ((settings: SiteSettings) => void) | undefined;
+  onBrandingSaved: (branding: Branding) => void;
 }) {
   const [saved, setSaved] = useState<SiteSettings>();
   const [enabled, setEnabled] = useState(false);
@@ -148,6 +152,12 @@ export function AdminSettings({
         client={client}
         session={session}
         onAccessLost={onAccessLost}
+      />
+      <ClanLogoSettings
+        client={client}
+        session={session}
+        onAccessLost={onAccessLost}
+        onSaved={onBrandingSaved}
       />
     </section>
   );

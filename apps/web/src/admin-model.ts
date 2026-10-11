@@ -126,6 +126,13 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  branding(signal: AbortSignal): Promise<import('./branding.ts').Branding>;
+  saveLogo(
+    file: File | null,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('./branding.ts').Branding>;
   accounts(signal: AbortSignal): Promise<StaffAccount[]>;
   createModerator(
     username: string,

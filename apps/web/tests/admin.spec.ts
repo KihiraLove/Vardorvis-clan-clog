@@ -2,6 +2,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
+import { defaultBranding } from '../src/branding.ts';
 import type { AdminCatalog, SubmissionDetail } from '../src/admin-model.ts';
 
 const editor = (page: Page) => page.locator('.submission-editor');
@@ -54,6 +55,8 @@ async function mockAdmin(page: Page) {
       return route.fulfill({
         json: state.authenticated ? f.session : { authenticated: false },
       });
+    if (path === '/api/v1/branding' || path === '/api/v1/admin/branding')
+      return route.fulfill({ json: defaultBranding });
     if (path === '/api/v1/admin/clan-api-key')
       return route.fulfill({
         json: {
@@ -729,6 +732,8 @@ test('live admin shows a password form and submits a password without Discord OA
       authenticated = true;
       return route.fulfill({ json: { authenticated: true } });
     }
+    if (path === '/api/v1/branding' || path === '/api/v1/admin/branding')
+      return route.fulfill({ json: defaultBranding });
     if (path === '/api/v1/admin/clan-api-key')
       return route.fulfill({
         json: {

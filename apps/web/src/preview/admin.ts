@@ -10,6 +10,11 @@ const generatePreviewKey = () =>
   ).join('');
 import { AdminRequestError } from '../admin-api.ts';
 import {
+  defaultBranding,
+  validateLogoFile,
+  type Branding,
+} from '../branding.ts';
+import {
   safeProof,
   validateCorrection,
   validateIconFile,
@@ -36,6 +41,74 @@ import {
 } from './scenarios.ts';
 
 export class PreviewAdminClient implements AdminClient {
+  private logoSettings: Branding = { ...defaultBranding };
+  private logoUrls = new Set<string>();
+  publicBranding() {
+    return { ...this.logoSettings };
+  }
+  async branding(signal: AbortSignal) {
+    this.access(signal);
+    return this.publicBranding();
+  }
+  async saveLogo(
+    file: File | null,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.logoSettings.revision)
+      throw new AdminRequestError(409);
+    let paths = defaultBranding;
+    if (file) {
+      validateLogoFile(file);
+      const bitmap = await createImageBitmap(file);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 64;
+        const scale = Math.min(64 / bitmap.width, 64 / bitmap.height);
+        const width = bitmap.width * scale,
+          height = bitmap.height * scale;
+        canvas
+          .getContext('2d')!
+          .drawImage(
+            bitmap,
+            (64 - width) / 2,
+            (64 - height) / 2,
+            width,
+            height,
+          );
+        const png = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob(
+            (blob) =>
+              blob
+                ? resolve(blob)
+                : reject(new Error('Could not create the website icon.')),
+            'image/png',
+          ),
+        );
+        this.access(signal);
+        paths = {
+          ...defaultBranding,
+          logoPath: URL.createObjectURL(file),
+          faviconPath: URL.createObjectURL(png),
+        };
+        this.logoUrls.add(paths.logoPath);
+        this.logoUrls.add(paths.faviconPath);
+      } finally {
+        bitmap.close();
+      }
+    }
+    // Recheck after asynchronous image decoding to preserve the same concurrency contract.
+    if (revision !== this.logoSettings.revision)
+      throw new AdminRequestError(409);
+    this.logoSettings = {
+      ...paths,
+      revision: 'branding-' + (Number(revision.slice(9)) + 1),
+    };
+    this.changed(false);
+    return this.publicBranding();
+  }
   private keySettings: ClanKeySettings = {
     revision: 'clan-key-1',
     enabled: true,
@@ -616,6 +689,8 @@ export class PreviewAdminClient implements AdminClient {
   }
   /** Blob URLs belong to this preview client and must be released when its mode is left. */
   dispose() {
+    for (const url of this.logoUrls) URL.revokeObjectURL(url);
+    this.logoUrls.clear();
     for (const asset of this.assets.values())
       URL.revokeObjectURL(asset.iconPath);
     this.assets.clear();

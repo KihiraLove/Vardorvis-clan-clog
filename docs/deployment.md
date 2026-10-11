@@ -147,6 +147,11 @@ add new forward-only migration files rather than editing this applied baseline.
 
 ## Backups, Discord and release acceptance
 
+Migration `006_clan_logos.sql` adds administrator-configurable logos and matching
+website icons. Files under `catalog-icons/branding` are already included in
+`icons.tar.gz`; restore that archive together with its database backup. See the
+[clan branding guide](clan-branding.md) for upload and recovery behavior.
+
 `infra/backup.sh /safe/new/backup-directory` stops the `app` writer, captures
 a PostgreSQL custom-format dump and all durable uploaded icons and screenshots, writes
 checksums and a `COMPLETE` marker, then restarts the app. Store an encrypted

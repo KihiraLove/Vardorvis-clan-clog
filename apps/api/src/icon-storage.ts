@@ -54,9 +54,10 @@ export class IconStorage {
     if (!isAbsolute(directory))
       throw new Error('ICON_STORAGE_PATH must be an absolute path');
   }
+  protected extension = 'png';
   private path(id: string) {
     if (!assetIdPattern.test(id)) throw new ApiError(404, 'Icon not found.');
-    return join(this.directory, id + '.png');
+    return join(this.directory, id + '.' + this.extension);
   }
   async initialize() {
     await mkdir(this.directory, { recursive: true });
