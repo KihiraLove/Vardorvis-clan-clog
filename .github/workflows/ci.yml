@@ -143,14 +143,17 @@ jobs:
             http://127.0.0.1:8088/api/v1/auth/session > /tmp/clog-local-session.json
           jq -e '.authenticated == true and .development == true and .displayName == "Local test admin"' /tmp/clog-local-session.json
           curl --fail -sS -b /tmp/clog-local-cookie.txt \
-            http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == false'
+            http://127.0.0.1:8088/api/v1/admin/settings > /tmp/clog-local-settings.json
+          jq -e '.hardcoreEnabled == false' /tmp/clog-local-settings.json
           curl --fail -sS -b /tmp/clog-local-cookie.txt \
             http://127.0.0.1:8088/api/v1/admin/catalog | jq -e '(.items | length) == 1717 and (.pages | length) == 124'
           csrf="$(jq -r '.csrfToken' /tmp/clog-local-session.json)"
+          jq '{hardcoreEnabled: true, expectedRevision: .revision}' \
+            /tmp/clog-local-settings.json > /tmp/clog-local-settings-update.json
           curl --fail -sS -b /tmp/clog-local-cookie.txt -X PUT \
             -H "Origin: http://127.0.0.1:8088" \
             -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' \
-            -d '{"hardcoreEnabled":true,"expectedRevision":"settings-1"}' \
+            --data-binary @/tmp/clog-local-settings-update.json \
             http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == true'
           test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: daybloom.net' \
             -b /tmp/clog-local-cookie.txt http://127.0.0.1:8088/api/v1/admin/settings)" = "403"
