@@ -12,7 +12,9 @@ import { AdminRequestError } from '../admin-api.ts';
 import {
   defaultSiteCopy,
   parseSiteCopy,
+  parseHardcoreAppearance,
   type SiteCopy,
+  type HardcoreAppearance,
   clanKeyBytes,
 } from '@clog/domain';
 import {
@@ -48,22 +50,24 @@ import {
 
 export class PreviewAdminClient implements AdminClient {
   private logoSettings: Branding = { ...defaultBranding };
+  private hardcoreLogoSettings: Branding = { ...defaultBranding };
   private logoUrls = new Set<string>();
-  publicBranding() {
-    return { ...this.logoSettings };
+  publicBranding(hardcore = false) {
+    return { ...(hardcore ? this.hardcoreLogoSettings : this.logoSettings) };
   }
-  async branding(signal: AbortSignal) {
+  async branding(signal: AbortSignal, hardcore = false) {
     this.access(signal);
-    return this.publicBranding();
+    return this.publicBranding(hardcore);
   }
   async saveLogo(
     file: File | null,
     revision: string,
     _csrf: string,
     signal: AbortSignal,
+    hardcore = false,
   ) {
     this.access(signal);
-    if (revision !== this.logoSettings.revision)
+    if (revision !== this.publicBranding(hardcore).revision)
       throw new AdminRequestError(409);
     let paths = defaultBranding;
     if (file) {
@@ -106,14 +110,16 @@ export class PreviewAdminClient implements AdminClient {
       }
     }
     // Recheck after asynchronous image decoding to preserve the same concurrency contract.
-    if (revision !== this.logoSettings.revision)
+    if (revision !== this.publicBranding(hardcore).revision)
       throw new AdminRequestError(409);
-    this.logoSettings = {
+    const saved = {
       ...paths,
       revision: 'branding-' + (Number(revision.slice(9)) + 1),
     };
+    if (hardcore) this.hardcoreLogoSettings = saved;
+    else this.logoSettings = saved;
     this.changed(false);
-    return this.publicBranding();
+    return this.publicBranding(hardcore);
   }
   private keySettings: ClanKeySettings = {
     revision: 'clan-key-1',
@@ -124,6 +130,7 @@ export class PreviewAdminClient implements AdminClient {
   private queueRevision = 0;
   private setting = {
     copy: { ...defaultSiteCopy },
+    hardcore: { clanName: 'Clan name', copy: { ...defaultSiteCopy } },
     revision: 'settings-0',
     hardcoreEnabled: false,
     clanName: 'Clan name',
@@ -481,12 +488,16 @@ export class PreviewAdminClient implements AdminClient {
     signal: AbortSignal,
     clanName?: string,
     copy?: SiteCopy,
+    hardcore?: HardcoreAppearance,
   ) {
     this.access(signal);
     if (expectedRevision !== this.setting.revision)
       throw new AdminRequestError(409);
     this.setting = {
       copy: copy ? parseSiteCopy(copy) : this.setting.copy,
+      hardcore: hardcore
+        ? parseHardcoreAppearance(hardcore)
+        : this.setting.hardcore,
       hardcoreEnabled,
       clanName: clanName?.trim() ?? this.setting.clanName,
       revision: 'settings-' + ++this.settingsVersion,

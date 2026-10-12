@@ -1,6 +1,11 @@
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
-import { parseSiteCopy, type SiteCopy } from '@clog/domain';
+import {
+  parseSiteCopy,
+  parseHardcoreAppearance,
+  type SiteCopy,
+  type HardcoreAppearance,
+} from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import {
@@ -448,8 +453,10 @@ export class PgStore implements BackendStore {
         version: number;
         clan_name: string;
         public_copy: SiteCopy;
+        hardcore_name: string;
+        hardcore_copy: SiteCopy;
       }>(
-        'SELECT hardcore_enabled, version, clan_name, public_copy FROM site_settings WHERE singleton=true',
+        'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true',
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Settings unavailable.');
@@ -458,6 +465,10 @@ export class PgStore implements BackendStore {
       hardcoreEnabled: row.hardcore_enabled,
       clanName: row.clan_name,
       copy: parseSiteCopy(row.public_copy),
+      hardcore: parseHardcoreAppearance({
+        clanName: row.hardcore_name,
+        copy: row.hardcore_copy,
+      }),
     };
   }
   async saveSettings(
@@ -466,6 +477,7 @@ export class PgStore implements BackendStore {
     actor: string,
     clanName?: string,
     copy?: SiteCopy,
+    hardcore?: HardcoreAppearance,
   ): Promise<Settings | null> {
     if (
       clanName !== undefined &&
@@ -481,8 +493,10 @@ export class PgStore implements BackendStore {
           version: number;
           clan_name: string;
           public_copy: SiteCopy;
+          hardcore_name: string;
+          hardcore_copy: SiteCopy;
         }>(
-          'SELECT hardcore_enabled, version, clan_name, public_copy FROM site_settings WHERE singleton=true FOR UPDATE',
+          'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true FOR UPDATE',
         )
       ).rows[0];
       if (!old || 'settings-' + old.version !== revision) {
@@ -492,12 +506,22 @@ export class PgStore implements BackendStore {
       const version = old.version + 1;
       const name = clanName?.trim() ?? old.clan_name;
       const text = parseSiteCopy(copy ?? old.public_copy);
-      await client.query(
-        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4 WHERE singleton=true',
-        [enabled, version, name, JSON.stringify(text)],
+      const hc = parseHardcoreAppearance(
+        hardcore ?? { clanName: old.hardcore_name, copy: old.hardcore_copy },
       );
       await client.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4, hardcore_name=$5, hardcore_copy=$6 WHERE singleton=true',
+        [
+          enabled,
+          version,
+          name,
+          JSON.stringify(text),
+          hc.clanName,
+          JSON.stringify(hc.copy),
+        ],
+      );
+      await client.query(
+        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy,old_hardcore_name,new_hardcore_name,old_hardcore_copy,new_hardcore_copy) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
         [
           actor,
           old.hardcore_enabled,
@@ -507,6 +531,10 @@ export class PgStore implements BackendStore {
           name,
           JSON.stringify(old.public_copy),
           JSON.stringify(text),
+          old.hardcore_name,
+          hc.clanName,
+          JSON.stringify(old.hardcore_copy),
+          JSON.stringify(hc.copy),
         ],
       );
       await client.query('COMMIT');
@@ -515,6 +543,7 @@ export class PgStore implements BackendStore {
         hardcoreEnabled: enabled,
         clanName: name,
         copy: text,
+        hardcore: hc,
       };
     } catch (error) {
       await client.query('ROLLBACK');

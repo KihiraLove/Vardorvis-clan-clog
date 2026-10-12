@@ -15,7 +15,11 @@ import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
 import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
 import { hashPassword, verifyPassword } from './passwords.js';
-import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
+import {
+  defaultSiteCopy,
+  type SiteCopy,
+  type HardcoreAppearance,
+} from '@clog/domain';
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
 const nonce = () => randomBytes(32).toString('base64url');
@@ -347,12 +351,29 @@ export function authRoutes(
     await requireOwner(request);
     return store.settings();
   });
+  const copySchema = {
+    type: 'object',
+    additionalProperties: false,
+    required: Object.keys(defaultSiteCopy),
+    properties: Object.fromEntries(
+      Object.keys(defaultSiteCopy).map((key) => [
+        key,
+        {
+          type: 'string',
+          minLength: 1,
+          maxLength: 160,
+          pattern: '^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$',
+        },
+      ]),
+    ),
+  };
   app.put<{
     Body: {
       hardcoreEnabled: boolean;
       expectedRevision: string;
       clanName?: string;
       copy?: SiteCopy;
+      hardcore?: HardcoreAppearance;
     };
   }>(
     '/api/v1/admin/settings',
@@ -364,22 +385,21 @@ export function authRoutes(
           required: ['hardcoreEnabled', 'expectedRevision'],
           properties: {
             hardcoreEnabled: { type: 'boolean' },
-            copy: {
+            copy: copySchema,
+            hardcore: {
               type: 'object',
               additionalProperties: false,
-              required: Object.keys(defaultSiteCopy),
-              properties: Object.fromEntries(
-                Object.keys(defaultSiteCopy).map((key) => [
-                  key,
-                  {
-                    type: 'string',
-                    minLength: 1,
-                    maxLength: 160,
-                    pattern:
-                      '^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$',
-                  },
-                ]),
-              ),
+              required: ['clanName', 'copy'],
+              properties: {
+                clanName: {
+                  type: 'string',
+                  minLength: 1,
+                  maxLength: 80,
+                  pattern:
+                    '^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$',
+                },
+                copy: copySchema,
+              },
             },
             clanName: {
               type: 'string',
@@ -408,6 +428,7 @@ export function authRoutes(
         session.id,
         request.body.clanName,
         request.body.copy,
+        request.body.hardcore,
       );
       if (!saved)
         throw new ApiError(

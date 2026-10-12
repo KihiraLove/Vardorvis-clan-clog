@@ -43,6 +43,7 @@ test(
         clanName: 'Clan name',
         hardcoreEnabled: false,
         copy: defaultSiteCopy,
+        hardcore: { clanName: 'Clan name', copy: defaultSiteCopy },
       });
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES(42,'Shared item','/items/42.png'),(43,'Manual item','/items/43.png')",

@@ -14,6 +14,9 @@
 * {
   box-sizing: border-box;
 }
+html {
+  scrollbar-gutter: stable;
+}
 body {
   margin: 0;
   min-width: 280px;
@@ -1173,6 +1176,27 @@ main {
   display: grid;
   gap: 13px;
 }
+.submission-results {
+  position: relative;
+  min-height: 64px;
+  margin: 12px 0;
+}
+.submission-results .submission-list,
+.submission-results .admin-empty {
+  margin: 0;
+}
+.submission-results[aria-busy='true'] .submission-list {
+  opacity: 0.5;
+}
+.queue-loading {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 8px 12px;
+  background: #29261e;
+  border: 1px solid #594c34;
+}
 .submission-card {
   border: 1px solid #514936;
   background: #211e17;
@@ -1931,8 +1955,8 @@ main {
   min-height: 37px;
   padding: 7px 10px;
   border-radius: 11px;
-  background: #72a5f2;
-  color: #172b49 !important;
+  background: #fff;
+  color: #181717 !important;
   text-decoration: none;
   font:
     700 12px/1.2 Arial,

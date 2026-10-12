@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { previewCatalog } from '../src/preview/scenarios.ts';
+import { resolve } from 'node:path';
+import { adminFixtures } from './admin-fixtures.ts';
+import { defaultBranding } from '../src/branding.ts';
 
 test('site settings lives on its own page and edited labels appear across the public site', async ({
   page,
@@ -24,9 +27,9 @@ test('site settings lives on its own page and edited labels appear across the pu
   await page
     .getByLabel('XP section title', { exact: true })
     .fill('Clan training');
-  await page
-    .getByLabel('XP total caption', { exact: true })
-    .fill('All clan training events');
+  await expect(
+    page.getByLabel('XP total caption', { exact: true }),
+  ).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Save site settings', exact: true })
     .click();
@@ -55,15 +58,20 @@ test('site settings lives on its own page and edited labels appear across the pu
     page.getByRole('heading', { name: 'Clan training', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('All clan training events', { exact: true }),
-  ).toBeVisible();
+    page.getByText('Across all recorded SOTW events', { exact: true }),
+  ).toHaveCount(0);
   await expect(page).toHaveTitle('Clan name · Our clan collection');
   await expect(page.locator('.site-footer')).not.toContainText(
     'One clan. Every collection.',
   );
   await expect(
-    page.getByRole('link', { name: 'GitHub · KihiraLove' }),
+    page.getByRole('link', { name: 'GitHub', exact: true }),
   ).toHaveAttribute('href', 'https://github.com/KihiraLove');
+  expect(
+    await page
+      .locator('.github-support')
+      .evaluate((node) => getComputedStyle(node).backgroundColor),
+  ).toBe('rgb(255, 255, 255)');
   await expect(
     page.getByRole('link', { name: 'Support me on Ko-fi' }),
   ).toHaveAttribute('href', 'https://ko-fi.com/kihiralove');
@@ -80,6 +88,193 @@ test('site settings lives on its own page and edited labels appear across the pu
     fullPage: true,
   });
 });
+test('hardcore appearance can be configured while disabled and switches independently on the public site', async ({
+  page,
+}) => {
+  await page.goto('/admin/settings?preview=1');
+  const logo = await page
+    .getByRole('heading', { name: 'Clan logo', exact: true })
+    .boundingBox();
+  const name = await page
+    .getByLabel('Clan name', { exact: true })
+    .boundingBox();
+  expect(logo!.y).toBeLessThan(name!.y);
+  await expect(
+    page.getByLabel('XP total caption', { exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole('link', { name: 'Hardcore worlds', exact: true })
+    .click();
+  await expect(page.getByLabel('Enable hardcore worlds')).not.toBeChecked();
+  await page.getByLabel('Displayed clan name').fill('Hardcore clan');
+  await page
+    .getByLabel('Collection log title', { exact: true })
+    .fill('Hardcore collection');
+  await page
+    .getByLabel('Collection log caption', { exact: true })
+    .fill('Hardcore drops');
+  await page
+    .getByLabel('XP section title', { exact: true })
+    .fill('Hardcore training');
+  await page
+    .getByLabel('Logo image')
+    .setInputFiles(resolve('public/skills/sailing.png'));
+  await page
+    .getByRole('button', { name: 'Save clan logo', exact: true })
+    .click();
+  await expect(
+    page.getByText('Clan logo and website icon saved.'),
+  ).toBeVisible();
+  const hcLogo = await page
+    .getByAltText('Current clan logo')
+    .getAttribute('src');
+  await page
+    .getByRole('button', { name: 'Save hardcore settings', exact: true })
+    .click();
+  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.locator('header a.clan-brand').click();
+  await expect(page.locator('.clan-name')).toHaveText('Clan name');
+  await expect(page.locator('header .clan-logo')).toHaveAttribute(
+    'src',
+    defaultBranding.logoPath,
+  );
+  await expect(
+    page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
+  ).toHaveCount(0);
+  await page.goBack();
+  await page.getByLabel('Enable hardcore worlds').check();
+  await page
+    .getByRole('button', { name: 'Save hardcore settings', exact: true })
+    .click();
+  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.locator('header a.clan-brand').click();
+  await page
+    .getByRole('button', { name: 'Hardcore worlds', exact: true })
+    .click();
+  await expect(page.locator('.clan-name')).toHaveText('Hardcore clan');
+  await expect(page.locator('header .clan-logo')).toHaveAttribute(
+    'src',
+    hcLogo!,
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Hardcore training', exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveTitle('Hardcore clan · Hardcore collection');
+  await expect(page.locator('.log-help')).toContainText('Hardcore drops');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
+    'href',
+    /^blob:/,
+  );
+  await page.screenshot({
+    path: test.info().outputPath('hardcore-customized-desktop.png'),
+    fullPage: true,
+  });
+  await page
+    .getByRole('button', { name: 'Hardcore worlds', exact: true })
+    .click();
+  await expect(page.locator('.clan-name')).toHaveText('Clan name');
+  await expect(page.locator('header .clan-logo')).toHaveAttribute(
+    'src',
+    defaultBranding.logoPath,
+  );
+  await page.goBack();
+  await page.getByLabel('Enable hardcore worlds').uncheck();
+  await page
+    .getByRole('button', { name: 'Save hardcore settings', exact: true })
+    .click();
+  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await expect(page.getByLabel('Displayed clan name')).toHaveValue(
+    'Hardcore clan',
+  );
+  await expect(page.getByAltText('Current clan logo')).toHaveAttribute(
+    'src',
+    hcLogo!,
+  );
+  await page.setViewportSize({ width: 320, height: 850 });
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await page.screenshot({
+    path: test.info().outputPath('hardcore-settings-disabled-mobile.png'),
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole('link', { name: 'XP imports', exact: true }).click();
+  await expect(page.locator('.event-tracker > h1')).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Import competition', exact: true }),
+  ).toBeVisible();
+});
+
+test('empty submission filters preserve panel and pagination geometry while loading', async ({
+  page,
+}) => {
+  const fixture = await adminFixtures();
+  let release: (() => void) | undefined;
+  let delay = false;
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/auth/session')
+      return route.fulfill({ json: fixture.session });
+    if (path === '/api/v1/settings')
+      return route.fulfill({
+        json: {
+          revision: 'settings-1',
+          clanName: 'Clan name',
+          hardcoreEnabled: false,
+        },
+      });
+    if (path.startsWith('/api/v1/branding'))
+      return route.fulfill({ json: defaultBranding });
+    if (path === '/api/v1/admin/catalog')
+      return route.fulfill({ json: fixture.catalog });
+    if (path === '/api/v1/admin/submissions') {
+      if (delay)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return route.fulfill({
+        json: { ...fixture.pending, submissions: [], nextCursor: null },
+      });
+    }
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+  await page.goto('/admin');
+  await expect(
+    page.getByText('No pending submissions in this view.'),
+  ).toBeVisible();
+  const panel = page.locator('.admin-panel').filter({
+    has: page.getByRole('heading', { name: 'Submissions', exact: true }),
+  });
+  const before = await panel.boundingBox(),
+    pagination = await page.locator('.admin-pagination').boundingBox();
+  for (const view of ['Unmatched', 'Reviewed', 'Pending']) {
+    delay = true;
+    release = undefined;
+    await page.getByRole('button', { name: view, exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Loading');
+    expect(await panel.boundingBox()).toEqual(before);
+    expect(await page.locator('.admin-pagination').boundingBox()).toEqual(
+      pagination,
+    );
+    await expect.poll(() => Boolean(release)).toBe(true);
+    delay = false;
+    release!();
+    await expect(
+      page.getByText(`No ${view.toLowerCase()} submissions in this view.`),
+    ).toBeVisible();
+    expect(await panel.boundingBox()).toEqual(before);
+    expect(await page.locator('.admin-pagination').boundingBox()).toEqual(
+      pagination,
+    );
+  }
+});
+
 test('administrator can disable, re-enable and delete moderator accounts without administrator controls', async ({
   page,
 }) => {

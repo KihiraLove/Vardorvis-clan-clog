@@ -34,7 +34,10 @@ export function AdminNavigation({
           ? [['/admin/accounts', 'Moderator accounts']]
           : []),
         ...(session?.role === 'admin'
-          ? [['/admin/settings', 'Site settings']]
+          ? [
+              ['/admin/settings', 'Site settings'],
+              ['/admin/settings/hardcore', 'Hardcore worlds'],
+            ]
           : []),
       ].map(([url, label]) => (
         <a
@@ -63,7 +66,7 @@ export function AdminPage({
   client: AdminClient;
   clanName: string;
   onSettingsSaved: (settings: SiteSettings) => void;
-  onBrandingSaved: (branding: Branding) => void;
+  onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
   onMode: (next: boolean) => void;
   children?: React.ReactNode;
 }) {
@@ -180,13 +183,17 @@ export function AdminPage({
       )}
       {session?.role === 'admin' &&
         !session.mustChangePassword &&
-        path === '/admin/settings' && (
+        (path === '/admin/settings' || path === '/admin/settings/hardcore') && (
           <AdminSettings
+            key={path}
+            hardcore={path === '/admin/settings/hardcore'}
             client={client}
             session={session}
             onAccessLost={accessLost}
             onSaved={onSettingsSaved}
-            onBrandingSaved={onBrandingSaved}
+            onBrandingSaved={(value) =>
+              onBrandingSaved(value, path === '/admin/settings/hardcore')
+            }
           />
         )}
       {action.error && (
@@ -274,7 +281,7 @@ export function AdminPage({
             Only the administrator can create moderator accounts.
           </p>
         )
-      ) : path === '/admin/settings' ? (
+      ) : path === '/admin/settings' || path === '/admin/settings/hardcore' ? (
         session.role === 'admin' ? null : (
           <p role="alert">Only the administrator can change site settings.</p>
         )

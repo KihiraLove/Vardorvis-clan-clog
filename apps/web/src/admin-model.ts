@@ -152,12 +152,16 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
   ): Promise<{ retired: boolean }>;
-  branding(signal: AbortSignal): Promise<import('./branding.ts').Branding>;
+  branding(
+    signal: AbortSignal,
+    hardcore?: boolean,
+  ): Promise<import('./branding.ts').Branding>;
   saveLogo(
     file: File | null,
     revision: string,
     csrf: string,
     signal: AbortSignal,
+    hardcore?: boolean,
   ): Promise<import('./branding.ts').Branding>;
   accounts(signal: AbortSignal): Promise<StaffAccount[]>;
   createModerator(
@@ -189,6 +193,7 @@ export interface AdminClient {
     signal: AbortSignal,
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
+    hardcore?: import('@clog/domain').HardcoreAppearance,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
   login(username: string, password: string, signal: AbortSignal): Promise<void>;

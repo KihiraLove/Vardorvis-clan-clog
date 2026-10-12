@@ -12,24 +12,26 @@ export const defaultBranding: Branding = {
   faviconPath: '/favicon.png',
 };
 export interface BrandingStore {
-  settings(): Promise<Branding>;
+  settings(hardcore?: boolean): Promise<Branding>;
   asset(id: string): Promise<LogoRecord | null>;
   save(
     record: LogoRecord | null,
     revision: string,
     actor: string,
+    hardcore?: boolean,
   ): Promise<Branding>;
 }
 export class PgBrandingStore implements BrandingStore {
   constructor(private readonly pool: pg.Pool) {}
-  async settings(): Promise<Branding> {
+  async settings(hardcore = false): Promise<Branding> {
+    const prefix = hardcore ? 'hardcore_' : '';
     const row = (
       await this.pool.query<{
         version: number;
         logo_asset_id: string | null;
         favicon_id: string | null;
       }>(
-        'SELECT b.version,b.logo_asset_id,a.favicon_id FROM clan_branding b LEFT JOIN clan_logo_assets a ON a.id=b.logo_asset_id WHERE singleton=true',
+        `SELECT b.${prefix}version AS version,b.${prefix}logo_asset_id AS logo_asset_id,a.favicon_id FROM clan_branding b LEFT JOIN clan_logo_assets a ON a.id=b.${prefix}logo_asset_id WHERE singleton=true`,
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Clan branding unavailable.');
@@ -70,13 +72,15 @@ export class PgBrandingStore implements BrandingStore {
     record: LogoRecord | null,
     revision: string,
     actor: string,
+    hardcore = false,
   ): Promise<Branding> {
+    const prefix = hardcore ? 'hardcore_' : '';
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       const old = (
         await client.query(
-          'SELECT * FROM clan_branding WHERE singleton=true FOR UPDATE',
+          `SELECT ${prefix}version AS version,${prefix}logo_asset_id AS logo_asset_id FROM clan_branding WHERE singleton=true FOR UPDATE`,
         )
       ).rows[0];
       if (!old || 'branding-' + old.version !== revision)
@@ -105,12 +109,12 @@ export class PgBrandingStore implements BrandingStore {
       const id = record?.logo.id ?? null,
         version = old.version + 1;
       await client.query(
-        'UPDATE clan_branding SET logo_asset_id=$1,version=$2 WHERE singleton=true',
+        `UPDATE clan_branding SET ${prefix}logo_asset_id=$1,${prefix}version=$2 WHERE singleton=true`,
         [id, version],
       );
       await client.query(
-        'INSERT INTO clan_branding_audit(actor_id,old_logo_asset_id,new_logo_asset_id,version) VALUES($1,$2,$3,$4)',
-        [actor, old.logo_asset_id, id, version],
+        'INSERT INTO clan_branding_audit(actor_id,old_logo_asset_id,new_logo_asset_id,version,hardcore) VALUES($1,$2,$3,$4,$5)',
+        [actor, old.logo_asset_id, id, version, hardcore],
       );
       await client.query('COMMIT');
       return {

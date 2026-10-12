@@ -1,6 +1,7 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
   copy?: import('@clog/domain').SiteCopy;
+  hardcore?: import('@clog/domain').HardcoreAppearance;
   clanName: string;
   revision: string;
   hardcoreEnabled: boolean;
@@ -103,6 +104,7 @@ export interface BackendStore {
     actor: string,
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
+    hardcore?: import('@clog/domain').HardcoreAppearance,
   ): Promise<Settings | null>;
   createState(hash: string, expiresAt: Date): Promise<void>;
   consumeState(hash: string): Promise<boolean>;

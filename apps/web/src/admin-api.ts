@@ -317,14 +317,20 @@ export class LiveAdminClient implements AdminClient {
   async settings(signal: AbortSignal) {
     return parseSettings(await this.json('/api/v1/admin/settings', signal));
   }
-  async branding(signal: AbortSignal) {
-    return parseBranding(await this.json('/api/v1/admin/branding', signal));
+  async branding(signal: AbortSignal, hardcore = false) {
+    return parseBranding(
+      await this.json(
+        '/api/v1/admin/branding' + (hardcore ? '/hardcore' : ''),
+        signal,
+      ),
+    );
   }
   async saveLogo(
     file: File | null,
     revision: string,
     csrf: string,
     signal: AbortSignal,
+    hardcore = false,
   ) {
     let options: RequestInit;
     if (file) {
@@ -339,7 +345,11 @@ export class LiveAdminClient implements AdminClient {
     } else options = this.write(csrf, { expectedRevision: revision }, 'DELETE');
     let payload: unknown;
     try {
-      payload = await this.json('/api/v1/admin/branding/logo', signal, options);
+      payload = await this.json(
+        '/api/v1/admin/branding' + (hardcore ? '/hardcore' : '') + '/logo',
+        signal,
+        options,
+      );
     } catch (failure) {
       if (
         file &&
@@ -364,6 +374,7 @@ export class LiveAdminClient implements AdminClient {
     signal: AbortSignal,
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
+    hardcore?: import('@clog/domain').HardcoreAppearance,
   ) {
     const result = parseSettings(
       await this.json(
@@ -376,6 +387,7 @@ export class LiveAdminClient implements AdminClient {
             expectedRevision,
             ...(clanName === undefined ? {} : { clanName }),
             ...(copy === undefined ? {} : { copy }),
+            ...(hardcore === undefined ? {} : { hardcore }),
           },
           'PUT',
         ),
@@ -386,6 +398,8 @@ export class LiveAdminClient implements AdminClient {
       (clanName !== undefined && result.clanName !== clanName.trim()) ||
       (copy !== undefined &&
         JSON.stringify(result.copy) !== JSON.stringify(copy)) ||
+      (hardcore !== undefined &&
+        JSON.stringify(result.hardcore) !== JSON.stringify(hardcore)) ||
       result.revision === expectedRevision
     )
       throw new Error('Unexpected settings receipt.');

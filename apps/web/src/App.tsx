@@ -11,7 +11,11 @@ import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
 import { parseSettings, type SiteSettings } from './site-settings.ts';
 import { defaultBranding, parseBranding } from './branding.ts';
-import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
+import {
+  defaultSiteCopy,
+  type SiteCopy,
+  type HardcoreAppearance,
+} from '@clog/domain';
 
 function LiveLog({
   preview,
@@ -128,8 +132,13 @@ export function App() {
   const [liveClanName, setLiveClanName] = useState('');
   const [liveCopy, setLiveCopy] = useState<SiteCopy>(defaultSiteCopy);
   const [liveBranding, setLiveBranding] = useState(defaultBranding);
+  const [liveHardcoreBranding, setLiveHardcoreBranding] =
+    useState(defaultBranding);
+  const [liveHardcoreAppearance, setLiveHardcoreAppearance] =
+    useState<HardcoreAppearance>();
   useEffect(() => {
     setLiveBranding(defaultBranding);
+    setLiveHardcoreBranding(defaultBranding);
     if (route.preview) return;
     let stopped = false,
       pending = false;
@@ -139,21 +148,33 @@ export function App() {
       pending = true;
       controller = new AbortController();
       const timeout = setTimeout(() => controller?.abort(), 10000);
+      const signal = controller.signal;
       try {
-        const response = await fetch('/api/v1/branding', {
-          signal: controller.signal,
-          cache: 'no-store',
-        });
-        if (!response.ok) throw new Error('Branding unavailable');
-        const value = parseBranding(await response.json());
-        if (!stopped)
-          setLiveBranding((current) =>
-            Number(value.revision.slice(9)) >= Number(current.revision.slice(9))
-              ? value
-              : current,
-          );
-      } catch {
-        /* Keep the last verified logo while the service is unavailable. */
+        await Promise.all(
+          [false, true].map(async (hardcoreMode) => {
+            try {
+              const response = await fetch(
+                '/api/v1/branding' + (hardcoreMode ? '/hardcore' : ''),
+                {
+                  signal,
+                  cache: 'no-store',
+                },
+              );
+              if (!response.ok) throw new Error('Branding unavailable');
+              const value = parseBranding(await response.json());
+              if (!stopped)
+                (hardcoreMode ? setLiveHardcoreBranding : setLiveBranding)(
+                  (current) =>
+                    Number(value.revision.slice(9)) >=
+                    Number(current.revision.slice(9))
+                      ? value
+                      : current,
+                );
+            } catch {
+              /* Keep each mode's last verified logo independently. */
+            }
+          }),
+        );
       } finally {
         clearTimeout(timeout);
         pending = false;
@@ -200,6 +221,12 @@ export function App() {
           setLiveEnabled(value.hardcoreEnabled);
           setLiveClanName(value.clanName);
           setLiveCopy(value.copy ?? defaultSiteCopy);
+          setLiveHardcoreAppearance(
+            value.hardcore ?? {
+              clanName: value.clanName,
+              copy: value.copy ?? defaultSiteCopy,
+            },
+          );
           if (!value.hardcoreEnabled) setHardcore(false);
         }
       } catch {
@@ -249,6 +276,7 @@ export function App() {
     window.scrollTo(0, 0);
   };
   const admin = route.path === '/admin' || route.path.startsWith('/admin/');
+  const hardcoreAppearance = hardcore && !admin;
   const adminClient = useMemo(
     () => (route.preview ? new PreviewAdminClient() : new LiveAdminClient()),
     [route.preview],
@@ -274,14 +302,21 @@ export function App() {
       ? adminClient.getRevision
       : () => 0,
   );
-  const clanName =
+  const appearance =
     adminClient instanceof PreviewAdminClient
-      ? adminClient.publicSettings().clanName
-      : liveClanName;
+      ? hardcoreAppearance
+        ? adminClient.publicSettings().hardcore
+        : adminClient.publicSettings()
+      : hardcoreAppearance
+        ? liveHardcoreAppearance
+        : { clanName: liveClanName, copy: liveCopy };
+  const clanName = appearance?.clanName ?? liveClanName;
   const branding =
     adminClient instanceof PreviewAdminClient
-      ? adminClient.publicBranding()
-      : liveBranding;
+      ? adminClient.publicBranding(hardcoreAppearance)
+      : hardcoreAppearance
+        ? liveHardcoreBranding
+        : liveBranding;
   useEffect(() => {
     document
       .querySelectorAll<HTMLLinkElement>(
@@ -292,12 +327,15 @@ export function App() {
         icon.href = branding.faviconPath;
       });
   }, [branding.faviconPath]);
-  const copy =
-    adminClient instanceof PreviewAdminClient
-      ? adminClient.publicSettings().copy
-      : liveCopy;
+  const copy = appearance?.copy ?? defaultSiteCopy;
   const settingsSaved = (value: SiteSettings) => {
     setLiveCopy(value.copy ?? defaultSiteCopy);
+    setLiveHardcoreAppearance(
+      value.hardcore ?? {
+        clanName: value.clanName,
+        copy: value.copy ?? defaultSiteCopy,
+      },
+    );
     setLiveClanName(value.clanName);
     setLiveEnabled(value.hardcoreEnabled);
     if (!value.hardcoreEnabled) setHardcore(false);
@@ -382,7 +420,11 @@ export function App() {
               client={adminClient}
               clanName={clanName}
               onSettingsSaved={settingsSaved}
-              onBrandingSaved={setLiveBranding}
+              onBrandingSaved={(value, hardcoreMode) =>
+                (hardcoreMode ? setLiveHardcoreBranding : setLiveBranding)(
+                  value,
+                )
+              }
               preview={route.preview}
               path={route.path}
               onMode={mode}
@@ -431,7 +473,7 @@ export function App() {
               rel="noopener noreferrer"
             >
               <img src="/brand/github-mark.svg" alt="" width="22" height="22" />
-              <span>GitHub · KihiraLove</span>
+              <span>GitHub</span>
             </a>
             <a
               href="https://ko-fi.com/kihiralove"

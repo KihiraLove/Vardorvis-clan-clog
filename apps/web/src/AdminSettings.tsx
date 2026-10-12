@@ -1,4 +1,4 @@
-/** Admin-only release switch. Live persistence requires the authenticated settings API. */
+/** Independent mode appearance, with shared revision-checked administrator writes. */
 import { useEffect, useState } from 'react';
 import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 import { ClanLogoSettings } from './ClanLogoSettings.tsx';
@@ -15,12 +15,14 @@ export function AdminSettings({
   onAccessLost,
   onSaved,
   onBrandingSaved,
+  hardcore = false,
 }: {
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
   onSaved?: ((settings: SiteSettings) => void) | undefined;
   onBrandingSaved: (branding: Branding) => void;
+  hardcore?: boolean;
 }) {
   const [saved, setSaved] = useState<SiteSettings>();
   const [enabled, setEnabled] = useState(false);
@@ -29,6 +31,13 @@ export function AdminSettings({
   const [readError, setReadError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
+  const apply = (value: SiteSettings) => {
+    const appearance = hardcore ? value.hardcore : value;
+    setSaved(value);
+    setEnabled(value.hardcoreEnabled);
+    setClanName(appearance?.clanName ?? value.clanName);
+    setCopy(appearance?.copy ?? { ...defaultSiteCopy });
+  };
   useEffect(() => {
     let active = true;
     setSaved(undefined);
@@ -38,13 +47,7 @@ export function AdminSettings({
     void client
       .settings(controller.signal)
       .then((value) => {
-        if (!controller.signal.aborted) {
-          setSaved(value);
-          setEnabled(value.hardcoreEnabled);
-          setClanName(value.clanName);
-          setCopy(value.copy ?? { ...defaultSiteCopy });
-          setReadError(undefined);
-        }
+        if (active && !controller.signal.aborted) apply(value);
       })
       .catch((failure: unknown) => {
         if (!active) return;
@@ -55,9 +58,7 @@ export function AdminSettings({
           onAccessLost();
           return;
         }
-        setReadError(
-          'Settings are unavailable. Hardcore remains hidden until a saved setting can be read.',
-        );
+        setReadError('Site settings are unavailable. Reload to try again.');
       })
       .finally(() => clearTimeout(timer));
     return () => {
@@ -65,13 +66,21 @@ export function AdminSettings({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [client, refresh, onAccessLost]);
+  }, [client, refresh, onAccessLost, hardcore]);
   return (
     <section className="admin-panel">
-      <h2>Site settings</h2>
+      <h2>{hardcore ? 'Hardcore worlds settings' : 'Site settings'}</h2>
+      <ClanLogoSettings
+        client={client}
+        session={session}
+        onAccessLost={onAccessLost}
+        onSaved={onBrandingSaved}
+        hardcore={hardcore}
+      />
       <p>
-        Enable hardcore worlds when they are released. Disabling the switch
-        hides the skull and preserves recorded hardcore collections.
+        {hardcore
+          ? 'Configure the hardcore appearance while worlds are hidden. Enabling the switch shows the skull; disabling it preserves your settings and recorded collections.'
+          : 'Configure the regular site appearance. The clan name and API key are shared by all RuneLite submissions.'}
       </p>
       {readError && (
         <p role="alert">
@@ -92,25 +101,26 @@ export function AdminSettings({
                   saved.revision,
                   session.csrfToken,
                   signal,
-                  clanName.trim(),
-                  parseSiteCopy(copy),
+                  hardcore ? undefined : clanName.trim(),
+                  hardcore ? undefined : parseSiteCopy(copy),
+                  hardcore
+                    ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
+                    : undefined,
                 );
                 if (!signal.aborted) {
-                  setSaved(value);
-                  setEnabled(value.hardcoreEnabled);
-                  setClanName(value.clanName);
-                  setCopy(value.copy ?? { ...defaultSiteCopy });
+                  apply(value);
                   onSaved?.(value);
-                  action.setMessage('Site settings saved.');
+                  action.setMessage(
+                    hardcore
+                      ? 'Hardcore worlds settings saved.'
+                      : 'Site settings saved.',
+                  );
                 }
               },
               async (signal) => {
                 const value = await client.settings(signal);
                 if (!signal.aborted) {
-                  setSaved(value);
-                  setEnabled(value.hardcoreEnabled);
-                  setClanName(value.clanName);
-                  setCopy(value.copy ?? { ...defaultSiteCopy });
+                  apply(value);
                   onSaved?.(value);
                 }
               },
@@ -118,7 +128,7 @@ export function AdminSettings({
           }}
         >
           <label>
-            Clan name
+            {hardcore ? 'Displayed clan name' : 'Clan name'}
             <input
               required
               maxLength={80}
@@ -128,17 +138,21 @@ export function AdminSettings({
             />
           </label>
           <p className="admin-note">
-            Shown on the website and required for RuneLite submissions.
+            {hardcore
+              ? 'Shown when viewing hardcore worlds. Submissions still use the clan name in Site settings.'
+              : 'Shown on the regular website and required for all RuneLite submissions.'}
           </p>
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={action.busy}
-              onChange={(event) => setEnabled(event.target.checked)}
-            />
-            Enable hardcore worlds
-          </label>
+          {hardcore && (
+            <label className="admin-checkbox">
+              <input
+                type="checkbox"
+                checked={enabled}
+                disabled={action.busy}
+                onChange={(event) => setEnabled(event.target.checked)}
+              />
+              Enable hardcore worlds
+            </label>
+          )}
           <fieldset className="site-copy-fields">
             <legend>Website text</legend>
             {(
@@ -146,7 +160,6 @@ export function AdminSettings({
                 ['collectionTitle', 'Collection log title'],
                 ['collectionCaption', 'Collection log caption'],
                 ['xpTitle', 'XP section title'],
-                ['xpTotalCaption', 'XP total caption'],
               ] as const
             ).map(([key, label]) => (
               <label key={key}>
@@ -173,28 +186,30 @@ export function AdminSettings({
               !clanName.trim() ||
               Object.values(copy).some((text) => !text.trim()) ||
               (enabled === saved.hardcoreEnabled &&
-                clanName.trim() === saved.clanName &&
+                clanName.trim() ===
+                  (hardcore
+                    ? (saved.hardcore?.clanName ?? saved.clanName)
+                    : saved.clanName) &&
                 JSON.stringify(copy) ===
-                  JSON.stringify(saved.copy ?? defaultSiteCopy))
+                  JSON.stringify(
+                    (hardcore ? saved.hardcore?.copy : saved.copy) ??
+                      defaultSiteCopy,
+                  ))
             }
           >
-            Save site settings
+            {hardcore ? 'Save hardcore settings' : 'Save site settings'}
           </button>
         </form>
       )}
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
-      <ClanApiKeySettings
-        client={client}
-        session={session}
-        onAccessLost={onAccessLost}
-      />
-      <ClanLogoSettings
-        client={client}
-        session={session}
-        onAccessLost={onAccessLost}
-        onSaved={onBrandingSaved}
-      />
+      {!hardcore && (
+        <ClanApiKeySettings
+          client={client}
+          session={session}
+          onAccessLost={onAccessLost}
+        />
+      )}
     </section>
   );
 }

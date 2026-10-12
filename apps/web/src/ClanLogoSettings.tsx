@@ -13,11 +13,13 @@ export function ClanLogoSettings({
   session,
   onAccessLost,
   onSaved,
+  hardcore = false,
 }: {
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
   onSaved: (branding: Branding) => void;
+  hardcore?: boolean;
 }) {
   const [saved, setSaved] = useState<Branding>();
   const [file, setFile] = useState<File>();
@@ -32,7 +34,7 @@ export function ClanLogoSettings({
     setSaved(undefined);
     setReadError(false);
     void client
-      .branding(controller.signal)
+      .branding(controller.signal, hardcore)
       .then((value) => {
         if (active && !controller.signal.aborted) setSaved(value);
       })
@@ -51,9 +53,9 @@ export function ClanLogoSettings({
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [client, refresh, onAccessLost]);
+  }, [client, refresh, onAccessLost, hardcore]);
   const reload = async (signal: AbortSignal) => {
-    const value = await client.branding(signal);
+    const value = await client.branding(signal, hardcore);
     if (!signal.aborted) {
       setSaved(value);
       onSaved(value);
@@ -68,6 +70,7 @@ export function ClanLogoSettings({
         saved.revision,
         session.csrfToken,
         signal,
+        hardcore,
       );
       if (!signal.aborted) {
         setSaved(value);

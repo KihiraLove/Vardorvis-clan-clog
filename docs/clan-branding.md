@@ -30,6 +30,13 @@ and hidden pages refresh when they become visible.
 - `DELETE /api/v1/admin/branding/logo` restores the default, accepting JSON
   `{ "expectedRevision": "branding-N" }` with the same session/origin/CSRF checks.
 
+Hardcore appearance uses `GET /api/v1/branding/hardcore`,
+`GET /api/v1/admin/branding/hardcore` and
+`PUT` / `DELETE /api/v1/admin/branding/hardcore/logo` with the same contracts.
+The two modes have independent revisions, logos, favicons and audit histories.
+Hardcore logo controls remain available while its public release flag is off.
+The public website switches both logo and icon with its selected world mode.
+
 Successful writes advance the branding revision. Concurrent or stale writes
 return 409 and do not overwrite a newer change. Account setup, role, session,
 origin and CSRF are checked before consuming an upload. Public asset paths

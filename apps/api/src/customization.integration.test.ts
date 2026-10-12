@@ -98,7 +98,6 @@ test(
         collectionTitle: 'Our drops',
         collectionCaption: 'Collected at clan events',
         xpTitle: 'Training together',
-        xpTotalCaption: 'Lifetime event experience',
       };
       const save = (
         headers: Record<string, string>,

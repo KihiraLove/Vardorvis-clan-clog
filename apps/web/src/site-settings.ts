@@ -1,6 +1,7 @@
 /** Versioned release visibility; missing public settings must fail closed. */
 export interface SiteSettings {
   copy?: SiteCopy;
+  hardcore?: HardcoreAppearance;
   revision: string;
   clanName: string;
   hardcoreEnabled: boolean;
@@ -23,6 +24,14 @@ export function parseSettings(value: unknown): SiteSettings {
     hardcoreEnabled: data.hardcoreEnabled,
     clanName: data.clanName,
     ...(data.copy === undefined ? {} : { copy: parseSiteCopy(data.copy) }),
+    ...(data.hardcore === undefined
+      ? {}
+      : { hardcore: parseHardcoreAppearance(data.hardcore) }),
   };
 }
-import { parseSiteCopy, type SiteCopy } from '@clog/domain';
+import {
+  parseSiteCopy,
+  parseHardcoreAppearance,
+  type SiteCopy,
+  type HardcoreAppearance,
+} from '@clog/domain';

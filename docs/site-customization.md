@@ -4,15 +4,16 @@ Visual references from the passing Chromium preview tests: [desktop homepage](si
 and [320-pixel Site settings](site-customization/settings-mobile.png), plus
 [mobile item management](site-customization/item-management-mobile.png). The account
 and key shown in the mobile capture are disposable preview fixtures.
+Additional references show [independent hardcore branding](site-customization/hardcore-desktop.png)
+and [hardcore settings while disabled](site-customization/hardcore-settings-mobile.png).
 
 The administrator's **Site settings** navigation entry opens `/admin/settings`.
-It contains the clan name (default **Clan name**), hardcore release flag, logo and RuneLite API key
-controls, plus four independently editable labels:
+The clan logo is the first setting, followed by the regular clan name (default
+**Clan name**), text and shared RuneLite API key controls. Three labels are editable:
 
 - Collection log title (also used in the browser title).
 - Collection log caption (the hardcore view adds its world-mode label).
 - XP section title.
-- XP total caption.
 
 Labels accept 1–160 printable characters. They are stored as text and rendered
 through React's escaping, with revision-checked updates and before/after audit
@@ -22,9 +23,22 @@ within 25 seconds. Moderators cannot read/write these private settings.
 The supplied `clan-logo.png` is the default logo and favicon source. The old GIF
 and its derived first-frame image have been removed. Uploaded GIF and animated
 WebP replacements continue to animate. See [clan branding](clan-branding.md).
-The footer links to KihiraLove's GitHub and Ko-fi pages with blue banners,
+The footer links to KihiraLove's GitHub and Ko-fi pages with a white **GitHub** banner and blue Ko-fi badge,
 using the official GitHub mark and Ko-fi button. README badges show support, GitHub release-asset downloads and the
 main CI workflow status; release downloads do not count container pulls.
+
+The **Hardcore worlds** navigation entry opens `/admin/settings/hardcore` even
+when hardcore visibility is disabled. It has its own logo/favicon, displayed
+clan name and the same three text labels, plus **Enable hardcore worlds**.
+The regular and hardcore appearances start identical and save independently.
+The public skull switches the name, logo, browser title/icon and text together.
+Disabling the release flag hides the public switch while retaining all appearance
+settings and collections. Moderators cannot use either settings page.
+
+The submission clan name and API key remain shared; the hardcore displayed name
+does not change RuneLite validation. XP totals and event data remain shared.
+The public XP heading is omitted from the admin import page. The total caption
+and its setting have been removed; selected events still show their source link.
 
 ## Shared API key form
 
@@ -96,3 +110,11 @@ verifier to a private disabled-account field and clears the login verifier;
 enabling restores it. This also prevents login through older images that do not
 understand the disabled flag. Deletion clears both verifier fields. Older images
 retain the new copy fields but do not expose the new management controls.
+
+Migration `010_hardcore_appearance.sql` copies current regular branding into
+independent hardcore settings, removes the retired caption from current settings
+and preserves historical audits. Logo revisions and audits are scoped per mode;
+website text uses the shared settings revision to prevent concurrent lost edits.
+Existing logo assets and image-volume backups serve both modes. Back up the
+database and image volume together before upgrading. A rollback to an image
+requiring the retired caption needs its matching pre-upgrade database backup.

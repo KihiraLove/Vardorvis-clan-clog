@@ -77,9 +77,9 @@ export function XpPage({
     <section
       className="event-tracker"
       id="xp-tracker"
-      aria-label={copy.xpTitle}
+      aria-label={admin ? 'XP imports' : copy.xpTitle}
     >
-      <h1>{copy.xpTitle}</h1>
+      {!admin && <h1>{copy.xpTitle}</h1>}
       {admin && (
         <XpAdmin
           client={client}
@@ -160,27 +160,27 @@ export function XpPage({
               <XpAmount xp={totals ? sumXp(totals) : null} label="All skills" />
             </div>
           </div>
-          <div className="event-source">
-            {event ? (
-              <>
-                <strong>{event.title}</strong>
-                <a
-                  href={event.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View event on Wise Old Man ↗
-                </a>
-              </>
-            ) : missing ? (
-              <p role="status">
-                This event is no longer available. Choose Total or another
-                event.
-              </p>
-            ) : (
-              <p>{copy.xpTotalCaption}</p>
-            )}
-          </div>
+          {(event || missing) && (
+            <div className="event-source">
+              {event ? (
+                <>
+                  <strong>{event.title}</strong>
+                  <a
+                    href={event.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View event on Wise Old Man ↗
+                  </a>
+                </>
+              ) : missing ? (
+                <p role="status">
+                  This event is no longer available. Choose Total or another
+                  event.
+                </p>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
     </section>

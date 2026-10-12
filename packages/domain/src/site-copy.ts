@@ -3,9 +3,31 @@ export const defaultSiteCopy = {
   collectionTitle: 'Clan Collection Log',
   collectionCaption: 'Collected during BOTW events',
   xpTitle: 'XP gained during SOTW events',
-  xpTotalCaption: 'Across all recorded SOTW events',
 };
 export type SiteCopy = typeof defaultSiteCopy;
+export interface HardcoreAppearance {
+  clanName: string;
+  copy: SiteCopy;
+}
+export function parseHardcoreAppearance(value: unknown): HardcoreAppearance {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Invalid hardcore appearance.');
+  const data = value as Record<string, unknown>;
+  if (
+    Object.keys(data).length !== 2 ||
+    typeof data.clanName !== 'string' ||
+    !data.clanName.trim() ||
+    data.clanName.trim().length > 80 ||
+    Array.from(data.clanName).some(
+      (character) =>
+        character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+    )
+  )
+    throw new Error(
+      'Hardcore clan name must contain 1–80 printable characters.',
+    );
+  return { clanName: data.clanName.trim(), copy: parseSiteCopy(data.copy) };
+}
 export function parseSiteCopy(value: unknown): SiteCopy {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('Invalid website text.');
