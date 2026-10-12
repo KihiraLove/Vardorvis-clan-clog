@@ -96,75 +96,76 @@ export function ClanApiKeySettings({
           </button>
         </p>
       )}
-      {saved && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            save();
-          }}
-        >
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={action.busy}
-              onChange={(event) => setEnabled(event.target.checked)}
-            />
-            Require clan API key
-          </label>
-          <label htmlFor="clan-api-key-value">Current shared API key</label>
-          <textarea
-            id="clan-api-key-value"
-            className="clan-api-key-value"
-            value={key}
-            required
-            minLength={clanKeyMinLength}
-            rows={2}
-            autoComplete="off"
-            spellCheck={false}
-            disabled={action.busy}
-            onChange={(event) => {
-              setKey(event.target.value);
-              action.setMessage(undefined);
-            }}
+      <form
+        aria-busy={!saved && !error}
+        onSubmit={(event) => {
+          event.preventDefault();
+          save();
+        }}
+      >
+        <label className="admin-checkbox">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={action.busy || !saved}
+            onChange={(event) => setEnabled(event.target.checked)}
           />
-          <p className="admin-note">
-            Generated keys contain 32 hexadecimal characters. Custom keys can
-            use any characters and must contain at least 8. Save to apply the
-            key and requirement together.
-          </p>
-          <div className="admin-actions">
-            <button
-              type="button"
-              className="site-button"
-              disabled={action.busy}
-              onClick={() => {
-                const bytes = crypto.getRandomValues(
-                  new Uint8Array(clanKeyBytes),
-                );
-                setKey(
-                  Array.from(bytes, (byte) =>
-                    byte.toString(16).padStart(2, '0'),
-                  ).join(''),
-                );
-                action.setMessage('New key generated. Save to apply it.');
-              }}
-            >
-              Generate new key
-            </button>
-            <button
-              className="site-button"
-              disabled={
-                action.busy ||
-                !validClanKey(key) ||
-                (enabled === saved.enabled && key === saved.key)
-              }
-            >
-              Save API key settings
-            </button>
-          </div>
-        </form>
-      )}
+          Require clan API key
+        </label>
+        <label htmlFor="clan-api-key-value">Current shared API key</label>
+        <textarea
+          id="clan-api-key-value"
+          className="clan-api-key-value"
+          value={key}
+          required
+          minLength={clanKeyMinLength}
+          rows={2}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={action.busy || !saved}
+          placeholder={saved ? undefined : 'Loading API key…'}
+          onChange={(event) => {
+            setKey(event.target.value);
+            action.setMessage(undefined);
+          }}
+        />
+        <p className="admin-note">
+          Generated keys contain 32 hexadecimal characters. Custom keys can use
+          any characters and must contain at least 8. Save to apply the key and
+          requirement together.
+        </p>
+        <div className="admin-actions">
+          <button
+            type="button"
+            className="site-button"
+            disabled={action.busy || !saved}
+            onClick={() => {
+              const bytes = crypto.getRandomValues(
+                new Uint8Array(clanKeyBytes),
+              );
+              setKey(
+                Array.from(bytes, (byte) =>
+                  byte.toString(16).padStart(2, '0'),
+                ).join(''),
+              );
+              action.setMessage('New key generated. Save to apply it.');
+            }}
+          >
+            Generate new key
+          </button>
+          <button
+            className="site-button"
+            disabled={
+              action.busy ||
+              !saved ||
+              !validClanKey(key) ||
+              (enabled === saved.enabled && key === saved.key)
+            }
+          >
+            Save API key settings
+          </button>
+        </div>
+      </form>
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
     </div>

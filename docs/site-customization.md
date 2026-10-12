@@ -26,6 +26,11 @@ through React's escaping, with revision-checked updates and before/after audit
 records. The saving browser updates immediately; other visible public pages poll
 within 25 seconds. Moderators cannot read/write these private settings.
 
+Settings forms and responsive logo previews keep their space while private data
+loads. Controls remain disabled until the settings are available, including after
+a failed read. The admin gradient is anchored to the viewport so switching
+between pages of different heights does not cause a background flash.
+
 The supplied `clan-logo.png` is the default logo and favicon source. The old GIF
 and its derived first-frame image have been removed. Uploaded GIF and animated
 WebP replacements continue to animate. See [clan branding](clan-branding.md).

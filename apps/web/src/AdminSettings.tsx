@@ -101,107 +101,108 @@ export function AdminSettings({
           </button>
         </p>
       )}
-      {saved && (
-        <form
-          id={hardcore ? 'hardcore-site-settings' : 'regular-site-settings'}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void action.execute(
-              async (signal) => {
-                const value = await client.saveSettings(
-                  enabled,
-                  saved.revision,
-                  session.csrfToken,
-                  signal,
-                  hardcore ? undefined : clanName.trim(),
-                  hardcore ? undefined : parseSiteCopy(copy),
+      <form
+        id={hardcore ? 'hardcore-site-settings' : 'regular-site-settings'}
+        aria-busy={!saved && !readError}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!saved) return;
+          void action.execute(
+            async (signal) => {
+              const value = await client.saveSettings(
+                enabled,
+                saved.revision,
+                session.csrfToken,
+                signal,
+                hardcore ? undefined : clanName.trim(),
+                hardcore ? undefined : parseSiteCopy(copy),
+                hardcore
+                  ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
+                  : undefined,
+              );
+              if (!signal.aborted) {
+                apply(value);
+                onSaved?.(value);
+                action.setMessage(
                   hardcore
-                    ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
-                    : undefined,
+                    ? 'Hardcore worlds settings saved.'
+                    : 'Site settings saved.',
                 );
-                if (!signal.aborted) {
-                  apply(value);
-                  onSaved?.(value);
-                  action.setMessage(
-                    hardcore
-                      ? 'Hardcore worlds settings saved.'
-                      : 'Site settings saved.',
-                  );
+              }
+            },
+            async (signal) => {
+              const value = await client.settings(signal);
+              if (!signal.aborted) {
+                apply(value);
+                onSaved?.(value);
+              }
+            },
+          );
+        }}
+      >
+        <label>
+          {hardcore ? 'Displayed clan name' : 'Clan name'}
+          <input
+            required
+            maxLength={80}
+            value={clanName}
+            disabled={action.busy || !saved}
+            onChange={(event) => setClanName(event.target.value)}
+          />
+        </label>
+        <p className="admin-note">
+          {hardcore
+            ? 'Shown when viewing hardcore worlds. Submissions still use the clan name in Site settings.'
+            : 'Shown on the regular website and required for all RuneLite submissions.'}
+        </p>
+        <fieldset className="site-copy-fields">
+          <legend>Website text</legend>
+          {(
+            [
+              ['collectionTitle', 'Collection log title'],
+              ['collectionCaption', 'Collection log caption'],
+              ['xpTitle', 'XP section title'],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key}>
+              {label}
+              <input
+                required
+                maxLength={160}
+                disabled={action.busy || !saved}
+                value={copy[key]}
+                onChange={(event) =>
+                  setCopy((current) => ({
+                    ...current,
+                    [key]: event.target.value,
+                  }))
                 }
-              },
-              async (signal) => {
-                const value = await client.settings(signal);
-                if (!signal.aborted) {
-                  apply(value);
-                  onSaved?.(value);
-                }
-              },
-            );
-          }}
+              />
+            </label>
+          ))}
+        </fieldset>
+        <button
+          className="site-button"
+          disabled={
+            action.busy ||
+            !saved ||
+            !clanName.trim() ||
+            Object.values(copy).some((text) => !text.trim()) ||
+            (enabled === saved.hardcoreEnabled &&
+              clanName.trim() ===
+                (hardcore
+                  ? (saved.hardcore?.clanName ?? saved.clanName)
+                  : saved.clanName) &&
+              JSON.stringify(copy) ===
+                JSON.stringify(
+                  (hardcore ? saved.hardcore?.copy : saved.copy) ??
+                    defaultSiteCopy,
+                ))
+          }
         >
-          <label>
-            {hardcore ? 'Displayed clan name' : 'Clan name'}
-            <input
-              required
-              maxLength={80}
-              value={clanName}
-              disabled={action.busy}
-              onChange={(event) => setClanName(event.target.value)}
-            />
-          </label>
-          <p className="admin-note">
-            {hardcore
-              ? 'Shown when viewing hardcore worlds. Submissions still use the clan name in Site settings.'
-              : 'Shown on the regular website and required for all RuneLite submissions.'}
-          </p>
-          <fieldset className="site-copy-fields">
-            <legend>Website text</legend>
-            {(
-              [
-                ['collectionTitle', 'Collection log title'],
-                ['collectionCaption', 'Collection log caption'],
-                ['xpTitle', 'XP section title'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key}>
-                {label}
-                <input
-                  required
-                  maxLength={160}
-                  disabled={action.busy}
-                  value={copy[key]}
-                  onChange={(event) =>
-                    setCopy((current) => ({
-                      ...current,
-                      [key]: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            ))}
-          </fieldset>
-          <button
-            className="site-button"
-            disabled={
-              action.busy ||
-              !clanName.trim() ||
-              Object.values(copy).some((text) => !text.trim()) ||
-              (enabled === saved.hardcoreEnabled &&
-                clanName.trim() ===
-                  (hardcore
-                    ? (saved.hardcore?.clanName ?? saved.clanName)
-                    : saved.clanName) &&
-                JSON.stringify(copy) ===
-                  JSON.stringify(
-                    (hardcore ? saved.hardcore?.copy : saved.copy) ??
-                      defaultSiteCopy,
-                  ))
-            }
-          >
-            {hardcore ? 'Save hardcore settings' : 'Save site settings'}
-          </button>
-        </form>
-      )}
+          {hardcore ? 'Save hardcore settings' : 'Save site settings'}
+        </button>
+      </form>
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
     </section>
