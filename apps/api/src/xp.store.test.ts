@@ -1,7 +1,7 @@
 /** Disposable PostgreSQL acceptance for atomic import, refresh, replay and projections. */
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { PgXpStore } from './xp-store.js';
@@ -49,15 +49,14 @@ test(
     const key = () => randomUUID(),
       actor = '123456789012345678';
     try {
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/001_baseline.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
+      const migrations = new URL(
+        '../../../packages/database/migrations/',
+        import.meta.url,
       );
+      for (const name of (await readdir(migrations))
+        .filter((n) => n.endsWith('.sql'))
+        .sort())
+        await pool.query(await readFile(new URL(name, migrations), 'utf8'));
       const initial = await app.inject('/api/v1/xp/tracker');
       assert.equal(initial.statusCode, 200);
       assert.equal(initial.json().revision, 'xp-1');
@@ -237,7 +236,7 @@ test(
       assert.ok(
         !JSON.stringify(
           (await app.inject('/api/v1/xp/tracker')).json(),
-        ).includes('playerId'),
+        ).includes('participants'),
       );
       assert.equal(
         (await pool.query('SELECT count(*)::int AS count FROM xp_events'))
@@ -245,6 +244,9 @@ test(
         2,
       );
       // The last available slot is serialized, and a full tracker stays readable.
+      await pool.query(
+        "INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at) SELECT id,'SKILL','Seed','https://wiseoldman.net/competitions/' || id,'[\"mining\"]','[\"mining\"]','2026-09-01','2026-09-08' FROM generate_series(20000,21996) id",
+      );
       await pool.query(
         "INSERT INTO xp_events(competition_id,title,source_url,skills,gains,source_hash,source_snapshot,imported_at) SELECT id,'Seed','https://wiseoldman.net/competitions/' || id,'[\"mining\"]','{\"mining\":\"0\"}',$1,$2,now() FROM generate_series(20000,21996) id",
         ['f'.repeat(64), JSON.stringify(base(20000, 'mining', '0'))],

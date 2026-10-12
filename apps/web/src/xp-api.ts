@@ -218,7 +218,7 @@ export class LiveXpClient implements XpClient {
       await this.json('/api/v1/admin/xp/imports/preview', signal, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-        body: JSON.stringify({ competitionUrl: source.url }),
+        body: JSON.stringify({ competitionUrl: source.url, kind: 'SKILL' }),
       }),
     );
     if (preview.competition.id !== source.id)

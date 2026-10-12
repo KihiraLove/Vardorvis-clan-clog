@@ -140,7 +140,7 @@ export function authRoutes(
     );
     return token;
   }
-  if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom);
+  if (xp) xpAdminRoutes(app, xp, requireOwner, fetchWom);
   if (review) reviewRoutes(app, review, requireAdmin);
   app.post<{ Body: { username: string; password: string } }>(
     '/api/v1/auth/login',

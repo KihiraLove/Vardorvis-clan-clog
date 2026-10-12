@@ -1,0 +1,131 @@
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { CompetitionKind } from '@clog/domain';
+import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
+import type { PgCompetitionStore } from './competition-store.js';
+import { fetchCompetition } from './competition-wom.js';
+type Authorize = (
+  request: FastifyRequest,
+  write?: boolean,
+) => Promise<AdminIdentity & Pick<StaffAccount, 'role'>>;
+export function competitionRoutes(
+  app: FastifyInstance,
+  store?: PgCompetitionStore,
+  authorize?: Authorize,
+  fetchSource = fetchCompetition,
+) {
+  const available = () => {
+    if (!store) throw new ApiError(503, 'Competition service unavailable.');
+    return store;
+  };
+  const staff = async (request: FastifyRequest, write = false) => {
+    if (!authorize) throw new ApiError(503, 'Staff sign-in is not configured.');
+    return authorize(request, write);
+  };
+  app.get('/api/v1/competitions/activities', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return available().activities();
+  });
+  app.post<{
+    Body: { competitionUrl: string; kind: CompetitionKind; pageIds?: string[] };
+  }>(
+    '/api/v1/admin/competitions/preview',
+    {
+      onRequest: async (r) => {
+        await staff(r, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['competitionUrl', 'kind'],
+          properties: {
+            competitionUrl: { type: 'string', minLength: 1, maxLength: 2048 },
+            kind: { enum: ['SKILL', 'ACTIVITY'] },
+            pageIds: {
+              type: 'array',
+              maxItems: 200,
+              uniqueItems: true,
+              items: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+          },
+        },
+      },
+    },
+    async (r) => {
+      const actor = await staff(r, true),
+        service = available();
+      const snapshot = await fetchSource(
+        r.body.competitionUrl,
+        r.body.kind,
+        await service.clock(),
+      );
+      if (
+        snapshot.competition.kind === 'SKILL' &&
+        snapshot.lifecycle === 'finished' &&
+        actor.role !== 'admin'
+      )
+        throw new ApiError(
+          403,
+          'Only the administrator can import XP results.',
+        );
+      return service.preview(snapshot, actor.id, r.body.pageIds);
+    },
+  );
+  app.post<{
+    Body: {
+      previewToken: string;
+      expectedRevision: string;
+      scheduleRevision: string;
+      acknowledgeCorrections?: boolean;
+    };
+  }>(
+    '/api/v1/admin/competitions/imports',
+    {
+      onRequest: async (r) => {
+        await staff(r, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['previewToken', 'expectedRevision', 'scheduleRevision'],
+          properties: {
+            previewToken: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' },
+            expectedRevision: {
+              type: 'string',
+              pattern: '^xp-[1-9][0-9]*$',
+              maxLength: 40,
+            },
+            scheduleRevision: {
+              type: 'string',
+              pattern: '^schedules-[1-9][0-9]*$',
+              maxLength: 30,
+            },
+            acknowledgeCorrections: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    async (r) => {
+      const actor = await staff(r, true),
+        key = r.headers['idempotency-key'];
+      if (
+        typeof key !== 'string' ||
+        !/^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/iu.test(
+          key,
+        )
+      )
+        throw new ApiError(400, 'A UUID Idempotency-Key is required.');
+      return available().apply(
+        r.body.previewToken,
+        r.body.expectedRevision,
+        r.body.scheduleRevision,
+        key,
+        actor.id,
+        actor.displayName,
+        actor.role,
+        r.body.acknowledgeCorrections ?? false,
+      );
+    },
+  );
+}

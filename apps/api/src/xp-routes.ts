@@ -33,7 +33,7 @@ export function xpAdminRoutes(
       await requireAdmin(request, true);
     },
   };
-  app.post<{ Body: { competitionUrl: string } }>(
+  app.post<{ Body: { competitionUrl: string; kind: 'SKILL' } }>(
     '/api/v1/admin/xp/imports/preview',
     {
       ...secured,
@@ -41,9 +41,10 @@ export function xpAdminRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['competitionUrl'],
+          required: ['competitionUrl', 'kind'],
           properties: {
             competitionUrl: { type: 'string', minLength: 1, maxLength: 2048 },
+            kind: { const: 'SKILL' },
           },
         },
       },

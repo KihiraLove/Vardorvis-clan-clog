@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { CompetitionImport } from './CompetitionImport.tsx';
+import type { CompetitionClient } from './competition-api.ts';
 import {
   parseCollectionScheduleInput,
   type CollectionSchedule,
@@ -19,10 +21,12 @@ export function AdminScheduling({
   client,
   session,
   onAccessLost,
+  competitionClient,
 }: {
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
+  competitionClient: CompetitionClient;
 }) {
   const [state, setState] = useState<SchedulingState>();
   const [catalog, setCatalog] = useState<AdminCatalog>();
@@ -120,6 +124,11 @@ export function AdminScheduling({
   return (
     <section className="admin-panel scheduling-panel">
       <h2>Collection log scheduling</h2>
+      <CompetitionImport
+        client={competitionClient}
+        session={session}
+        onApplied={() => setRefresh((n) => n + 1)}
+      />
       <p>
         Open one or more pages during each window. Overlapping schedules combine
         their open pages. A shared item is accepted when any associated page is

@@ -18,6 +18,7 @@ const appendOnly = new Set([
   'site_settings_audit',
   'catalog_audit',
   'xp_import_history',
+  'competition_import_history',
   'manual_submission_requests',
   'runelite_submission_requests',
   'catalog_page_requests',

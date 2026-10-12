@@ -175,7 +175,7 @@ test('direct admin imports require access, review corrections and send CSRF plus
         csrfToken: 'csrf',
         displayName: 'Reviewer',
         username: 'reviewer',
-        role: 'moderator',
+        role: 'admin',
         mustChangePassword: false,
       },
     }),
@@ -183,10 +183,24 @@ test('direct admin imports require access, review corrections and send CSRF plus
   await page.route('**/api/v1/admin/xp/imports', (route) =>
     route.fulfill({ json: { imports: [] } }),
   );
-  await page.route('**/api/v1/admin/xp/imports/preview', (route) =>
+  await page.route('**/api/v1/admin/competitions/preview', (route) =>
     route.fulfill({
       json: {
         ...importPreview,
+        competition: {
+          ...importPreview.competition,
+          kind: 'SKILL',
+          metrics: ['attack'],
+        },
+        lifecycle: 'finished',
+        action: 'import-results',
+        scheduleRevision: 'schedules-1',
+        scheduleStartsAt: null,
+        pageIds: [],
+        pages: [],
+        participants: [
+          { playerId: 1, displayName: 'KihiraVD', gains: { attack: '1' } },
+        ],
         changes: [
           {
             skill: 'attack',
@@ -202,6 +216,7 @@ test('direct admin imports require access, review corrections and send CSRF plus
   await page
     .getByLabel('Wise Old Man competition link')
     .fill('https://wiseoldman.net/competitions/1001');
+  await page.getByLabel('Competition kind').selectOption('SKILL');
   await page
     .getByRole('button', { name: 'Preview competition', exact: true })
     .click();
@@ -211,7 +226,7 @@ test('direct admin imports require access, review corrections and send CSRF plus
   await page
     .getByLabel('I reviewed the corrections that reduce recorded XP.')
     .check();
-  await page.route('**/api/v1/admin/xp/imports', (route) => {
+  await page.route('**/api/v1/admin/competitions/imports', (route) => {
     if (route.request().method() === 'POST') {
       expect(route.request().headers()['x-csrf-token']).toBe('csrf');
       expect(route.request().headers()['idempotency-key']).toBeTruthy();
@@ -221,6 +236,6 @@ test('direct admin imports require access, review corrections and send CSRF plus
   });
   await page.getByRole('button', { name: 'Apply import' }).click();
   await expect(
-    page.getByText('Competition imported. Recorded skill totals are updated.'),
+    page.getByText('Competition imported.', { exact: true }),
   ).toBeVisible();
 });

@@ -67,20 +67,17 @@ function metricNames(value: unknown): string[] {
     );
   return names as string[];
 }
-function strictScope(names: string[]): Skill[] {
+export function strictScope(names: string[]): Skill[] {
   if (names.length === 1 && skillIds.some((s) => s === names[0]))
     return [names[0] as Skill];
   if (names.length === 1 && ['overall', 'total'].includes(names[0]!))
     return [...skillIds];
   if (
-    names.length === skillIds.length &&
-    skillIds.every((skill) => names.includes(skill))
+    names.length > 0 &&
+    names.every((name) => skillIds.includes(name as Skill))
   )
-    return [...skillIds];
-  throw new ApiError(
-    422,
-    'WOM competition must track one skill or all supported skills.',
-  );
+    return skillIds.filter((skill) => names.includes(skill));
+  throw new ApiError(422, 'SKILL competitions must track supported XP skills.');
 }
 function metadata(source: unknown, requestedId: number) {
   if (
@@ -95,8 +92,7 @@ function metadata(source: unknown, requestedId: number) {
     !date(source.updatedAt) ||
     !Array.isArray(source.participations) ||
     source.participations.length > 10000 ||
-    (source.participantCount !== undefined &&
-      source.participantCount !== source.participations.length)
+    source.participantCount !== source.participations.length
   )
     throw new ApiError(
       422,
@@ -126,6 +122,7 @@ export function parseWomSnapshot(
     details.title !== source.title ||
     details.startsAt !== source.startsAt ||
     details.endsAt !== source.endsAt ||
+    details.updatedAt !== source.updatedAt ||
     details.participations.length !== source.participations.length
   )
     throw new ApiError(
@@ -176,11 +173,12 @@ export function parseWomSnapshot(
         422,
         'WOM competition has unavailable skill XP; prior totals are preserved.',
       );
-    participants.push({
-      playerId: p.playerId,
-      displayName: p.player.displayName.slice(0, 80),
-      gains,
-    });
+    if (Object.values(gains).some((gain) => BigInt(gain!) > 0n))
+      participants.push({
+        playerId: p.playerId,
+        displayName: p.player.displayName.slice(0, 80),
+        gains,
+      });
   }
   if (seen.size !== sourceIds.size)
     throw new ApiError(422, 'WOM returned partial participant data.');
@@ -217,41 +215,45 @@ export function parseWomSnapshot(
     sourceHash,
   };
 }
+export async function getWom(
+  url: string,
+  request: typeof fetch = fetch,
+): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await request(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(6500),
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Vardorvis-clan-clog/1.0',
+      },
+    });
+  } catch {
+    throw new ApiError(
+      503,
+      'WOM is temporarily unavailable; no data was changed.',
+    );
+  }
+  if (response.status === 429)
+    throw new ApiError(429, 'WOM rate limit reached; no data was changed.');
+  if (!response.ok)
+    throw new ApiError(
+      response.status === 404 ? 422 : 503,
+      'WOM competition could not be fetched.',
+    );
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    throw new ApiError(422, 'WOM returned invalid JSON.');
+  }
+}
 export async function fetchWomCompetition(
   input: string,
   request: typeof fetch = fetch,
 ): Promise<XpSnapshot> {
   const { id } = parseCompetitionUrl(input);
-  const get = async (url: string): Promise<unknown> => {
-    let response: Response;
-    try {
-      response = await request(url, {
-        redirect: 'error',
-        signal: AbortSignal.timeout(6500),
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'Vardorvis-clan-clog/1.0',
-        },
-      });
-    } catch {
-      throw new ApiError(
-        503,
-        'WOM is temporarily unavailable; no data was changed.',
-      );
-    }
-    if (response.status === 429)
-      throw new ApiError(429, 'WOM rate limit reached; no data was changed.');
-    if (!response.ok)
-      throw new ApiError(
-        response.status === 404 ? 422 : 503,
-        'WOM competition could not be fetched.',
-      );
-    try {
-      return (await response.json()) as unknown;
-    } catch {
-      throw new ApiError(422, 'WOM returned invalid JSON.');
-    }
-  };
+  const get = (url: string) => getWom(url, request);
   const base = 'https://api.wiseoldman.net/v2/competitions/' + id;
   const original = await get(base);
   if (!record(original))
@@ -260,7 +262,7 @@ export async function fetchWomCompetition(
   // WOM documents one request for a metric batch, not a request per player/skill.
   const query = new URLSearchParams();
   if (scope.length > 1)
-    for (const skill of skillIds) query.append('metrics', skill);
+    for (const skill of scope) query.append('metrics', skill);
   const breakdown =
     scope.length > 1 ? await get(base + '?' + query.toString()) : undefined;
   return parseWomSnapshot(original, breakdown, id);

@@ -58,7 +58,9 @@ export async function requireScheduledItem(
     ).rowCount === 1;
   if (!open) throw new ApiError(403, closedCollectionPageMessage);
 }
-async function readState(client: pg.PoolClient): Promise<SchedulingState> {
+export async function readState(
+  client: pg.PoolClient,
+): Promise<SchedulingState> {
   const row = (
     await client.query<{ enabled: boolean; version: number }>(
       'SELECT enabled,version FROM collection_scheduling WHERE singleton=true',

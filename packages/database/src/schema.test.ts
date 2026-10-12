@@ -36,6 +36,7 @@ test(
           '011_catalog_page_management.sql',
           '012_runelite_auto_review.sql',
           '013_collection_log_schedules.sql',
+          '014_wom_competitions.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.
