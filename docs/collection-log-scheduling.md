@@ -1,5 +1,13 @@
 # Collection log scheduling
 
+[WOM imports](wom-competitions.md) are available in Scheduling and XP imports.
+Staff explicitly choose SKILL or ACTIVITY. A future competition opens selected
+pages for its source period; a running competition opens them from database
+apply time until its WOM end. Finished imports create no opening window.
+Review or correct the proposed pages and refresh the preview before applying.
+The import never enables scheduling. Re-imports preserve linked staff edits and
+deleted schedules; recreate a deleted window manually if wanted.
+
 **Scheduling** (`/admin/schedules`) is available to administrators and moderators.
 Only the administrator can enable or disable enforcement. Scheduling is disabled
 by default and disabled mode preserves the existing intake rules. Saved windows

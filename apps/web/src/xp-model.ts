@@ -244,8 +244,7 @@ export function parseCompetition(value: unknown): Competition {
   if (source.id !== id) throw new Error('Competition link identity mismatch.');
   const ids = list(c.skills).map(skill);
   unique(ids);
-  if (ids.length !== 1 && ids.length !== skills.length)
-    throw new Error('An event must track one skill or all skills.');
+  if (!ids.length) throw new Error('An event needs supported skills.');
   const startsAt = timestamp(c.startsAt),
     endsAt = timestamp(c.endsAt);
   if (Date.parse(endsAt) <= Date.parse(startsAt))

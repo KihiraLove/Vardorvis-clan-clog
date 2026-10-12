@@ -79,7 +79,7 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.dev.yaml up -d --wait --wait-timeout 120
           # Fresh install applies the immutable baseline and forward-only upgrades.
-          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql"
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql,014_wom_competitions.sql"
           curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8088/healthz
           curl --fail http://127.0.0.1:8088/api/v1/status
           curl --fail --output /tmp/catalog.json http://127.0.0.1:8088/api/v1/catalog
@@ -116,12 +116,16 @@ jobs:
               if (current !== 'clog_runtime') throw Error('API must not run as migrator');
               const roles = (await client.query(\"SELECT has_table_privilege(current_user,'public.audit_events','INSERT') AS ai, has_table_privilege(current_user,'public.audit_events','UPDATE') AS au, has_table_privilege(current_user,'public.audit_events','DELETE') AS ad, has_table_privilege(current_user,'public.catalog_audit','DELETE') AS cd, has_table_privilege(current_user,'public.xp_import_history','UPDATE') AS xu, has_table_privilege(current_user,'public.schema_migrations','SELECT') AS ms, has_table_privilege(current_user,'public.submissions','UPDATE') AS su\")).rows[0];
               if (JSON.stringify(roles) !== JSON.stringify({ai:true,au:false,ad:false,cd:false,xu:false,ms:false,su:true})) throw Error('Unexpected runtime grants: '+JSON.stringify(roles));
-              for (const table of ['runelite_settings_audit', 'collection_schedule_audit']) {
+              for (const table of ['runelite_settings_audit', 'collection_schedule_audit', 'competition_import_history']) {
                 const audit = (await client.query(\"SELECT has_table_privilege(current_user, 'public.' || \$1, 'SELECT') AS read, has_table_privilege(current_user, 'public.' || \$1, 'INSERT') AS append, has_table_privilege(current_user, 'public.' || \$1, 'UPDATE') AS edit, has_table_privilege(current_user, 'public.' || \$1, 'DELETE') AS remove\", [table])).rows[0];
                 if (JSON.stringify(audit) !== JSON.stringify({read:true,append:true,edit:false,remove:false})) throw Error('Unexpected audit grants: '+table);
               }
             } finally { await client.end(); }
           "
+      - name: Unified WOM competitions and scheduled page imports
+        run: |
+          docker compose cp scripts app:/app/scripts
+          docker compose exec -T -e COMPETITION_SMOKE_DISPOSABLE=true app node /app/scripts/competitions-smoke.mjs
       - name: Proxy isolation and durable manual submission retries
         run: docker compose exec -T -e REVIEW_SMOKE_TEST=1 app node --input-type=module < scripts/review-smoke.mjs
       - name: Admin catalog, durable icons and coordinated backup

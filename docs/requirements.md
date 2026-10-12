@@ -41,12 +41,20 @@ for supported image formats, limits and the API contract.
 
 ## XP gained tracker below the collection log
 
+[WOM competition imports](wom-competitions.md) share one persisted identity with
+an explicit staff-selected SKILL/ACTIVITY kind. Future/running imports store
+metadata and an opening schedule only. Finished imports discard zero-gain
+participants and reconcile final results. Only SKILL competitions contribute XP;
+the selected competition and Total each show a top-three podium. The public
+ACTIVITY list sits to the left of the collection log, sorted by end descending,
+with local start/end times, status labels and red/green/yellow date colors.
+
 - Display the SOTW/competition XP tracker **below the collection log on the homepage**, not behind a separate public navigation tab. The `/xp` route may remain a compatibility alias; preserve the collection log's five in-window tabs.
 - Show site-aggregated skill XP and imported competition events with their titles, source links, and per-skill totals. Detailed participant records are retained for reconciled imports, but **not** presented as a public member table. Show zero or unavailable event values accurately.
 - An allowlisted admin supplies a Wise Old Man competition link to import/refresh results. The selected competition provides the participant roster; do not silently omit competitors or require a separate automatic clan sync.
 - Use competition gained XP for the appropriate skill, adding every valid competitor contribution to the site's existing total. This total is competition-accumulated XP, not each account's lifetime HiScores XP.
 - First import adds the full gains; refreshing the same competition applies only differences from the stored contribution. The same unchanged competition/link cannot add XP twice. Further competitions add their gains to the existing matching skill totals.
-- Support individual skill and multi-skill results. Expand overall competitions into explicit per-skill gains when supported by the official metrics-preview endpoint; never count an aggregate score/overall total alongside the individual skill contributions. Reject competitions containing no supported XP skill.
+- Support individual skill and multi-skill results. Expand overall competitions into explicit per-skill gains when supported by the official metrics-preview endpoint; never count an aggregate score/overall total alongside the individual skill contributions. Reject unsupported mixed scopes and competitions containing no supported XP skill.
 - Retain stable WOM player IDs, name snapshots, competition source/date/history and the last successful import time. Failed, partial or rate-limited refreshes preserve published totals; missing source values are labelled unavailable, not invented as XP.
 - Public visitors read stored results only. Import/refresh is an admin action, with an authenticated preview/apply flow and audited snapshot reconciliation. Distinct overlapping competitions are shown as overlapping; the displayed ledger counts their reported contributions rather than claiming deduplicated lifetime XP.
 
@@ -67,7 +75,7 @@ These features are planned in #26, #27, #28, #30 and #31; detailed data rules an
 
 Every submission records raw item input, resolved canonical item when known, collector display name, collection date, hardcore claim, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
 
-The admin page uses individual staff accounts and server-side session/CSRF checks; Discord OAuth is not used for site administration. One administrator starts with username `admin` and password `admin`; no moderators exist by default. The administrator creates moderator accounts. Every new account must change its password on first login before using staff tools. Both roles can change their own username and password, confirming the current password. Passwords use unique salts and one-way scrypt hashes. Usernames are case-insensitively unique. Moderators have all review, submission, catalog and XP tools; the hardcore release flag and account creator are administrator-only.
+The admin page uses individual staff accounts and server-side session/CSRF checks; Discord OAuth is not used for site administration. One administrator starts with username `admin` and password `admin`; no moderators exist by default. The administrator creates moderator accounts. Every new account must change its password on first login before using staff tools. Both roles can change their own username and password, confirming the current password. Passwords use unique salts and one-way scrypt hashes. Usernames are case-insensitively unique. Moderators have review, submission, catalog and scheduling tools, including metadata-only SKILL schedules and ACTIVITY imports. Finished XP imports, the hardcore release flag and account creator are administrator-only.
 
 The page lists pending submissions with item/match state, collector, date, external proof link and submission time. Staff can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited with permanent account identities; a public anonymous request cannot perform them.
 

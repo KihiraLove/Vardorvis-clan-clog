@@ -4,6 +4,11 @@ import { AdminPage } from './AdminPage.tsx';
 import { LiveAdminClient } from './admin-api.ts';
 import { PreviewAdminClient } from './preview/admin.ts';
 import { XpPage } from './XpPage.tsx';
+import { ActivityCompetitions } from './ActivityCompetitions.tsx';
+import {
+  LiveCompetitionClient,
+  PreviewCompetitionClient,
+} from './competition-api.ts';
 import { LiveXpClient } from './xp-api.ts';
 import { PreviewXpClient } from './preview/xp.ts';
 import { CollectionLog } from './CollectionLog.tsx';
@@ -294,6 +299,13 @@ export function App() {
         : new LiveXpClient(),
     [route.preview, adminClient],
   );
+  const competitionClient = useMemo(
+    () =>
+      route.preview
+        ? new PreviewCompetitionClient(adminClient, xpClient)
+        : new LiveCompetitionClient(),
+    [route.preview, adminClient, xpClient],
+  );
   useSyncExternalStore(
     adminClient instanceof PreviewAdminClient
       ? adminClient.subscribe
@@ -417,6 +429,7 @@ export function App() {
         <main id={admin ? 'admin-main' : 'collection-log'}>
           {admin ? (
             <AdminPage
+              competitionClient={competitionClient}
               client={adminClient}
               clanName={clanName}
               onSettingsSaved={settingsSaved}
@@ -432,6 +445,7 @@ export function App() {
             >
               {route.path === '/admin/xp' && (
                 <XpPage
+                  competitionClient={competitionClient}
                   client={xpClient}
                   admin
                   preview={route.preview}
@@ -441,20 +455,26 @@ export function App() {
             </AdminPage>
           ) : (
             <>
-              {adminClient instanceof PreviewAdminClient ? (
-                <PreviewLog
-                  client={adminClient}
-                  hardcore={hardcore}
-                  copy={copy}
-                />
-              ) : (
-                <LiveLog
-                  preview={() => mode(true)}
-                  hardcore={hardcore}
-                  copy={copy}
-                />
-              )}
+              <div className="public-log-layout">
+                <ActivityCompetitions client={competitionClient} />
+                <div className="public-log-content">
+                  {adminClient instanceof PreviewAdminClient ? (
+                    <PreviewLog
+                      client={adminClient}
+                      hardcore={hardcore}
+                      copy={copy}
+                    />
+                  ) : (
+                    <LiveLog
+                      preview={() => mode(true)}
+                      hardcore={hardcore}
+                      copy={copy}
+                    />
+                  )}
+                </div>
+              </div>
               <XpPage
+                competitionClient={competitionClient}
                 client={xpClient}
                 admin={false}
                 copy={copy}

@@ -15,6 +15,13 @@ instants and the database clock; the editor shows local and UTC times.
 
 # Architecture
 
+The [WOM competition registry](wom-competitions.md) introduced by migration 014
+owns one identity per source competition. SKILL results retain the existing XP
+ledger and immutable import history; ACTIVITY results stay outside XP. Metadata
+imports and linked schedule creation lock scheduling settings before XP state,
+then catalog pages, and commit their audits and receipts atomically. Public
+pages read local metadata and the top-three XP projection without contacting WOM.
+
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
 
 > **8 October 2026 CAT-01 update:** [Complete catalog import](catalog-import.md) now supplies 1,717 items, 124 ordered pages and verified local icons. Compose initializes the catalog after migrations; earlier descriptions of catalog import as pending are superseded.

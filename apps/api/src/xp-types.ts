@@ -47,6 +47,11 @@ export interface XpSnapshot {
   sourceUpdatedAt: string;
   sourceHash: string;
 }
+export interface PodiumPlayer {
+  playerId: number;
+  displayName: string;
+  gained: string;
+}
 export interface XpChange {
   skill: Skill;
   before: string;
@@ -78,7 +83,11 @@ export interface XpStore {
   tracker(): Promise<{
     revision: string;
     totals: Record<Skill, string>;
-    events: XpEvent[];
+    events: (Omit<XpEvent, 'gains'> & {
+      gains: Partial<Record<Skill, string | null>>;
+      podium?: PodiumPlayer[];
+    })[];
+    podium?: PodiumPlayer[];
   }>;
   preview(snapshot: XpSnapshot, actor: string): Promise<XpPreview>;
   apply(

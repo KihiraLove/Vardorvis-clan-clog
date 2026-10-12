@@ -2,6 +2,7 @@
 import { proofRoutes } from './proof-routes.js';
 import { runeLiteSettingsRoutes } from './runelite-settings-routes.js';
 import { schedulingRoutes } from './scheduling-routes.js';
+import { competitionRoutes } from './competition-routes.js';
 import { brandingRoutes } from './branding-routes.js';
 import type { BrandingStorage } from './branding-storage.js';
 import type { BrandingStore } from './branding-store.js';
@@ -22,6 +23,9 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  competitions?:
+    import('./competition-store.js').PgCompetitionStore | undefined;
+  fetchCompetition?: typeof import('./competition-wom.js').fetchCompetition;
   scheduling?: import('./scheduling-store.js').SchedulingStore | undefined;
   runeLiteSettings?:
     import('./runelite-settings.js').RuneLiteSettingsStore | undefined;
@@ -201,6 +205,12 @@ export function createApp(
   brandingRoutes(app, options.branding, options.logos, requireAdmin);
   runeLiteSettingsRoutes(app, options.runeLiteSettings, requireAdmin);
   schedulingRoutes(app, options.scheduling, requireAdmin);
+  competitionRoutes(
+    app,
+    options.competitions,
+    requireAdmin,
+    options.fetchCompetition,
+  );
   // Review and catalog editing share one private catalog projection and auth boundary.
   if (options.catalog || options.review)
     app.get(

@@ -2077,3 +2077,191 @@ main {
 .admin-delete-confirm p {
   overflow-wrap: anywhere;
 }
+/* Competitions accompany the log while preserving its established frame proportions. */
+.site-shell {
+  max-width: 1336px;
+}
+.public-log-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1008px);
+  gap: 16px;
+  align-items: start;
+}
+.public-log-content {
+  min-width: 0;
+}
+.activity-competitions {
+  margin-top: 4px;
+  border: 4px solid #343328;
+  border-radius: 5px;
+  background: #191812;
+  padding: 12px;
+  min-width: 0;
+}
+.activity-competitions h2 {
+  font:
+    25px/1.2 RuneScape,
+    serif;
+  color: #dec77c;
+  margin: 0 0 10px;
+}
+.activity-timezone {
+  font-size: 11px;
+  color: #b8aa83;
+  overflow-wrap: anywhere;
+}
+.activity-competitions ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 650px;
+  overflow-y: auto;
+}
+.activity-competition {
+  padding: 12px 0;
+  border-top: 1px solid #54482d;
+  overflow-wrap: anywhere;
+}
+.activity-competition a {
+  display: block;
+  color: #ece9df;
+  font:
+    23px/1.2 RuneScape,
+    serif;
+}
+.activity-competition small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.activity-competition--finished small {
+  color: #ff9898;
+}
+.activity-competition--running small {
+  color: #a4e5a4;
+}
+.activity-competition--future small {
+  color: #f3dc83;
+}
+.event-tracker__layout {
+  grid-template-columns: minmax(160px, 260px) minmax(0, 470px) minmax(
+      160px,
+      240px
+    );
+  max-width: 970px;
+  gap: 0;
+}
+.xp-podium {
+  padding: 12px;
+  text-align: center;
+  min-width: 0;
+}
+.xp-podium h2 {
+  color: #dec77c;
+  font:
+    28px/1.2 RuneScape,
+    serif;
+  margin: 0;
+}
+.xp-podium > p {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.xp-podium__places {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  list-style: none;
+  padding: 0;
+  margin: 28px 0 0;
+  gap: 4px;
+}
+.xp-podium__place {
+  min-width: 0;
+}
+.xp-podium__place--1 {
+  grid-column: 2;
+  grid-row: 1;
+}
+.xp-podium__place--2 {
+  grid-column: 1;
+  grid-row: 1;
+}
+.xp-podium__place--3 {
+  grid-column: 3;
+  grid-row: 1;
+}
+.xp-podium__name {
+  display: block;
+  color: #ece9df;
+  font:
+    20px/1.15 RuneScape,
+    serif;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+.xp-podium__step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font:
+    32px/1 RuneScape,
+    serif;
+  color: #191812;
+  background: #d7bd6d;
+  height: 100px;
+  border: 2px solid #54482d;
+}
+.xp-podium__place--2 .xp-podium__step {
+  height: 72px;
+  background: #b6b7ab;
+}
+.xp-podium__place--3 .xp-podium__step {
+  height: 48px;
+  background: #bd9470;
+}
+.competition-import {
+  margin-bottom: 24px;
+}
+.competition-import input,
+.competition-import select {
+  max-width: 100%;
+  min-width: 0;
+}
+.competition-import .admin-fieldset {
+  max-width: 42rem;
+}
+.competition-import small {
+  color: #b8aa83;
+}
+@media (max-width: 1050px) {
+  .public-log-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .activity-competitions ol {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    max-height: 220px;
+  }
+  .activity-competition {
+    flex: 0 0 220px;
+  }
+}
+@media (max-width: 740px) {
+  .event-tracker__layout {
+    grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
+  }
+  .xp-podium {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 330px;
+    justify-self: center;
+  }
+}
+@media (max-width: 380px) {
+  .event-tracker__layout {
+    grid-template-columns: 94px minmax(0, 1fr);
+  }
+}

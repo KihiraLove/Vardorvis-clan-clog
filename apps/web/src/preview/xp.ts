@@ -14,6 +14,7 @@ import {
   type XpSnapshot,
 } from '../xp-model.ts';
 import { XpRequestError } from '../xp-api.ts';
+import { podiumFromParticipants } from '../xp-tracker.ts';
 
 export class PreviewXpClient implements XpClient {
   private readonly getSession:
@@ -92,11 +93,15 @@ export class PreviewXpClient implements XpClient {
     return structuredClone({
       revision: 'preview-' + this.revision,
       totals: this.totals(),
+      podium: podiumFromParticipants(
+        [...this.stored.values()].flatMap((d) => d.participants),
+      ),
       events: [...this.stored.values()].map((detail) => ({
         id: detail.competition.id,
         title: detail.competition.title,
         sourceUrl: detail.competition.sourceUrl,
         skills: detail.competition.skills,
+        podium: podiumFromParticipants(detail.participants),
         gains: Object.fromEntries(
           detail.competition.skills.map((id) => {
             const known = detail.participants

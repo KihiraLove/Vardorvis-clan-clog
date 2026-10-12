@@ -12,6 +12,7 @@ import {
   type XpPreview,
   type XpSnapshot,
   type XpStore,
+  type PodiumPlayer,
 } from './xp-types.js';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -67,10 +68,67 @@ export class PgXpStore implements XpStore {
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const revision = await this.state(client);
-      const events = (await this.events(client)).map(event);
-      const totals = sumTotals(events);
+      const rows = await this.events(client);
+      const totals = sumTotals(rows.map(event));
+      const metadata = (
+        await client.query<{
+          id: number;
+          title: string;
+          sourceUrl: string;
+          skills: XpEvent['skills'];
+        }>(
+          'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills FROM wom_competitions WHERE kind=\'SKILL\' ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
+        )
+      ).rows;
+      if (metadata.length > maxEvents)
+        throw new ApiError(503, 'XP event limit exceeded.');
+      const totalPlayers = new Map<number, PodiumPlayer>();
+      // Name snapshots follow the latest successful import; stable ID breaks timestamp ties.
+      const imported = (
+        await client.query<{ competition_id: string }>(
+          'SELECT competition_id::text FROM xp_events ORDER BY imported_at,competition_id',
+        )
+      ).rows;
+      for (const item of imported) {
+        const source = rows.find(
+          (r) => r.competition_id === item.competition_id,
+        );
+        if (!source) continue;
+        for (const p of source.source_snapshot.participants) {
+          const gained = Object.values(p.gains).reduce(
+            (sum, n) => sum + BigInt(n!),
+            0n,
+          );
+          if (gained <= 0n) continue;
+          const prior = totalPlayers.get(p.playerId);
+          totalPlayers.set(p.playerId, {
+            playerId: p.playerId,
+            displayName: p.displayName,
+            gained: (BigInt(prior?.gained ?? '0') + gained).toString(),
+          });
+        }
+      }
+      const events = metadata.map((m) => {
+        const r = rows.find((r) => Number(r.competition_id) === m.id);
+        return {
+          ...m,
+          gains: r?.gains ?? Object.fromEntries(m.skills.map((s) => [s, null])),
+          podium: r
+            ? rankPodium(
+                r.source_snapshot.participants.map((p) => ({
+                  playerId: p.playerId,
+                  displayName: p.displayName,
+                  gained: Object.values(p.gains)
+                    .reduce((sum, n) => sum + BigInt(n!), 0n)
+                    .toString(),
+                })),
+              )
+            : [],
+        };
+      });
+      const podium = rankPodium([...totalPlayers.values()]);
       await client.query('COMMIT');
-      return { revision, totals, events };
+      return { revision, totals, events, podium };
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;
@@ -83,6 +141,7 @@ export class PgXpStore implements XpStore {
       token = randomBytes(32).toString('base64url');
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+      await requireFinishedSkill(client, snapshot);
       const expectedRevision = await this.state(client);
       const events = await this.events(client);
       const prior =
@@ -219,6 +278,7 @@ export class PgXpStore implements XpStore {
       if (row.expected_revision !== revision || current !== revision)
         throw new ApiError(409, 'XP tracker changed; preview again.');
       const all = await this.events(client);
+      await requireFinishedSkill(client, row.snapshot);
       const prior =
         all.find((x) => Number(x.competition_id) === row.snapshot.event.id) ??
         null;
@@ -236,6 +296,7 @@ export class PgXpStore implements XpStore {
         );
       const changed = !prior || prior.source_hash !== row.snapshot.sourceHash;
       if (changed) {
+        await saveLegacyIdentity(client, row.snapshot);
         await client.query(
           'INSERT INTO xp_events(competition_id,title,source_url,skills,gains,source_hash,source_snapshot,imported_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()) ON CONFLICT(competition_id) DO UPDATE SET title=EXCLUDED.title,source_url=EXCLUDED.source_url,skills=EXCLUDED.skills,gains=EXCLUDED.gains,source_hash=EXCLUDED.source_hash,source_snapshot=EXCLUDED.source_snapshot,imported_at=now()',
           [
@@ -310,4 +371,75 @@ export class PgXpStore implements XpStore {
       })),
     };
   }
+}
+
+async function requireFinishedSkill(
+  client: pg.PoolClient,
+  snapshot: XpSnapshot,
+) {
+  const row = (
+    await client.query<{ kind: string; skills: XpEvent['skills'] }>(
+      'SELECT kind,skills FROM wom_competitions WHERE competition_id=$1',
+      [snapshot.event.id],
+    )
+  ).rows[0];
+  if (row && row.kind !== 'SKILL')
+    throw new ApiError(
+      422,
+      'This WOM identity is already an ACTIVITY competition.',
+    );
+  if (
+    row &&
+    JSON.stringify(row.skills) !== JSON.stringify(snapshot.event.skills)
+  )
+    throw new ApiError(
+      422,
+      'WOM competition skill scope changed; manual reconciliation is required.',
+    );
+  requireCapacity(
+    (
+      await client.query<{ count: number }>(
+        'SELECT count(*)::int AS count FROM wom_competitions',
+      )
+    ).rows[0]!.count,
+    !!row,
+  );
+  if (
+    !(
+      await client.query(
+        'SELECT 1 WHERE $1::timestamptz <= clock_timestamp()',
+        [snapshot.endsAt],
+      )
+    ).rowCount
+  )
+    throw new ApiError(
+      422,
+      'Use the competition schedule importer for future or running competitions. XP results are imported only after the end.',
+    );
+}
+export function rankPodium(players: PodiumPlayer[]): PodiumPlayer[] {
+  return players
+    .filter((p) => BigInt(p.gained) > 0n)
+    .sort((a, b) =>
+      BigInt(a.gained) > BigInt(b.gained)
+        ? -1
+        : BigInt(a.gained) < BigInt(b.gained)
+          ? 1
+          : a.playerId - b.playerId,
+    )
+    .slice(0, 3);
+}
+async function saveLegacyIdentity(client: pg.PoolClient, snapshot: XpSnapshot) {
+  await client.query(
+    "INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at,results_imported_at,source_hash) VALUES($1,'SKILL',$2,$3,$4,$4,$5,$6,now(),$7) ON CONFLICT(competition_id) DO UPDATE SET title=EXCLUDED.title,source_url=EXCLUDED.source_url,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,results_imported_at=now(),source_hash=EXCLUDED.source_hash",
+    [
+      snapshot.event.id,
+      snapshot.event.title,
+      snapshot.event.sourceUrl,
+      JSON.stringify(snapshot.event.skills),
+      snapshot.startsAt,
+      snapshot.endsAt,
+      snapshot.sourceHash,
+    ],
+  );
 }

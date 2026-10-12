@@ -23,7 +23,10 @@ export function localScheduleToUtc(value: string): string {
   return date.toISOString();
 }
 export const utcScheduleLabel = (utc: string) =>
-  utc.replace('T', ' ').replace(/\.\d{3}Z$/u, ' UTC');
+  new Date(utc)
+    .toISOString()
+    .replace('T', ' ')
+    .replace(/\.\d{3}Z$/u, ' UTC');
 export const localScheduleLabel = (utc: string) =>
   new Intl.DateTimeFormat(undefined, {
     year: 'numeric',

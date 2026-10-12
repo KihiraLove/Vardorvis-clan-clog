@@ -175,6 +175,7 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     const preview = async (
       h: Record<string, string>,
       payload: unknown = {
+        kind: 'SKILL',
         competitionUrl: 'https://wiseoldman.net/competitions/9001',
       },
     ) =>

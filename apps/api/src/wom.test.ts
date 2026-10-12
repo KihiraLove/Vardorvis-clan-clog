@@ -57,11 +57,11 @@ test('links use only canonical WOM competition identity and reject alternate ori
   ])
     assert.throws(() => parseCompetitionUrl(url));
 });
-test('single-skill events retain valid zero, large exact gains and event identity', () => {
+test('single-skill events discard zero players and retain large exact gains and event identity', () => {
   const item = parseWomSnapshot(sample, undefined, 123);
   assert.deepEqual(item.event.skills, ['mining']);
   assert.deepEqual(item.event.gains, { mining: '9007199254740993' });
-  assert.equal(item.participants[1]?.gains.mining, '0');
+  assert.equal(item.participants.length, 1);
   assert.equal(item.participants[0]?.playerId, 1);
   assert.equal(item.event.sourceUrl, 'https://wiseoldman.net/competitions/123');
   assert.equal(item.event.title, 'SOTW: Mining');

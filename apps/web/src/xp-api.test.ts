@@ -119,6 +119,7 @@ test('preview requests canonicalize the source and carry CSRF; applies use the v
   await client.apply(preview, 'csrf', 'same-request', signal());
   assert.deepEqual(JSON.parse(requests[0]!.options!.body as string), {
     competitionUrl: competition.sourceUrl,
+    kind: 'SKILL',
   });
   assert.equal(
     (requests[0]!.options!.headers as Record<string, string>)['X-CSRF-Token'],

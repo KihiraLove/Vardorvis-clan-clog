@@ -2,18 +2,22 @@
 import { useEffect, useState } from 'react';
 import { XpAmount } from './XpAmount.tsx';
 import { XpAdmin } from './XpAdmin.tsx';
+import { XpPodium } from './XpPodium.tsx';
+import type { CompetitionClient } from './competition-api.ts';
 import { skills, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
 import { PreviewXpClient } from './preview/xp.ts';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 export function XpPage({
   client,
+  competitionClient,
   admin,
   preview,
   onMode,
   copy = defaultSiteCopy,
 }: {
   client: XpClient;
+  competitionClient: CompetitionClient;
   admin: boolean;
   preview: boolean;
   onMode: (next: boolean) => void;
@@ -83,6 +87,7 @@ export function XpPage({
       {admin && (
         <XpAdmin
           client={client}
+          competitionClient={competitionClient}
           onApplied={() => setRefresh((n) => n + 1)}
           previewMode={preview}
         />
@@ -182,6 +187,12 @@ export function XpPage({
             </div>
           )}
         </div>
+        <XpPodium
+          players={
+            missing ? [] : event ? (event.podium ?? []) : (data?.podium ?? [])
+          }
+          title={event?.title ?? (missing ? 'Unavailable event' : 'Total')}
+        />
       </div>
     </section>
   );

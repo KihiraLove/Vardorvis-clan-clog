@@ -14,6 +14,7 @@ import { AdminAccounts } from './AdminAccounts.tsx';
 import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 import { RuneLiteReviewSettings } from './RuneLiteReviewSettings.tsx';
 import { AdminScheduling } from './AdminScheduling.tsx';
+import type { CompetitionClient } from './competition-api.ts';
 
 export interface AdminRouteProps {
   preview: boolean;
@@ -65,8 +66,10 @@ export function AdminPage({
   clanName,
   onSettingsSaved,
   onBrandingSaved,
+  competitionClient,
 }: AdminRouteProps & {
   client: AdminClient;
+  competitionClient: CompetitionClient;
   clanName: string;
   onSettingsSaved: (settings: SiteSettings) => void;
   onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
@@ -277,6 +280,7 @@ export function AdminPage({
           client={client}
           session={session}
           onAccessLost={accessLost}
+          competitionClient={competitionClient}
         />
       ) : path === '/admin/runelite' ? (
         session.role === 'admin' ? (
