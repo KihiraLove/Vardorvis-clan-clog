@@ -79,7 +79,7 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.dev.yaml up -d --wait --wait-timeout 120
           # Fresh install applies the immutable baseline and forward-only upgrades.
-          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql"
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql"
           curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8088/healthz
           curl --fail http://127.0.0.1:8088/api/v1/status
           curl --fail --output /tmp/catalog.json http://127.0.0.1:8088/api/v1/catalog
@@ -99,7 +99,8 @@ jobs:
           curl --fail http://127.0.0.1:8088/api/v1/settings
           curl --fail --output /tmp/xp.json http://127.0.0.1:8088/api/v1/xp/tracker
           jq -e '(.revision == "xp-1") and (.events == []) and (.totals | .mining == "0")' /tmp/xp.json
-          curl --fail http://127.0.0.1:8088/api/v1/auth/session
+          curl --fail -sS http://127.0.0.1:8088/api/v1/auth/session | jq -e '.authenticated == false'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/api/v1/admin/settings)" = "401"
           test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://clog.example.com' \
             -H 'Content-Type: application/json' -d '{"username":"admin","password":"wrong"}' \
             http://127.0.0.1:8088/api/v1/auth/login)" = "401"
@@ -129,41 +130,23 @@ jobs:
           docker compose up -d --no-deps --force-recreate --wait app
           curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://127.0.0.1:8088$icon_path" --output /tmp/icon-after.png
           cmp /tmp/icon-before.png /tmp/icon-after.png
+          curl --fail --output /tmp/catalog-after.json http://127.0.0.1:8088/api/v1/catalog
+          jq -e --slurpfile receipt /tmp/catalog-created.json '
+            ([.pages[] | select(.category=="bosses")][0].id == $receipt[0].pageId) and
+            ([.pages[] | select(.id==$receipt[0].pageId) | .itemIds] == [[$receipt[0].itemId]]) and
+            ([.pages[] | select(.id==$receipt[0].deletedPageId)] | length == 0)
+          ' /tmp/catalog-after.json
           bash infra/backup.sh /tmp/catalog-backup
           test -f /tmp/catalog-backup/COMPLETE
           (cd /tmp/catalog-backup && sha256sum --check SHA256SUMS)
           tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
-      - name: Stop default stack before local admin override
-        run: docker compose -f compose.yaml -f compose.dev.yaml down --volumes
-      - name: Verify passwordless local admin Compose override
-        run: |
-          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml config --quiet
-          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml up -d --wait --wait-timeout 120
-          curl --fail -sS -c /tmp/clog-local-cookie.txt \
-            http://127.0.0.1:8088/api/v1/auth/session > /tmp/clog-local-session.json
-          jq -e '.authenticated == true and .development == true and .displayName == "Local test admin"' /tmp/clog-local-session.json
-          curl --fail -sS -b /tmp/clog-local-cookie.txt \
-            http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == false'
-          curl --fail -sS -b /tmp/clog-local-cookie.txt \
-            http://127.0.0.1:8088/api/v1/admin/catalog | jq -e '(.items | length) == 1717 and (.pages | length) == 124'
-          csrf="$(jq -r '.csrfToken' /tmp/clog-local-session.json)"
-          curl --fail -sS -b /tmp/clog-local-cookie.txt -X PUT \
-            -H "Origin: http://127.0.0.1:8088" \
-            -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' \
-            -d '{"hardcoreEnabled":true,"expectedRevision":"settings-1"}' \
-            http://127.0.0.1:8088/api/v1/admin/settings | jq -e '.hardcoreEnabled == true'
-          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: daybloom.net' \
-            -b /tmp/clog-local-cookie.txt http://127.0.0.1:8088/api/v1/admin/settings)" = "403"
       - name: Logs on failure
         if: failure()
         run: |
           docker compose -f compose.yaml -f compose.dev.yaml logs --no-color --tail 100 || true
-          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml logs --no-color --tail 100 || true
       - name: Clean up
         if: always()
-        run: |
-          docker compose -f compose.yaml -f compose.dev.yaml down --volumes
-          docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml down --volumes
+        run: docker compose -f compose.yaml -f compose.dev.yaml down --volumes
 
   frontend-browser:
     # Preview/mocked browser flows form a separate gate from Node unit tests.

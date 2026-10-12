@@ -6,7 +6,7 @@ export interface Branding {
 }
 export const defaultBranding: Branding = {
   revision: 'branding-1',
-  logoPath: '/brand/mexicat.gif',
+  logoPath: '/brand/clan-logo.png',
   faviconPath: '/favicon.png',
 };
 export function parseBranding(value: unknown): Branding {

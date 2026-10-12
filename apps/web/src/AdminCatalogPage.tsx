@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { useAdminAction } from './use-admin-action.ts';
 import { ItemCreator } from './ItemCreator.tsx';
 import { PageOrderEditor } from './PageOrderEditor.tsx';
+import { PageManagement } from './PageManagement.tsx';
 
 export function AdminCatalogPage({
   client,
@@ -20,7 +20,6 @@ export function AdminCatalogPage({
     [readError, setReadError] = useState<string>();
   const [loading, setLoading] = useState(true),
     [refreshKey, setRefreshKey] = useState(0);
-  const action = useAdminAction(onAccessLost);
   useEffect(() => {
     let active = true;
     const controller = new AbortController(),
@@ -64,52 +63,18 @@ export function AdminCatalogPage({
   };
   return (
     <>
-      <section className="admin-panel">
-        <div className="admin-section-heading">
-          <div>
-            <h2>Catalog maintenance</h2>
-            <p>
-              Add new drops to existing collection-log pages and save deliberate
-              item arrangements.
-            </p>
-          </div>
+      {loading && <p role="status">Loading catalog…</p>}
+      {readError && (
+        <section role="alert" className="admin-panel admin-error">
+          <p>{readError}</p>
           <button
             className="site-button"
-            disabled={loading || action.busy}
-            onClick={() => {
-              void action.execute(async (signal) => {
-                await refresh(signal);
-              });
-            }}
+            onClick={() => setRefreshKey((n) => n + 1)}
           >
-            Refresh catalog
+            Retry catalog
           </button>
-        </div>
-        {catalog && (
-          <p className="admin-note">
-            {catalog.items.length} canonical items · {catalog.pages.length}{' '}
-            pages · Source:{' '}
-            {catalog.sourceRevision ?? 'No source revision recorded'}
-          </p>
-        )}
-        {loading && <p role="status">Loading catalog…</p>}
-        {action.error && (
-          <p className="admin-error" role="alert">
-            {action.error}
-          </p>
-        )}
-        {readError && (
-          <div role="alert" className="admin-error">
-            <p>{readError}</p>
-            <button
-              className="site-button"
-              onClick={() => setRefreshKey((n) => n + 1)}
-            >
-              Retry catalog
-            </button>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
       {catalog && (
         <div className="catalog-editor-layout">
           <ItemCreator
@@ -120,6 +85,13 @@ export function AdminCatalogPage({
             refresh={refresh}
           />
           <PageOrderEditor
+            client={client}
+            catalog={catalog}
+            session={session}
+            onAccessLost={onAccessLost}
+            refresh={refresh}
+          />
+          <PageManagement
             client={client}
             catalog={catalog}
             session={session}

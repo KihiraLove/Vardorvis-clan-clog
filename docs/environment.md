@@ -34,8 +34,8 @@ login; `PUBLIC_ORIGIN` must exactly match the browser origin.
 `SESSION_SECRET` must
 hold 32+ random bytes encoded as hex. `TRUSTED_PROXY_CIDRS` optionally lists
 verified upstream proxy IPs and CIDRs (including Traefik). The bundled app
-always trusts its internal Nginx loopback hop, except in local unauthenticated
-admin mode. Leave the list empty only when no external reverse proxy is used;
+always trusts its internal Nginx loopback hop. Leave the list empty only when
+no external reverse proxy is used;
 see [the trust-chain configuration](deployment.md#existing-traefik).
 
 The first authenticated startup creates one administrator with username `admin`
@@ -80,7 +80,8 @@ Install Node 24 and Docker Compose v2, then:
 
 ```bash
 cp .env.example .env
-# Configure POSTGRES_PASSWORD and APP_DB_PASSWORD as separate random hex values.
+# Configure POSTGRES_PASSWORD, APP_DB_PASSWORD and SESSION_SECRET independently.
+# Set AUTH_ENABLED=true to enable staff login; keep PUBLIC_ORIGIN on HTTP loopback.
 npm ci
 npm run validate
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
@@ -91,18 +92,9 @@ The local application uses the full bundled catalog and starts with all
 items uncollected. The database is available only on host loopback (5432).
 To reset **disposable** data, see [fresh-install reset](deployment.md#fresh-install-database-baseline-breaking-change).
 
-For real API admin testing without a password, use the private development
-override, never the public Traefik setup:
-
-```bash
-docker compose -f compose.yaml -f compose.dev.yaml -f compose.local-admin.yaml up -d --build --wait
-# Visit http://127.0.0.1:8088/admin
-```
-
-It creates a separate Compose project and volumes with development-only
-`DEV_ADMIN_MODE=true`, `AUTH_ENABLED=false`, HTTP loopback origin and no
-trusted proxies. Stop the other stack if both want port 8088 or 5432.
-Never attach this override to `web` or expose it publicly.
+Visit `http://127.0.0.1:8088/admin` and sign in with your staff credentials.
+Local development requires the same password login and first-login password
+change as production. With `AUTH_ENABLED=false`, staff tools are unavailable.
 
 ## Host-side development and tests
 

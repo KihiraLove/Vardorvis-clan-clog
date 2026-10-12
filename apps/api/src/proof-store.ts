@@ -1,6 +1,10 @@
 /** PNG metadata and RuneLite receipts commit with the pending claim. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import {
+  blockedRuneLiteWorldTypes,
+  parseRuneLiteWorldTypes,
+} from '@clog/domain';
 import { requireClanKey } from './clan-api-key.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
@@ -10,6 +14,26 @@ export const uuidPattern =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 export const clanMatches = (a: string, b: string) =>
   a.trim().toLowerCase() === b.trim().toLowerCase();
+export function runeLiteWorld(value: unknown) {
+  let worldTypes: string[];
+  try {
+    worldTypes = parseRuneLiteWorldTypes(value);
+  } catch {
+    throw new ApiError(
+      422,
+      'Use a world type identifier or a JSON array of world type identifiers.',
+    );
+  }
+  const blocked = worldTypes.find((type) =>
+    blockedRuneLiteWorldTypes.includes(type),
+  );
+  if (blocked)
+    throw new ApiError(
+      403,
+      `Submissions from ${blocked} worlds are not allowed.`,
+    );
+  return { worldTypes, hardcore: worldTypes.includes('HC_WORLD_PLACEHOLDER') };
+}
 export async function insertImage(client: pg.PoolClient, image: IconRecord) {
   await client.query(
     'INSERT INTO submission_images(id,sha256,byte_size,width,height) VALUES($1,$2,$3,$4,$5)',
@@ -20,6 +44,7 @@ export interface RuneLiteFields {
   username: string;
   clanName: string;
   itemId: number;
+  worldTypes: string[];
 }
 export interface RuneLiteReceipt {
   submissionId: string;
@@ -27,6 +52,7 @@ export interface RuneLiteReceipt {
   itemId: number;
   submittedAt: string;
   collectedOn: string;
+  hardcore?: boolean;
 }
 export interface ProofStore {
   allowIntake(ip: string): Promise<boolean>;
@@ -87,15 +113,15 @@ export class PgProofStore implements ProofStore {
     key: string,
     apiKey?: string,
   ) {
+    const world = runeLiteWorld(fields.worldTypes);
+    const payload = [
+      fields.username.trim(),
+      fields.clanName.trim().toLowerCase(),
+      fields.itemId,
+      image.sha256,
+    ];
     const hash = createHash('sha256')
-      .update(
-        JSON.stringify([
-          fields.username.trim(),
-          fields.clanName.trim().toLowerCase(),
-          fields.itemId,
-          image.sha256,
-        ]),
-      )
+      .update(JSON.stringify([...payload, world.worldTypes]))
       .digest('hex');
     const client = await this.pool.connect();
     try {
@@ -119,13 +145,19 @@ export class PgProofStore implements ProofStore {
           payload_hash: string;
           response: RuneLiteReceipt;
           image_id: string;
+          legacy: boolean;
         }>(
-          'SELECT r.payload_hash,r.response,s.proof_image_id::text AS image_id FROM runelite_submission_requests r JOIN submissions s ON s.id=r.submission_id WHERE r.request_key=$1',
+          'SELECT r.payload_hash,r.response,s.proof_image_id::text AS image_id,s.submitted_world_types IS NULL AS legacy FROM runelite_submission_requests r JOIN submissions s ON s.id=r.submission_id WHERE r.request_key=$1',
           [key],
         )
       ).rows[0];
       if (prior) {
-        if (prior.payload_hash !== hash)
+        const legacyMatch =
+          prior.legacy &&
+          !world.hardcore &&
+          prior.payload_hash ===
+            createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+        if (prior.payload_hash !== hash && !legacyMatch)
           throw new ApiError(
             409,
             'Submission key already used for a different request.',
@@ -135,7 +167,7 @@ export class PgProofStore implements ProofStore {
       }
       const item = (
         await client.query<{ id: number; name: string }>(
-          'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active',
+          'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active FOR SHARE OF i',
           [fields.itemId],
         )
       ).rows[0];
@@ -148,7 +180,7 @@ export class PgProofStore implements ProofStore {
       const id = randomUUID();
       const row = (
         await client.query<{ submitted_at: Date; collected_on: string }>(
-          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id) VALUES($1,'runelite',$2,$3,$4,(now() AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
+          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types) VALUES($1,'runelite',$2,$3,$4,(now() AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
           [
             id,
             item.name,
@@ -157,6 +189,8 @@ export class PgProofStore implements ProofStore {
             image.id,
             fields.clanName.trim(),
             fields.itemId,
+            world.hardcore,
+            world.worldTypes,
           ],
         )
       ).rows[0]!;
@@ -166,6 +200,7 @@ export class PgProofStore implements ProofStore {
         itemId: item.id,
         submittedAt: row.submitted_at.toISOString(),
         collectedOn: row.collected_on,
+        hardcore: world.hardcore,
       };
       await client.query(
         'INSERT INTO runelite_submission_requests(request_key,payload_hash,submission_id,response) VALUES($1,$2,$3,$4)',

@@ -1,5 +1,7 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
+  copy?: import('@clog/domain').SiteCopy;
+  hardcore?: import('@clog/domain').HardcoreAppearance;
   clanName: string;
   revision: string;
   hardcoreEnabled: boolean;
@@ -22,6 +24,8 @@ export interface AdminIdentity {
   accountVersion?: number;
 }
 export interface StaffAccount {
+  disabled?: boolean;
+  version?: number;
   id: string;
   username: string;
   role: 'admin' | 'moderator';
@@ -31,7 +35,10 @@ export interface StoredAccount extends StaffAccount {
   passwordHash: string;
   credentialVersion: number;
 }
-export interface StoredSession extends AdminIdentity {
+export interface AccountSessionIdentity extends AdminIdentity {
+  accountVersion: number;
+}
+export interface StoredSession extends AccountSessionIdentity {
   expiresAt: Date;
 }
 export interface BotSubmissionInput {
@@ -58,6 +65,12 @@ export interface BotReceipt {
   creditOccupied: boolean;
 }
 export interface BackendStore {
+  manageModerator?(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    actor: string,
+  ): Promise<StaffAccount>;
   ensureDefaultAdmin(passwordHash: string): Promise<void>;
   accountByUsername(username: string): Promise<StoredAccount | null>;
   accountById(id: string): Promise<StoredAccount | null>;
@@ -90,12 +103,14 @@ export interface BackendStore {
     revision: string,
     actor: string,
     clanName?: string,
+    copy?: import('@clog/domain').SiteCopy,
+    hardcore?: import('@clog/domain').HardcoreAppearance,
   ): Promise<Settings | null>;
   createState(hash: string, expiresAt: Date): Promise<void>;
   consumeState(hash: string): Promise<boolean>;
   createSession(
     hash: string,
-    identity: AdminIdentity,
+    identity: AccountSessionIdentity,
     expiresAt: Date,
   ): Promise<void>;
   session(hash: string): Promise<StoredSession | null>;

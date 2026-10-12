@@ -26,10 +26,7 @@ if [[ "${BOT_ENABLED:-false}" == true ]]; then
 fi
 
 # Nginx is the fixed immediate hop. Extend trust only to configured upstreams.
-# Local unauthenticated admin mode keeps its no-forwarded-headers boundary.
-if [[ "${DEV_ADMIN_MODE:-false}" != true ]]; then
-  export TRUSTED_PROXY_CIDRS="127.0.0.1/32${TRUSTED_PROXY_CIDRS:+,${TRUSTED_PROXY_CIDRS}}"
-fi
+export TRUSTED_PROXY_CIDRS="127.0.0.1/32${TRUSTED_PROXY_CIDRS:+,${TRUSTED_PROXY_CIDRS}}"
 
 node apps/api/dist/server.js &
 pids+=("$!")

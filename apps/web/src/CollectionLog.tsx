@@ -17,6 +17,7 @@ import {
   type Item,
 } from './model.ts';
 import { ItemMenu, type OpenItem } from './ItemMenu.tsx';
+import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 
 /** Hover/focus opens transient history; clicking or tapping pins it until dismissal. */
 function ItemSlot({
@@ -88,6 +89,7 @@ export function CollectionLog({
   retry,
   hardcore = false,
   onPreview,
+  copy = defaultSiteCopy,
 }: {
   data?: LogData | undefined;
   loading?: boolean;
@@ -96,6 +98,7 @@ export function CollectionLog({
   preview?: boolean;
   hardcore?: boolean;
   onPreview?: (() => void) | undefined;
+  copy?: SiteCopy;
 }) {
   const requestedPage = new URLSearchParams(window.location.search).get('page');
   const firstPage =
@@ -190,6 +193,10 @@ export function CollectionLog({
 
   return (
     <section className="collection-section" aria-label="Clan collection log">
+      <h1 className="log-help">
+        {copy.collectionCaption}
+        {hardcore && ' · Hardcore worlds'}
+      </h1>
       <div className="log-viewport">
         <div
           className="log-sizing"
@@ -404,11 +411,6 @@ export function CollectionLog({
           </button>
         </p>
       )}
-      <p className="log-help">
-        {hardcore
-          ? 'Collected on hardcore worlds during BOTW events'
-          : 'Collected during BOTW events'}
-      </p>
       {open &&
         itemState(open.item.id, credits).collected &&
         (() => {

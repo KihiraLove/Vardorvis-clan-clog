@@ -5,16 +5,19 @@ import { XpAdmin } from './XpAdmin.tsx';
 import { skills, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
 import { PreviewXpClient } from './preview/xp.ts';
+import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 export function XpPage({
   client,
   admin,
   preview,
   onMode,
+  copy = defaultSiteCopy,
 }: {
   client: XpClient;
   admin: boolean;
   preview: boolean;
   onMode: (next: boolean) => void;
+  copy?: SiteCopy;
 }) {
   const [data, setData] = useState<XpTracker>();
   const [selected, setSelected] = useState<number>();
@@ -74,9 +77,9 @@ export function XpPage({
     <section
       className="event-tracker"
       id="xp-tracker"
-      aria-label="XP gained during SOTW events"
+      aria-label={admin ? 'XP imports' : copy.xpTitle}
     >
-      <h1>XP gained during SOTW events</h1>
+      {!admin && <h1>{copy.xpTitle}</h1>}
       {admin && (
         <XpAdmin
           client={client}
@@ -157,27 +160,27 @@ export function XpPage({
               <XpAmount xp={totals ? sumXp(totals) : null} label="All skills" />
             </div>
           </div>
-          <div className="event-source">
-            {event ? (
-              <>
-                <strong>{event.title}</strong>
-                <a
-                  href={event.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View event on Wise Old Man ↗
-                </a>
-              </>
-            ) : missing ? (
-              <p role="status">
-                This event is no longer available. Choose Total or another
-                event.
-              </p>
-            ) : (
-              <p>Across all recorded SOTW events</p>
-            )}
-          </div>
+          {(event || missing) && (
+            <div className="event-source">
+              {event ? (
+                <>
+                  <strong>{event.title}</strong>
+                  <a
+                    href={event.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View event on Wise Old Man ↗
+                  </a>
+                </>
+              ) : missing ? (
+                <p role="status">
+                  This event is no longer available. Choose Total or another
+                  event.
+                </p>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
     </section>

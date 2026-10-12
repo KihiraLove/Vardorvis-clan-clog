@@ -3,12 +3,9 @@ import { useEffect, useState } from 'react';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { AdminRequestError } from './admin-api.ts';
-import {
-  validClanKey,
-  type ClanKeySettings,
-  type ClanKeyUpdate,
-} from './clan-api-key.ts';
+import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { clanKeyBytes, clanKeyMinLength } from '@clog/domain';
 
 export function ClanApiKeySettings({
   client,
@@ -21,13 +18,14 @@ export function ClanApiKeySettings({
 }) {
   const [saved, setSaved] = useState<ClanKeySettings>();
   const [enabled, setEnabled] = useState(true);
-  const [custom, setCustom] = useState('');
+  const [key, setKey] = useState('');
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
   const accept = (value: ClanKeySettings) => {
     setSaved(value);
     setEnabled(value.enabled);
+    setKey(value.key);
   };
   useEffect(() => {
     let active = true;
@@ -41,6 +39,7 @@ export function ClanApiKeySettings({
         if (active && !controller.signal.aborted) {
           setSaved(value);
           setEnabled(value.enabled);
+          setKey(value.key);
         }
       })
       .catch((failure: unknown) => {
@@ -61,23 +60,18 @@ export function ClanApiKeySettings({
       clearTimeout(timeout);
     };
   }, [client, onAccessLost, refresh]);
-  const save = (changes: Omit<ClanKeyUpdate, 'expectedRevision'>) => {
+  const save = () => {
     if (!saved) return;
     void action.execute(
       async (signal) => {
         const value = await client.saveClanApiKey(
-          { ...changes, expectedRevision: saved.revision },
+          { key, enabled, expectedRevision: saved.revision },
           session.csrfToken,
           signal,
         );
         if (!signal.aborted) {
           accept(value);
-          setCustom('');
-          action.setMessage(
-            changes.generate || changes.key !== undefined
-              ? 'Clan API key rotated.'
-              : 'API key requirement saved.',
-          );
+          action.setMessage('Clan API key settings saved.');
         }
       },
       async (signal) => {
@@ -102,80 +96,76 @@ export function ClanApiKeySettings({
           </button>
         </p>
       )}
-      {saved && (
-        <>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              save({ enabled });
-            }}
-          >
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                checked={enabled}
-                disabled={action.busy}
-                onChange={(event) => setEnabled(event.target.checked)}
-              />
-              Require clan API key
-            </label>
-            <button
-              className="site-button"
-              disabled={action.busy || enabled === saved.enabled}
-            >
-              Save API key requirement
-            </button>
-          </form>
-          <label>
-            Current shared API key
-            <input
-              className="clan-api-key-value"
-              type="text"
-              readOnly
-              value={saved.key}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-          <p className="admin-note">
-            Send this value in the X-Clan-API-Key header. Rotation replaces the
-            current key immediately.
-          </p>
+      <form
+        aria-busy={!saved && !error}
+        onSubmit={(event) => {
+          event.preventDefault();
+          save();
+        }}
+      >
+        <label className="admin-checkbox">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={action.busy || !saved}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+          Require clan API key
+        </label>
+        <label htmlFor="clan-api-key-value">Current shared API key</label>
+        <textarea
+          id="clan-api-key-value"
+          className="clan-api-key-value"
+          value={key}
+          required
+          minLength={clanKeyMinLength}
+          rows={2}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={action.busy || !saved}
+          placeholder={saved ? undefined : 'Loading API key…'}
+          onChange={(event) => {
+            setKey(event.target.value);
+            action.setMessage(undefined);
+          }}
+        />
+        <p className="admin-note">
+          Generated keys contain 32 hexadecimal characters. Custom keys can use
+          any characters and must contain at least 8. Save to apply the key and
+          requirement together.
+        </p>
+        <div className="admin-actions">
           <button
             type="button"
             className="site-button"
-            disabled={action.busy}
-            onClick={() => save({ generate: true })}
+            disabled={action.busy || !saved}
+            onClick={() => {
+              const bytes = crypto.getRandomValues(
+                new Uint8Array(clanKeyBytes),
+              );
+              setKey(
+                Array.from(bytes, (byte) =>
+                  byte.toString(16).padStart(2, '0'),
+                ).join(''),
+              );
+              action.setMessage('New key generated. Save to apply it.');
+            }}
           >
             Generate new key
           </button>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              save({ key: custom.trim() });
-            }}
+          <button
+            className="site-button"
+            disabled={
+              action.busy ||
+              !saved ||
+              !validClanKey(key) ||
+              (enabled === saved.enabled && key === saved.key)
+            }
           >
-            <label>
-              New shared API key
-              <input
-                type="text"
-                value={custom}
-                maxLength={256}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={action.busy}
-                onChange={(event) => setCustom(event.target.value)}
-              />
-            </label>
-            <button
-              className="site-button"
-              disabled={action.busy || !validClanKey(custom.trim())}
-            >
-              Set API key
-            </button>
-          </form>
-        </>
-      )}
+            Save API key settings
+          </button>
+        </div>
+      </form>
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
     </div>

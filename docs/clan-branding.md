@@ -1,8 +1,8 @@
 # Clan logo and website icon
 
 After completing first-login password setup, the administrator can upload a
-logo from **Site settings → Clan logo** on `/admin`. Moderators cannot use
-these controls or their private API endpoints. The bundled Mexicat logo is
+logo from **Site settings → Clan logo** on `/admin/settings`. Moderators cannot use
+these controls or their private API endpoints. The bundled clan logo is
 the default; **Restore default logo** restores it without erasing the history.
 
 The service detects image content instead of trusting extensions or browser
@@ -29,6 +29,13 @@ and hidden pages refresh when they become visible.
   exact site `Origin` and `X-CSRF-Token`.
 - `DELETE /api/v1/admin/branding/logo` restores the default, accepting JSON
   `{ "expectedRevision": "branding-N" }` with the same session/origin/CSRF checks.
+
+Hardcore appearance uses `GET /api/v1/branding/hardcore`,
+`GET /api/v1/admin/branding/hardcore` and
+`PUT` / `DELETE /api/v1/admin/branding/hardcore/logo` with the same contracts.
+The two modes have independent revisions, logos, favicons and audit histories.
+Hardcore logo controls remain available while its public release flag is off.
+The public website switches both logo and icon with its selected world mode.
 
 Successful writes advance the branding revision. Concurrent or stale writes
 return 409 and do not overwrite a newer change. Account setup, role, session,

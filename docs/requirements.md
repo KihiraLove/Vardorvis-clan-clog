@@ -1,5 +1,7 @@
 # Product requirements
 
+Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migration `007_site_customization.sql` preserves existing histories; `008_default_clan_name.sql` sets the generic Clan name default while preserving administrator-chosen names. Generated clan keys use exactly 32 hexadecimal characters; custom keys accept any characters with a minimum length of 8. [RuneLite intake](runelite-submissions.md) rejects excluded world flags and routes HC_WORLD_PLACEHOLDER claims to HC credit after review.
+
 > **9 October 2026 DEC-01 review:** [ADR 002](decisions/002-command-date-display.md) records the approved one-credit-per-mode policy, actual password auth and command/date defaults. The sole `/cc-clog submit` command and API receipt-date policy are confirmed. The owner confirmed Traefik/Let's Encrypt using Docker networks `web` and `socknet` and visually approved the frontend on 9 October 2026. Actual domain/DNS, deployed TLS routing/certificate and live login checks remain unverified.
 
 ## Public collection log

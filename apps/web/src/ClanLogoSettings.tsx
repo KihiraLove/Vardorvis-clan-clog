@@ -13,11 +13,13 @@ export function ClanLogoSettings({
   session,
   onAccessLost,
   onSaved,
+  hardcore = false,
 }: {
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
   onSaved: (branding: Branding) => void;
+  hardcore?: boolean;
 }) {
   const [saved, setSaved] = useState<Branding>();
   const [file, setFile] = useState<File>();
@@ -32,7 +34,7 @@ export function ClanLogoSettings({
     setSaved(undefined);
     setReadError(false);
     void client
-      .branding(controller.signal)
+      .branding(controller.signal, hardcore)
       .then((value) => {
         if (active && !controller.signal.aborted) setSaved(value);
       })
@@ -51,9 +53,9 @@ export function ClanLogoSettings({
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [client, refresh, onAccessLost]);
+  }, [client, refresh, onAccessLost, hardcore]);
   const reload = async (signal: AbortSignal) => {
-    const value = await client.branding(signal);
+    const value = await client.branding(signal, hardcore);
     if (!signal.aborted) {
       setSaved(value);
       onSaved(value);
@@ -68,6 +70,7 @@ export function ClanLogoSettings({
         saved.revision,
         session.csrfToken,
         signal,
+        hardcore,
       );
       if (!signal.aborted) {
         setSaved(value);
@@ -99,49 +102,55 @@ export function ClanLogoSettings({
           </button>
         </p>
       )}
-      {saved && (
-        <>
+      <div className="clan-logo-preview" aria-busy={!saved && !readError}>
+        {saved ? (
           <img
             className="clan-logo"
             src={saved.logoPath}
             alt="Current clan logo"
           />
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              save(false);
+        ) : (
+          <div className="clan-logo-placeholder" aria-hidden="true" />
+        )}
+      </div>
+      <form
+        aria-busy={!saved && !readError}
+        onSubmit={(event) => {
+          event.preventDefault();
+          save(false);
+        }}
+      >
+        <label>
+          Logo image
+          <input
+            key={inputVersion}
+            type="file"
+            accept="image/*,.avif,.tif,.tiff"
+            disabled={action.busy || !saved}
+            onChange={(event) => {
+              setFile(event.target.files?.[0]);
+              action.setError(undefined);
+              action.setMessage(undefined);
             }}
-          >
-            <label>
-              Logo image
-              <input
-                key={inputVersion}
-                type="file"
-                accept="image/*,.avif,.tif,.tiff"
-                disabled={action.busy}
-                onChange={(event) => {
-                  setFile(event.target.files?.[0]);
-                  action.setError(undefined);
-                  action.setMessage(undefined);
-                }}
-              />
-            </label>
-            <button className="site-button" disabled={action.busy || !file}>
-              Save clan logo
-            </button>
-            <button
-              type="button"
-              className="site-button"
-              disabled={
-                action.busy || saved.logoPath === defaultBranding.logoPath
-              }
-              onClick={() => save(true)}
-            >
-              Restore default logo
-            </button>
-          </form>
-        </>
-      )}
+          />
+        </label>
+        <button
+          className="site-button"
+          disabled={action.busy || !saved || !file}
+        >
+          Save clan logo
+        </button>
+        <button
+          type="button"
+          className="site-button"
+          disabled={
+            action.busy || !saved || saved.logoPath === defaultBranding.logoPath
+          }
+          onClick={() => save(true)}
+        >
+          Restore default logo
+        </button>
+      </form>
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
     </div>

@@ -1,13 +1,11 @@
 /** Validate account-session configuration. Credentials live only in PostgreSQL. */
 import { isIP } from 'node:net';
 import { isAbsolute } from 'node:path';
-import { randomBytes } from 'node:crypto';
 
 export interface AuthConfig {
   origin: string;
   secret: string;
   secure: boolean;
-  devOnly?: true;
 }
 export interface BotConfig {
   token: string;
@@ -22,8 +20,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     throw new Error('ICON_STORAGE_PATH must be absolute');
   if (!['true', 'false', undefined, ''].includes(env.AUTH_ENABLED))
     throw new Error('AUTH_ENABLED must be true or false');
-  if (!['true', 'false', undefined, ''].includes(env.DEV_ADMIN_MODE))
-    throw new Error('DEV_ADMIN_MODE must be true or false');
   const trusted = (env.TRUSTED_PROXY_CIDRS ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -53,8 +49,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const bot: BotConfig | undefined = botToken
     ? { token: botToken, guildId: botGuildId }
     : undefined;
-  const devOnly = env.DEV_ADMIN_MODE === 'true';
-  if (!devOnly && env.AUTH_ENABLED !== 'true')
+  if (env.AUTH_ENABLED !== 'true')
     return {
       auth: undefined,
       iconDirectory,
@@ -87,30 +82,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     throw new Error(
       'PUBLIC_ORIGIN must use HTTPS (HTTP loopback only in development)',
     );
-  if (devOnly) {
-    if (
-      env.NODE_ENV !== 'development' ||
-      env.AUTH_ENABLED === 'true' ||
-      trusted.length ||
-      !loopback ||
-      origin.protocol !== 'http:'
-    )
-      throw new Error(
-        'DEV_ADMIN_MODE requires development, disabled password auth, no trusted proxies and an HTTP loopback origin',
-      );
-    return {
-      iconDirectory,
-      proofDirectory,
-      auth: {
-        origin: origin.origin,
-        secret: randomBytes(32).toString('hex'),
-        secure: false,
-        devOnly: true as const,
-      } satisfies AuthConfig,
-      bot,
-      trustProxy: false as const,
-    };
-  }
   const secret = env.SESSION_SECRET?.trim() ?? '';
   if (!/^[a-f\d]{64,}$/iu.test(secret))
     throw new Error(

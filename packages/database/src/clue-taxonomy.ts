@@ -128,12 +128,17 @@ export async function applyClueTaxonomy(
       category: string;
       name: string;
       order_origin: string;
+      position_origin: string;
+      active: boolean;
     }>(
-      'SELECT id,category,name,order_origin FROM pages WHERE id=ANY($1::text[])',
+      'SELECT id,category,name,order_origin,position_origin,active FROM pages WHERE id=ANY($1::text[])',
       [expected],
     );
     if (
       pages.rows.length !== expected.length ||
+      pages.rows.some(
+        (page) => !page.active || page.position_origin !== 'source',
+      ) ||
       (
         await client.query('SELECT id FROM pages WHERE id=ANY($1::text[])', [
           rareIds,

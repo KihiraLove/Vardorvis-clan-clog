@@ -11,6 +11,7 @@ import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
 import { AccountSettings } from './AccountSettings.tsx';
 import { AdminAccounts } from './AdminAccounts.tsx';
+import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 
 export interface AdminRouteProps {
   preview: boolean;
@@ -27,12 +28,17 @@ export function AdminNavigation({
     <nav className="admin-navigation" aria-label="Admin navigation">
       {[
         ['/admin', 'Submissions'],
-        ['/admin/catalog', 'Catalog items'],
+        ['/admin/catalog', 'Items catalog'],
         ['/admin/xp', 'XP imports'],
-        ...(!session?.development ? [['/admin/account', 'Your account']] : []),
-        ...(session?.role === 'admin' && !session.development
-          ? [['/admin/accounts', 'Moderator accounts']]
+        ...(session?.role === 'admin'
+          ? [
+              ['/admin/runelite', 'RuneLite submissions'],
+              ['/admin/settings', 'Site settings'],
+              ['/admin/settings/hardcore', 'Hardcore worlds'],
+              ['/admin/accounts', 'Moderator accounts'],
+            ]
           : []),
+        ['/admin/account', 'Your account'],
       ].map(([url, label]) => (
         <a
           key={url}
@@ -60,7 +66,7 @@ export function AdminPage({
   client: AdminClient;
   clanName: string;
   onSettingsSaved: (settings: SiteSettings) => void;
-  onBrandingSaved: (branding: Branding) => void;
+  onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
   onMode: (next: boolean) => void;
   children?: React.ReactNode;
 }) {
@@ -144,12 +150,6 @@ export function AdminPage({
           </button>
         </div>
       )}
-      {session?.development && (
-        <div className="preview-banner" role="status">
-          Local test admin — no Discord login required. Changes are saved to a
-          separate test database, not clan production.
-        </div>
-      )}
       <div className="admin-heading">
         <div>
           <p className="xp-eyebrow">{clanName} clan</p>
@@ -158,20 +158,18 @@ export function AdminPage({
         {session && (
           <div className="admin-account">
             <span>{session.displayName}</span>
-            {!session.development && (
-              <button
-                className="site-button"
-                disabled={action.busy}
-                onClick={() => {
-                  void action.execute(async (signal) => {
-                    await client.logout(session.csrfToken, signal);
-                    if (!signal.aborted) accessLost();
-                  });
-                }}
-              >
-                Sign out
-              </button>
-            )}
+            <button
+              className="site-button"
+              disabled={action.busy}
+              onClick={() => {
+                void action.execute(async (signal) => {
+                  await client.logout(session.csrfToken, signal);
+                  if (!signal.aborted) accessLost();
+                });
+              }}
+            >
+              Sign out
+            </button>
           </div>
         )}
       </div>
@@ -183,15 +181,21 @@ export function AdminPage({
           session={session}
         />
       )}
-      {session?.role === 'admin' && !session.mustChangePassword && (
-        <AdminSettings
-          client={client}
-          session={session}
-          onAccessLost={accessLost}
-          onSaved={onSettingsSaved}
-          onBrandingSaved={onBrandingSaved}
-        />
-      )}
+      {session?.role === 'admin' &&
+        !session.mustChangePassword &&
+        (path === '/admin/settings' || path === '/admin/settings/hardcore') && (
+          <AdminSettings
+            key={path}
+            hardcore={path === '/admin/settings/hardcore'}
+            client={client}
+            session={session}
+            onAccessLost={accessLost}
+            onSaved={onSettingsSaved}
+            onBrandingSaved={(value) =>
+              onBrandingSaved(value, path === '/admin/settings/hardcore')
+            }
+          />
+        )}
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}
@@ -259,18 +263,29 @@ export function AdminPage({
           )}
         </section>
       ) : session.mustChangePassword || path === '/admin/account' ? (
-        session.development ? (
-          <p>Account settings are unavailable in local test mode.</p>
+        <AccountSettings
+          client={client}
+          session={session}
+          onSaved={setSession}
+          onAccessLost={accessLost}
+        />
+      ) : path === '/admin/runelite' ? (
+        session.role === 'admin' ? (
+          <section className="admin-panel">
+            <h2>RuneLite submissions</h2>
+            <ClanApiKeySettings
+              client={client}
+              session={session}
+              onAccessLost={accessLost}
+            />
+          </section>
         ) : (
-          <AccountSettings
-            client={client}
-            session={session}
-            onSaved={setSession}
-            onAccessLost={accessLost}
-          />
+          <p role="alert">
+            Only the administrator can change RuneLite settings.
+          </p>
         )
       ) : path === '/admin/accounts' ? (
-        session.role === 'admin' && !session.development ? (
+        session.role === 'admin' ? (
           <AdminAccounts
             client={client}
             session={session}
@@ -280,6 +295,10 @@ export function AdminPage({
           <p role="alert">
             Only the administrator can create moderator accounts.
           </p>
+        )
+      ) : path === '/admin/settings' || path === '/admin/settings/hardcore' ? (
+        session.role === 'admin' ? null : (
+          <p role="alert">Only the administrator can change site settings.</p>
         )
       ) : children ? (
         children

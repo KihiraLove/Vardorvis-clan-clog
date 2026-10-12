@@ -1,10 +1,16 @@
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
+import {
+  parseSiteCopy,
+  parseHardcoreAppearance,
+  type SiteCopy,
+  type HardcoreAppearance,
+} from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import {
   ApiError,
-  type AdminIdentity,
+  type AccountSessionIdentity,
   type BackendStore,
   type BotReceipt,
   type BotSubmissionInput,
@@ -16,7 +22,7 @@ import {
   type StoredAccount,
 } from './types.js';
 const unavailable = () => new ApiError(503, 'The catalog is not ready.');
-const accountFields = `id, username, role, must_change_password AS "mustChangePassword"`;
+const accountFields = `id, username, role, must_change_password AS "mustChangePassword", disabled, credential_version AS version`;
 const credentialFields = `${accountFields}, password_hash AS "passwordHash", credential_version AS "credentialVersion"`;
 const duplicateUsername = (error: unknown) => {
   if (
@@ -43,7 +49,7 @@ export class PgStore implements BackendStore {
     return (
       (
         await this.pool.query<StoredAccount>(
-          `SELECT ${credentialFields} FROM staff_accounts WHERE lower(username)=lower($1)`,
+          `SELECT ${credentialFields} FROM staff_accounts WHERE lower(username)=lower($1) AND deleted_at IS NULL`,
           [username],
         )
       ).rows[0] ?? null
@@ -55,7 +61,7 @@ export class PgStore implements BackendStore {
     return (
       (
         await this.pool.query<StoredAccount>(
-          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1`,
+          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1 AND deleted_at IS NULL`,
           [id],
         )
       ).rows[0] ?? null
@@ -64,7 +70,7 @@ export class PgStore implements BackendStore {
   async accounts(): Promise<StaffAccount[]> {
     return (
       await this.pool.query<StaffAccount>(
-        `SELECT ${accountFields} FROM staff_accounts ORDER BY role, lower(username)`,
+        `SELECT ${accountFields} FROM staff_accounts WHERE deleted_at IS NULL ORDER BY role, lower(username)`,
       )
     ).rows;
   }
@@ -109,7 +115,7 @@ export class PgStore implements BackendStore {
           `UPDATE staff_accounts SET username=$3, password_hash=COALESCE($4,password_hash),
          must_change_password=CASE WHEN $4 IS NULL THEN must_change_password ELSE false END,
          credential_version=credential_version+1
-         WHERE id=$1 AND credential_version=$2 RETURNING ${credentialFields}`,
+         WHERE id=$1 AND credential_version=$2 AND NOT disabled AND deleted_at IS NULL RETURNING ${credentialFields}`,
           [id, expectedVersion, username, passwordHash ?? null],
         )
       ).rows[0];
@@ -135,6 +141,58 @@ export class PgStore implements BackendStore {
     }
   }
 
+  async manageModerator(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    actor: string,
+  ): Promise<StaffAccount> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const old = (
+        await client.query<StoredAccount>(
+          `SELECT ${credentialFields} FROM staff_accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+          [id],
+        )
+      ).rows[0];
+      if (!old) throw new ApiError(404, 'Moderator account not found.');
+      if (old.role !== 'moderator')
+        throw new ApiError(
+          403,
+          'The administrator account cannot be disabled or deleted.',
+        );
+      if (old.credentialVersion !== expectedVersion)
+        throw new ApiError(
+          409,
+          'This account changed. Reload the account list.',
+        );
+      const saved = (
+        await client.query<StaffAccount>(
+          `UPDATE staff_accounts SET disabled=$2,
+        deleted_at=CASE WHEN $3 THEN now() ELSE NULL END,
+        password_hash=CASE WHEN $3 THEN '' WHEN $4='enable' THEN COALESCE(disabled_password_hash,password_hash) ELSE '' END,
+        disabled_password_hash=CASE WHEN $4='disable' THEN COALESCE(disabled_password_hash,password_hash) ELSE NULL END,
+        credential_version=credential_version+1 WHERE id=$1 RETURNING ${accountFields}`,
+          [id, action !== 'enable', action === 'delete', action],
+        )
+      ).rows[0]!;
+      await client.query('DELETE FROM admin_sessions WHERE account_id=$1', [
+        id,
+      ]);
+      await client.query(
+        'INSERT INTO staff_account_audit(actor_id,account_id,action,username) VALUES($1,$2,$3,$4)',
+        [actor, id, action, old.username],
+      );
+      await client.query('COMMIT');
+      return saved;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   private async matchItems(client: pg.PoolClient): Promise<MatchItem[]> {
     const items = (
       await client.query<{ id: number; name: string }>(
@@ -223,6 +281,16 @@ export class PgStore implements BackendStore {
         throw new ApiError(422, 'Selected canonical item is unavailable.');
       const matched = resolveMatch(matches, input.rawItemText, input.itemId);
       const itemId = matched.itemId;
+      if (
+        itemId !== null &&
+        (
+          await client.query(
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+            [itemId],
+          )
+        ).rowCount !== 1
+      )
+        throw new ApiError(422, 'Selected canonical item is unavailable.');
       const creditOccupied =
         itemId !== null &&
         (
@@ -302,17 +370,17 @@ export class PgStore implements BackendStore {
       ).rows;
       const pages = (
         await client.query<{ id: string; name: string; category: string }>(
-          'SELECT id, name, category FROM pages ORDER BY sort_order, id LIMIT 2001',
+          'SELECT id, name, category FROM pages WHERE active ORDER BY sort_order, id LIMIT 2001',
         )
       ).rows;
       const slots = (
         await client.query<{ page_id: string; item_id: number }>(
-          'SELECT p.page_id, p.item_id FROM page_items p JOIN items i ON i.id=p.item_id WHERE i.active ORDER BY p.page_id, p.slot LIMIT 50001',
+          'SELECT p.page_id, p.item_id FROM page_items p JOIN items i ON i.id=p.item_id JOIN pages g ON g.id=p.page_id WHERE i.active AND g.active ORDER BY p.page_id, p.slot LIMIT 50001',
         )
       ).rows;
       if (
-        !items.length ||
-        !pages.length ||
+        (!pages.length &&
+          !(await client.query('SELECT 1 FROM pages LIMIT 1')).rowCount) ||
         items.length > 10000 ||
         pages.length > 2000 ||
         slots.length > 50000
@@ -385,8 +453,11 @@ export class PgStore implements BackendStore {
         hardcore_enabled: boolean;
         version: number;
         clan_name: string;
+        public_copy: SiteCopy;
+        hardcore_name: string;
+        hardcore_copy: SiteCopy;
       }>(
-        'SELECT hardcore_enabled, version, clan_name FROM site_settings WHERE singleton=true',
+        'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true',
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Settings unavailable.');
@@ -394,6 +465,11 @@ export class PgStore implements BackendStore {
       revision: 'settings-' + row.version,
       hardcoreEnabled: row.hardcore_enabled,
       clanName: row.clan_name,
+      copy: parseSiteCopy(row.public_copy),
+      hardcore: parseHardcoreAppearance({
+        clanName: row.hardcore_name,
+        copy: row.hardcore_copy,
+      }),
     };
   }
   async saveSettings(
@@ -401,6 +477,8 @@ export class PgStore implements BackendStore {
     revision: string,
     actor: string,
     clanName?: string,
+    copy?: SiteCopy,
+    hardcore?: HardcoreAppearance,
   ): Promise<Settings | null> {
     if (
       clanName !== undefined &&
@@ -415,8 +493,11 @@ export class PgStore implements BackendStore {
           hardcore_enabled: boolean;
           version: number;
           clan_name: string;
+          public_copy: SiteCopy;
+          hardcore_name: string;
+          hardcore_copy: SiteCopy;
         }>(
-          'SELECT hardcore_enabled, version, clan_name FROM site_settings WHERE singleton=true FOR UPDATE',
+          'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true FOR UPDATE',
         )
       ).rows[0];
       if (!old || 'settings-' + old.version !== revision) {
@@ -425,19 +506,45 @@ export class PgStore implements BackendStore {
       }
       const version = old.version + 1;
       const name = clanName?.trim() ?? old.clan_name;
-      await client.query(
-        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3 WHERE singleton=true',
-        [enabled, version, name],
+      const text = parseSiteCopy(copy ?? old.public_copy);
+      const hc = parseHardcoreAppearance(
+        hardcore ?? { clanName: old.hardcore_name, copy: old.hardcore_copy },
       );
       await client.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name) VALUES($1,$2,$3,$4,$5,$6)',
-        [actor, old.hardcore_enabled, enabled, version, old.clan_name, name],
+        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4, hardcore_name=$5, hardcore_copy=$6 WHERE singleton=true',
+        [
+          enabled,
+          version,
+          name,
+          JSON.stringify(text),
+          hc.clanName,
+          JSON.stringify(hc.copy),
+        ],
+      );
+      await client.query(
+        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy,old_hardcore_name,new_hardcore_name,old_hardcore_copy,new_hardcore_copy) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [
+          actor,
+          old.hardcore_enabled,
+          enabled,
+          version,
+          old.clan_name,
+          name,
+          JSON.stringify(old.public_copy),
+          JSON.stringify(text),
+          old.hardcore_name,
+          hc.clanName,
+          JSON.stringify(old.hardcore_copy),
+          JSON.stringify(hc.copy),
+        ],
       );
       await client.query('COMMIT');
       return {
         revision: 'settings-' + version,
         hardcoreEnabled: enabled,
         clanName: name,
+        copy: text,
+        hardcore: hc,
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -463,7 +570,11 @@ export class PgStore implements BackendStore {
       ).rowCount === 1
     );
   }
-  async createSession(hash: string, identity: AdminIdentity, expiresAt: Date) {
+  async createSession(
+    hash: string,
+    identity: AccountSessionIdentity,
+    expiresAt: Date,
+  ) {
     await this.pool.query('DELETE FROM admin_sessions WHERE expires_at<=now()');
     await this.pool.query(
       'INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at,account_id,credential_version) VALUES($1,$2,$3,$4,$5,$6)',
@@ -472,8 +583,8 @@ export class PgStore implements BackendStore {
         identity.id,
         identity.displayName,
         expiresAt,
-        identity.accountVersion ? identity.id : null,
-        identity.accountVersion ?? null,
+        identity.id,
+        identity.accountVersion,
       ],
     );
   }
@@ -481,7 +592,7 @@ export class PgStore implements BackendStore {
     return (
       (
         await this.pool.query<StoredSession>(
-          'SELECT discord_user_id AS id, display_name AS "displayName", expires_at AS "expiresAt", credential_version AS "accountVersion" FROM admin_sessions WHERE token_hash=$1 AND expires_at>now()',
+          'SELECT account_id AS id, display_name AS "displayName", expires_at AS "expiresAt", credential_version AS "accountVersion" FROM admin_sessions WHERE token_hash=$1 AND expires_at>now() AND account_id IS NOT NULL AND credential_version IS NOT NULL',
           [hash],
         )
       ).rows[0] ?? null

@@ -1,5 +1,25 @@
 # Validation and completion gates
 
+Workspace builds remove their own generated `dist` directories before compiling.
+This prevents deleted test sources (including the removed passwordless admin
+tests) from leaving executable stale files behind during `npm run validate`.
+The cleanup helper refuses unknown workspaces and linked output directories.
+PostgreSQL integration tests require `TEST_DATABASE_URL`; without it they report
+explicit skips. CI provides a disposable database and runs those tests.
+
+Page-management acceptance tests exercise authenticated moderator writes,
+CSRF/role checks, idempotent creation, stale catalog/page versions, full page
+permutations, rollback on audit failure, shared-item preservation, historical
+credits, empty catalogs and startup preservation. Chromium checks create/reorder/
+confirm-delete flows, mobile layout, selection recovery, navigation order,
+separate RuneLite settings and caption position/typography.
+
+Settings navigation regressions hold private responses pending and compare form,
+panel, navigation and footer geometry before/after loading at desktop and
+320-pixel widths. They also compare background pixels across catalog, XP,
+submission, moderator and account navigation, and verify that unloaded controls
+cannot be edited.
+
 ## Foundation checks
 
 ```bash

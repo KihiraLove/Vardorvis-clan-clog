@@ -5,9 +5,10 @@ import { adminFixtures } from './admin-fixtures.ts';
 test('saving the clan name updates branding and a manual PNG can be reviewed in preview', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await page.goto('/admin/settings?preview=1');
   await page.getByLabel('Clan name', { exact: true }).fill('New Clan');
   await page.getByRole('button', { name: 'Save site settings' }).click();
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.clan-name')).toHaveText('New Clan');
   await expect(page).toHaveTitle('New Clan · Clan Collection Log');
   await page.getByRole('button', { name: 'Add manual submission' }).click();

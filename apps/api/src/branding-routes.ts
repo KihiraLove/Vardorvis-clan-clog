@@ -13,10 +13,14 @@ export function brandingRoutes(
     write?: boolean,
   ) => Promise<{ id: string; role: 'admin' | 'moderator' }>,
 ) {
-  app.get('/api/v1/branding', async (_request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    return store ? store.settings() : defaultBranding;
-  });
+  for (const hardcore of [false, true])
+    app.get(
+      '/api/v1/branding' + (hardcore ? '/hardcore' : ''),
+      async (_request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        return store ? store.settings(hardcore) : defaultBranding;
+      },
+    );
   for (const favicon of [false, true])
     app.get<{ Params: { id: string } }>(
       favicon
@@ -56,91 +60,95 @@ export function brandingRoutes(
       );
     return actor;
   }
-  app.get(
-    '/api/v1/admin/branding',
-    {
-      onRequest: async (request) => {
-        await owner(request);
-      },
-    },
-    () => store!.settings(),
-  );
-  app.delete<{ Body: { expectedRevision: string } }>(
-    '/api/v1/admin/branding/logo',
-    {
-      onRequest: async (request) => {
-        await owner(request, true);
-      },
-      schema: {
-        body: {
-          type: 'object',
-          required: ['expectedRevision'],
-          additionalProperties: false,
-          properties: {
-            expectedRevision: {
-              type: 'string',
-              pattern: '^branding-[1-9][0-9]*$',
-              maxLength: 40,
-            },
-          },
+  for (const hardcore of [false, true]) {
+    const path = '/api/v1/admin/branding' + (hardcore ? '/hardcore' : '');
+    app.get(
+      path,
+      {
+        onRequest: async (request) => {
+          await owner(request);
         },
       },
-    },
-    async (request) =>
-      store!.save(
-        null,
-        request.body.expectedRevision,
-        (await owner(request, true)).id,
-      ),
-  );
-  void app.register(async (scope) => {
-    await scope.register(multipart, {
-      limits: {
-        fileSize: MAX_LOGO_BYTES,
-        files: 1,
-        fields: 0,
-        parts: 1,
-        fieldNameSize: 20,
-        headerPairs: 30,
-      },
-    });
-    scope.put(
-      '/api/v1/admin/branding/logo',
+      () => store!.settings(hardcore),
+    );
+    app.delete<{ Body: { expectedRevision: string } }>(
+      path + '/logo',
       {
         onRequest: async (request) => {
           await owner(request, true);
         },
+        schema: {
+          body: {
+            type: 'object',
+            required: ['expectedRevision'],
+            additionalProperties: false,
+            properties: {
+              expectedRevision: {
+                type: 'string',
+                pattern: '^branding-[1-9][0-9]*$',
+                maxLength: 40,
+              },
+            },
+          },
+        },
       },
-      async (request) => {
-        const actor = await owner(request, true),
-          revision = request.headers['if-match'];
-        if (
-          typeof revision !== 'string' ||
-          !/^branding-[1-9][0-9]*$/u.test(revision) ||
-          revision.length > 40
-        )
-          throw new ApiError(400, 'Supply the current logo revision.');
-        let input: Buffer | undefined;
-        for await (const part of request.parts()) {
-          if (part.type !== 'file' || part.fieldname !== 'logo')
-            throw new ApiError(400, 'Upload one logo image.');
-          input = await part.toBuffer();
-          if (part.file.truncated)
-            throw new ApiError(413, 'Choose a logo up to 10 MiB.');
-        }
-        if (!input) throw new ApiError(400, 'Upload one logo image.');
-        const record = await storage!.saveLogo(input);
-        try {
-          return await store!.save(record, revision, actor.id);
-        } catch (error) {
-          // Retain files if a database outage makes the commit outcome uncertain.
-          const existing = await store!
-            .asset(record.logo.id)
-            .catch(() => undefined);
-          if (existing === null) await storage!.removeLogo(record);
-          throw error;
-        }
-      },
+      async (request) =>
+        store!.save(
+          null,
+          request.body.expectedRevision,
+          (await owner(request, true)).id,
+          hardcore,
+        ),
     );
-  });
+    void app.register(async (scope) => {
+      await scope.register(multipart, {
+        limits: {
+          fileSize: MAX_LOGO_BYTES,
+          files: 1,
+          fields: 0,
+          parts: 1,
+          fieldNameSize: 20,
+          headerPairs: 30,
+        },
+      });
+      scope.put(
+        path + '/logo',
+        {
+          onRequest: async (request) => {
+            await owner(request, true);
+          },
+        },
+        async (request) => {
+          const actor = await owner(request, true),
+            revision = request.headers['if-match'];
+          if (
+            typeof revision !== 'string' ||
+            !/^branding-[1-9][0-9]*$/u.test(revision) ||
+            revision.length > 40
+          )
+            throw new ApiError(400, 'Supply the current logo revision.');
+          let input: Buffer | undefined;
+          for await (const part of request.parts()) {
+            if (part.type !== 'file' || part.fieldname !== 'logo')
+              throw new ApiError(400, 'Upload one logo image.');
+            input = await part.toBuffer();
+            if (part.file.truncated)
+              throw new ApiError(413, 'Choose a logo up to 10 MiB.');
+          }
+          if (!input) throw new ApiError(400, 'Upload one logo image.');
+          const record = await storage!.saveLogo(input);
+          try {
+            return await store!.save(record, revision, actor.id, hardcore);
+          } catch (error) {
+            // Retain files if a database outage makes the commit outcome uncertain.
+            const existing = await store!
+              .asset(record.logo.id)
+              .catch(() => undefined);
+            if (existing === null) await storage!.removeLogo(record);
+            throw error;
+          }
+        },
+      );
+    });
+  }
 }

@@ -10,6 +10,69 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('page item deletion sends the selected page, CSRF and both revisions, and validates its retirement receipt', async () => {
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(path, '/api/v1/admin/catalog/pages/one%2Fpage/items/42');
+    assert.equal(options?.method, 'DELETE');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      expectedRevision: 'catalog-1',
+      expectedVersion: 'page-2',
+    });
+    return json({
+      itemId: 42,
+      pageId: 'one/page',
+      retired: false,
+      catalogRevision: 'catalog-2',
+    });
+  });
+  assert.deepEqual(
+    await client.removePageItem(
+      'one/page',
+      42,
+      'catalog-1',
+      'page-2',
+      'csrf',
+      signal(),
+    ),
+    { retired: false },
+  );
+  for (const receipt of [
+    {
+      itemId: 42,
+      pageId: 'other',
+      retired: false,
+      catalogRevision: 'catalog-2',
+    },
+    {
+      itemId: 42,
+      pageId: 'one/page',
+      retired: 'true',
+      catalogRevision: 'catalog-2',
+    },
+    {
+      itemId: 43,
+      pageId: 'one/page',
+      retired: false,
+      catalogRevision: 'catalog-2',
+    },
+  ])
+    await assert.rejects(
+      new LiveAdminClient(async () => json(receipt)).removePageItem(
+        'one/page',
+        42,
+        'catalog-1',
+        'page-2',
+        'csrf',
+        signal(),
+      ),
+      /Unexpected/u,
+    );
+});
+
 test('private reads use same-origin/no-store, native fetch receiver and encoded queue cursors', async () => {
   const fixture = await adminFixtures(),
     paths: string[] = [];

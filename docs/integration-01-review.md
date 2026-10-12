@@ -1,3 +1,5 @@
+> **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](site-customization.md). Earlier visual notes below are historical.
+
 # INTEGRATION-01 implementation and review log
 
 Umbrella: [#43](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/43) coordinates [REVIEW-01 #7](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/7), [HC-01 #26](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/26), [UI-01 #3](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/3), [UI-02 #9](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/9), [XP-02 #28](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/28) and [ADMIN-01 #8](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/8).
@@ -33,10 +35,6 @@ CI supplies \`TEST_DATABASE_URL\` and runs \`npm run validate\`. Preview/testing
 
 Avoid merging this PR until tests and manual acceptance are complete. The PR deliberately references #43 and the original six issues **without closing keywords** while still incomplete.
 
-## Local no-login testing
-
-The explicit disposable `compose.local-admin.yaml` override allows direct `/admin` and `/admin/xp` live-API review without Discord login. It uses an isolated local database and fails closed in production. See [local admin setup](environment.md#local-admin-testing-without-discord-login). This does not replace production OAuth acceptance.
-
 ## Admin authentication and manually entered drops
 
-Individual staff accounts replace the shared admin password. `AUTH_ENABLED=true` and a strong `SESSION_SECRET` are required for sign-in; the existing loopback-only disposable test bypass remains opt-in. Manual submissions are saved and audited through the live review API, can be pending or immediately approved, and observe the existing one-approved-credit-per-item/world rule. See [environment setup](environment.md#required-secrets-and-configuration).
+Individual staff accounts replace the shared admin password. `AUTH_ENABLED=true` and a strong `SESSION_SECRET` are required for sign-in in both development and production. Manual submissions are saved and audited through the live review API, can be pending or immediately approved, and observe the existing one-approved-credit-per-item/world rule. See [environment setup](environment.md#required-secrets-and-configuration).

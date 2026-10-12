@@ -1,5 +1,7 @@
 > **10 October 2026 release update:** The nine development migrations have been squashed to [001_baseline.sql](../packages/database/migrations/001_baseline.sql). The web proxy, API and optional bot share a single application container, separate from PostgreSQL. Historical implementation notes below may describe the old topology.
 
+Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migrations `007_site_customization.sql` and `008_default_clan_name.sql` preserve histories and administrator-chosen names. Generated clan keys use 32 hexadecimal characters; custom keys preserve any characters with a minimum length of 8. Migration `009_runelite_world_types.sql` retains original world flags separately from staff-correctable credit mode. Intake rejects excluded flags and binds retries to the normalized flag set.
+
 # Architecture
 
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.

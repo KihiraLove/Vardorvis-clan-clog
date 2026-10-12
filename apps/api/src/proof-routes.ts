@@ -6,6 +6,7 @@ import type { RequireAdmin } from './catalog-routes.js';
 import { assetIdPattern, type IconRecord } from './icon-storage.js';
 import {
   clanMatches,
+  runeLiteWorld,
   screenshotPath,
   uuidPattern,
   type ProofStore,
@@ -13,6 +14,7 @@ import {
 import { MAX_SCREENSHOT_BYTES, type ProofStorage } from './proof-storage.js';
 import type { ManualSubmissionInput, ReviewStore } from './review-types.js';
 import { ApiError } from './types.js';
+import { suppliedClanKey } from './clan-api-key.js';
 
 async function parts(request: FastifyRequest, allowed: string[]) {
   if (!request.isMultipart())
@@ -133,8 +135,8 @@ export function proofRoutes(
       limits: {
         fileSize: MAX_SCREENSHOT_BYTES,
         files: 1,
-        fields: 3,
-        parts: 4,
+        fields: 4,
+        parts: 5,
         fieldSize: 8192,
       },
     });
@@ -147,11 +149,7 @@ export function proofRoutes(
               429,
               'Submission rate limit reached. Try again later.',
             );
-          await store.authorizeIntake(
-            typeof req.headers['x-clan-api-key'] === 'string'
-              ? req.headers['x-clan-api-key']
-              : undefined,
-          );
+          await store.authorizeIntake(suppliedClanKey(req.headers));
         },
       },
       async (req, reply) => {
@@ -160,6 +158,7 @@ export function proofRoutes(
           'username',
           'clanName',
           'itemId',
+          'worldType',
         ]);
         if (
           !fields.username!.trim() ||
@@ -175,6 +174,7 @@ export function proofRoutes(
           );
         if (!clanMatches(fields.clanName!, await store.clanName()))
           throw new ApiError(403, 'Clan name does not match this website.');
+        const world = runeLiteWorld(fields.worldType!);
         const image = await storage.save(file.bytes, file.mime);
         try {
           const result = await store.createRuneLite(
@@ -182,12 +182,11 @@ export function proofRoutes(
               username: fields.username!,
               clanName: fields.clanName!,
               itemId: Number(fields.itemId),
+              worldTypes: world.worldTypes,
             },
             image,
             key,
-            typeof req.headers['x-clan-api-key'] === 'string'
-              ? req.headers['x-clan-api-key']
-              : undefined,
+            suppliedClanKey(req.headers),
           );
           if (result.imageId !== image.id) await discardUnreferenced(image);
           return reply.code(201).send(result.receipt);

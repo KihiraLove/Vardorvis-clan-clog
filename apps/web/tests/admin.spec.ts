@@ -62,7 +62,7 @@ async function mockAdmin(page: Page) {
         json: {
           revision: 'clan-key-1',
           enabled: true,
-          key: 'mock-test-clan-key',
+          key: 'a'.repeat(32),
         },
       });
     if (path.startsWith('/api/v1/admin/')) state.privateReads++;
@@ -100,9 +100,13 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   const f = await adminFixtures(),
     maskId = f.detail.submission.itemId!;
   await page.goto('/admin?preview=1');
+  await page
+    .getByRole('link', { name: 'Hardcore worlds', exact: true })
+    .click();
   await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save site settings' }).click();
-  await expect(page.getByText('Site settings saved.')).toBeVisible();
+  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
+  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await review(page, 'Iron Fern').click();
@@ -151,9 +155,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   await expect(
     editor(page).getByText('approve · Preview admin', { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
-    .click();
+  await page.locator('header a.clan-brand').click();
   await page
     .getByRole('button', { name: 'Hardcore worlds', exact: true })
     .click();
@@ -197,9 +199,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     }),
   ).toBeVisible();
-  await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
-    .click();
+  await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot--collected')).toHaveCount(0);
 });
 
@@ -238,9 +238,7 @@ test('approved corrections require a reason and move the single credit into a fr
       exact: true,
     }),
   ).toBeVisible();
-  await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
-    .click();
+  await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot--hardcore')).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Virtus mask: collected', exact: true })
@@ -269,11 +267,13 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await expect(page.locator('.item-creator').getByRole('status')).toContainText(
     'created. Every selected page starts uncollected.',
   );
-  const rows = page.locator('.page-order-list li');
+  const rows = page.locator('.page-order-editor .page-order-list li');
   await expect(rows.last()).toContainText('New clan drop');
   const id = Number(await rows.last().getAttribute('data-item-id'));
   const count = await rows.count();
-  const added = page.locator(`.page-order-list li[data-item-id="${id}"]`);
+  const added = page.locator(
+    `.page-order-editor .page-order-list li[data-item-id="${id}"]`,
+  );
   await added.focus();
   for (let i = 1; i < count; i++) await added.press('Alt+ArrowUp');
   await expect(rows.first()).toHaveAttribute('data-item-id', String(id));
@@ -287,9 +287,7 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await page.getByRole('button', { name: 'Save order', exact: true }).click();
   await expect(page.getByText(/Page order saved\./)).toBeVisible();
   await capture(page, 'admin-catalog-desktop.png');
-  await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
-    .click();
+  await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot').first()).toHaveAttribute(
     'aria-label',
     'New clan drop: not collected',
@@ -325,9 +323,7 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await expect(
     page.getByText('Saved submission state: approved.', { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
-    .click();
+  await page.locator('header a.clan-brand').click();
   await expect(
     page.getByRole('button', { name: 'New clan drop: collected', exact: true }),
   ).toBeVisible();
@@ -369,14 +365,13 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
   await capture(page, 'admin-review-mobile.png');
-  await page.getByRole('link', { name: 'Catalog items', exact: true }).tap();
-  const first = page.locator('.page-order-list li').first();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).tap();
+  const first = page.locator('.page-order-editor .page-order-list li').first();
   const id = await first.getAttribute('data-item-id');
   await first.getByRole('button', { name: / down$/ }).tap();
-  await expect(page.locator('.page-order-list li').nth(1)).toHaveAttribute(
-    'data-item-id',
-    id!,
-  );
+  await expect(
+    page.locator('.page-order-editor .page-order-list li').nth(1),
+  ).toHaveAttribute('data-item-id', id!);
   await page.getByRole('button', { name: 'Save order', exact: true }).tap();
   await expect(page.getByText(/Page order saved\./)).toBeVisible();
   expect(
@@ -633,14 +628,13 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   await expect(page.locator('.admin-created')).toContainText(
     'New live drop · #50001',
   );
-  await expect(page.locator('.page-order-list li').last()).toHaveAttribute(
-    'data-item-id',
-    '50001',
-  );
+  await expect(
+    page.locator('.page-order-editor .page-order-list li').last(),
+  ).toHaveAttribute('data-item-id', '50001');
   expect(uploads).toBe(1);
   expect(creates).toBe(2);
   await page
-    .locator('.page-order-list li')
+    .locator('.page-order-editor .page-order-list li')
     .first()
     .getByRole('button', { name: / down$/ })
     .click();
@@ -648,10 +642,9 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   await expect(
     page.locator('.page-order-editor').getByRole('alert'),
   ).toContainText('The latest data is loaded');
-  await expect(page.locator('.page-order-list li').first()).toHaveAttribute(
-    'data-item-id',
-    '50001',
-  );
+  await expect(
+    page.locator('.page-order-editor .page-order-list li').first(),
+  ).toHaveAttribute('data-item-id', '50001');
   await expect(
     page.getByRole('button', { name: 'Save order', exact: true }),
   ).toBeDisabled();
@@ -671,22 +664,6 @@ test('preview logout clears reviews and also denies the XP import form in the sa
     page.getByRole('heading', { name: 'Admin sign-in required' }),
   ).toBeVisible();
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
-});
-
-test('live local admin session shows test indicator and no Discord sign-out', async ({
-  page,
-}) => {
-  const fixture = await adminFixtures();
-  await mockAdmin(page);
-  await page.route('**/api/v1/auth/session', (route) =>
-    route.fulfill({ json: { ...fixture.session, development: true } }),
-  );
-  await page.goto('/admin');
-  await expect(
-    page.getByText(/Local test admin — no Discord login required/),
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
-  await expect(page.locator('.submission-card')).toHaveCount(1);
 });
 
 test('admin preview can add a manual credit without a Discord claim', async ({
@@ -971,9 +948,7 @@ test('stalled login times out, ignores a late reply, and cancels on navigation',
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-login-calls', '1');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
-    .click();
+  await page.locator('header a.clan-brand').click();
   await expect(page.locator('html')).toHaveAttribute('data-login-aborts', '2');
 });
 
@@ -1084,7 +1059,7 @@ test('leaving the manual form aborts its pending request', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Saving…', exact: true }),
   ).toBeDisabled();
-  await page.getByRole('link', { name: 'Catalog items', exact: true }).click();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-manual-aborted',
     'true',

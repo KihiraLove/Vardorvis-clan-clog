@@ -188,6 +188,22 @@ test(
       // The separate correction runs after the immutable first import; a manually
       // modified obsolete page must block the entire correction transaction.
       const patch = await readClueTaxonomy();
+      // Initial taxonomy work must not restore a deleted page or reset staff page order.
+      await client.query("UPDATE pages SET active=false WHERE id='gilded'");
+      await assert.rejects(
+        applyClueTaxonomy(client, snapshot, patch),
+        /Clue pages already differ/,
+      );
+      await client.query(
+        "UPDATE pages SET active=true,position_origin='manual' WHERE id='gilded'",
+      );
+      await assert.rejects(
+        applyClueTaxonomy(client, snapshot, patch),
+        /Clue pages already differ/,
+      );
+      await client.query(
+        "UPDATE pages SET position_origin='source' WHERE id='gilded'",
+      );
       await client.query(
         "INSERT INTO page_items(page_id,item_id,slot,origin) VALUES('gilded',42,20,'manual')",
       );
@@ -306,6 +322,34 @@ test(
           )
         ).rows[0].order_origin,
         'manual',
+      );
+      // Later page deletion stays removed after both bootstrap steps run again.
+      await client.query(
+        "DELETE FROM page_items WHERE page_id='master_treasure_trails_rare'",
+      );
+      await client.query(
+        "UPDATE pages SET active=false WHERE id='master_treasure_trails_rare'",
+      );
+      assert.equal(await importCatalog(client, snapshot), 'unchanged');
+      assert.equal(
+        await applyClueTaxonomy(client, snapshot, patch),
+        'unchanged',
+      );
+      assert.equal(
+        (
+          await client.query(
+            "SELECT active FROM pages WHERE id='master_treasure_trails_rare'",
+          )
+        ).rows[0].active,
+        false,
+      );
+      assert.equal(
+        (
+          await client.query(
+            "SELECT count(*)::int AS n FROM page_items WHERE page_id='master_treasure_trails_rare'",
+          )
+        ).rows[0].n,
+        0,
       );
     } finally {
       await Promise.all(clients.map((client) => client.end()));

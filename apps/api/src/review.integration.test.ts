@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from './passwords.js';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { createApp } from './app.js';
@@ -33,44 +33,16 @@ test(
     });
     let app: ReturnType<typeof createApp> | undefined;
     try {
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/001_baseline.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
+      const migrations = new URL(
+        '../../../packages/database/migrations/',
+        import.meta.url,
       );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/002_manual_submission_requests.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
-      );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/004_runelite_submissions.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
-      );
+      for (const file of (await readdir(migrations))
+        .filter((file) => file.endsWith('.sql'))
+        .sort())
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES (42,'Vardorvis item','/items/42.png'),(43,'Shared item','/items/43.png')",
-      );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/003_staff_accounts.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
       );
       const accountStore = new PgStore(pool);
       await accountStore.ensureDefaultAdmin(await hashPassword(password));

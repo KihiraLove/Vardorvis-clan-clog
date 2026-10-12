@@ -110,6 +110,7 @@ export function SubmissionEditor({
     );
   const row = detail.submission,
     editable = ['pending', 'approved'].includes(row.status);
+  const activeItem = catalog.items.some((item) => item.id === row.itemId);
   const dirty =
     draft.itemId !== (row.itemId ?? 0) ||
     draft.collectorName.trim() !== row.collectorName ||
@@ -129,7 +130,7 @@ export function SubmissionEditor({
         (dirty ||
           !checked ||
           (!proof && row.source !== 'manual') ||
-          row.itemId === null)
+          !activeItem)
       )
         throw new Error(
           'Save a specific item match and check the linked proof before approving.',
@@ -269,6 +270,13 @@ export function SubmissionEditor({
           perform();
         }}
       >
+        {row.itemId !== null && !activeItem && (
+          <p className="admin-note">
+            Item #{row.itemId} is no longer in the active catalog. Select and
+            save an active item before approving this claim. Its proof and
+            review history remain available.
+          </p>
+        )}
         <fieldset disabled={locked || !editable} className="admin-fieldset">
           <legend>Saved claim and corrections</legend>
           <div className="admin-form-grid">
@@ -393,7 +401,7 @@ export function SubmissionEditor({
                 locked ||
                 dirty ||
                 (!proof && row.source !== 'manual') ||
-                row.itemId === null
+                !activeItem
               }
               onChange={(event) => setChecked(event.target.checked)}
             />
@@ -413,7 +421,7 @@ export function SubmissionEditor({
                   dirty ||
                   !checked ||
                   (!proof && row.source !== 'manual') ||
-                  row.itemId === null
+                  !activeItem
                 }
                 onClick={() => perform('approve')}
               >

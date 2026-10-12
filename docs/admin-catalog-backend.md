@@ -6,7 +6,7 @@ The existing `/admin/catalog` UI now uses authenticated storage for item creatio
 
 ## Routes and authorization
 
-All admin reads require the existing admin session (password login, or explicitly enabled local development mode). Every mutation also requires the configured same-origin `Origin` and session-bound `X-CSRF-Token`. Authentication runs before body parsing and validation. Actors come from the session, never a request field. Private responses use `Cache-Control: no-store`.
+All admin reads require an authenticated administrator or moderator account. Every mutation also requires the configured same-origin `Origin` and session-bound `X-CSRF-Token`. Authentication runs before body parsing and validation. Actors come from the session, never a request field. Private responses use `Cache-Control: no-store`.
 
 | Route                                          | Contract                                                                                                                     |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -66,6 +66,30 @@ Reordering locks the page, compares its version and verifies an exact permutatio
 Database triggers advance page versions on membership mutations and advance catalog revisions on item, page and alias changes, including future source writers. Public ETags and search revisions include the catalog version. Repeatable-read snapshots prevent a response from mixing items, membership and revision from different transactions.
 
 ## Source refresh and reconciliation boundary
+
+### Whole-page management
+
+Both staff roles can create, reorder and delete pages in **Items catalog → Page
+management**. These session/Origin/CSRF-protected endpoints use the catalog/import
+lock and commit the revision, memberships and audit together:
+
+- `POST /api/v1/admin/catalog/pages`: `name`, `category`, ordered `itemIds` (may
+  be empty), `expectedRevision`, plus a stable `Idempotency-Key`. Returns the page
+  and catalog revision. Retries return the original durable receipt; changing
+  the payload under that key returns 409. Names must be distinct within a category.
+- `PUT /api/v1/admin/catalog/pages/order`: `category`, `orderedPageIds` containing
+  every active page in that category exactly once, and `expectedRevision`.
+- `DELETE /api/v1/admin/catalog/pages/:id`: `expectedRevision` and
+  `expectedVersion`. Removes all memberships and deactivates the page. Items
+  without another active page are deactivated; shared items and all review/credit
+  history remain intact. Stale revisions/versions return 409.
+
+Migration 011 retains deleted page rows for audits and retries, records manual
+page position separately from item ordering, and adds append-only page creation
+receipts. Public/staff catalogs exclude deleted pages. An intentionally empty
+catalog after deleting the last page is valid. Normal bootstrap never recreates
+deleted pages, and initial clue correction refuses to overwrite manually changed
+page positions or deleted clue pages.
 
 Repeated CAT-01 bootstrap imports remain no-ops: they preserve manual names/icons/items/memberships, explicit order and credits. Changed source snapshots are still refused by the initial importer; reviewed source refresh itself remains [#10](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/10).
 

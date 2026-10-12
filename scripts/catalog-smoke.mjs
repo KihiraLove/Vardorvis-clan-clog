@@ -66,6 +66,65 @@ try {
     },
   );
   assert.equal(ordered.page.itemIds[0], created.item.id);
+  const createPage = async (name, itemIds, key) => {
+    const current = await request('/api/v1/admin/catalog');
+    return request('/api/v1/admin/catalog/pages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify({
+        name,
+        category: 'bosses',
+        itemIds,
+        expectedRevision: current.revision,
+      }),
+    });
+  };
+  const removedPage = await createPage(
+    'CI removed page',
+    [],
+    'ci-removed-page',
+  );
+  const deleted = await request(
+    '/api/v1/admin/catalog/pages/' + removedPage.page.id,
+    {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedRevision: removedPage.catalogRevision,
+        expectedVersion: removedPage.page.version,
+      }),
+    },
+  );
+  assert.deepEqual(deleted.retiredItemIds, []);
+  const retainedPage = await createPage(
+    'CI shared page',
+    [created.item.id],
+    'ci-shared-page',
+  );
+  const withPage = await request('/api/v1/admin/catalog');
+  const pageIds = withPage.pages
+    .filter((page) => page.category === 'bosses')
+    .map((page) => page.id);
+  await request('/api/v1/admin/catalog/pages/order', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      category: 'bosses',
+      orderedPageIds: [
+        retainedPage.page.id,
+        ...pageIds.filter((id) => id !== retainedPage.page.id),
+      ],
+      expectedRevision: withPage.revision,
+    }),
+  });
+  const publicCatalog = await request('/api/v1/catalog');
+  assert.equal(
+    publicCatalog.pages.filter((page) => page.category === 'bosses')[0].id,
+    retainedPage.page.id,
+  );
+  assert.ok(
+    !publicCatalog.pages.some((page) => page.id === removedPage.page.id),
+  );
   const search = await request('/api/v1/catalog/search?q=CI%20manual');
   assert.equal(search.items[0].id, created.item.id);
   const credits = await request('/api/v1/collections');
@@ -74,6 +133,8 @@ try {
     JSON.stringify({
       iconPath: created.item.iconPath,
       itemId: created.item.id,
+      pageId: retainedPage.page.id,
+      deletedPageId: removedPage.page.id,
     }),
   );
 } finally {

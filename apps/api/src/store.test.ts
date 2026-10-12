@@ -1,9 +1,10 @@
 /** Real PostgreSQL contract checks, mandatory in CI via TEST_DATABASE_URL. */
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
+import { defaultSiteCopy } from '@clog/domain';
 import { PgStore } from './store.js';
 import { createApp } from './app.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -27,39 +28,22 @@ test(
       { store, logger: false },
     );
     try {
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/001_baseline.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
+      const migrations = new URL(
+        '../../../packages/database/migrations/',
+        import.meta.url,
       );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/003_staff_accounts.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
-      );
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/004_runelite_submissions.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
-      );
+      for (const file of (await readdir(migrations))
+        .filter((file) => file.endsWith('.sql'))
+        .sort())
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
-        revision: 'settings-1',
-        clanName: 'Vardorvis',
+        revision: 'settings-2',
+        clanName: 'Clan name',
         hardcoreEnabled: false,
+        copy: defaultSiteCopy,
+        hardcore: { clanName: 'Clan name', copy: defaultSiteCopy },
       });
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES(42,'Shared item','/items/42.png'),(43,'Manual item','/items/43.png')",
@@ -115,12 +99,16 @@ test(
       assert.equal(revised.json().credits[0].hardcore, true);
       assert.equal(revised.json().credits.length, 1);
       const results = await Promise.all([
-        store.saveSettings(true, 'settings-1', 'admin-one'),
-        store.saveSettings(false, 'settings-1', 'admin-two'),
+        store.saveSettings(true, 'settings-2', 'admin-one'),
+        store.saveSettings(false, 'settings-2', 'admin-two'),
       ]);
       assert.equal(results.filter(Boolean).length, 1);
       assert.equal(
-        (await pool.query('SELECT * FROM site_settings_audit')).rows.length,
+        (
+          await pool.query(
+            "SELECT * FROM site_settings_audit WHERE actor_discord_id IN ('admin-one','admin-two')",
+          )
+        ).rows.length,
         1,
       );
       // A failure in the audit insert must roll back the setting, too.
@@ -147,22 +135,36 @@ test(
       );
       await store.createState(hash('expired'), new Date(0));
       assert.equal(await store.consumeState(hash('expired')), false);
+      await store.ensureDefaultAdmin('test-only-verifier');
+      const account = (await store.accountByUsername('admin'))!;
+      const identity = {
+        id: account.id,
+        displayName: account.username,
+        accountVersion: account.credentialVersion,
+      };
+      // Rows issued without a staff-account binding by older images cannot authenticate.
+      await pool.query(
+        'INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at) VALUES($1,$2,$3,$4)',
+        [
+          hash('legacy-session'),
+          'local-dev-admin',
+          'Local test admin',
+          new Date(Date.now() + 60000),
+        ],
+      );
+      assert.equal(await restarted.session(hash('legacy-session')), null);
       await store.createSession(
         hash('session'),
-        { id: '123456789012345678', displayName: 'Admin' },
+        identity,
         new Date(Date.now() + 60000),
       );
       assert.equal(
         (await restarted.session(hash('session')))?.displayName,
-        'Admin',
+        'admin',
       );
       await store.deleteSession(hash('session'));
       assert.equal(await restarted.session(hash('session')), null);
-      await store.createSession(
-        hash('expired-session'),
-        { id: '123456789012345678', displayName: 'Admin' },
-        new Date(0),
-      );
+      await store.createSession(hash('expired-session'), identity, new Date(0));
       assert.equal(await restarted.session(hash('expired-session')), null);
       const limited = await Promise.all(
         Array.from({ length: 21 }, () => store.allowLogin(hash('ip'))),

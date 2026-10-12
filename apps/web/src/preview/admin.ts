@@ -5,10 +5,18 @@ import {
   type ClanKeyUpdate,
 } from '../clan-api-key.ts';
 const generatePreviewKey = () =>
-  Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+  Array.from(crypto.getRandomValues(new Uint8Array(clanKeyBytes)), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
 import { AdminRequestError } from '../admin-api.ts';
+import {
+  defaultSiteCopy,
+  parseSiteCopy,
+  parseHardcoreAppearance,
+  type SiteCopy,
+  type HardcoreAppearance,
+  clanKeyBytes,
+} from '@clog/domain';
 import {
   defaultBranding,
   validateLogoFile,
@@ -28,6 +36,7 @@ import {
   type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
+  type CreatePage,
   type QueueView,
   type StagedIcon,
   type Submission,
@@ -42,22 +51,24 @@ import {
 
 export class PreviewAdminClient implements AdminClient {
   private logoSettings: Branding = { ...defaultBranding };
+  private hardcoreLogoSettings: Branding = { ...defaultBranding };
   private logoUrls = new Set<string>();
-  publicBranding() {
-    return { ...this.logoSettings };
+  publicBranding(hardcore = false) {
+    return { ...(hardcore ? this.hardcoreLogoSettings : this.logoSettings) };
   }
-  async branding(signal: AbortSignal) {
+  async branding(signal: AbortSignal, hardcore = false) {
     this.access(signal);
-    return this.publicBranding();
+    return this.publicBranding(hardcore);
   }
   async saveLogo(
     file: File | null,
     revision: string,
     _csrf: string,
     signal: AbortSignal,
+    hardcore = false,
   ) {
     this.access(signal);
-    if (revision !== this.logoSettings.revision)
+    if (revision !== this.publicBranding(hardcore).revision)
       throw new AdminRequestError(409);
     let paths = defaultBranding;
     if (file) {
@@ -100,14 +111,16 @@ export class PreviewAdminClient implements AdminClient {
       }
     }
     // Recheck after asynchronous image decoding to preserve the same concurrency contract.
-    if (revision !== this.logoSettings.revision)
+    if (revision !== this.publicBranding(hardcore).revision)
       throw new AdminRequestError(409);
-    this.logoSettings = {
+    const saved = {
       ...paths,
       revision: 'branding-' + (Number(revision.slice(9)) + 1),
     };
+    if (hardcore) this.hardcoreLogoSettings = saved;
+    else this.logoSettings = saved;
     this.changed(false);
-    return this.publicBranding();
+    return this.publicBranding(hardcore);
   }
   private keySettings: ClanKeySettings = {
     revision: 'clan-key-1',
@@ -117,9 +130,11 @@ export class PreviewAdminClient implements AdminClient {
   private revision = 0;
   private queueRevision = 0;
   private setting = {
+    copy: { ...defaultSiteCopy },
+    hardcore: { clanName: 'Clan name', copy: { ...defaultSiteCopy } },
     revision: 'settings-0',
     hardcoreEnabled: false,
-    clanName: 'Vardorvis',
+    clanName: 'Clan name',
   };
   private settingsVersion = 0;
   private signedIn = true;
@@ -152,6 +167,8 @@ export class PreviewAdminClient implements AdminClient {
     })),
   };
   private rows: Submission[];
+  private nextItemId =
+    Math.max(0, ...previewCatalog.items.map((item) => item.id)) + 1;
   private audit = new Map<string, AuditEntry[]>();
   private assets = new Map<string, StagedIcon>();
   private receipts = new Map<string, { fields: string; result: CreatedItem }>();
@@ -339,6 +356,156 @@ export class PreviewAdminClient implements AdminClient {
     this.access(signal);
     return structuredClone(this.staff);
   }
+  async manageModerator(
+    id: string,
+    expectedVersion: number,
+    action: 'disable' | 'enable' | 'delete',
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const account = this.staff.find((row) => row.id === id);
+    if (!account) throw new AdminRequestError(404);
+    if (account.role !== 'moderator') throw new AdminRequestError(403);
+    if ((account.version ?? 1) !== expectedVersion)
+      throw new AdminRequestError(409);
+    const saved = {
+      ...account,
+      disabled: action !== 'enable',
+      version: expectedVersion + 1,
+    };
+    this.staff =
+      action === 'delete'
+        ? this.staff.filter((row) => row.id !== id)
+        : this.staff.map((row) => (row.id === id ? saved : row));
+    return saved;
+  }
+  private pageRequests = new Map<
+    string,
+    { payload: string; page: AdminPage }
+  >();
+  async createPage(
+    fields: CreatePage,
+    key: string,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const payload = JSON.stringify(fields),
+      prior = this.pageRequests.get(key);
+    if (prior) {
+      if (prior.payload !== payload) throw new AdminRequestError(409);
+      return structuredClone(prior.page);
+    }
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    if (
+      !fields.name.trim() ||
+      this.data.pages.some(
+        (p) =>
+          p.category === fields.category &&
+          p.name.toLowerCase() === fields.name.trim().toLowerCase(),
+      )
+    )
+      throw new AdminRequestError(400);
+    if (
+      new Set(fields.itemIds).size !== fields.itemIds.length ||
+      fields.itemIds.some(
+        (id) => !this.data.items.some((item) => item.id === id),
+      )
+    )
+      throw new AdminRequestError(400);
+    const page: AdminPage = {
+      id: 'manual-page-' + crypto.randomUUID(),
+      name: fields.name.trim(),
+      category: fields.category,
+      itemIds: [...fields.itemIds],
+      version: 'page-1',
+      orderOrigin: 'manual',
+    };
+    this.data.pages.push(page);
+    this.pageVersions.set(page.id, 1);
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+    this.pageRequests.set(key, { payload, page: structuredClone(page) });
+    return structuredClone(page);
+  }
+  async removePage(
+    id: string,
+    revision: string,
+    version: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    const page = this.data.pages.find((p) => p.id === id);
+    if (!page || page.version !== version) throw new AdminRequestError(409);
+    this.data.pages = this.data.pages.filter((p) => p.id !== id);
+    const retiredItemIds = page.itemIds.filter(
+      (item) => !this.data.pages.some((p) => p.itemIds.includes(item)),
+    );
+    this.data.items = this.data.items.filter(
+      (item) => !retiredItemIds.includes(item.id),
+    );
+    this.pageVersions.delete(id);
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+    return { retiredItemIds };
+  }
+  async reorderPages(
+    category: import('../model.ts').Category,
+    ids: string[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    const pages = this.data.pages.filter((p) => p.category === category);
+    if (
+      pages.length !== ids.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !pages.some((p) => p.id === id))
+    )
+      throw new AdminRequestError(400);
+    let slot = 0;
+    this.data.pages = this.data.pages.map((p) => {
+      if (p.category !== category) return p;
+      const id = ids[slot++]!;
+      const page = pages.find((p) => p.id === id)!,
+        version = (this.pageVersions.get(page.id) ?? 1) + 1;
+      this.pageVersions.set(page.id, version);
+      return { ...page, version: 'page-' + version };
+    });
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+  }
+  async removePageItem(
+    pageId: string,
+    id: number,
+    revision: string,
+    expectedVersion: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    const page = this.data.pages.find((row) => row.id === pageId);
+    if (!page || !page.itemIds.includes(id)) throw new AdminRequestError(404);
+    if (page.version !== expectedVersion) throw new AdminRequestError(409);
+    page.itemIds = page.itemIds.filter((itemId) => itemId !== id);
+    const version = this.pageVersions.get(page.id)! + 1;
+    this.pageVersions.set(page.id, version);
+    page.version = 'page-' + version;
+    page.orderOrigin = 'manual';
+    const retired = !this.data.pages.some((row) => row.itemIds.includes(id));
+    if (retired)
+      this.data.items = this.data.items.filter((row) => row.id !== id);
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+    return { retired };
+  }
   async createModerator(
     username: string,
     _password: string,
@@ -422,11 +589,17 @@ export class PreviewAdminClient implements AdminClient {
     _csrf: string,
     signal: AbortSignal,
     clanName?: string,
+    copy?: SiteCopy,
+    hardcore?: HardcoreAppearance,
   ) {
     this.access(signal);
     if (expectedRevision !== this.setting.revision)
       throw new AdminRequestError(409);
     this.setting = {
+      copy: copy ? parseSiteCopy(copy) : this.setting.copy,
+      hardcore: hardcore
+        ? parseHardcoreAppearance(hardcore)
+        : this.setting.hardcore,
       hardcoreEnabled,
       clanName: clanName?.trim() ?? this.setting.clanName,
       revision: 'settings-' + ++this.settingsVersion,
@@ -476,7 +649,11 @@ export class PreviewAdminClient implements AdminClient {
           ? {
               revision: 'preview-credits-' + this.revision,
               credits: this.rows
-                .filter((row) => row.status === 'approved')
+                .filter(
+                  (row) =>
+                    row.status === 'approved' &&
+                    this.data.items.some((item) => item.id === row.itemId),
+                )
                 .map((row) => ({
                   submissionId: row.id,
                   itemId: row.itemId!,
@@ -594,7 +771,7 @@ export class PreviewAdminClient implements AdminClient {
         ? row.status !== 'approved'
         : row.status !== 'pending') ||
       (action === 'approve'
-        ? row.itemId === null ||
+        ? !this.data.items.some((item) => item.id === row.itemId) ||
           (row.source !== 'manual' && !safeProof(row.proofUrl))
         : !reason.trim())
     )
@@ -640,7 +817,7 @@ export class PreviewAdminClient implements AdminClient {
       throw new AdminRequestError(422);
     // This allocator is safe only in this single in-memory simulator, not a concurrent API.
     const item = {
-      id: Math.max(0, ...this.data.items.map((i) => i.id)) + 1,
+      id: this.nextItemId++,
       name: clean.name,
       iconPath: asset.iconPath,
       origin: 'manual' as const,

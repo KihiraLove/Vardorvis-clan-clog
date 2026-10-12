@@ -48,4 +48,4 @@ Node tests cover exact formatting, input/payload validation, conditional snapsho
 
 CI uploads `xp-desktop.png`, `xp-mobile.png` and `xp-admin.png` in the `frontend-browser-review` artifact, alongside collection-log captures and any failure traces. These are review captures, not approved pixel baselines. Real WOM imports, database concurrency/corrections, rename reconciliation, OAuth/CSRF enforcement and live end-to-end acceptance remain backend/integration work. No task is closed automatically.
 
-The shared admin navigation now links Submissions, Catalog items and XP imports. Preview sign-out in the submission/catalog area also denies the XP import form for that SPA session; reloading starts a fresh signed-in sample session. See the [admin review guide](admin-frontend-review.md) for the related frontend work in #8/#31.
+The shared admin navigation now links Submissions, Items catalog and XP imports. Preview sign-out in the submission/catalog area also denies the XP import form for that SPA session; reloading starts a fresh signed-in sample session. See the [admin review guide](admin-frontend-review.md) for the related frontend work in #8/#31.

@@ -181,7 +181,7 @@ export class PgReviewStore implements ReviewStore {
         return replay.response;
       }
       const validItem = await client.query<{ name: string }>(
-        'SELECT name FROM items WHERE id=$1 AND active',
+        'SELECT name FROM items WHERE id=$1 AND active FOR SHARE',
         [fields.itemId],
       );
       if (validItem.rowCount !== 1)
@@ -418,7 +418,7 @@ export class PgReviewStore implements ReviewStore {
               'Resolve a canonical item and validate proof before approval.',
             );
           const active = await client.query(
-            'SELECT 1 FROM items WHERE id=$1 AND active',
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
             [row.itemId],
           );
           if (active.rowCount !== 1)
@@ -481,7 +481,7 @@ export class PgReviewStore implements ReviewStore {
             'Collection date is invalid or in the future.',
           );
         const active = await client.query(
-          'SELECT 1 FROM items WHERE id=$1 AND active',
+          'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
           [fields.itemId],
         );
         if (active.rowCount !== 1)

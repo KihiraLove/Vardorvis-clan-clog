@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import catalog from '../src/preview/catalog.json' with { type: 'json' };
 
-test('homepage uses animated branding, 2x log and inline XP without public admin navigation', async ({
+test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({
   page,
 }) => {
   await page.goto('/?preview=1');
   await expect(page.locator('.clan-logo')).toHaveAttribute(
     'src',
-    '/brand/mexicat.gif',
+    '/brand/clan-logo.png',
   );
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
     'href',
@@ -89,12 +89,13 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   page,
 }) => {
   await page.goto('/admin?preview=1');
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save site settings' }).click();
-  await expect(page.getByText('Site settings saved.')).toBeVisible();
   await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
+    .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
+  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
+  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.locator('header a.clan-brand').click();
   await page.locator('.preview-options').first().locator('summary').click();
   await page.getByLabel('Review scenario').selectOption('hardcore');
   await page
@@ -135,12 +136,13 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
     fullPage: true,
   });
   await page.goBack();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).uncheck();
-  await page.getByRole('button', { name: 'Save site settings' }).click();
-  await expect(page.getByText('Site settings saved.')).toBeVisible();
   await page
-    .getByRole('link', { name: 'Vardorvis clan collection log', exact: true })
+    .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
+  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.locator('header a.clan-brand').click();
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveCount(0);

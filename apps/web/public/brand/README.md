@@ -1,3 +1,9 @@
-# Supplied clan artwork
+# Brand assets
 
-The user supplied mexicat.gif and skull.png on 7 October 2026 for this website redesign. The original 12-frame GIF is copied unchanged for the animated clan logo. mexicat-first-frame.png and the public favicon.png/favicon.ico are generated from frame zero, preserving transparency and centering it on a square canvas. No animation frame was regenerated. Ownership/licensing is not inferred from delivery; existing Jagex attribution remains on the site.
+The owner supplied clan-logo.png on 11 October 2026 as the new default clan logo. It is copied unchanged. The public favicon.png/favicon.ico are generated from that image with nearest-neighbour resizing and transparent padding. Administrator uploads can replace this default; GIF and animated WebP uploads retain their animation.
+
+skull.png was supplied by the owner on 7 October 2026. Jagex attribution remains on the website.
+
+ko-fi-blue.png is the official blue Support me on Ko-fi button, converted losslessly from the [Ko-fi creator kit](https://more.ko-fi.com/brand-assets). Source: [official blue button](https://cdn.prod.website-files.com/5c14e387dab576fe667689cf/670f5a01c01ea9191809398c_support_me_on_kofi_blue.avif), retrieved 11 October 2026. The button is used intact and links to the owner's Ko-fi page.
+
+github-mark.svg is the official [Primer Octicons GitHub mark](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg), retrieved 11 October 2026. Its MIT license is included in [github-mark.LICENSE.txt](github-mark.LICENSE.txt). The mark appears in a blue footer banner linking to the owner's GitHub profile.

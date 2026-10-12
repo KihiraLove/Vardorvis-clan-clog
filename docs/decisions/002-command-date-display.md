@@ -1,3 +1,5 @@
+> **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](../site-customization.md). Earlier visual notes below are historical.
+
 # ADR 002: Discord commands, collection dates and collector display
 
 Status: **command/date policy, Traefik TLS/network plan and frontend visuals confirmed; live deployment checks pending** (DEC-01 #14), 9 October 2026.

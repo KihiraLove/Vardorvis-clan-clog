@@ -177,47 +177,6 @@ test('wrong competition previews and non-admin sessions cannot be treated as an 
   );
 });
 
-test('live admin session recognizes only an explicit boolean local test marker', async () => {
-  const live = new LiveXpClient(async () =>
-    json({
-      authenticated: true,
-      displayName: 'Local test admin',
-      username: 'local-admin',
-      role: 'admin',
-      mustChangePassword: false,
-      csrfToken: 'token',
-      development: true,
-    }),
-  );
-  assert.equal((await live.session(signal()))?.development, true);
-  const production = new LiveXpClient(async () =>
-    json({
-      authenticated: true,
-      displayName: 'Admin',
-      csrfToken: 'token',
-      username: 'admin',
-      role: 'admin',
-      mustChangePassword: false,
-    }),
-  );
-  assert.equal((await production.session(signal()))?.development, undefined);
-  const malformed = new LiveXpClient(async () =>
-    json({
-      authenticated: true,
-      displayName: 'Admin',
-      username: 'admin',
-      role: 'admin',
-      mustChangePassword: false,
-      csrfToken: 'token',
-      development: 'true',
-    }),
-  );
-  await assert.rejects(
-    malformed.session(signal()),
-    /Invalid admin session mode/,
-  );
-});
-
 test('XP capacity errors explain the limit without displaying arbitrary server messages', async () => {
   const capacity =
     'The XP tracker has reached its 2000-event capacity. Existing events can still be refreshed.';

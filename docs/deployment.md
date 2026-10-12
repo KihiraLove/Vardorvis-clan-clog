@@ -1,5 +1,7 @@
 # Release deployment and operations
 
+Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migrations `007_site_customization.sql` and `008_default_clan_name.sql` preserve histories and administrator-chosen names. Generated clan keys use 32 hexadecimal characters; custom keys accept any characters with a minimum length of 8 and persist across restarts. Only historical shorter keys rotate once, with an audit and preserved enforcement. Migration `009_runelite_world_types.sql` adds original world flags without changing existing credit modes. New RuneLite clients must send the required worldType field; see the [intake contract](runelite-submissions.md) for excluded modes, HC routing and arbitrary-key header encoding.
+
 > Release preparation (10 October 2026): the former three application images
 > (`web`, `api`, `bot`) are replaced by ONE `app` image. This document
 > describes the new Compose layout, not a deployed production instance.
@@ -108,8 +110,7 @@ Traefik must likewise trust forwarded headers only from verified upstream
 proxies. This gives each client a separate login limit and prevents a client
 from bypassing it by supplying a forged forwarding prefix.
 With no external proxies configured, direct Nginx clients remain distinct.
-Host-run API development and local unauthenticated admin mode keep their
-existing explicit/no-proxy settings.
+Host-run API development uses only its explicitly configured trusted proxies.
 
 ## Fresh-install database baseline (breaking change)
 
