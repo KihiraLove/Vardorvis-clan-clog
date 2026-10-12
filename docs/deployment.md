@@ -110,8 +110,7 @@ Traefik must likewise trust forwarded headers only from verified upstream
 proxies. This gives each client a separate login limit and prevents a client
 from bypassing it by supplying a forged forwarding prefix.
 With no external proxies configured, direct Nginx clients remain distinct.
-Host-run API development and local unauthenticated admin mode keep their
-existing explicit/no-proxy settings.
+Host-run API development uses only its explicitly configured trusted proxies.
 
 ## Fresh-install database baseline (breaking change)
 

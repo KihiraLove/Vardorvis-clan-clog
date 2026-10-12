@@ -197,12 +197,6 @@ export function XpAdmin({
         Add an event by its Wise Old Man link. Review its name, skill or
         all-skill scope, and gained XP before applying.
       </p>
-      {session.development && (
-        <p className="xp-note" role="status">
-          Local test admin — no Discord login. Imported XP is stored in the
-          separate disposable local database.
-        </p>
-      )}
       {previewMode && (
         <p className="xp-note">
           Review only: use sample competition 1001 or 1002. No live imports are

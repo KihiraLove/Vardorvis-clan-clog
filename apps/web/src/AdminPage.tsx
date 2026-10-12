@@ -29,8 +29,8 @@ export function AdminNavigation({
         ['/admin', 'Submissions'],
         ['/admin/catalog', 'Catalog items'],
         ['/admin/xp', 'XP imports'],
-        ...(!session?.development ? [['/admin/account', 'Your account']] : []),
-        ...(session?.role === 'admin' && !session.development
+        ['/admin/account', 'Your account'],
+        ...(session?.role === 'admin'
           ? [['/admin/accounts', 'Moderator accounts']]
           : []),
         ...(session?.role === 'admin'
@@ -147,12 +147,6 @@ export function AdminPage({
           </button>
         </div>
       )}
-      {session?.development && (
-        <div className="preview-banner" role="status">
-          Local test admin — no Discord login required. Changes are saved to a
-          separate test database, not clan production.
-        </div>
-      )}
       <div className="admin-heading">
         <div>
           <p className="xp-eyebrow">{clanName} clan</p>
@@ -161,20 +155,18 @@ export function AdminPage({
         {session && (
           <div className="admin-account">
             <span>{session.displayName}</span>
-            {!session.development && (
-              <button
-                className="site-button"
-                disabled={action.busy}
-                onClick={() => {
-                  void action.execute(async (signal) => {
-                    await client.logout(session.csrfToken, signal);
-                    if (!signal.aborted) accessLost();
-                  });
-                }}
-              >
-                Sign out
-              </button>
-            )}
+            <button
+              className="site-button"
+              disabled={action.busy}
+              onClick={() => {
+                void action.execute(async (signal) => {
+                  await client.logout(session.csrfToken, signal);
+                  if (!signal.aborted) accessLost();
+                });
+              }}
+            >
+              Sign out
+            </button>
           </div>
         )}
       </div>
@@ -264,18 +256,14 @@ export function AdminPage({
           )}
         </section>
       ) : session.mustChangePassword || path === '/admin/account' ? (
-        session.development ? (
-          <p>Account settings are unavailable in local test mode.</p>
-        ) : (
-          <AccountSettings
-            client={client}
-            session={session}
-            onSaved={setSession}
-            onAccessLost={accessLost}
-          />
-        )
+        <AccountSettings
+          client={client}
+          session={session}
+          onSaved={setSession}
+          onAccessLost={accessLost}
+        />
       ) : path === '/admin/accounts' ? (
-        session.role === 'admin' && !session.development ? (
+        session.role === 'admin' ? (
           <AdminAccounts
             client={client}
             session={session}

@@ -4,7 +4,11 @@ import { test } from 'node:test';
 import { hashPassword } from './passwords.js';
 import { createApp } from './app.js';
 import { type AuthConfig } from './config.js';
-import type { BackendStore, AdminIdentity, StoredSession } from './types.js';
+import type {
+  BackendStore,
+  AccountSessionIdentity,
+  StoredSession,
+} from './types.js';
 import { parseWomSnapshot } from './wom.js';
 import type { XpStore } from './xp-types.js';
 
@@ -61,7 +65,7 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
       states.delete(k);
       return !!d && d.getTime() > Date.now();
     },
-    async createSession(k: string, u: AdminIdentity, d: Date) {
+    async createSession(k: string, u: AccountSessionIdentity, d: Date) {
       sessions.set(k, { ...u, expiresAt: d });
     },
     async session(k: string) {

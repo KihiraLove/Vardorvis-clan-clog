@@ -92,7 +92,6 @@ export interface AdminSession {
   username: string;
   role: 'admin' | 'moderator';
   mustChangePassword: boolean;
-  development?: boolean;
 }
 export function parseAdminSession(input: unknown): AdminSession | null {
   const value = object(input);
@@ -103,15 +102,12 @@ export function parseAdminSession(input: unknown): AdminSession | null {
     typeof value.mustChangePassword !== 'boolean'
   )
     throw new Error('Invalid admin session.');
-  if (value.development !== undefined && typeof value.development !== 'boolean')
-    throw new Error('Invalid admin session mode.');
   return {
     csrfToken: text(value.csrfToken),
     displayName: text(value.displayName),
     username: text(value.username),
     role: value.role as AdminSession['role'],
     mustChangePassword: value.mustChangePassword,
-    ...(value.development === true ? { development: true } : {}),
   };
 }
 export interface ApplyResult {

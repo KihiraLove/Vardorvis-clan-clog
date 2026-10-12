@@ -34,7 +34,10 @@ export interface StoredAccount extends StaffAccount {
   passwordHash: string;
   credentialVersion: number;
 }
-export interface StoredSession extends AdminIdentity {
+export interface AccountSessionIdentity extends AdminIdentity {
+  accountVersion: number;
+}
+export interface StoredSession extends AccountSessionIdentity {
   expiresAt: Date;
 }
 export interface BotSubmissionInput {
@@ -105,7 +108,7 @@ export interface BackendStore {
   consumeState(hash: string): Promise<boolean>;
   createSession(
     hash: string,
-    identity: AdminIdentity,
+    identity: AccountSessionIdentity,
     expiresAt: Date,
   ): Promise<void>;
   session(hash: string): Promise<StoredSession | null>;

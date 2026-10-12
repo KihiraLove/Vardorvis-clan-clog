@@ -5,7 +5,7 @@ import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import {
   ApiError,
-  type AdminIdentity,
+  type AccountSessionIdentity,
   type BackendStore,
   type BotReceipt,
   type BotSubmissionInput,
@@ -540,7 +540,11 @@ export class PgStore implements BackendStore {
       ).rowCount === 1
     );
   }
-  async createSession(hash: string, identity: AdminIdentity, expiresAt: Date) {
+  async createSession(
+    hash: string,
+    identity: AccountSessionIdentity,
+    expiresAt: Date,
+  ) {
     await this.pool.query('DELETE FROM admin_sessions WHERE expires_at<=now()');
     await this.pool.query(
       'INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at,account_id,credential_version) VALUES($1,$2,$3,$4,$5,$6)',
@@ -549,8 +553,8 @@ export class PgStore implements BackendStore {
         identity.id,
         identity.displayName,
         expiresAt,
-        identity.accountVersion ? identity.id : null,
-        identity.accountVersion ?? null,
+        identity.id,
+        identity.accountVersion,
       ],
     );
   }
@@ -558,7 +562,7 @@ export class PgStore implements BackendStore {
     return (
       (
         await this.pool.query<StoredSession>(
-          'SELECT discord_user_id AS id, display_name AS "displayName", expires_at AS "expiresAt", credential_version AS "accountVersion" FROM admin_sessions WHERE token_hash=$1 AND expires_at>now()',
+          'SELECT account_id AS id, display_name AS "displayName", expires_at AS "expiresAt", credential_version AS "accountVersion" FROM admin_sessions WHERE token_hash=$1 AND expires_at>now() AND account_id IS NOT NULL AND credential_version IS NOT NULL',
           [hash],
         )
       ).rows[0] ?? null

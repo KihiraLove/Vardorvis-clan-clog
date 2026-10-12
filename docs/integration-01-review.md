@@ -35,10 +35,6 @@ CI supplies \`TEST_DATABASE_URL\` and runs \`npm run validate\`. Preview/testing
 
 Avoid merging this PR until tests and manual acceptance are complete. The PR deliberately references #43 and the original six issues **without closing keywords** while still incomplete.
 
-## Local no-login testing
-
-The explicit disposable `compose.local-admin.yaml` override allows direct `/admin` and `/admin/xp` live-API review without Discord login. It uses an isolated local database and fails closed in production. See [local admin setup](environment.md#local-admin-testing-without-discord-login). This does not replace production OAuth acceptance.
-
 ## Admin authentication and manually entered drops
 
-Individual staff accounts replace the shared admin password. `AUTH_ENABLED=true` and a strong `SESSION_SECRET` are required for sign-in; the existing loopback-only disposable test bypass remains opt-in. Manual submissions are saved and audited through the live review API, can be pending or immediately approved, and observe the existing one-approved-credit-per-item/world rule. See [environment setup](environment.md#required-secrets-and-configuration).
+Individual staff accounts replace the shared admin password. `AUTH_ENABLED=true` and a strong `SESSION_SECRET` are required for sign-in in both development and production. Manual submissions are saved and audited through the live review API, can be pending or immediately approved, and observe the existing one-approved-credit-per-item/world rule. See [environment setup](environment.md#required-secrets-and-configuration).

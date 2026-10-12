@@ -134,22 +134,36 @@ test(
       );
       await store.createState(hash('expired'), new Date(0));
       assert.equal(await store.consumeState(hash('expired')), false);
+      await store.ensureDefaultAdmin('test-only-verifier');
+      const account = (await store.accountByUsername('admin'))!;
+      const identity = {
+        id: account.id,
+        displayName: account.username,
+        accountVersion: account.credentialVersion,
+      };
+      // Rows issued without a staff-account binding by older images cannot authenticate.
+      await pool.query(
+        'INSERT INTO admin_sessions(token_hash,discord_user_id,display_name,expires_at) VALUES($1,$2,$3,$4)',
+        [
+          hash('legacy-session'),
+          'local-dev-admin',
+          'Local test admin',
+          new Date(Date.now() + 60000),
+        ],
+      );
+      assert.equal(await restarted.session(hash('legacy-session')), null);
       await store.createSession(
         hash('session'),
-        { id: '123456789012345678', displayName: 'Admin' },
+        identity,
         new Date(Date.now() + 60000),
       );
       assert.equal(
         (await restarted.session(hash('session')))?.displayName,
-        'Admin',
+        'admin',
       );
       await store.deleteSession(hash('session'));
       assert.equal(await restarted.session(hash('session')), null);
-      await store.createSession(
-        hash('expired-session'),
-        { id: '123456789012345678', displayName: 'Admin' },
-        new Date(0),
-      );
+      await store.createSession(hash('expired-session'), identity, new Date(0));
       assert.equal(await restarted.session(hash('expired-session')), null);
       const limited = await Promise.all(
         Array.from({ length: 21 }, () => store.allowLogin(hash('ip'))),

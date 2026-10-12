@@ -4,13 +4,13 @@ import { test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { createApp } from './app.js';
 import { readConfig, type AuthConfig } from './config.js';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { hashPassword } from './passwords.js';
 import { ApiError, type StoredAccount, type StaffAccount } from './types.js';
 import type { ReviewStore } from './review-types.js';
 import type { XpStore } from './xp-types.js';
 import type {
-  AdminIdentity,
+  AccountSessionIdentity,
   BackendStore,
   CatalogData,
   PublicCredit,
@@ -164,7 +164,11 @@ export class MemoryStore implements BackendStore {
     this.state.delete(hash);
     return true;
   }
-  async createSession(hash: string, identity: AdminIdentity, date: Date) {
+  async createSession(
+    hash: string,
+    identity: AccountSessionIdentity,
+    date: Date,
+  ) {
     this.sessions.set(hash, { ...identity, expiresAt: date });
   }
   async session(hash: string) {
@@ -470,6 +474,113 @@ test('login rate limits and config fail closed without valid session configurati
       .trustProxy,
     ['127.0.0.1', '172.18.0.0/16'],
   );
+});
+
+test('retired admin environment flag cannot enable staff tools or bypass the session secret', async () => {
+  const env = {
+    NODE_ENV: 'development',
+    DEV_ADMIN_MODE: 'true',
+    AUTH_ENABLED: 'false',
+    PUBLIC_ORIGIN: 'http://127.0.0.1:8088',
+  };
+  assert.equal(readConfig(env).auth, undefined);
+  assert.throws(
+    () => readConfig({ ...env, AUTH_ENABLED: 'true' }),
+    /SESSION_SECRET/,
+  );
+  const store = new MemoryStore();
+  const app = createApp(undefined, undefined, {
+    store,
+    ...readConfig(env),
+    logger: false,
+  });
+  try {
+    const response = await app.inject('/api/v1/auth/session');
+    assert.deepEqual(response.json(), { authenticated: false });
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal((await app.inject('/api/v1/admin/settings')).statusCode, 404);
+    assert.equal(store.sessions.size, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test('localhost requires password login and first-login setup even with the retired flag set', async () => {
+  const auth = readConfig({
+    NODE_ENV: 'development',
+    DEV_ADMIN_MODE: 'true',
+    AUTH_ENABLED: 'true',
+    PUBLIC_ORIGIN: 'http://127.0.0.1:8088',
+    SESSION_SECRET: config.secret,
+  }).auth!;
+  const store = new MemoryStore();
+  store.staff.clear();
+  const app = createApp(undefined, undefined, { store, auth, logger: false });
+  try {
+    const response = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { host: '127.0.0.1:8088' },
+    });
+    assert.deepEqual(response.json(), { authenticated: false });
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(store.sessions.size, 0);
+    assert.equal((await app.inject('/api/v1/admin/settings')).statusCode, 401);
+    const signedIn = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: auth.origin },
+      payload: { username: 'admin', password: 'admin' },
+    });
+    assert.equal(signedIn.statusCode, 200);
+    assert.equal(signedIn.json().mustChangePassword, true);
+    assert.equal(signedIn.json().development, undefined);
+    const cookie = String(signedIn.headers['set-cookie']).split(';')[0]!;
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/settings', headers: { cookie } }))
+        .statusCode,
+      403,
+    );
+  } finally {
+    await app.close();
+  }
+});
+
+test('a stored session without a staff account cannot authorize admin requests', async () => {
+  const { app, store } = fixture();
+  const token = 'a'.repeat(43);
+  const key = createHmac('sha256', config.secret)
+    .update('session:' + token)
+    .digest('hex');
+  store.sessions.set(key, {
+    id: 'local-dev-admin',
+    displayName: 'Local test admin',
+    accountVersion: 1,
+    expiresAt: new Date(Date.now() + 60000),
+  });
+  const headers = { cookie: '__Host-clog-session=' + token };
+  try {
+    const response = await app.inject({ url: '/api/v1/auth/session', headers });
+    assert.deepEqual(response.json(), { authenticated: false });
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/settings', headers })).statusCode,
+      401,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/v1/admin/settings',
+          headers,
+          payload: { hardcoreEnabled: true, expectedRevision: 'settings-1' },
+        })
+      ).statusCode,
+      401,
+    );
+    assert.deepEqual(store.audits, []);
+  } finally {
+    await app.close();
+  }
 });
 
 test('proxy login buckets distinguish clients and ignore spoofed forwarding prefixes', async () => {

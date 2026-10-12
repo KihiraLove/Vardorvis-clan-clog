@@ -41,7 +41,6 @@ export function authRoutes(
 ) {
   let dummyHash: string;
   app.addHook('onReady', async () => {
-    if (config.devOnly) return;
     dummyHash = await hashPassword('admin');
     await store.ensureDefaultAdmin(dummyHash);
   });
@@ -56,33 +55,11 @@ export function authRoutes(
     createHmac('sha256', config.secret)
       .update('csrf:' + token)
       .digest('base64url');
-  function requireLocalHost(request: FastifyRequest) {
-    if (!config.devOnly) return;
-    const host = request.headers.host ?? '';
-    if (
-      !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/iu.test(host) ||
-      request.headers['x-forwarded-host'] !== undefined
-    )
-      throw new ApiError(
-        403,
-        'Local admin mode accepts only loopback hostnames.',
-      );
-  }
   async function current(request: FastifyRequest) {
-    requireLocalHost(request);
     const token = cookieValue(request, sessionName);
     if (!token) return null;
     const session = await store.session(key(token));
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
-    if (config.devOnly)
-      return session.id === 'local-dev-admin'
-        ? {
-            token,
-            ...session,
-            role: 'admin' as const,
-            mustChangePassword: false,
-          }
-        : null;
     const account = await store.accountById(session.id);
     if (
       !account ||
@@ -141,7 +118,6 @@ export function authRoutes(
     role: session.role,
     mustChangePassword: session.mustChangePassword,
     csrfToken: csrf(session.token),
-    ...(config.devOnly ? { development: true } : {}),
   });
   async function signIn(account: {
     id: string;
@@ -177,11 +153,6 @@ export function authRoutes(
         },
       },
       onRequest: async (request) => {
-        if (config.devOnly)
-          throw new ApiError(
-            404,
-            'Password login is disabled for local test mode.',
-          );
         if (request.headers.origin !== config.origin)
           throw new ApiError(
             403,
@@ -216,25 +187,8 @@ export function authRoutes(
       );
     },
   );
-  app.get('/api/v1/auth/session', async (request, reply) => {
-    let session = await current(request);
-    if (!session && config.devOnly) {
-      const token = nonce();
-      const identity = {
-        id: 'local-dev-admin',
-        displayName: 'Local test admin',
-      };
-      const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
-      await store.createSession(key(token), identity, expiresAt);
-      reply.header('Set-Cookie', cookie(token, 8 * 60 * 60));
-      session = {
-        ...identity,
-        token,
-        expiresAt,
-        role: 'admin',
-        mustChangePassword: false,
-      };
-    }
+  app.get('/api/v1/auth/session', async (request) => {
+    const session = await current(request);
     return session ? receipt(session) : { authenticated: false };
   });
   app.post('/api/v1/auth/logout', async (request, reply) => {
@@ -272,11 +226,6 @@ export function authRoutes(
     },
     async (request, reply) => {
       const session = await requireAdmin(request, true, true);
-      if (config.devOnly)
-        throw new ApiError(
-          404,
-          'Account settings are unavailable in local test mode.',
-        );
       if (!(await store.allowLogin(hash('account:' + session.id))))
         throw new ApiError(
           429,
@@ -344,11 +293,6 @@ export function authRoutes(
     },
     async (request, reply) => {
       const session = await requireOwner(request, true);
-      if (config.devOnly)
-        throw new ApiError(
-          404,
-          'Account creation is unavailable in local test mode.',
-        );
       const saved = await store.createModerator(
         request.body.username,
         await hashPassword(request.body.password),

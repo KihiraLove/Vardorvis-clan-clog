@@ -39,8 +39,6 @@ Generate the session secret with `openssl rand -hex 32`. The initial account is 
 
 The API stores independently salted scrypt verifiers in PostgreSQL, compares derived keys in constant time and applies the shared PostgreSQL per-IP login rate limiter. Successful login returns a random eight-hour, HttpOnly, SameSite=Lax session cookie. HTTPS uses Secure and the `__Host-` prefix. Browser writes require both an exact `Origin` and session-bound `X-CSRF-Token`. Logout revokes the session. Credential edits revoke other sessions; rotating `SESSION_SECRET` invalidates all existing cookies. No passwords or hashes are exposed to frontend assets or public API responses.
 
-`DEV_ADMIN_MODE=true` is a separate, explicitly selected loopback-only, passwordless test workflow documented in [environment setup](environment.md#local-admin-testing-without-discord-login). It requires development mode, disabled password auth and an isolated local Compose project; never expose it publicly.
-
 ## Code and storage
 
 | File                                              | Responsibility                                                                                                      |
