@@ -34,6 +34,8 @@ test(
           '009_runelite_world_types.sql',
           '010_hardcore_appearance.sql',
           '011_catalog_page_management.sql',
+          '012_runelite_auto_review.sql',
+          '013_collection_log_schedules.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

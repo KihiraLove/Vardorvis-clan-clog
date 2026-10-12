@@ -1955,6 +1955,51 @@ main {
 .clan-api-key-value {
   font-family: monospace;
 }
+.runelite-review-settings p {
+  overflow-wrap: anywhere;
+}
+.runelite-world-policy {
+  margin-block: 1rem;
+}
+.runelite-world-policy label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+.scheduling-panel p,
+.schedule-card h4 {
+  overflow-wrap: anywhere;
+}
+.schedule-page-list {
+  max-height: 18rem;
+  overflow: auto;
+  border: 1px solid #5b5240;
+  padding: 0.5rem 1rem;
+}
+.schedule-list {
+  display: grid;
+  gap: 1rem;
+}
+.schedule-card,
+.schedule-delete-confirm {
+  border: 1px solid #5b5240;
+  padding: 1rem;
+}
+.schedule-card h4 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+.schedule-delete-confirm {
+  max-width: min(32rem, calc(100vw - 2rem));
+  color: #e3d5b8;
+  background: #29271e;
+}
+.schedule-delete-confirm::backdrop {
+  background: #0009;
+}
+.schedule-utc {
+  color: #b9ab8f;
+  font-size: 0.9em;
+}
 .clan-logo-preview .clan-logo {
   display: block;
 }

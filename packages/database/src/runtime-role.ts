@@ -12,6 +12,8 @@ const appendOnly = new Set([
   'clan_branding_audit',
   'staff_account_audit',
   'clan_api_key_audit',
+  'runelite_settings_audit',
+  'collection_schedule_audit',
   'audit_events',
   'site_settings_audit',
   'catalog_audit',

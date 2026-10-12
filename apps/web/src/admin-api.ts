@@ -1,5 +1,16 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
 import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
+import {
+  parseSchedulingState,
+  parseCollectionScheduleInput,
+  closedCollectionPageMessage,
+  type CollectionScheduleInput,
+} from '@clog/domain';
+import {
+  parseRuneLiteSettings,
+  parseRuneLiteRules,
+  type RuneLiteSettingsUpdate,
+} from '@clog/domain';
 import { parseSettings } from './site-settings.ts';
 import { parseBranding, validateLogoFile } from './branding.ts';
 import { LiveXpClient } from './xp-api.ts';
@@ -72,6 +83,104 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async scheduling(signal: AbortSignal) {
+    return parseSchedulingState(
+      await this.json('/api/v1/admin/schedules', signal),
+    );
+  }
+  async setSchedulingEnabled(
+    enabled: boolean,
+    expectedRevision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSchedulingState(
+      await this.json(
+        '/api/v1/admin/schedules/settings',
+        signal,
+        this.write(csrf, { enabled, expectedRevision }, 'PUT'),
+      ),
+    );
+    if (result.revision === expectedRevision || result.enabled !== enabled)
+      throw new Error('Unexpected scheduling receipt.');
+    return result;
+  }
+  async saveSchedule(
+    input: CollectionScheduleInput,
+    expectedRevision: string,
+    csrf: string,
+    signal: AbortSignal,
+    id?: string,
+  ) {
+    const fields = parseCollectionScheduleInput(input);
+    const result = parseSchedulingState(
+      await this.json(
+        '/api/v1/admin/schedules' + (id ? '/' + encodeURIComponent(id) : ''),
+        signal,
+        this.write(csrf, { expectedRevision, ...fields }, id ? 'PUT' : 'POST'),
+      ),
+    );
+    if (
+      result.revision === expectedRevision ||
+      !result.schedules.some(
+        (schedule) =>
+          (!id || schedule.id === id) &&
+          schedule.title === fields.title &&
+          schedule.startsAt === fields.startsAt &&
+          schedule.endsAt === fields.endsAt &&
+          JSON.stringify(schedule.pageIds) === JSON.stringify(fields.pageIds),
+      )
+    )
+      throw new Error('Unexpected schedule receipt.');
+    return result;
+  }
+  async deleteSchedule(
+    id: string,
+    expectedRevision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSchedulingState(
+      await this.json(
+        '/api/v1/admin/schedules/' + encodeURIComponent(id),
+        signal,
+        this.write(csrf, { expectedRevision }, 'DELETE'),
+      ),
+    );
+    if (
+      result.revision === expectedRevision ||
+      result.schedules.some((schedule) => schedule.id === id)
+    )
+      throw new Error('Unexpected schedule deletion receipt.');
+    return result;
+  }
+  async runeLiteSettings(signal: AbortSignal) {
+    return parseRuneLiteSettings(
+      await this.json('/api/v1/admin/runelite-settings', signal),
+    );
+  }
+  async saveRuneLiteSettings(
+    fields: RuneLiteSettingsUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const { expectedRevision, ...input } = fields;
+    const rules = parseRuneLiteRules(input);
+    const result = parseRuneLiteSettings(
+      await this.json(
+        '/api/v1/admin/runelite-settings',
+        signal,
+        this.write(csrf, { expectedRevision, ...rules }, 'PUT'),
+      ),
+    );
+    const { revision, ...saved } = result;
+    if (
+      revision === expectedRevision ||
+      JSON.stringify(saved) !== JSON.stringify(rules)
+    )
+      throw new Error('Unexpected RuneLite settings receipt.');
+    return result;
+  }
   private readonly request: typeof fetch;
   private readonly auth: LiveXpClient;
   constructor(request: typeof fetch = fetch) {
@@ -91,7 +200,7 @@ export class LiveAdminClient implements AdminClient {
     });
     if (!response.ok) {
       let serverConflict: string | undefined;
-      if ([400, 409].includes(response.status)) {
+      if ([400, 403, 409].includes(response.status)) {
         try {
           const body: unknown = await response.json();
           if (
@@ -105,6 +214,11 @@ export class LiveAdminClient implements AdminClient {
           // Unexpected error responses keep the standard conflict message.
         }
       }
+      if (
+        response.status === 403 &&
+        serverConflict === closedCollectionPageMessage
+      )
+        throw new Error(closedCollectionPageMessage);
       throw new AdminRequestError(response.status, serverConflict);
     }
     return response;

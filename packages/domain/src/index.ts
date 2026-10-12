@@ -143,5 +143,27 @@ export {
 export { clanKeyBytes, clanKeyMinLength, validClanApiKey } from './clan-key.js';
 export {
   blockedRuneLiteWorldTypes,
+  hardcoreRuneLiteWorldTypes,
   parseRuneLiteWorldTypes,
 } from './world-types.js';
+export {
+  defaultRuneLiteRules,
+  normalizePlayerName,
+  parseRuneLiteRules,
+  parseRuneLiteSettings,
+  runeLiteDecision,
+  type WorldPolicy,
+  type RuneLiteRules,
+  type RuneLiteSettings,
+  type RuneLiteSettingsUpdate,
+} from './runelite-rules.js';
+export {
+  parseCollectionScheduleInput,
+  parseSchedulingState,
+  scheduleIdPattern,
+  scheduledItemOpen,
+  closedCollectionPageMessage,
+  type CollectionScheduleInput,
+  type CollectionSchedule,
+  type SchedulingState,
+} from './scheduling.js';

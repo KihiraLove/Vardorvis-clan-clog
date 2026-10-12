@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
+import { closedCollectionPageMessage } from '@clog/domain';
 import { Events, MessageFlags, type Client } from 'discord.js';
 import {
   HttpBotApi,
@@ -333,6 +334,38 @@ test('HTTP adapter only fetches fixed bot routes, retries timeout using identica
     'http://api:3000/api/v1/bot/items?q=dragon+axe&limit=25',
   );
   assert.equal(urls[1], 'http://api:3000/api/v1/bot/submissions');
+});
+test('closed-page rejections explain scheduling without retrying or exposing arbitrary API messages', async () => {
+  const claim: Claim = {
+    interactionId: receipt.interactionId,
+    guildId,
+    actorDiscordId: userId,
+    rawItemText: 'Dragon axe',
+    collectorName: 'User',
+    proofUrl: 'https://imgur.com/a/abc',
+    hardcore: false,
+  };
+  let calls = 0;
+  const api = new HttpBotApi('http://api:3000', token, async () => {
+    calls++;
+    return Response.json(
+      { error: closedCollectionPageMessage },
+      { status: 403 },
+    );
+  });
+  await assert.rejects(
+    api.submit(claim),
+    (error: unknown) =>
+      error instanceof BotApiError &&
+      error.status === 403 &&
+      failureMessage(error) === closedCollectionPageMessage,
+  );
+  assert.equal(calls, 1);
+  assert.ok(
+    !failureMessage(new BotApiError(403, 'private service details')).includes(
+      'private service details',
+    ),
+  );
 });
 test('HTTP conflicts and malformed API responses fail rather than inventing a receipt', async () => {
   const claim: Claim = {

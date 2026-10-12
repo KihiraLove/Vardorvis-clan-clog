@@ -5,7 +5,6 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { RequireAdmin } from './catalog-routes.js';
 import { assetIdPattern, type IconRecord } from './icon-storage.js';
 import {
-  clanMatches,
   runeLiteWorld,
   screenshotPath,
   uuidPattern,
@@ -172,18 +171,18 @@ export function proofRoutes(
             422,
             'Invalid username, clan name or game item ID.',
           );
-        if (!clanMatches(fields.clanName!, await store.clanName()))
-          throw new ApiError(403, 'Clan name does not match this website.');
         const world = runeLiteWorld(fields.worldType!);
+        const submission = {
+          username: fields.username!,
+          clanName: fields.clanName!,
+          itemId: Number(fields.itemId),
+          worldTypes: world.worldTypes,
+        };
+        await store.validateSubmission(submission);
         const image = await storage.save(file.bytes, file.mime);
         try {
           const result = await store.createRuneLite(
-            {
-              username: fields.username!,
-              clanName: fields.clanName!,
-              itemId: Number(fields.itemId),
-              worldTypes: world.worldTypes,
-            },
+            submission,
             image,
             key,
             suppliedClanKey(req.headers),

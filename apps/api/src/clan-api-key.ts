@@ -280,6 +280,7 @@ export async function requireClanKey(
   database: Pick<pg.Pool, 'query'> | Pick<pg.PoolClient, 'query'>,
   supplied: string | undefined,
   lock = false,
+  required = false,
 ) {
   const row = (
     await database.query<{ enabled: boolean; key_hash: string }>(
@@ -288,7 +289,7 @@ export async function requireClanKey(
     )
   ).rows[0];
   if (!row) throw new ApiError(503, 'Clan API key storage is unavailable.');
-  if (!row.enabled) return;
+  if (!row.enabled && !required) return;
   if (
     !validClanApiKey(supplied) ||
     !timingSafeEqual(

@@ -12,6 +12,8 @@ import { AdminCatalogPage } from './AdminCatalogPage.tsx';
 import { AccountSettings } from './AccountSettings.tsx';
 import { AdminAccounts } from './AdminAccounts.tsx';
 import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
+import { RuneLiteReviewSettings } from './RuneLiteReviewSettings.tsx';
+import { AdminScheduling } from './AdminScheduling.tsx';
 
 export interface AdminRouteProps {
   preview: boolean;
@@ -30,6 +32,7 @@ export function AdminNavigation({
         ['/admin', 'Submissions'],
         ['/admin/catalog', 'Items catalog'],
         ['/admin/xp', 'XP imports'],
+        ['/admin/schedules', 'Scheduling'],
         ...(session?.role === 'admin'
           ? [
               ['/admin/runelite', 'RuneLite submissions'],
@@ -269,11 +272,22 @@ export function AdminPage({
           onSaved={setSession}
           onAccessLost={accessLost}
         />
+      ) : path === '/admin/schedules' ? (
+        <AdminScheduling
+          client={client}
+          session={session}
+          onAccessLost={accessLost}
+        />
       ) : path === '/admin/runelite' ? (
         session.role === 'admin' ? (
           <section className="admin-panel">
             <h2>RuneLite submissions</h2>
             <ClanApiKeySettings
+              client={client}
+              session={session}
+              onAccessLost={accessLost}
+            />
+            <RuneLiteReviewSettings
               client={client}
               session={session}
               onAccessLost={accessLost}

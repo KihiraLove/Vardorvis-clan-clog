@@ -84,9 +84,10 @@ export function ClanApiKeySettings({
     <div className="clan-api-key-settings">
       <h3>RuneLite shared API key</h3>
       <p>
-        When required, RuneLite submissions must include this key and match the
-        clan name. Turning it off keeps the key available and checks submissions
-        by clan name.
+        When required, RuneLite submissions must include this key. Clan matching
+        and automatic review are configured below. API key only mode always
+        requires the key. Turning this requirement off applies only when clan
+        name matching is enabled.
       </p>
       {error && (
         <p role="alert">

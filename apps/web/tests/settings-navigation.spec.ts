@@ -3,6 +3,7 @@ import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
 import { PreviewAdminClient } from '../src/preview/admin.ts';
 import { PreviewXpClient } from '../src/preview/xp.ts';
+import { defaultRuneLiteRules } from '@clog/domain';
 
 async function delayedSettings(page: Page) {
   const fixture = await adminFixtures(),
@@ -25,6 +26,10 @@ async function delayedSettings(page: Page) {
         revision: 'clan-key-1',
         enabled: true,
         key: 'a'.repeat(32),
+      },
+      '/api/v1/admin/runelite-settings': {
+        revision: 'runelite-1',
+        ...defaultRuneLiteRules('Clan name'),
       },
       '/api/v1/admin/catalog': fixture.catalog,
       '/api/v1/admin/submissions': fixture.pending,
@@ -74,7 +79,7 @@ test('settings-navigation: forms, panel and footer keep their geometry while pri
     for (const [name, field, calls] of [
       ['Site settings', 'Clan name', 2],
       ['Hardcore worlds', 'Displayed clan name', 2],
-      ['RuneLite submissions', 'Current shared API key', 1],
+      ['RuneLite submissions', 'Current shared API key', 2],
     ] as const) {
       requests.hold();
       await page.getByRole('link', { name, exact: true }).click();

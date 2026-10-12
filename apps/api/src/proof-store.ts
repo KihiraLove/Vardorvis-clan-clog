@@ -1,10 +1,15 @@
-/** PNG metadata and RuneLite receipts commit with the pending claim. */
+/** PNG evidence, automatic review, audit and RuneLite receipts commit together. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import {
   blockedRuneLiteWorldTypes,
+  hardcoreRuneLiteWorldTypes,
   parseRuneLiteWorldTypes,
+  runeLiteDecision,
+  type RuneLiteRules,
 } from '@clog/domain';
+import { readRuneLiteSettings } from './runelite-settings.js';
+import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
 import { requireClanKey } from './clan-api-key.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
@@ -32,7 +37,22 @@ export function runeLiteWorld(value: unknown) {
       403,
       `Submissions from ${blocked} worlds are not allowed.`,
     );
-  return { worldTypes, hardcore: worldTypes.includes('HC_WORLD_PLACEHOLDER') };
+  return {
+    worldTypes,
+    hardcore: worldTypes.some((type) =>
+      (hardcoreRuneLiteWorldTypes as readonly string[]).includes(type),
+    ),
+  };
+}
+function validateSubmission(fields: RuneLiteFields, rules: RuneLiteRules) {
+  if (rules.matchClanName && !clanMatches(fields.clanName, rules.clanName))
+    throw new ApiError(
+      403,
+      'Clan name does not match the configured in-game clan name.',
+    );
+  const decision = runeLiteDecision(fields.worldTypes, fields.username, rules);
+  if (decision.action === 'reject') throw new ApiError(403, decision.reason);
+  return decision;
 }
 export async function insertImage(client: pg.PoolClient, image: IconRecord) {
   await client.query(
@@ -48,7 +68,7 @@ export interface RuneLiteFields {
 }
 export interface RuneLiteReceipt {
   submissionId: string;
-  status: 'pending';
+  status: 'pending' | 'approved';
   itemId: number;
   submittedAt: string;
   collectedOn: string;
@@ -57,7 +77,7 @@ export interface RuneLiteReceipt {
 export interface ProofStore {
   allowIntake(ip: string): Promise<boolean>;
   authorizeIntake(apiKey: string | undefined): Promise<void>;
-  clanName(): Promise<string>;
+  validateSubmission(fields: RuneLiteFields): Promise<void>;
   image(id: string): Promise<IconRecord | null>;
   createRuneLite(
     fields: RuneLiteFields,
@@ -69,16 +89,11 @@ export interface ProofStore {
 export class PgProofStore implements ProofStore {
   constructor(private readonly pool: pg.Pool) {}
   async authorizeIntake(apiKey: string | undefined) {
-    await requireClanKey(this.pool, apiKey);
+    const rules = await readRuneLiteSettings(this.pool);
+    await requireClanKey(this.pool, apiKey, false, !rules.matchClanName);
   }
-  async clanName() {
-    const row = (
-      await this.pool.query<{ clan_name: string }>(
-        'SELECT clan_name FROM site_settings WHERE singleton=true',
-      )
-    ).rows[0];
-    if (!row) throw new ApiError(503, 'Settings unavailable.');
-    return row.clan_name;
+  async validateSubmission(fields: RuneLiteFields) {
+    validateSubmission(fields, await readRuneLiteSettings(this.pool));
   }
   async allowIntake(ip: string) {
     // Durable namespace shared across replicas, independent of staff login limits.
@@ -126,16 +141,11 @@ export class PgProofStore implements ProofStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      // A rename cannot race validation/insertion. Replays must also match the current clan.
-      const settings = (
-        await client.query<{ clan_name: string }>(
-          'SELECT clan_name FROM site_settings WHERE singleton=true FOR SHARE',
-        )
-      ).rows[0];
-      if (!settings) throw new ApiError(503, 'Settings unavailable.');
-      if (!clanMatches(fields.clanName, settings.clan_name))
-        throw new ApiError(403, 'Clan name does not match this website.');
-      await requireClanKey(client, apiKey, true);
+      const schedulingEnabled = await lockScheduling(client);
+      // Settings and key rotation cannot race validation, approval or a replay.
+      const rules = await readRuneLiteSettings(client, true);
+      const decision = validateSubmission(fields, rules);
+      await requireClanKey(client, apiKey, true, !rules.matchClanName);
       await client.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
         ['runelite:' + key.toLowerCase()],
@@ -176,6 +186,7 @@ export class PgProofStore implements ProofStore {
           422,
           'Item ID is not in the active collection-log catalog.',
         );
+      await requireScheduledItem(client, schedulingEnabled, item.id);
       await insertImage(client, image);
       const id = randomUUID();
       const row = (
@@ -194,9 +205,66 @@ export class PgProofStore implements ProofStore {
           ],
         )
       ).rows[0]!;
+      let status: RuneLiteReceipt['status'] = 'pending';
+      if (decision.action === 'allow') {
+        // The unique credit index arbitrates concurrent auto/manual approvals.
+        await client.query('SAVEPOINT automatic_approval');
+        try {
+          await client.query(
+            "UPDATE submissions SET status='approved',version=version+1,reviewed_at=now(),reviewed_by='system:runelite-auto-review',review_reason=$2 WHERE id=$1",
+            [id, decision.reason],
+          );
+          status = 'approved';
+        } catch (error) {
+          if (
+            !error ||
+            typeof error !== 'object' ||
+            !('code' in error) ||
+            error.code !== '23505' ||
+            !('constraint' in error) ||
+            error.constraint !== 'submissions_one_credit_per_world'
+          )
+            throw error;
+          await client.query('ROLLBACK TO SAVEPOINT automatic_approval');
+        }
+        await client.query('RELEASE SAVEPOINT automatic_approval');
+        const before = {
+          id,
+          version: 1,
+          source: 'runelite',
+          itemId: item.id,
+          rawItemText: item.name,
+          collectorName: fields.username.trim(),
+          collectedOn: row.collected_on,
+          dateSource: 'submission',
+          submittedAt: row.submitted_at.toISOString(),
+          proofUrl: '',
+          screenshotPath: screenshotPath(image.id),
+          hardcore: world.hardcore,
+          status: 'pending',
+        };
+        await client.query(
+          'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,reason,old_values,new_values) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          [
+            id,
+            'system:runelite-auto-review',
+            'RuneLite auto review',
+            status === 'approved' ? 'approve' : 'create',
+            status === 'approved'
+              ? decision.reason
+              : 'Automatic approval deferred: an approved credit already exists for this item and world mode.',
+            JSON.stringify(before),
+            JSON.stringify({
+              ...before,
+              status,
+              version: status === 'approved' ? 2 : 1,
+            }),
+          ],
+        );
+      }
       const receipt: RuneLiteReceipt = {
         submissionId: id,
-        status: 'pending',
+        status,
         itemId: item.id,
         submittedAt: row.submitted_at.toISOString(),
         collectedOn: row.collected_on,

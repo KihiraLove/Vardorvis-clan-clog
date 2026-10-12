@@ -1,4 +1,5 @@
 /** Restrict Discord data access to two bot-only API routes. No direct database access. */
+import { closedCollectionPageMessage } from '@clog/domain';
 export interface Candidate {
   id: number;
   name: string;
@@ -150,6 +151,16 @@ export class HttpBotApi implements BotApi {
             body: JSON.stringify(claim),
           },
         );
+        if (response.status === 403) {
+          let body: unknown;
+          try {
+            body = await response.json();
+          } catch {
+            /* Keep unknown failures private. */
+          }
+          if (record(body) && body.error === closedCollectionPageMessage)
+            throw new BotApiError(403, closedCollectionPageMessage);
+        }
         if (response.status !== 200 && response.status !== 201)
           throw new BotApiError(response.status);
         const value: unknown = await response.json();

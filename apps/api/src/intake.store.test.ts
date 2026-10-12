@@ -1,7 +1,7 @@
 /** PostgreSQL intake verifies uniqueness, concurrency, durability and rollback. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { createApp } from './app.js';
@@ -54,15 +54,17 @@ test(
         payload: body,
       });
     try {
-      await pool.query(
-        await readFile(
-          new URL(
-            '../../../packages/database/migrations/001_baseline.sql',
-            import.meta.url,
-          ),
-          'utf8',
-        ),
+      const migrations = new URL(
+        '../../../packages/database/migrations/',
+        import.meta.url,
       );
+      for (const migration of (await readdir(migrations))
+        .filter((name) => name.endsWith('.sql'))
+        .sort()) {
+        await pool.query(
+          await readFile(new URL(migration, migrations), 'utf8'),
+        );
+      }
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES (42,'Dragon axe','/42.png'),(43,'Dragon axe (or)','/43.png'),(44,'Mystic axe','/44.png')",
       );

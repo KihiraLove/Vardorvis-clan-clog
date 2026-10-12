@@ -217,7 +217,13 @@ test('moderators retain review tools, have no owner controls and can update thei
     page
       .getByRole('navigation', { name: 'Admin navigation' })
       .getByRole('link'),
-  ).toHaveText(['Submissions', 'Items catalog', 'XP imports', 'Your account']);
+  ).toHaveText([
+    'Submissions',
+    'Items catalog',
+    'XP imports',
+    'Scheduling',
+    'Your account',
+  ]);
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Page management', exact: true }),

@@ -8,6 +8,7 @@ import {
 } from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
+import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
 import {
   ApiError,
   type AccountSessionIdentity,
@@ -237,6 +238,7 @@ export class PgStore implements BackendStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const schedulingEnabled = await lockScheduling(client);
       const readReceipt = async (): Promise<{
         hash: string | null;
         receipt: BotReceipt | null;
@@ -291,6 +293,7 @@ export class PgStore implements BackendStore {
         ).rowCount !== 1
       )
         throw new ApiError(422, 'Selected canonical item is unavailable.');
+      await requireScheduledItem(client, schedulingEnabled, itemId);
       const creditOccupied =
         itemId !== null &&
         (

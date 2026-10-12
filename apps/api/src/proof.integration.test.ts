@@ -516,14 +516,14 @@ test(
         (await app.inject('/api/v1/settings')).json().clanName,
         'New Clan',
       );
-      assert.equal((await runelite(fields, png, key)).statusCode, 403);
+      assert.equal((await runelite(fields, png, key)).statusCode, 201);
       assert.equal(
         (
           await runelite(
             fields.map(([k, v]) => [k, k === 'clanName' ? 'new clan' : v]),
           )
         ).statusCode,
-        201,
+        403,
       );
       assert.deepEqual(
         (

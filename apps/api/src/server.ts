@@ -13,6 +13,8 @@ import { PgXpStore } from './xp-store.js';
 import { ProofStorage } from './proof-storage.js';
 import { PgClanKeyStore, loadClanKeyRoot } from './clan-api-key.js';
 import { PgProofStore } from './proof-store.js';
+import { PgRuneLiteSettingsStore } from './runelite-settings.js';
+import { PgSchedulingStore } from './scheduling-store.js';
 import { PgReviewStore } from './review-store.js';
 const config = readConfig();
 if ((config.auth || config.bot) && !process.env.DATABASE_URL)
@@ -64,6 +66,8 @@ const app = createApp(
     proofs,
     clanKeys,
     proofStore: pool ? new PgProofStore(pool) : undefined,
+    runeLiteSettings: pool ? new PgRuneLiteSettingsStore(pool) : undefined,
+    scheduling: pool ? new PgSchedulingStore(pool) : undefined,
     xp: pool ? new PgXpStore(pool) : undefined,
     review: pool && store ? new PgReviewStore(pool, store) : undefined,
     ...config,

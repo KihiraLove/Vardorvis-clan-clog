@@ -1,5 +1,7 @@
 /** Public projections plus optional configured admin auth; unavailable services fail closed. */
 import { proofRoutes } from './proof-routes.js';
+import { runeLiteSettingsRoutes } from './runelite-settings-routes.js';
+import { schedulingRoutes } from './scheduling-routes.js';
 import { brandingRoutes } from './branding-routes.js';
 import type { BrandingStorage } from './branding-storage.js';
 import type { BrandingStore } from './branding-store.js';
@@ -20,6 +22,9 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  scheduling?: import('./scheduling-store.js').SchedulingStore | undefined;
+  runeLiteSettings?:
+    import('./runelite-settings.js').RuneLiteSettingsStore | undefined;
   branding?: BrandingStore | undefined;
   logos?: BrandingStorage | undefined;
   clanKeys?: import('./clan-api-key.js').ClanKeyStore | undefined;
@@ -194,6 +199,8 @@ export function createApp(
     });
   }
   brandingRoutes(app, options.branding, options.logos, requireAdmin);
+  runeLiteSettingsRoutes(app, options.runeLiteSettings, requireAdmin);
+  schedulingRoutes(app, options.scheduling, requireAdmin);
   // Review and catalog editing share one private catalog projection and auth boundary.
   if (options.catalog || options.review)
     app.get(
