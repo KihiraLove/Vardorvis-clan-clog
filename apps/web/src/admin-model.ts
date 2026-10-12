@@ -142,6 +142,28 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  scheduling(
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').SchedulingState>;
+  setSchedulingEnabled(
+    enabled: boolean,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').SchedulingState>;
+  saveSchedule(
+    input: import('@clog/domain').CollectionScheduleInput,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+    id?: string,
+  ): Promise<import('@clog/domain').SchedulingState>;
+  deleteSchedule(
+    id: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').SchedulingState>;
   createPage(
     fields: CreatePage,
     key: string,
@@ -204,6 +226,14 @@ export interface AdminClient {
   clanApiKey(
     signal: AbortSignal,
   ): Promise<import('./clan-api-key.ts').ClanKeySettings>;
+  runeLiteSettings(
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').RuneLiteSettings>;
+  saveRuneLiteSettings(
+    fields: import('@clog/domain').RuneLiteSettingsUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').RuneLiteSettings>;
   saveClanApiKey(
     fields: import('./clan-api-key.ts').ClanKeyUpdate,
     csrf: string,

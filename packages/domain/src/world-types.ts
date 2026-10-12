@@ -1,4 +1,4 @@
-/** RuneLite world flags are a set; unknown future identifiers use ordinary credit. */
+/** RuneLite world flags are a set; retain plugin aliases alongside official names. */
 export const blockedRuneLiteWorldTypes: readonly string[] = [
   'BETA_WORLD',
   'DEADMAN',
@@ -6,8 +6,13 @@ export const blockedRuneLiteWorldTypes: readonly string[] = [
   'PVP_ARENA',
   'QUEST_SPEEDRUNNING',
   'SEASONAL',
+  'TOURNAMENT',
   'TOURNAMENT_WORLD',
 ];
+export const hardcoreRuneLiteWorldTypes = [
+  'HC_WORLD_PLACEHOLDER',
+  'HC_WORLDS_PLACEHOLDER',
+] as const;
 export function parseRuneLiteWorldTypes(value: unknown): string[] {
   let types: unknown = value;
   if (typeof value === 'string') {

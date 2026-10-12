@@ -7,6 +7,7 @@ import {
   type Interaction,
 } from 'discord.js';
 import { BotApiError, type BotApi, type Receipt } from './api.js';
+import { closedCollectionPageMessage } from '@clog/domain';
 
 export function validProof(value: string): boolean {
   try {
@@ -61,6 +62,8 @@ export function receiptMessage(receipt: Receipt): string {
 }
 export function failureMessage(error: unknown): string {
   if (error instanceof BotApiError) {
+    if (error.status === 403 && error.message === closedCollectionPageMessage)
+      return closedCollectionPageMessage;
     if (error.status === 409)
       return 'This Discord interaction ID was already submitted with different details. Nothing new was saved.';
     if (error.status === 422 || error.status === 400)

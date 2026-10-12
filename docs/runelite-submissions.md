@@ -6,7 +6,7 @@ these fields (their order does not matter):
 | Field        | Value                                              |
 | ------------ | -------------------------------------------------- |
 | `username`   | Collector name, 1–80 characters                    |
-| `clanName`   | Website clan name, 1–80 characters                 |
+| `clanName`   | In-game clan name, 1–80 characters                 |
 | `itemId`     | Positive OSRS game item ID, as decimal text        |
 | `worldType`  | World type identifier or JSON array of identifiers |
 | `screenshot` | One PNG file, MIME `image/png`, up to 10 MiB       |
@@ -25,9 +25,11 @@ header. The API generates a cryptographically random 16-byte key written as
 32 hexadecimal characters on first startup
 and preserves it across restarts. An enabled requirement rejects missing/wrong
 keys with **401**, before reading uploads. A trimmed, case-insensitive clan-name mismatch returns
-**403** and creates no submission or image. This comparison validates the
-submitted clan string; it does not authenticate clan membership. All accepted
-claims are **pending** and need staff review before they grant credit.
+**403** and creates no submission or image when clan matching is enabled. The
+comparison uses the separate **In-game clan name for matching** setting; it does
+not authenticate clan membership. All world policies default to staff review.
+Configured auto allow policies and the player whitelist can grant automatic
+approval. Receipts have `status: "pending"` or `status: "approved"`.
 
 The game ID resolves through `game_item_ids` to an active canonical catalog
 item. Variant IDs can resolve to the same item; unknown/inactive IDs return
@@ -41,11 +43,11 @@ flags of at most 64 characters are accepted. Duplicate flags and array order do
 not change the submission's identity.
 
 Any occurrence of `BETA_WORLD`, `DEADMAN`, `NOSAVE_MODE`, `PVP_ARENA`,
-`QUEST_SPEEDRUNNING`, `SEASONAL` or `TOURNAMENT_WORLD` returns **403** without
+`QUEST_SPEEDRUNNING`, `SEASONAL`, `TOURNAMENT` or `TOURNAMENT_WORLD` returns **403** without
 storing a claim or screenshot. This also applies to mixed flags containing the
-HC placeholder. `HC_WORLD_PLACEHOLDER` sets `hardcore: true`; every other
+HC placeholder. `HC_WORLD_PLACEHOLDER` and `HC_WORLDS_PLACEHOLDER` set `hardcore: true`; every other
 accepted type, including future identifiers, uses the regular log. Pending
-claims do not grant credit until reviewed. The HC visibility setting does not
+claims do not grant credit until approved. The HC visibility setting does not
 block intake or discard HC credit. Staff can correct date and world mode during
 review; the original flags remain private submission provenance.
 
@@ -65,12 +67,13 @@ Success returns **201**, for example:
 The optional UUID `Idempotency-Key` should be generated once per drop and reused
 on retries. Identical fields and decoded PNG pixels return the original receipt,
 including after review/restart. Changing the payload with that key returns
-**409**. Without a key, each request creates a new pending claim. Replays must
+**409**. Without a key, each request creates a new claim. Replays must
 use the same normalized world-type set; changing modes or any flag returns
 **409**. Historical receipts created before world-type support can replay as
 ordinary-world requests with the original payload; requesting HC with their
 key returns **409**. Their original receipt is retained and may omit `hardcore`.
-Replays must still match the currently configured clan and, when required, use the current
+Replays must still pass current world rejection policies, match the configured
+in-game clan when matching is enabled and, when required, use the current
 API key. Credentials are not part of the immutable submission payload, so a
 retry using a newly rotated key can recover its original receipt. A future plugin should retain the
 key, payload and PNG until it receives the receipt.
@@ -86,8 +89,8 @@ re-encoded, discarding metadata and original filenames.
 ## Website settings and manual submissions
 
 The admin's **Site settings → Clan name** defaults to `Clan name`. Saving updates
-the public header, admin heading and document title, and immediately
-changes intake validation. Public tabs refresh settings every 25 seconds or
+the public header, admin heading and document title independently of intake
+validation. Public tabs refresh settings every 25 seconds or
 when returning to the tab. `GET /api/v1/settings` returns `revision`,
 `hardcoreEnabled` and `clanName`. Admin-only, CSRF-protected
 `PUT /api/v1/admin/settings` accepts those values with `expectedRevision`.
@@ -102,11 +105,63 @@ click **Generate new key**, or enter their own key of at least 8 characters.
 generating only fills the draft until it is saved.
 All key controls remain visible and usable with the requirement disabled.
 Disabling preserves the saved key and accepts matching-clan submissions without
-checking their key header. The clan-name and normal payload/PNG checks still
+checking their key header when clan matching is enabled. **API key only** mode
+always requires the current key, including when this checkbox is off. Normal payload/PNG checks still
 apply. Generating or supplying a key while disabled changes the visible saved
 key, without enabling enforcement. Re-enabling immediately requires that key.
 Rotations invalidate the previous key immediately, including uploads that
 started before rotation but have not committed.
+
+**Automatic review** on this page provides **Clan matching**, a separate
+**In-game clan name for matching**, world-policy dropdowns and a player whitelist.
+The migration seeds the matching name from the existing visual clan name once;
+subsequent changes to either name do not affect the other. Choose clan matching
+with the existing optional key requirement, or API key only, which ignores the
+submitted clan name for matching while retaining it as provenance.
+
+| World flags                               | Available policy                   |
+| ----------------------------------------- | ---------------------------------- |
+| `F2P` (plugin-provided), `PVP`            | Reject, Send to review, Auto allow |
+| `MEMBERS`, either HC placeholder spelling | Send to review, Auto allow         |
+
+For combined flags, any rejection wins; otherwise review wins over auto allow.
+Flags without a configured category (including `[]`) go to review. A whitelist
+match overrides review after all world rejection checks. Player names ignore
+case, surrounding/repeated spaces and the difference between underscores,
+nonbreaking spaces and ordinary spaces. The list supports up to 200 names, one
+per line. Neither whitelisting nor auto allow bypasses clan/key, catalog or PNG
+validation. Auto approvals grant collection credit immediately and append an
+audit attributed to **RuneLite auto review**. If an approved credit already
+exists for the canonical item and world mode, the new claim remains pending
+with an audit explaining why approval was deferred. Replays retain their
+original pending/approved receipt after policy or whitelist changes.
+
+Admin-only `GET /api/v1/admin/runelite-settings` returns private rules with a
+`runelite-N` revision. CSRF-protected `PUT` replaces the complete rules and
+requires `expectedRevision`; stale writes return **409**. For example:
+
+```json
+{
+  "expectedRevision": "runelite-1",
+  "matchClanName": true,
+  "clanName": "In-game Clan",
+  "worldPolicies": {
+    "f2p": "reject",
+    "pvp": "review",
+    "members": "allow",
+    "hardcore": "review"
+  },
+  "playerWhitelist": ["Trusted Player"]
+}
+```
+
+Rules and whitelist names are absent from public settings. Writes append an
+administrator audit and lock the rules used by in-flight intake transactions.
+
+When [collection log scheduling](collection-log-scheduling.md) is enabled, a new
+RuneLite claim must also belong to at least one currently open active page.
+Whitelist and world auto allow settings cannot bypass closed pages. Previously
+saved retries still return their original receipt after a page closes.
 
 Admin-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
 CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
@@ -174,6 +229,14 @@ requirement under a database lock when committing the pending submission.
 adds nullable original world flags. Existing claims and immutable receipts
 remain valid and keep their current world mode; new claims retain normalized
 flags and include the mode in their receipt. No new volume or secret is needed.
+
+[`012_runelite_auto_review.sql`](../packages/database/migrations/012_runelite_auto_review.sql)
+adds private versioned rules and an append-only administrator audit. All policies
+default to review, with clan matching enabled and an empty whitelist. Apply the
+migration and runtime-role bootstrap before starting the updated API. No new
+volume or secret is needed. Take a coordinated backup before upgrading: earlier
+API images do not enforce these configurable rules and still match the visual
+clan name, so reverting requires the matching pre-upgrade image and backup.
 
 Compose supplies `PROOF_STORAGE_PATH=/data/submission-images` and a separate
 durable `submission-images` volume. For standalone API development set an

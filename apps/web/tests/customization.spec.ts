@@ -20,6 +20,7 @@ test('site settings lives on its own page and edited labels appear across the pu
     'Submissions',
     'Items catalog',
     'XP imports',
+    'Scheduling',
     'RuneLite submissions',
     'Site settings',
     'Hardcore worlds',

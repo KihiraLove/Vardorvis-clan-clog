@@ -10,6 +10,7 @@ test('a single editable key and save apply the key and requirement together, inc
     name: 'Save API key settings',
     exact: true,
   });
+  await expect(current).toHaveValue(/^[a-f0-9]{32}$/u);
   const initial = await current.inputValue();
   expect(initial).toMatch(/^[a-f0-9]{32}$/u);
   await expect(required).toBeChecked();

@@ -2,6 +2,17 @@
 
 Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migrations `007_site_customization.sql` and `008_default_clan_name.sql` preserve histories and administrator-chosen names. Generated clan keys use 32 hexadecimal characters; custom keys preserve any characters with a minimum length of 8. Migration `009_runelite_world_types.sql` retains original world flags separately from staff-correctable credit mode. Intake rejects excluded flags and binds retries to the normalized flag set.
 
+Migration `012_runelite_auto_review.sql` adds private RuneLite world policies,
+independent in-game clan matching and a player whitelist. Intake locks these
+versioned rules and the current key, then commits evidence, any automatic
+approval, audit and immutable receipt together. The unique item/world credit
+index sends duplicate auto-approved claims to review without replacing credit.
+
+[Collection log scheduling](collection-log-scheduling.md) adds a default-disabled
+administrator switch and staff-managed overlapping page windows in migration 013. Every new intake locks the settings before catalog item locks and admits
+items belonging to any currently open active page. Windows use persisted UTC
+instants and the database clock; the editor shows local and UTC times.
+
 # Architecture
 
 > **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.

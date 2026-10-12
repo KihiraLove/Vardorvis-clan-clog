@@ -1,5 +1,10 @@
 # Site customization and account/catalog management
 
+[Collection log scheduling](collection-log-scheduling.md) is available to both
+staff roles from **Scheduling**. The administrator controls enforcement; both
+roles can create, edit and delete overlapping page windows. Local date/time
+entry shows UTC previews, and disabled mode retains ordinary submission behavior.
+
 Visual references from the passing Chromium preview tests: [desktop homepage](site-customization/homepage-desktop.png)
 and [320-pixel Site settings](site-customization/settings-mobile.png), plus
 [mobile item management](site-customization/item-management-mobile.png). The account
@@ -49,6 +54,9 @@ settings and collections. Moderators cannot use either settings page.
 
 The submission clan name and API key remain shared; the hardcore displayed name
 does not change RuneLite validation. XP totals and event data remain shared.
+RuneLite settings now provide a separate in-game clan name, an API-key-only
+matching option, world-policy dropdowns and a player whitelist. Displayed clan
+names do not change submission matching. See [automatic review rules](runelite-submissions.md).
 The public XP heading is omitted from the admin import page. The total caption
 and its setting have been removed; selected events still show their source link.
 
@@ -63,6 +71,8 @@ Leaving without saving discards the draft. The field and generation remain
 available when the requirement is disabled. Requirement-only changes do not
 claim a key rotation in the audit. The API continues to support direct generation
 for existing clients. See [RuneLite submissions](runelite-submissions.md).
+Disabling the key requirement applies to clan-name matching mode. API-key-only
+matching always requires a valid key.
 
 ## Item management
 

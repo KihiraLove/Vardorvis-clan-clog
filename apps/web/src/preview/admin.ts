@@ -16,6 +16,15 @@ import {
   type SiteCopy,
   type HardcoreAppearance,
   clanKeyBytes,
+  defaultRuneLiteRules,
+  parseRuneLiteRules,
+  type RuneLiteSettings,
+  type RuneLiteSettingsUpdate,
+  parseCollectionScheduleInput,
+  scheduledItemOpen,
+  closedCollectionPageMessage,
+  type SchedulingState,
+  type CollectionScheduleInput,
 } from '@clog/domain';
 import {
   defaultBranding,
@@ -50,6 +59,100 @@ import {
 } from './scenarios.ts';
 
 export class PreviewAdminClient implements AdminClient {
+  private schedulingState: SchedulingState = {
+    revision: 'schedules-1',
+    enabled: false,
+    schedules: [],
+  };
+  async scheduling(signal: AbortSignal) {
+    this.access(signal);
+    return structuredClone(this.schedulingState);
+  }
+  private checkScheduleRevision(revision: string, signal: AbortSignal) {
+    this.access(signal);
+    if (revision !== this.schedulingState.revision)
+      throw new AdminRequestError(409);
+  }
+  private nextScheduleRevision() {
+    this.schedulingState.revision =
+      'schedules-' +
+      (Number(this.schedulingState.revision.split('-').at(-1)) + 1);
+  }
+  async setSchedulingEnabled(
+    enabled: boolean,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkScheduleRevision(revision, signal);
+    this.schedulingState.enabled = enabled;
+    this.nextScheduleRevision();
+    return this.scheduling(signal);
+  }
+  async saveSchedule(
+    input: CollectionScheduleInput,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+    id?: string,
+  ) {
+    this.checkScheduleRevision(revision, signal);
+    const fields = parseCollectionScheduleInput(input);
+    if (fields.pageIds.some((id) => !this.data.pages.some((p) => p.id === id)))
+      throw new AdminRequestError(422);
+    if (id && !this.schedulingState.schedules.some((s) => s.id === id))
+      throw new AdminRequestError(404);
+    if (!id && this.schedulingState.schedules.length >= 500)
+      throw new AdminRequestError(422);
+    const schedule = { id: id ?? crypto.randomUUID(), ...fields };
+    this.schedulingState.schedules = [
+      ...this.schedulingState.schedules.filter((s) => s.id !== schedule.id),
+      schedule,
+    ].sort(
+      (a, b) =>
+        a.startsAt.localeCompare(b.startsAt) || a.id.localeCompare(b.id),
+    );
+    this.nextScheduleRevision();
+    return this.scheduling(signal);
+  }
+  async deleteSchedule(
+    id: string,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkScheduleRevision(revision, signal);
+    if (!this.schedulingState.schedules.some((s) => s.id === id))
+      throw new AdminRequestError(404);
+    this.schedulingState.schedules = this.schedulingState.schedules.filter(
+      (s) => s.id !== id,
+    );
+    this.nextScheduleRevision();
+    return this.scheduling(signal);
+  }
+  private runelite: RuneLiteSettings = {
+    revision: 'runelite-1',
+    ...defaultRuneLiteRules('Clan name'),
+  };
+  async runeLiteSettings(signal: AbortSignal) {
+    this.access(signal);
+    return structuredClone(this.runelite);
+  }
+  async saveRuneLiteSettings(
+    fields: RuneLiteSettingsUpdate,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const { expectedRevision, ...rules } = fields;
+    if (expectedRevision !== this.runelite.revision)
+      throw new AdminRequestError(409);
+    this.runelite = {
+      revision: 'runelite-' + (Number(expectedRevision.split('-').at(-1)) + 1),
+      ...parseRuneLiteRules(rules),
+    };
+    return this.runeLiteSettings(signal);
+  }
   private logoSettings: Branding = { ...defaultBranding };
   private hardcoreLogoSettings: Branding = { ...defaultBranding };
   private logoUrls = new Set<string>();
@@ -294,6 +397,16 @@ export class PreviewAdminClient implements AdminClient {
     }
     const item = this.data.items.find((row) => row.id === fields.itemId);
     if (!item) throw new AdminRequestError(422);
+    if (
+      !scheduledItemOpen(
+        this.schedulingState,
+        this.data.pages
+          .filter((page) => page.itemIds.includes(item.id))
+          .map((page) => page.id),
+        new Date().toISOString(),
+      )
+    )
+      throw new Error(closedCollectionPageMessage);
     if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
     if (fields.proofUrl && !safeProof(fields.proofUrl))
       throw new AdminRequestError(422);
