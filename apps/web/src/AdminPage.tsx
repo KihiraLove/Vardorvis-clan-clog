@@ -11,6 +11,7 @@ import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
 import { AccountSettings } from './AccountSettings.tsx';
 import { AdminAccounts } from './AdminAccounts.tsx';
+import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 
 export interface AdminRouteProps {
   preview: boolean;
@@ -27,18 +28,17 @@ export function AdminNavigation({
     <nav className="admin-navigation" aria-label="Admin navigation">
       {[
         ['/admin', 'Submissions'],
-        ['/admin/catalog', 'Catalog items'],
+        ['/admin/catalog', 'Items catalog'],
         ['/admin/xp', 'XP imports'],
-        ['/admin/account', 'Your account'],
-        ...(session?.role === 'admin'
-          ? [['/admin/accounts', 'Moderator accounts']]
-          : []),
         ...(session?.role === 'admin'
           ? [
+              ['/admin/runelite', 'RuneLite submissions'],
               ['/admin/settings', 'Site settings'],
               ['/admin/settings/hardcore', 'Hardcore worlds'],
+              ['/admin/accounts', 'Moderator accounts'],
             ]
           : []),
+        ['/admin/account', 'Your account'],
       ].map(([url, label]) => (
         <a
           key={url}
@@ -269,6 +269,21 @@ export function AdminPage({
           onSaved={setSession}
           onAccessLost={accessLost}
         />
+      ) : path === '/admin/runelite' ? (
+        session.role === 'admin' ? (
+          <section className="admin-panel">
+            <h2>RuneLite submissions</h2>
+            <ClanApiKeySettings
+              client={client}
+              session={session}
+              onAccessLost={accessLost}
+            />
+          </section>
+        ) : (
+          <p role="alert">
+            Only the administrator can change RuneLite settings.
+          </p>
+        )
       ) : path === '/admin/accounts' ? (
         session.role === 'admin' ? (
           <AdminAccounts

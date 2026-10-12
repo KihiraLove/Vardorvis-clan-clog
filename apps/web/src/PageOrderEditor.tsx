@@ -36,6 +36,7 @@ export function PageOrderEditor({
   const latest = catalog.pages.find((page) => page.id === pageId),
     stale = latest?.version !== saved?.version;
   const accept = (page: AdminPage | undefined) => {
+    setPageId(page?.id ?? '');
     setSaved(page);
     setIds(page?.itemIds ?? []);
     setMoved(undefined);
@@ -44,8 +45,8 @@ export function PageOrderEditor({
     if (catalog.revision === seen.current) return;
     seen.current = catalog.revision;
     // Preserve an unsaved arrangement on refresh; a changed version blocks saving it.
-    if (!dirty) accept(latest);
-  }, [catalog.revision, dirty, latest]);
+    if (!dirty) accept(latest ?? catalog.pages[0]);
+  }, [catalog.revision, catalog.pages, dirty, latest]);
   const move = (from: number, to: number) => {
     if (action.busy || to < 0 || to >= ids.length) return;
     setIds(moveItem(ids, from, to));
@@ -127,7 +128,10 @@ export function PageOrderEditor({
               void action.execute(async (signal) => {
                 const next = await refresh(signal);
                 if (!signal.aborted)
-                  accept(next.pages.find((page) => page.id === pageId));
+                  accept(
+                    next.pages.find((page) => page.id === pageId) ??
+                      next.pages[0],
+                  );
               });
             }}
           >
@@ -242,7 +246,10 @@ export function PageOrderEditor({
                         if (signal.aborted) return;
                         const next = await refresh(signal);
                         if (signal.aborted) return;
-                        accept(next.pages.find((page) => page.id === pageId));
+                        accept(
+                          next.pages.find((page) => page.id === pageId) ??
+                            next.pages[0],
+                        );
                         action.setMessage(
                           retired
                             ? `${item.name} deleted from its last page and the catalog.`
@@ -252,7 +259,10 @@ export function PageOrderEditor({
                       async (signal) => {
                         const next = await refresh(signal);
                         if (!signal.aborted)
-                          accept(next.pages.find((page) => page.id === pageId));
+                          accept(
+                            next.pages.find((page) => page.id === pageId) ??
+                              next.pages[0],
+                          );
                       },
                     );
                   }}
@@ -306,7 +316,10 @@ export function PageOrderEditor({
               },
               async (signal) => {
                 const next = await refresh(signal);
-                accept(next.pages.find((page) => page.id === pageId));
+                accept(
+                  next.pages.find((page) => page.id === pageId) ??
+                    next.pages[0],
+                );
               },
             );
           }}
@@ -316,7 +329,7 @@ export function PageOrderEditor({
         <button
           className="site-button"
           disabled={action.busy || !dirty}
-          onClick={() => accept(latest)}
+          onClick={() => accept(latest ?? catalog.pages[0])}
         >
           Discard order changes
         </button>

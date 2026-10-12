@@ -36,6 +36,7 @@ import {
   type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
+  type CreatePage,
   type QueueView,
   type StagedIcon,
   type Submission,
@@ -378,6 +379,107 @@ export class PreviewAdminClient implements AdminClient {
         ? this.staff.filter((row) => row.id !== id)
         : this.staff.map((row) => (row.id === id ? saved : row));
     return saved;
+  }
+  private pageRequests = new Map<
+    string,
+    { payload: string; page: AdminPage }
+  >();
+  async createPage(
+    fields: CreatePage,
+    key: string,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const payload = JSON.stringify(fields),
+      prior = this.pageRequests.get(key);
+    if (prior) {
+      if (prior.payload !== payload) throw new AdminRequestError(409);
+      return structuredClone(prior.page);
+    }
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    if (
+      !fields.name.trim() ||
+      this.data.pages.some(
+        (p) =>
+          p.category === fields.category &&
+          p.name.toLowerCase() === fields.name.trim().toLowerCase(),
+      )
+    )
+      throw new AdminRequestError(400);
+    if (
+      new Set(fields.itemIds).size !== fields.itemIds.length ||
+      fields.itemIds.some(
+        (id) => !this.data.items.some((item) => item.id === id),
+      )
+    )
+      throw new AdminRequestError(400);
+    const page: AdminPage = {
+      id: 'manual-page-' + crypto.randomUUID(),
+      name: fields.name.trim(),
+      category: fields.category,
+      itemIds: [...fields.itemIds],
+      version: 'page-1',
+      orderOrigin: 'manual',
+    };
+    this.data.pages.push(page);
+    this.pageVersions.set(page.id, 1);
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+    this.pageRequests.set(key, { payload, page: structuredClone(page) });
+    return structuredClone(page);
+  }
+  async removePage(
+    id: string,
+    revision: string,
+    version: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    const page = this.data.pages.find((p) => p.id === id);
+    if (!page || page.version !== version) throw new AdminRequestError(409);
+    this.data.pages = this.data.pages.filter((p) => p.id !== id);
+    const retiredItemIds = page.itemIds.filter(
+      (item) => !this.data.pages.some((p) => p.itemIds.includes(item)),
+    );
+    this.data.items = this.data.items.filter(
+      (item) => !retiredItemIds.includes(item.id),
+    );
+    this.pageVersions.delete(id);
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+    return { retiredItemIds };
+  }
+  async reorderPages(
+    category: import('../model.ts').Category,
+    ids: string[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+    const pages = this.data.pages.filter((p) => p.category === category);
+    if (
+      pages.length !== ids.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !pages.some((p) => p.id === id))
+    )
+      throw new AdminRequestError(400);
+    let slot = 0;
+    this.data.pages = this.data.pages.map((p) => {
+      if (p.category !== category) return p;
+      const id = ids[slot++]!;
+      const page = pages.find((p) => p.id === id)!,
+        version = (this.pageVersions.get(page.id) ?? 1) + 1;
+      this.pageVersions.set(page.id, version);
+      return { ...page, version: 'page-' + version };
+    });
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
   }
   async removePageItem(
     pageId: string,

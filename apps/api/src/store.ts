@@ -370,16 +370,17 @@ export class PgStore implements BackendStore {
       ).rows;
       const pages = (
         await client.query<{ id: string; name: string; category: string }>(
-          'SELECT id, name, category FROM pages ORDER BY sort_order, id LIMIT 2001',
+          'SELECT id, name, category FROM pages WHERE active ORDER BY sort_order, id LIMIT 2001',
         )
       ).rows;
       const slots = (
         await client.query<{ page_id: string; item_id: number }>(
-          'SELECT p.page_id, p.item_id FROM page_items p JOIN items i ON i.id=p.item_id WHERE i.active ORDER BY p.page_id, p.slot LIMIT 50001',
+          'SELECT p.page_id, p.item_id FROM page_items p JOIN items i ON i.id=p.item_id JOIN pages g ON g.id=p.page_id WHERE i.active AND g.active ORDER BY p.page_id, p.slot LIMIT 50001',
         )
       ).rows;
       if (
-        !pages.length ||
+        (!pages.length &&
+          !(await client.query('SELECT 1 FROM pages LIMIT 1')).rowCount) ||
         items.length > 10000 ||
         pages.length > 2000 ||
         slots.length > 50000

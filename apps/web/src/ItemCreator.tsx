@@ -116,6 +116,15 @@ export function ItemCreator({
     [reset, setReset] = useState(0);
   const [pending, setPending] = useState<{ fields: CreateItem; key: string }>(),
     [created, setCreated] = useState<CreatedItem>();
+  useEffect(() => {
+    if (pending) return;
+    setPageIds((ids) => {
+      const current = ids.filter((id) =>
+        catalog.pages.some((page) => page.id === id),
+      );
+      return current.length === ids.length ? ids : current;
+    });
+  }, [catalog.pages, pending]);
   const action = useAdminAction(onAccessLost);
   const iconChanged = useCallback((file: File | undefined) => {
     setFile(file);

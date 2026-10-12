@@ -13,6 +13,23 @@ test('site settings lives on its own page and edited labels appear across the pu
   ).toHaveCount(0);
   await page.getByRole('link', { name: 'Site settings', exact: true }).click();
   await expect(
+    page
+      .getByRole('navigation', { name: 'Admin navigation' })
+      .getByRole('link'),
+  ).toHaveText([
+    'Submissions',
+    'Items catalog',
+    'XP imports',
+    'RuneLite submissions',
+    'Site settings',
+    'Hardcore worlds',
+    'Moderator accounts',
+    'Your account',
+  ]);
+  await expect(
+    page.getByLabel('Current shared API key', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
     page.getByRole('heading', { name: 'Site settings', exact: true }),
   ).toBeVisible();
   await expect(
@@ -54,6 +71,20 @@ test('site settings lives on its own page and edited labels appear across the pu
     'Our clan collection',
   );
   await expect(page.locator('.log-help')).toHaveText('Drops earned together');
+  for (const width of [1100, 320]) {
+    await page.setViewportSize({ width, height: 850 });
+    const caption = await page.locator('.log-help').boundingBox();
+    const log = await page.locator('.game-window').boundingBox();
+    expect(caption!.y + caption!.height).toBeLessThan(log!.y);
+    const sizes = await page.evaluate(() =>
+      [
+        document.querySelector('.log-help'),
+        document.querySelector('.event-tracker > h1'),
+      ].map((node) => getComputedStyle(node!).fontSize),
+    );
+    expect(sizes[0]).toBe(sizes[1]);
+  }
+  await page.setViewportSize({ width: 1100, height: 850 });
   await expect(
     page.getByRole('heading', { name: 'Clan training', exact: true }),
   ).toBeVisible();
@@ -106,6 +137,11 @@ test('hardcore appearance can be configured while disabled and switches independ
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
   await expect(page.getByLabel('Enable hardcore worlds')).not.toBeChecked();
+  const flag = await page.getByLabel('Enable hardcore worlds').boundingBox();
+  const hardcoreLogo = await page
+    .getByRole('heading', { name: 'Clan logo', exact: true })
+    .boundingBox();
+  expect(flag!.y).toBeLessThan(hardcoreLogo!.y);
   await page.getByLabel('Displayed clan name').fill('Hardcore clan');
   await page
     .getByLabel('Collection log title', { exact: true })
@@ -384,11 +420,15 @@ test('item management confirms page-only deletion, retires the last membership a
   };
   await confirm(initial.name, false);
   await expect(
-    page.locator('.page-order-list li').filter({ hasText: 'Virtus mask' }),
+    page
+      .locator('.page-order-editor .page-order-list li')
+      .filter({ hasText: 'Virtus mask' }),
   ).toHaveCount(1);
   await confirm(initial.name, true);
   await expect(
-    page.locator('.page-order-list li').filter({ hasText: 'Virtus mask' }),
+    page
+      .locator('.page-order-editor .page-order-list li')
+      .filter({ hasText: 'Virtus mask' }),
   ).toHaveCount(0);
   await page.locator('header a.clan-brand').click();
   await expect(
@@ -411,7 +451,9 @@ test('item management confirms page-only deletion, retires the last membership a
       .selectOption(row.id);
     await confirm(row.name, true, index === remaining.length - 1);
     await expect(
-      page.locator('.page-order-list li').filter({ hasText: 'Virtus mask' }),
+      page
+        .locator('.page-order-editor .page-order-list li')
+        .filter({ hasText: 'Virtus mask' }),
     ).toHaveCount(0);
   }
   await expect(

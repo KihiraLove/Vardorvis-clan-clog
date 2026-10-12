@@ -3,7 +3,9 @@
 Visual references from the passing Chromium preview tests: [desktop homepage](site-customization/homepage-desktop.png)
 and [320-pixel Site settings](site-customization/settings-mobile.png), plus
 [mobile item management](site-customization/item-management-mobile.png). The account
-and key shown in the mobile capture are disposable preview fixtures.
+shown in the mobile capture is a disposable preview fixture.
+The [mobile Page management panel](site-customization/page-management-mobile.png)
+shows page creation and category ordering.
 Additional references show [independent hardcore branding](site-customization/hardcore-desktop.png)
 and [hardcore settings while disabled](site-customization/hardcore-settings-mobile.png).
 The [mobile XP imports page](site-customization/admin-xp-mobile.png) keeps the
@@ -11,10 +13,12 @@ import form below admin navigation without the public heading and spacing.
 
 The administrator's **Site settings** navigation entry opens `/admin/settings`.
 The clan logo is the first setting, followed by the regular clan name (default
-**Clan name**), text and shared RuneLite API key controls. Three labels are editable:
+**Clan name**) and text. The shared API key controls have their own
+**RuneLite submissions** page at `/admin/runelite`. Three labels are editable:
 
 - Collection log title (also used in the browser title).
-- Collection log caption (the hardcore view adds its world-mode label).
+- Collection log caption, above the log window and the same size as the XP heading
+  (the hardcore view adds its world-mode label).
 - XP section title.
 
 Labels accept 1–160 printable characters. They are stored as text and rendered
@@ -30,8 +34,9 @@ using the official GitHub mark and Ko-fi button. README badges show support, Git
 main CI workflow status; release downloads do not count container pulls.
 
 The **Hardcore worlds** navigation entry opens `/admin/settings/hardcore` even
-when hardcore visibility is disabled. It has its own logo/favicon, displayed
-clan name and the same three text labels, plus **Enable hardcore worlds**.
+when hardcore visibility is disabled. **Enable hardcore worlds** is the first
+setting, followed by its own logo/favicon, displayed clan name and the same
+three text labels.
 The regular and hardcore appearances start identical and save independently.
 The public skull switches the name, logo, browser title/icon and text together.
 Disabling the release flag hides the public switch while retaining all appearance
@@ -81,6 +86,22 @@ with the staff session, exact Origin and CSRF token. Both staff
 roles can use it. Stale revisions return 409; an unauthenticated caller cannot
 reach the write.
 
+## Page management and navigation
+
+**Items catalog** also contains **Page management**, available to administrators
+and moderators. Choose a category, name a page and optionally select existing
+catalog items. Empty pages are supported; the Add item form can populate them.
+Move buttons save page order within that category immediately. Deleting a page
+requires confirmation and removes it from both world modes. Shared items remain
+on their other pages; items losing their last page are deactivated. Review
+history, approved credits and immutable creation receipts remain in storage.
+Startup preserves page deletions and custom ordering.
+
+Administrator navigation is ordered **Submissions, Items catalog, XP imports,
+RuneLite submissions, Site settings, Hardcore worlds, Moderator accounts, Your
+account**. Moderators see Submissions, Items catalog, XP imports and Your account.
+Owner settings and API keys remain inaccessible to moderators.
+
 ## Moderator accounts
 
 Only the administrator can disable, enable or delete moderators from
@@ -120,3 +141,9 @@ website text uses the shared settings revision to prevent concurrent lost edits.
 Existing logo assets and image-volume backups serve both modes. Back up the
 database and image volume together before upgrading. A rollback to an image
 requiring the retired caption needs its matching pre-upgrade database backup.
+
+Migration `011_catalog_page_management.sql` adds page activation, independent
+page-position provenance and durable page creation receipts. It preserves all
+existing memberships and histories. Older images do not filter deactivated page
+rows; use a compatible image or restore the coordinated pre-upgrade backup when
+rolling back after whole-page deletions.

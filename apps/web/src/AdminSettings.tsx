@@ -1,6 +1,5 @@
 /** Independent mode appearance, with shared revision-checked administrator writes. */
 import { useEffect, useState } from 'react';
-import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 import { ClanLogoSettings } from './ClanLogoSettings.tsx';
 import type { Branding } from './branding.ts';
 import { AdminRequestError } from './admin-api.ts';
@@ -70,6 +69,18 @@ export function AdminSettings({
   return (
     <section className="admin-panel">
       <h2>{hardcore ? 'Hardcore worlds settings' : 'Site settings'}</h2>
+      {hardcore && (
+        <label className="admin-checkbox hardcore-release-setting">
+          <input
+            type="checkbox"
+            form="hardcore-site-settings"
+            checked={enabled}
+            disabled={action.busy || !saved}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+          Enable hardcore worlds
+        </label>
+      )}
       <ClanLogoSettings
         client={client}
         session={session}
@@ -92,6 +103,7 @@ export function AdminSettings({
       )}
       {saved && (
         <form
+          id={hardcore ? 'hardcore-site-settings' : 'regular-site-settings'}
           onSubmit={(event) => {
             event.preventDefault();
             void action.execute(
@@ -142,17 +154,6 @@ export function AdminSettings({
               ? 'Shown when viewing hardcore worlds. Submissions still use the clan name in Site settings.'
               : 'Shown on the regular website and required for all RuneLite submissions.'}
           </p>
-          {hardcore && (
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                checked={enabled}
-                disabled={action.busy}
-                onChange={(event) => setEnabled(event.target.checked)}
-              />
-              Enable hardcore worlds
-            </label>
-          )}
           <fieldset className="site-copy-fields">
             <legend>Website text</legend>
             {(
@@ -203,13 +204,6 @@ export function AdminSettings({
       )}
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}
-      {!hardcore && (
-        <ClanApiKeySettings
-          client={client}
-          session={session}
-          onAccessLost={onAccessLost}
-        />
-      )}
     </section>
   );
 }

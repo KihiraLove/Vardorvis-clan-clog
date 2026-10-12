@@ -3,7 +3,7 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError, type AdminIdentity } from './types.js';
 import { assetIdPattern, IconStorage, MAX_ICON_BYTES } from './icon-storage.js';
-import { PgCatalogStore, type NewItem } from './catalog-store.js';
+import { PgCatalogStore, type NewItem, type NewPage } from './catalog-store.js';
 export type RequireAdmin = (
   request: FastifyRequest,
   write?: boolean,
@@ -14,6 +14,15 @@ const ids = {
   uniqueItems: true,
   maxItems: 10000,
   items: { type: 'integer', minimum: 1, maximum: 2147483647 },
+};
+const revision = {
+  type: 'string',
+  pattern: '^catalog-[1-9][0-9]*$',
+  maxLength: 30,
+};
+const category = {
+  type: 'string',
+  enum: ['bosses', 'raids', 'clues', 'minigames', 'other'],
 };
 export function catalogRoutes(
   app: FastifyInstance,
@@ -89,6 +98,125 @@ export function catalogRoutes(
       },
     );
   });
+  app.post<{ Body: NewPage }>(
+    '/api/v1/admin/catalog/pages',
+    {
+      onRequest: async (request) => {
+        await admin(request, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'category', 'itemIds', 'expectedRevision'],
+          properties: {
+            name: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 200,
+              pattern:
+                '^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$',
+            },
+            category,
+            itemIds: ids,
+            expectedRevision: revision,
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const actor = await admin(request, true),
+        key = request.headers['idempotency-key'];
+      if (typeof key !== 'string' || !/^[a-zA-Z0-9_-]{8,128}$/u.test(key))
+        throw new ApiError(400, 'Supply a stable Idempotency-Key.');
+      return reply
+        .code(201)
+        .send(
+          await store.createPage(
+            { ...request.body, name: request.body.name.trim() },
+            actor.id,
+            key,
+          ),
+        );
+    },
+  );
+  app.delete<{
+    Params: { id: string };
+    Body: { expectedRevision: string; expectedVersion: string };
+  }>(
+    '/api/v1/admin/catalog/pages/:id',
+    {
+      onRequest: async (request) => {
+        await admin(request, true);
+      },
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', minLength: 1, maxLength: 200 } },
+        },
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['expectedRevision', 'expectedVersion'],
+          properties: {
+            expectedRevision: revision,
+            expectedVersion: {
+              type: 'string',
+              pattern: '^page-[1-9][0-9]*$',
+              maxLength: 30,
+            },
+          },
+        },
+      },
+    },
+    async (request) =>
+      store.removePage(
+        request.params.id,
+        request.body.expectedRevision,
+        request.body.expectedVersion,
+        (await admin(request, true)).id,
+      ),
+  );
+  app.put<{
+    Body: {
+      category: string;
+      orderedPageIds: string[];
+      expectedRevision: string;
+    };
+  }>(
+    '/api/v1/admin/catalog/pages/order',
+    {
+      onRequest: async (request) => {
+        await admin(request, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['category', 'orderedPageIds', 'expectedRevision'],
+          properties: {
+            category,
+            expectedRevision: revision,
+            orderedPageIds: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 2000,
+              uniqueItems: true,
+              items: { type: 'string', minLength: 1, maxLength: 200 },
+            },
+          },
+        },
+      },
+    },
+    async (request) =>
+      store.reorderPages(
+        request.body.category,
+        request.body.orderedPageIds,
+        request.body.expectedRevision,
+        (await admin(request, true)).id,
+      ),
+  );
   app.post<{ Body: NewItem }>(
     '/api/v1/admin/catalog/items',
     {

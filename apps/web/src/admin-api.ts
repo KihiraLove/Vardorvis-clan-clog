@@ -28,6 +28,7 @@ import {
   type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
+  type CreatePage,
   type QueueView,
   type StagedIcon,
 } from './admin-model.ts';
@@ -44,6 +45,9 @@ export class AdminRequestError extends Error {
           'Choose a new password to finish account setup.',
           'Choose a password different from your current password.',
           'Your account changed. Sign in again before retrying.',
+          'A page with this name already exists in this category.',
+          'Choose distinct active catalog items.',
+          'The catalog has reached its page or item-slot limit.',
         ].includes(serverConflict)
         ? serverConflict
         : status === 409 &&
@@ -184,6 +188,90 @@ export class LiveAdminClient implements AdminClient {
     )
       throw new Error('Unexpected moderator account receipt.');
     return result;
+  }
+  async createPage(
+    fields: CreatePage,
+    key: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json('/api/v1/admin/catalog/pages', signal, {
+        ...this.write(csrf, { ...fields, expectedRevision: revision }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrf,
+          'Idempotency-Key': key,
+        },
+      }),
+    );
+    const page = parseAdminPage(result.page);
+    if (
+      page.name !== fields.name.trim() ||
+      page.category !== fields.category ||
+      JSON.stringify(page.itemIds) !== JSON.stringify(fields.itemIds) ||
+      text(result.catalogRevision) === revision
+    )
+      throw new Error('Unexpected page creation receipt.');
+    return page;
+  }
+  async removePage(
+    id: string,
+    revision: string,
+    version: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json(
+        `/api/v1/admin/catalog/pages/${encodeURIComponent(id)}`,
+        signal,
+        this.write(
+          csrf,
+          { expectedRevision: revision, expectedVersion: version },
+          'DELETE',
+        ),
+      ),
+    );
+    const retiredItemIds = list(result.retiredItemIds).map((value) => {
+      if (
+        !Number.isInteger(value) ||
+        Number(value) < 1 ||
+        Number(value) > 2147483647
+      )
+        throw new Error('Unexpected page deletion receipt.');
+      return value as number;
+    });
+    unique(retiredItemIds);
+    if (result.pageId !== id || text(result.catalogRevision) === revision)
+      throw new Error('Unexpected page deletion receipt.');
+    return { retiredItemIds };
+  }
+  async reorderPages(
+    category: import('./model.ts').Category,
+    ids: string[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json(
+        '/api/v1/admin/catalog/pages/order',
+        signal,
+        this.write(
+          csrf,
+          { category, orderedPageIds: ids, expectedRevision: revision },
+          'PUT',
+        ),
+      ),
+    );
+    if (
+      result.category !== category ||
+      JSON.stringify(result.orderedPageIds) !== JSON.stringify(ids) ||
+      text(result.catalogRevision) === revision
+    )
+      throw new Error('Unexpected page order receipt.');
   }
   async removePageItem(
     pageId: string,

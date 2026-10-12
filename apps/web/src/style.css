@@ -1378,6 +1378,34 @@ main {
   gap: 20px;
   align-items: start;
 }
+.page-management {
+  grid-column: 1 / -1;
+}
+.page-management > label,
+.new-page-form > label {
+  display: block;
+  margin: 12px 0;
+}
+.page-item-picker {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #594c34;
+}
+.page-item-choices {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.managed-pages {
+  max-height: 480px;
+  overflow-y: auto;
+}
+.page-order-list.managed-pages > li {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.hardcore-release-setting {
+  margin: 16px 0 24px;
+}
 .icon-picker__preview {
   display: flex;
   align-items: center;
@@ -1604,11 +1632,11 @@ main {
 .log-help {
   text-align: center;
   font:
-    23px/1.4 RuneScape,
+    38px/1.25 RuneScape,
     serif;
   color: #dec77c;
-  letter-spacing: 1px;
-  margin: 16px 0 0;
+  letter-spacing: 2px;
+  margin: 50px 0;
 }
 /* Browser interpolation smooths enlarged sprite edges; this is not an xBR shader. */
 .item-slot img {
@@ -1818,7 +1846,8 @@ main {
   .event-tracker {
     margin-top: 65px;
   }
-  .event-tracker > h1 {
+  .event-tracker > h1,
+  .log-help {
     font-size: 29px;
     margin-bottom: 25px;
   }

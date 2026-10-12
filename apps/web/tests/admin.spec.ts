@@ -267,11 +267,13 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await expect(page.locator('.item-creator').getByRole('status')).toContainText(
     'created. Every selected page starts uncollected.',
   );
-  const rows = page.locator('.page-order-list li');
+  const rows = page.locator('.page-order-editor .page-order-list li');
   await expect(rows.last()).toContainText('New clan drop');
   const id = Number(await rows.last().getAttribute('data-item-id'));
   const count = await rows.count();
-  const added = page.locator(`.page-order-list li[data-item-id="${id}"]`);
+  const added = page.locator(
+    `.page-order-editor .page-order-list li[data-item-id="${id}"]`,
+  );
   await added.focus();
   for (let i = 1; i < count; i++) await added.press('Alt+ArrowUp');
   await expect(rows.first()).toHaveAttribute('data-item-id', String(id));
@@ -363,14 +365,13 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
   await capture(page, 'admin-review-mobile.png');
-  await page.getByRole('link', { name: 'Catalog items', exact: true }).tap();
-  const first = page.locator('.page-order-list li').first();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).tap();
+  const first = page.locator('.page-order-editor .page-order-list li').first();
   const id = await first.getAttribute('data-item-id');
   await first.getByRole('button', { name: / down$/ }).tap();
-  await expect(page.locator('.page-order-list li').nth(1)).toHaveAttribute(
-    'data-item-id',
-    id!,
-  );
+  await expect(
+    page.locator('.page-order-editor .page-order-list li').nth(1),
+  ).toHaveAttribute('data-item-id', id!);
   await page.getByRole('button', { name: 'Save order', exact: true }).tap();
   await expect(page.getByText(/Page order saved\./)).toBeVisible();
   expect(
@@ -627,14 +628,13 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   await expect(page.locator('.admin-created')).toContainText(
     'New live drop · #50001',
   );
-  await expect(page.locator('.page-order-list li').last()).toHaveAttribute(
-    'data-item-id',
-    '50001',
-  );
+  await expect(
+    page.locator('.page-order-editor .page-order-list li').last(),
+  ).toHaveAttribute('data-item-id', '50001');
   expect(uploads).toBe(1);
   expect(creates).toBe(2);
   await page
-    .locator('.page-order-list li')
+    .locator('.page-order-editor .page-order-list li')
     .first()
     .getByRole('button', { name: / down$/ })
     .click();
@@ -642,10 +642,9 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   await expect(
     page.locator('.page-order-editor').getByRole('alert'),
   ).toContainText('The latest data is loaded');
-  await expect(page.locator('.page-order-list li').first()).toHaveAttribute(
-    'data-item-id',
-    '50001',
-  );
+  await expect(
+    page.locator('.page-order-editor .page-order-list li').first(),
+  ).toHaveAttribute('data-item-id', '50001');
   await expect(
     page.getByRole('button', { name: 'Save order', exact: true }),
   ).toBeDisabled();
@@ -1060,7 +1059,7 @@ test('leaving the manual form aborts its pending request', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Saving…', exact: true }),
   ).toBeDisabled();
-  await page.getByRole('link', { name: 'Catalog items', exact: true }).click();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-manual-aborted',
     'true',

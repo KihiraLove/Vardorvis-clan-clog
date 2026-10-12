@@ -211,8 +211,17 @@ test('moderators retain review tools, have no owner controls and can update thei
   await expect(
     page.getByRole('button', { name: 'Add manual submission' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Catalog items' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Items catalog' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'XP imports' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Admin navigation' })
+      .getByRole('link'),
+  ).toHaveText(['Submissions', 'Items catalog', 'XP imports', 'Your account']);
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Page management', exact: true }),
+  ).toBeVisible();
   await expect(page.getByLabel('Enable hardcore worlds')).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'Moderator accounts' }),
@@ -255,6 +264,15 @@ test('moderators retain review tools, have no owner controls and can update thei
   await expect(
     page.getByRole('button', { name: 'Create moderator' }),
   ).toHaveCount(0);
+  const reads = state.privateReads;
+  await page.goto('/admin/runelite');
+  await expect(page.getByRole('alert')).toHaveText(
+    'Only the administrator can change RuneLite settings.',
+  );
+  await expect(
+    page.getByLabel('Current shared API key', { exact: true }),
+  ).toHaveCount(0);
+  expect(state.privateReads).toBe(reads);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(
     page.getByRole('heading', { name: 'Admin sign-in required' }),

@@ -33,6 +33,7 @@ test(
           '008_default_clan_name.sql',
           '009_runelite_world_types.sql',
           '010_hardcore_appearance.sql',
+          '011_catalog_page_management.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

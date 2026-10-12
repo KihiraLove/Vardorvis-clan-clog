@@ -5,6 +5,7 @@ import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { ItemCreator } from './ItemCreator.tsx';
 import { PageOrderEditor } from './PageOrderEditor.tsx';
+import { PageManagement } from './PageManagement.tsx';
 
 export function AdminCatalogPage({
   client,
@@ -84,6 +85,13 @@ export function AdminCatalogPage({
             refresh={refresh}
           />
           <PageOrderEditor
+            client={client}
+            catalog={catalog}
+            session={session}
+            onAccessLost={onAccessLost}
+            refresh={refresh}
+          />
+          <PageManagement
             client={client}
             catalog={catalog}
             session={session}

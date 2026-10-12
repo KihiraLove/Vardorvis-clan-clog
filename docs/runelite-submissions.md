@@ -95,7 +95,8 @@ Concurrent settings writes return **409**; both previous/new clan names are
 recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
 
-Admins can view the **Current shared API key**, toggle **Require clan API key**,
+On **RuneLite submissions** (`/admin/runelite`), admins can view the
+**Current shared API key**, toggle **Require clan API key**,
 click **Generate new key**, or enter their own key of at least 8 characters.
 **Save API key settings** saves the field and requirement checkbox together;
 generating only fills the draft until it is saved.

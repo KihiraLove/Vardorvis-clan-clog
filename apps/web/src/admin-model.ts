@@ -105,6 +105,11 @@ export interface CreatedItem {
   pageIds: string[];
   catalogRevision: string;
 }
+export interface CreatePage {
+  name: string;
+  category: import('./model.ts').Category;
+  itemIds: number[];
+}
 export interface StaffAccount {
   disabled?: boolean;
   version?: number;
@@ -137,6 +142,27 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  createPage(
+    fields: CreatePage,
+    key: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<AdminPage>;
+  removePage(
+    id: string,
+    revision: string,
+    version: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<{ retiredItemIds: number[] }>;
+  reorderPages(
+    category: import('./model.ts').Category,
+    ids: string[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
   manageModerator(
     id: string,
     expectedVersion: number,

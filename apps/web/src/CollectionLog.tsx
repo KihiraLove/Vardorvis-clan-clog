@@ -193,6 +193,10 @@ export function CollectionLog({
 
   return (
     <section className="collection-section" aria-label="Clan collection log">
+      <h1 className="log-help">
+        {copy.collectionCaption}
+        {hardcore && ' · Hardcore worlds'}
+      </h1>
       <div className="log-viewport">
         <div
           className="log-sizing"
@@ -407,10 +411,6 @@ export function CollectionLog({
           </button>
         </p>
       )}
-      <p className="log-help">
-        {copy.collectionCaption}
-        {hardcore && ' · Hardcore worlds'}
-      </p>
       {open &&
         itemState(open.item.id, credits).collected &&
         (() => {
