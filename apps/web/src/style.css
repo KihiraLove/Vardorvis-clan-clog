@@ -1647,6 +1647,9 @@ main {
 .event-tracker {
   margin: 100px auto 0;
 }
+.admin-page .event-tracker {
+  margin: 0 auto;
+}
 .event-tracker > h1 {
   font:
     38px/1.25 RuneScape,

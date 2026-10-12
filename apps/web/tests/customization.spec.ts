@@ -209,6 +209,10 @@ test('hardcore appearance can be configured while disabled and switches independ
   await expect(
     page.getByRole('heading', { name: 'Import competition', exact: true }),
   ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('admin-xp-mobile.png'),
+    fullPage: true,
+  });
 });
 
 test('empty submission filters preserve panel and pagination geometry while loading', async ({

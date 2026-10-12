@@ -6,6 +6,8 @@ and [320-pixel Site settings](site-customization/settings-mobile.png), plus
 and key shown in the mobile capture are disposable preview fixtures.
 Additional references show [independent hardcore branding](site-customization/hardcore-desktop.png)
 and [hardcore settings while disabled](site-customization/hardcore-settings-mobile.png).
+The [mobile XP imports page](site-customization/admin-xp-mobile.png) keeps the
+import form below admin navigation without the public heading and spacing.
 
 The administrator's **Site settings** navigation entry opens `/admin/settings`.
 The clan logo is the first setting, followed by the regular clan name (default
