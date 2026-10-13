@@ -38,7 +38,7 @@ test(
       assert.equal(rows.length, 15);
       assert.equal(
         new Set(rows.map((row: { name: string }) => row.name)).size,
-        14,
+        15,
       );
       assert.equal(
         (await client.query('SELECT count(*)::int AS count FROM xp_state'))
