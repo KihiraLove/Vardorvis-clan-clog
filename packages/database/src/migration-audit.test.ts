@@ -237,7 +237,7 @@ test(
       try {
         await blocker.query('SELECT pg_advisory_lock(74261005)');
         const before = (await client.query('SELECT * FROM schema_migrations ORDER BY name')).rows;
-        await assert.rejects(migrate(url), { code: '55P03' });
+        await assert.rejects(migrate(url, 250), { code: '55P03' });
         assert.deepEqual(
           (await client.query('SELECT * FROM schema_migrations ORDER BY name')).rows,
           before,
