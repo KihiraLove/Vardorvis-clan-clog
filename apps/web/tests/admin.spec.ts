@@ -212,12 +212,12 @@ test('approved corrections require a reason and move the single credit into a fr
   await editor(page)
     .getByLabel('Collected on hardcore worlds', { exact: true })
     .uncheck();
-  await editor(page)
-    .getByRole('button', { name: 'Save corrections', exact: true })
-    .click();
-  await expect(editor(page).getByRole('alert')).toContainText(
-    'Enter a reason for correcting an approved credit.',
-  );
+  await expect(
+    editor(page).getByRole('button', { name: 'Save corrections', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    editor(page).getByText('Enter an audit reason before changing an approved credit.'),
+  ).toBeVisible();
   await editor(page)
     .getByLabel('Review reason')
     .fill('Proof was from ordinary worlds');
