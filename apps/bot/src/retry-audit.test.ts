@@ -157,7 +157,13 @@ test('repeated transport and server errors stop after exactly two identical atte
 test('malformed, mismatched and unreadable successful receipts cannot confirm success or cause new writes', async () => {
   for (const [status, response] of [
     [200, Response.json({ status: 'approved' })],
-    [201, Response.json({ ...receipt, interactionId: '999999999999999999' })],
+    [
+      201,
+      Response.json(
+        { ...receipt, interactionId: '999999999999999999' },
+        { status: 201 },
+      ),
+    ],
     [
       200,
       new Response('{', {
@@ -179,7 +185,7 @@ test('malformed, mismatched and unreadable successful receipts cannot confirm su
       1,
       'a successful HTTP response with no durable receipt is not replayed',
     );
-    assert.ok(status === 200 || status === 201);
+    assert.equal(response.status, status);
   }
   let calls = 0;
   const secondInvalid = new HttpBotApi(origin, token, async () => {
