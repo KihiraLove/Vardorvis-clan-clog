@@ -163,6 +163,38 @@ export function reviewRoutes(
       );
     },
   );
+  // Note-only writes have a distinct contract: they do not require a
+  // resolved canonical item and cannot change an approved collection credit.
+  app.patch<{
+    Params: { id: string };
+    Body: { expectedVersion: number; note: string };
+  }>(
+    '/api/v1/admin/submissions/:id/note',
+    {
+      onRequest: guard(true),
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['expectedVersion', 'note'],
+          properties: {
+            expectedVersion: version,
+            note: { type: 'string', maxLength: 1000 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const actor = await authorize(req, true);
+      return store.mutate(
+        req.params.id,
+        req.body.expectedVersion,
+        { note: req.body.note },
+        actor.id,
+        actor.displayName,
+      );
+    },
+  );
   for (const action of ['approve', 'reject', 'revoke'] as const) {
     app.post<{
       Params: { id: string };
