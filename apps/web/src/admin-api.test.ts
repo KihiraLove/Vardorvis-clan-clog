@@ -476,3 +476,38 @@ test('manual PNG uploads use multipart with CSRF and a stable retry key', async 
   );
   assert.equal(result.screenshotPath, path);
 });
+
+test('note-only PATCH has its own versioned CSRF contract and validates the saved note receipt', async () => {
+  const f = await adminFixtures();
+  const original = f.detail.submission;
+  let attempts = 0;
+  const client = new LiveAdminClient(async (url, options) => {
+    attempts++;
+    assert.equal(
+      url, '/api/v1/admin/submissions/' + encodeURIComponent(original.id) + '/note',
+    );
+    assert.equal(options?.method, 'PATCH');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'], 'csrf',
+    );
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      expectedVersion: original.version,
+      note: '  A saved note  ',
+    });
+    return Response.json({
+      ...original,
+      version: attempts === 1 ? original.version + 1 : original.version,
+      reviewNote: attempts === 1 ? 'A saved note' : 'different',
+    });
+  });
+  const result = await client.saveReviewNote(
+    original.id, original.version, '  A saved note  ', 'csrf', signal(),
+  );
+  assert.equal(result.reviewNote, 'A saved note');
+  await assert.rejects(
+    client.saveReviewNote(
+      original.id, original.version, '  A saved note  ', 'csrf', signal(),
+    ),
+    /Unexpected review note receipt/u,
+  );
+});
