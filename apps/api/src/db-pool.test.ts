@@ -13,10 +13,7 @@ test('idle pool errors are consumed, categorized and never disclose the driver e
   );
   assert.equal(pool.emit('error', unsafe), true);
   assert.deepEqual(categories, ['connection-lost']);
-  assert.equal(
-    JSON.stringify(categories).includes('private-password'),
-    false,
-  );
+  assert.equal(JSON.stringify(categories).includes('private-password'), false);
   assert.equal(JSON.stringify(categories).includes('secret'), false);
   await pool.end();
 });
