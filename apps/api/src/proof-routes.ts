@@ -103,13 +103,8 @@ export function proofRoutes(
     return authorize(request, write);
   };
   // If commit acknowledgement was lost, retain the file unless absence is confirmed.
-  const discardUnreferenced = async (image: IconRecord) => {
-    try {
-      if (!(await store.image(image.id))) await storage.remove(image.id);
-    } catch {
-      /* A later maintenance pass can remove unreferenced files. */
-    }
-  };
+  // Never unlink a saved file based on an uncertain database receipt.
+  // Offline, reference-checked maintenance reclaims orphaned uploads.
   app.get<{ Params: { id: string } }>(
     '/api/v1/admin/submission-images/:id.png',
     {
@@ -187,10 +182,10 @@ export function proofRoutes(
             key,
             suppliedClanKey(req.headers),
           );
-          if (result.imageId !== image.id) await discardUnreferenced(image);
+          // A replay may leave an orphan; maintenance will check it later.
           return reply.code(201).send(result.receipt);
         } catch (error) {
-          await discardUnreferenced(image);
+          // Commit outcome may be uncertain: preserve the file for maintenance.
           throw error;
         }
       },
@@ -218,10 +213,10 @@ export function proofRoutes(
               image,
             );
             if (result.screenshotPath !== screenshotPath(image.id))
-              await discardUnreferenced(image);
+              // Commit outcome may be uncertain: preserve the file for maintenance.
             return reply.code(201).send(result);
           } catch (error) {
-            await discardUnreferenced(image);
+            // Commit outcome may be uncertain: preserve the file for maintenance.
             throw error;
           }
         },
