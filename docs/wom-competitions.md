@@ -1,8 +1,9 @@
 # Wise Old Man competition imports
 
 Import a `https://wiseoldman.net/competitions/<id>` link from **Scheduling** or
-**XP imports**. Staff must choose **SKILL** or **ACTIVITY**; WOM does not provide
-this application flag. Each WOM ID has one persisted identity, and its kind and
+**XP imports**. The server derives **SKILL** or **ACTIVITY** from canonical WOM
+metric metadata and returns the detected kind in the preview. Both forms need
+only the competition link; neither has a kind selector. Each WOM ID has one persisted identity, and its kind and
 supported metric scope cannot be changed by importing a duplicate. A mismatched
 kind or changed scope requires staff reconciliation instead of silently changing
 the ledger. Both roles can import ACTIVITY competitions and prepare SKILL
@@ -13,9 +14,15 @@ returns all participants in the details response. Its bulk metrics override
 provides individual skill deltas for overall competitions. The supported integer
 boss/activity metrics follow the
 [official metric definitions](https://docs.wiseoldman.net/api/global-type-definitions).
-Computed EHP/EHB and mixed or weighted activity scopes are unsupported. SKILL
-supports any nonempty subset of the supported skills; overall expands to all
-skills, without adding the aggregate/weighted total again.
+Computed EHP/EHB, unknown metrics, mixed skill/activity or aggregate-overlap
+scopes, multiple activities and weighted activity scopes are explicitly rejected.
+SKILL supports any nonempty subset of the 24 skills in
+[the shared domain registry](../packages/domain/src/skills.ts); `overall` and
+`total` expand to all skills. Classification precedes result validation, so a
+missing result never changes a SKILL event into ACTIVITY. Finished skill imports
+fetch one complete per-skill batch, preserving exact integer contributions
+without adding the aggregate/weighted total again. The registry supplies display
+order, names and icon filenames to API/web, including `runecrafting` → `runecraft.png`.
 
 ## Lifecycle and schedules
 
@@ -24,7 +31,7 @@ running from its start until its end, and finished at or after its end.
 
 | Source state | Persisted import                                       | Opening schedule                  |
 | ------------ | ------------------------------------------------------ | --------------------------------- |
-| Future       | Link, title, explicit kind, metrics and original dates | Source start to source end        |
+| Future       | Link, title, detected kind, metrics and original dates | Source start to source end        |
 | Running      | The same minimal metadata                              | Database apply time to source end |
 | Finished     | Metadata plus validated, filtered final results        | None created                      |
 
@@ -86,7 +93,10 @@ Distinct overlapping competitions still count their reported XP independently.
 ACTIVITY metadata only. `GET /api/v1/xp/tracker` retains its single repeatable-read
 snapshot, revision and ETag, adding a Total `podium` and an event `podium`.
 
-`POST /api/v1/admin/competitions/preview` takes `{competitionUrl,kind,pageIds?}`.
+`POST /api/v1/admin/competitions/preview` takes `{competitionUrl,pageIds?}`.
+An optional legacy `kind` is checked against WOM metadata and a mismatch is
+rejected; it never authorizes XP writes. Finished SKILL previews and applies
+require an administrator even if the caller supplies `kind: "ACTIVITY"`.
 It returns a ten-minute actor-bound token, XP and schedule revisions, original
 dates, lifecycle, proposed/selected pages, effective start, exact action and
 filtered finished results when applicable.
@@ -98,8 +108,8 @@ and CSRF token. Apply checks the current role, clock, preview expiry and both
 revisions. Receipt retries survive expiry/restarts; changing a request under the
 same key returns 409. Every import is audited, including unchanged imports.
 
-The established legacy XP routes remain administrator-only, require an explicit
-`kind: "SKILL"` preview field, accept finished results only and write the same
+The established legacy XP routes remain administrator-only, accept an optional
+checked `kind: "SKILL"` preview hint, accept finished results only and write the same
 registry identity. The shared form uses the new routes. Schedule enforcement
 and audit lock ordering are unchanged: scheduling settings precede XP state,
 competition identity and page locks. Results, metadata, schedules, revisions,

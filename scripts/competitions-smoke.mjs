@@ -60,7 +60,6 @@ try {
   const importFixture = async (id, kind, start, end) => {
     const snapshot = await fetchCompetition(
       'https://wiseoldman.net/competitions/' + id,
-      kind,
       now,
       async () =>
         Response.json(

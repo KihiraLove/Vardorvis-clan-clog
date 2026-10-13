@@ -1,31 +1,6 @@
 /** XP aggregates and private preview data have no Discord-auth or browser dependencies. */
-export const skillIds = [
-  'attack',
-  'hitpoints',
-  'mining',
-  'strength',
-  'agility',
-  'smithing',
-  'defence',
-  'herblore',
-  'fishing',
-  'ranged',
-  'thieving',
-  'cooking',
-  'prayer',
-  'crafting',
-  'firemaking',
-  'magic',
-  'fletching',
-  'woodcutting',
-  'runecrafting',
-  'slayer',
-  'farming',
-  'construction',
-  'hunter',
-  'sailing',
-] as const;
-export type Skill = (typeof skillIds)[number];
+import { skillIds, type Skill } from '@clog/domain';
+export { skillIds, type Skill } from '@clog/domain';
 export type Gains = Partial<Record<Skill, string>>;
 export interface XpParticipant {
   playerId: number;

@@ -196,31 +196,7 @@ Use integer decimal strings for XP totals/contributions in the public/admin JSON
 The XP frontend in #28 consumes the following proposed shapes; the backend in #27/#4 must still implement them. [xp-model.ts](../apps/web/src/xp-model.ts) defines the decoded view types and [xp-api.ts](../apps/web/src/xp-api.ts) implements the transport validation.
 
 ```ts
-type SkillId =
-  | 'attack'
-  | 'hitpoints'
-  | 'mining'
-  | 'strength'
-  | 'agility'
-  | 'smithing'
-  | 'defence'
-  | 'herblore'
-  | 'fishing'
-  | 'ranged'
-  | 'thieving'
-  | 'cooking'
-  | 'prayer'
-  | 'crafting'
-  | 'firemaking'
-  | 'magic'
-  | 'fletching'
-  | 'woodcutting'
-  | 'runecrafting'
-  | 'slayer'
-  | 'farming'
-  | 'construction'
-  | 'hunter'
-  | 'sailing';
+import type { Skill as SkillId } from '@clog/domain'; // shared 24-skill registry
 type Xp = string; // unsigned canonical decimal integer, at most 100 digits
 type Revision = string; // nonempty opaque global XP projection revision
 interface Competition {

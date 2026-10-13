@@ -76,8 +76,8 @@ test(
       xp,
       auth,
       logger: false,
-      fetchCompetition: (url, kind, at) =>
-        fetchCompetition(url, kind, at, async () => Response.json(fakeSource)),
+      fetchCompetition: (url, at) =>
+        fetchCompetition(url, at, async () => Response.json(fakeSource)),
     });
     const snapshot = async (
       id: number,
@@ -88,7 +88,6 @@ test(
     ) =>
       fetchCompetition(
         'https://wiseoldman.net/competitions/' + id,
-        kind,
         now,
         async () =>
           Response.json(
@@ -317,7 +316,6 @@ test(
       );
       const mismatchedSkill = await fetchCompetition(
         'https://wiseoldman.net/competitions/102',
-        'SKILL',
         now,
         async () =>
           Response.json(source(102, 'mining', now - 2 * day, now - day)),
@@ -496,7 +494,6 @@ test(
         url = '/api/v1/admin/competitions/preview',
         payload = {
           competitionUrl: 'https://wiseoldman.net/competitions/500',
-          kind: 'ACTIVITY',
         };
       assert.equal(
         (await app.inject({ method: 'POST', url, payload })).statusCode,
@@ -519,7 +516,7 @@ test(
             method: 'POST',
             url,
             headers: moderator,
-            payload: { competitionUrl: payload.competitionUrl },
+            payload: { ...payload, kind: 'INVALID' },
           })
         ).statusCode,
         400,
@@ -529,6 +526,35 @@ test(
           .statusCode,
         200,
       );
+      const detectedActivity = await app.inject({
+        method: 'POST',
+        url,
+        headers: moderator,
+        payload,
+      });
+      assert.equal(detectedActivity.json().competition.kind, 'ACTIVITY');
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: owner,
+            payload: { ...payload, kind: 'SKILL' },
+          })
+        ).statusCode,
+        422,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: moderator,
+            payload: { ...payload, kind: 'ACTIVITY' },
+          })
+        ).statusCode,
+        200,
+      );
       fakeSource = source(500, 'attack', now - 2 * day, now - day);
       assert.equal(
         (
@@ -536,7 +562,7 @@ test(
             method: 'POST',
             url,
             headers: moderator,
-            payload: { ...payload, kind: 'SKILL' },
+            payload,
           })
         ).statusCode,
         403,
@@ -547,11 +573,51 @@ test(
             method: 'POST',
             url,
             headers: owner,
-            payload: { ...payload, kind: 'SKILL' },
+            payload,
           })
         ).statusCode,
         200,
       );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: moderator,
+            payload: { ...payload, kind: 'ACTIVITY' },
+          })
+        ).statusCode,
+        403,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: owner,
+            payload: { ...payload, kind: 'ACTIVITY' },
+          })
+        ).statusCode,
+        422,
+      );
+      const detectedSkill = await app.inject({
+        method: 'POST',
+        url,
+        headers: owner,
+        payload: { ...payload, kind: 'SKILL' },
+      });
+      assert.equal(detectedSkill.statusCode, 200, detectedSkill.body);
+      assert.equal(detectedSkill.json().competition.kind, 'SKILL');
+      fakeSource = source(501, 'attack', now + day, now + 2 * day);
+      const futureSkill = await app.inject({
+        method: 'POST',
+        url,
+        headers: moderator,
+        payload: { competitionUrl: 'https://wiseoldman.net/competitions/501' },
+      });
+      assert.equal(futureSkill.statusCode, 200, futureSkill.body);
+      assert.equal(futureSkill.json().competition.kind, 'SKILL');
+      assert.equal(futureSkill.json().participants.length, 0);
       assert.equal(
         (
           await app.inject({

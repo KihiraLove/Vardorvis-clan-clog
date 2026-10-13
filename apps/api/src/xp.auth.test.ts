@@ -204,6 +204,23 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     assert.equal(p.statusCode, 200);
     assert.equal(previewed, 1);
     assert.equal(fetched, 1);
+    assert.equal(
+      (
+        await preview(headers, {
+          competitionUrl: 'https://wiseoldman.net/competitions/9001',
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal(
+      (
+        await preview(headers, {
+          competitionUrl: 'https://wiseoldman.net/competitions/9001',
+          kind: 'ACTIVITY',
+        })
+      ).statusCode,
+      400,
+    );
     const apply = await app.inject({
       url: '/api/v1/admin/xp/imports',
       method: 'POST',

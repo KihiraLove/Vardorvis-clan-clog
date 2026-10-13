@@ -1,5 +1,6 @@
 /** Fetch only the fixed official WOM API and reject incomplete, unsafe source rows. */
 import { createHash } from 'node:crypto';
+import { competitionScope } from '@clog/domain';
 import { ApiError } from './types.js';
 import {
   skillIds,
@@ -68,16 +69,16 @@ function metricNames(value: unknown): string[] {
   return names as string[];
 }
 export function strictScope(names: string[]): Skill[] {
-  if (names.length === 1 && skillIds.some((s) => s === names[0]))
-    return [names[0] as Skill];
-  if (names.length === 1 && ['overall', 'total'].includes(names[0]!))
-    return [...skillIds];
-  if (
-    names.length > 0 &&
-    names.every((name) => skillIds.includes(name as Skill))
-  )
-    return skillIds.filter((skill) => names.includes(skill));
-  throw new ApiError(422, 'SKILL competitions must track supported XP skills.');
+  try {
+    const scope = competitionScope(names);
+    if (scope.kind === 'SKILL') return scope.skills;
+  } catch (error) {
+    throw new ApiError(422, (error as Error).message);
+  }
+  throw new ApiError(
+    422,
+    'SKILL competitions must track supported XP skills; computed metrics are unsupported.',
+  );
 }
 function metadata(source: unknown, requestedId: number) {
   if (

@@ -1,5 +1,6 @@
 /** Pure collection-log rules shared by the browser and future service handlers. */
 export * from './competitions.js';
+export * from './skills.js';
 export interface CatalogItem {
   id: number;
   name: string;

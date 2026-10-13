@@ -1,31 +1,7 @@
 /** XP wire types, exact arithmetic and parsers; also supplies shared private-response guards. */
-export const skills = [
-  ['attack', 'Attack'],
-  ['hitpoints', 'Hitpoints'],
-  ['mining', 'Mining'],
-  ['strength', 'Strength'],
-  ['agility', 'Agility'],
-  ['smithing', 'Smithing'],
-  ['defence', 'Defence'],
-  ['herblore', 'Herblore'],
-  ['fishing', 'Fishing'],
-  ['ranged', 'Ranged'],
-  ['thieving', 'Thieving'],
-  ['cooking', 'Cooking'],
-  ['prayer', 'Prayer'],
-  ['crafting', 'Crafting'],
-  ['firemaking', 'Firemaking'],
-  ['magic', 'Magic'],
-  ['fletching', 'Fletching'],
-  ['woodcutting', 'Woodcutting'],
-  ['runecrafting', 'Runecraft'],
-  ['slayer', 'Slayer'],
-  ['farming', 'Farming'],
-  ['construction', 'Construction'],
-  ['hunter', 'Hunter'],
-  ['sailing', 'Sailing'],
-] as const;
-export type SkillId = (typeof skills)[number][0];
+import { skills, isSkill, type Skill } from '@clog/domain';
+export { skills, skillName, skillIcon } from '@clog/domain';
+export type SkillId = Skill;
 // Decimal strings survive JSON without Number rounding; null means unavailable, not zero.
 export type Xp = string;
 export type Gains = Partial<Record<SkillId, Xp | null>>;
@@ -136,10 +112,6 @@ export interface XpClient {
   ): Promise<ApplyResult>;
   history(signal: AbortSignal): Promise<ImportEntry[]>;
 }
-export const skillName = (id: SkillId) =>
-  skills.find(([key]) => key === id)![1];
-export const skillIcon = (id: SkillId) =>
-  '/skills/' + (id === 'runecrafting' ? 'runecraft' : id) + '.png';
 export const zeroTotals = () =>
   Object.fromEntries(skills.map(([id]) => [id, '0'])) as Record<SkillId, Xp>;
 export const exactXp = (xp: Xp) =>
@@ -228,8 +200,7 @@ export function timestamp(value: unknown): string {
   return result;
 }
 export function skill(value: unknown): SkillId {
-  if (!skills.some(([id]) => id === value))
-    throw new Error('Unknown XP skill.');
+  if (!isSkill(value)) throw new Error('Unknown XP skill.');
   return value as SkillId;
 }
 export function unique(values: readonly unknown[]): void {

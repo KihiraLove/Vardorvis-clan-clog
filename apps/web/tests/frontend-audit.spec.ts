@@ -552,7 +552,7 @@ for (const status of [401, 403]) {
     await page
       .getByLabel('Wise Old Man competition link')
       .fill('https://wiseoldman.net/competitions/42');
-    await page.getByLabel('Competition kind').selectOption('SKILL');
+
     await page.getByRole('button', { name: 'Preview competition' }).click();
     if (status === 401) {
       await expect(

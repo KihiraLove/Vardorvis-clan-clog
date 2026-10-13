@@ -22,7 +22,9 @@ Only administrators import finished XP results. Legacy
 `/api/v1/admin/xp/imports/preview` and `/api/v1/admin/xp/imports` remain available
 for finished SKILL imports, with the existing session, Origin, CSRF, optimistic
 revision, correction acknowledgement and UUID request-key contracts. Legacy
-preview payloads must include `kind: "SKILL"`. Private history is available at
+preview payloads need only `competitionUrl`; an optional `kind: "SKILL"` hint
+remains compatible with older clients, while WOM scope validation and the
+administrator boundary stay authoritative. Private history is available at
 `GET /api/v1/admin/xp/imports`.
 
 Migration 014 backfills all existing XP identities as SKILL and preserves the

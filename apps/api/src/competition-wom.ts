@@ -1,12 +1,7 @@
 import { createHash } from 'node:crypto';
-import { competitionLifecycle, type CompetitionKind } from '@clog/domain';
+import { competitionLifecycle, competitionScope } from '@clog/domain';
 import { ApiError } from './types.js';
-import {
-  getWom,
-  parseCompetitionUrl,
-  parseWomSnapshot,
-  strictScope,
-} from './wom.js';
+import { getWom, parseCompetitionUrl, parseWomSnapshot } from './wom.js';
 import type { CompetitionSnapshot } from './competition-types.js';
 
 // Official integer boss/activity metrics. Computed EHP/EHB and weighted mixed scopes are excluded.
@@ -104,7 +99,6 @@ export const competitionHash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export async function fetchCompetition(
   input: string,
-  kind: CompetitionKind,
   now: number,
   request: typeof fetch = fetch,
 ): Promise<CompetitionSnapshot> {
@@ -129,14 +123,35 @@ export async function fetchCompetition(
   );
   if (metrics.some((m) => !m) || new Set(metrics).size !== metrics.length)
     throw new ApiError(422, 'Invalid WOM metric scope.');
-  const skills = kind === 'SKILL' ? strictScope(metrics) : [];
+  let scope: ReturnType<typeof competitionScope>;
+  try {
+    scope = competitionScope(metrics);
+  } catch (error) {
+    throw new ApiError(422, (error as Error).message);
+  }
+  const { kind, skills } = scope;
   if (
     kind === 'ACTIVITY' &&
     (metrics.length !== 1 || !activityMetrics.has(metrics[0]!))
   )
     throw new ApiError(
       422,
-      'ACTIVITY competitions must track one supported boss or activity metric.',
+      'Unsupported WOM activity scope. Computed metrics and unknown boss/activity metrics cannot be imported.',
+    );
+  if (
+    source.metrics.some(
+      (m: unknown) =>
+        obj(m) &&
+        m.weight !== undefined &&
+        (typeof m.weight !== 'number' ||
+          !Number.isFinite(m.weight) ||
+          m.weight <= 0 ||
+          (kind === 'ACTIVITY' && m.weight !== 1)),
+    )
+  )
+    throw new ApiError(
+      422,
+      'Unsupported WOM metric weights. Activity results require an unweighted integer metric.',
     );
   const competition = {
     id,

@@ -1,5 +1,6 @@
 import {
   competitionLifecycle,
+  competitionScope,
   type CompetitionKind,
   type CompetitionLifecycle,
   type WomCompetition,
@@ -44,7 +45,6 @@ export interface CompetitionClient {
   ): Promise<{ serverNow: string; competitions: WomCompetition[] }>;
   preview(
     url: string,
-    kind: CompetitionKind,
     csrf: string,
     signal: AbortSignal,
     pageIds?: string[],
@@ -69,6 +69,8 @@ export function parseWomCompetition(value: unknown): WomCompetition {
   if (Date.parse(endsAt) <= Date.parse(startsAt) || !metrics.length)
     throw new Error('Invalid competition period or metrics.');
   unique(metrics);
+  if (competitionScope(metrics).kind !== c.kind)
+    throw new Error('Competition kind does not match its WOM metric scope.');
   return {
     id,
     kind: c.kind as CompetitionKind,
@@ -80,11 +82,10 @@ export function parseWomCompetition(value: unknown): WomCompetition {
   };
 }
 export class CompetitionRequestError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
+  readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
 export class LiveCompetitionClient implements CompetitionClient {
@@ -133,7 +134,6 @@ export class LiveCompetitionClient implements CompetitionClient {
   }
   async preview(
     url: string,
-    kind: CompetitionKind,
     csrf: string,
     signal: AbortSignal,
     pageIds?: string[],
@@ -144,11 +144,15 @@ export class LiveCompetitionClient implements CompetitionClient {
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
         body: JSON.stringify({
           competitionUrl: competitionUrl(url).url,
-          kind,
           ...(pageIds ? { pageIds } : {}),
         }),
       }),
     );
+    const competition = parseWomCompetition(p.competition);
+    if (competition.id !== competitionUrl(url).id)
+      throw new Error(
+        'Competition preview identity does not match the requested WOM link.',
+      );
     if (
       !['future', 'running', 'finished'].includes(String(p.lifecycle)) ||
       ![
@@ -180,7 +184,7 @@ export class LiveCompetitionClient implements CompetitionClient {
       expectedRevision: text(p.expectedRevision),
       scheduleRevision: text(p.scheduleRevision),
       expiresAt: timestamp(p.expiresAt),
-      competition: parseWomCompetition(p.competition),
+      competition,
       lifecycle: p.lifecycle as CompetitionLifecycle,
       action: p.action as CompetitionImportPreview['action'],
       scheduleStartsAt:
@@ -225,10 +229,12 @@ export class LiveCompetitionClient implements CompetitionClient {
 }
 /** Controlled preview fixtures mirror the live lifecycle and never fetch WOM. */
 export class PreviewCompetitionClient implements CompetitionClient {
-  constructor(
-    private readonly scheduleClient?: AdminClient,
-    private readonly xpClient?: XpClient,
-  ) {}
+  private readonly scheduleClient: AdminClient | undefined;
+  private readonly xpClient: XpClient | undefined;
+  constructor(scheduleClient?: AdminClient, xpClient?: XpClient) {
+    this.scheduleClient = scheduleClient;
+    this.xpClient = xpClient;
+  }
   private readonly fixtureNow = Date.now();
   private stored = new Map<number, WomCompetition>();
   private schedules = new Map<number, string>();
@@ -273,7 +279,6 @@ export class PreviewCompetitionClient implements CompetitionClient {
   }
   async preview(
     url: string,
-    kind: CompetitionKind,
     csrf: string,
     signal: AbortSignal,
     pageIds?: string[],
@@ -283,6 +288,12 @@ export class PreviewCompetitionClient implements CompetitionClient {
       now = this.fixtureNow,
       day = 86400000,
       stage = id % 3;
+    // Stable fixture metadata determines kind, just as WOM metadata does live.
+    const fixtureMetrics =
+      id >= 1000 && id < 2000
+        ? [id === 1002 ? 'overall' : 'attack']
+        : ['vardorvis'];
+    const { kind, skills: fixtureSkills } = competitionScope(fixtureMetrics);
     const prior = this.stored.get(id);
     if (prior && prior.kind !== kind)
       throw new Error('This competition already has a different kind.');
@@ -306,13 +317,25 @@ export class PreviewCompetitionClient implements CompetitionClient {
           ? 'Sample skill competition'
           : 'Sample boss competition'),
       sourceUrl: competitionUrl(url).url,
-      metrics: xpPreview?.competition.skills ?? [
-        kind === 'SKILL' ? 'attack' : 'vardorvis',
-      ],
+      metrics: xpPreview?.competition.skills ?? fixtureMetrics,
       startsAt,
       endsAt,
     };
     const lifecycle = competitionLifecycle(competition, Date.now());
+    if (this.scheduleClient) {
+      const session = await this.scheduleClient.session(signal);
+      if (!session)
+        throw new CompetitionRequestError(401, 'Sign in to continue.');
+      if (
+        session.role !== 'admin' &&
+        kind === 'SKILL' &&
+        lifecycle === 'finished'
+      )
+        throw new CompetitionRequestError(
+          403,
+          'Only the administrator can import XP results.',
+        );
+    }
     const catalog = this.scheduleClient
       ? await this.scheduleClient.catalog(signal)
       : undefined;
@@ -373,14 +396,12 @@ export class PreviewCompetitionClient implements CompetitionClient {
       changes:
         xpPreview?.changes ??
         (kind === 'SKILL' && lifecycle === 'finished'
-          ? [
-              {
-                skill: 'attack',
-                before: '0',
-                after: '12345678',
-                change: '12345678',
-              },
-            ]
+          ? fixtureSkills.map((skill) => ({
+              skill,
+              before: '0',
+              after: skill === 'attack' ? '12345678' : '0',
+              change: skill === 'attack' ? '12345678' : '0',
+            }))
           : []),
       warnings: [
         'Preview mode only. No server data is changed.',

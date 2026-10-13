@@ -216,10 +216,11 @@ test('direct admin imports require access, review corrections and send CSRF plus
   await page
     .getByLabel('Wise Old Man competition link')
     .fill('https://wiseoldman.net/competitions/1001');
-  await page.getByLabel('Competition kind').selectOption('SKILL');
+  await expect(page.getByLabel('Competition kind')).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Preview competition', exact: true })
     .click();
+  await expect(page.getByText(/Detected kind: SKILL/)).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Apply import' }),
   ).toBeDisabled();

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { classifyAccessFailure } from './admin-session.ts';
-import type { CompetitionKind } from '@clog/domain';
 import {
   CompetitionRequestError,
   type CompetitionClient,
@@ -19,8 +18,7 @@ export function CompetitionImport({
   onApplied: () => void;
   onAccessLost: () => void;
 }) {
-  const [url, setUrl] = useState(''),
-    [kind, setKind] = useState<CompetitionKind | ''>('');
+  const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<CompetitionImportPreview>(),
     [pages, setPages] = useState<string[]>();
   const [busy, setBusy] = useState(false),
@@ -44,7 +42,7 @@ export function CompetitionImport({
     JSON.stringify(pages?.slice().sort()) !==
       JSON.stringify(preview.pageIds.slice().sort());
   const execute = async (apply: boolean) => {
-    if (!kind || busy) return;
+    if (busy) return;
     const controller = new AbortController();
     operation.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15000);
@@ -72,7 +70,6 @@ export function CompetitionImport({
       } else {
         const p = await client.preview(
           url,
-          kind,
           session.csrfToken,
           controller.signal,
           pages,
@@ -123,9 +120,9 @@ export function CompetitionImport({
     <section className="competition-import">
       <h3>Import competition</h3>
       <p>
-        Choose SKILL for XP or ACTIVITY for boss/activity results. Future and
-        running imports save metadata and an opening window; finished imports
-        save final results.
+        WOM metrics determine whether this is a SKILL or ACTIVITY competition.
+        Future and running imports save metadata and an opening window; finished
+        imports save final results.
       </p>
       {session.role === 'moderator' && (
         <p>
@@ -154,23 +151,7 @@ export function CompetitionImport({
               }}
             />
           </label>
-          <label>
-            Competition kind
-            <select
-              required
-              value={kind}
-              onChange={(e) => {
-                setKind(e.target.value as CompetitionKind);
-                setPreview(undefined);
-                setPages(undefined);
-              }}
-            >
-              <option value="">Choose SKILL or ACTIVITY</option>
-              <option value="SKILL">SKILL — XP</option>
-              <option value="ACTIVITY">ACTIVITY — boss/activity</option>
-            </select>
-          </label>
-          <button className="site-button" disabled={!kind || !url}>
+          <button className="site-button" disabled={!url}>
             {busy ? 'Please wait…' : 'Preview competition'}
           </button>
         </fieldset>
@@ -181,7 +162,7 @@ export function CompetitionImport({
         <div className="xp-import-preview">
           <h4>{preview.competition.title}</h4>
           <p>
-            {preview.competition.kind} · {preview.lifecycle} ·{' '}
+            Detected kind: {preview.competition.kind} · {preview.lifecycle} ·{' '}
             {preview.competition.metrics.join(', ')}
           </p>
           <a

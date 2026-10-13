@@ -5,6 +5,34 @@ const podium = [
   { playerId: 2, displayName: 'Silver Player', gained: '9007199254740993' },
   { playerId: 3, displayName: 'Bronze Player', gained: '100' },
 ];
+for (const path of ['/admin/xp', '/admin/schedules']) {
+  test(`both import screens detect fixture kind without a selector: ${path}`, async ({
+    page,
+  }) => {
+    await page.goto(path + '?preview=1');
+    const link = page.getByLabel('Wise Old Man competition link');
+    await expect(link).toBeVisible();
+    await expect(page.getByLabel('Competition kind')).toHaveCount(0);
+    for (const [id, kind] of [
+      [1001, 'SKILL'],
+      [3002, 'ACTIVITY'],
+      [1002, 'SKILL'],
+    ] as const) {
+      await link.fill('https://wiseoldman.net/competitions/' + id);
+      await expect(page.locator('.xp-import-preview')).toHaveCount(0);
+      await page
+        .getByRole('button', { name: 'Preview competition', exact: true })
+        .click();
+      await expect(
+        page.getByText('Detected kind: ' + kind, { exact: false }),
+      ).toBeVisible();
+      await expect(page.locator('.xp-import-preview a')).toHaveAttribute(
+        'href',
+        'https://wiseoldman.net/competitions/' + id,
+      );
+    }
+  });
+}
 test('activity list orders by source end, shows local start/end status colors and safe links, and advances at time boundaries', async ({
   page,
 }) => {
@@ -145,7 +173,7 @@ test('XP podium follows Total and selected SKILL events, preserves 2–1–3 geo
       .locator('li'),
   ).toHaveCount(1);
 });
-test('scheduling importer requires kind, lets staff correct pages with a fresh preview and preserves request identity on uncertain apply', async ({
+test('scheduling importer detects kind, lets staff correct pages with a fresh preview and preserves request identity on uncertain apply', async ({
   page,
 }) => {
   await page.route('**/api/v1/auth/session', (r) =>
@@ -180,7 +208,8 @@ test('scheduling importer requires kind, lets staff correct pages with a fresh p
   const bodies: unknown[] = [];
   await page.route('**/api/v1/admin/competitions/preview', (r) => {
     const b = r.request().postDataJSON();
-    expect(b.kind).toBe('ACTIVITY');
+    expect(b.kind).toBeUndefined();
+    expect(b.competitionUrl).toBe('https://wiseoldman.net/competitions/123');
     expect(r.request().headers()['x-csrf-token']).toBe('csrf');
     previews++;
     return r.fulfill({
@@ -227,14 +256,15 @@ test('scheduling importer requires kind, lets staff correct pages with a fresh p
     .fill('https://wiseoldman.net/competitions/123');
   await expect(
     page.getByRole('button', { name: 'Preview competition', exact: true }),
-  ).toBeDisabled();
-  await page.getByLabel('Competition kind').selectOption('ACTIVITY');
+  ).toBeEnabled();
+  await expect(page.getByLabel('Competition kind')).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Preview competition', exact: true })
     .click();
   await expect(
     page.getByText(/starting immediately when Apply commits/),
   ).toBeVisible();
+  await expect(page.getByText(/Detected kind: ACTIVITY/)).toBeVisible();
   await expect(
     page.locator('.xp-import-preview small').filter({ hasText: 'UTC' }).first(),
   ).toBeVisible();

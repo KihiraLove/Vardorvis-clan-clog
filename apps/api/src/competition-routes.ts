@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { CompetitionKind } from '@clog/domain';
+import type { CompetitionPreviewInput } from '@clog/domain';
 import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
 import type { PgCompetitionStore } from './competition-store.js';
 import { fetchCompetition } from './competition-wom.js';
@@ -26,7 +26,7 @@ export function competitionRoutes(
     return available().activities();
   });
   app.post<{
-    Body: { competitionUrl: string; kind: CompetitionKind; pageIds?: string[] };
+    Body: CompetitionPreviewInput;
   }>(
     '/api/v1/admin/competitions/preview',
     {
@@ -37,7 +37,7 @@ export function competitionRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['competitionUrl', 'kind'],
+          required: ['competitionUrl'],
           properties: {
             competitionUrl: { type: 'string', minLength: 1, maxLength: 2048 },
             kind: { enum: ['SKILL', 'ACTIVITY'] },
@@ -56,7 +56,6 @@ export function competitionRoutes(
         service = available();
       const snapshot = await fetchSource(
         r.body.competitionUrl,
-        r.body.kind,
         await service.clock(),
       );
       if (
@@ -67,6 +66,16 @@ export function competitionRoutes(
         throw new ApiError(
           403,
           'Only the administrator can import XP results.',
+        );
+      if (
+        r.body.kind !== undefined &&
+        r.body.kind !== snapshot.competition.kind
+      )
+        throw new ApiError(
+          422,
+          'The legacy kind hint does not match WOM metadata. Detected kind: ' +
+            snapshot.competition.kind +
+            '.',
         );
       return service.preview(snapshot, actor.id, r.body.pageIds);
     },
