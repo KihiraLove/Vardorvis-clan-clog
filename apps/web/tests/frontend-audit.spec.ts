@@ -583,11 +583,11 @@ for (const hardcore of [false, true]) {
     const approve = editor.getByRole('button', { name: 'Approve submission' });
     const check = editor.getByLabel(/^I checked the linked proof/);
     await expect(approve).toBeDisabled();
-    await expect(editor.getByText('Select and save an active canonical item before approving.')).toBeVisible();
+    await expect(editor.getByText('Select and save an active canonical item before approving.').first()).toBeVisible();
     await expect(check).toBeDisabled();
     await editor.locator('#canonical-item').selectOption(String((await adminFixtures()).detail.submission.itemId));
     await expect(approve).toBeDisabled();
-    await expect(editor.getByText('Save or discard claim corrections before deciding.')).toBeVisible();
+    await expect(editor.getByText('Save or discard claim corrections before deciding.').first()).toBeVisible();
     await editor.getByRole('button', { name: 'Save corrections' }).click();
     await expect.poll(() => state.claimWrites).toBe(1);
     await expect(check).toBeEnabled();
@@ -615,7 +615,7 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
   state.detail.submission.proofUrl = 'https://example.com/not-valid';
   const editor = await openReview(page);
   await expect(editor.getByRole('button', { name: 'Approve submission' })).toBeDisabled();
-  await expect(editor.getByText('A valid proof link or saved screenshot is required for approval.')).toBeVisible();
+  await expect(editor.getByText('A valid proof link or saved screenshot is required for approval.').first()).toBeVisible();
   await expect(editor.getByLabel(/^I checked the linked proof/)).toBeDisabled();
   const reject = editor.getByRole('button', { name: 'Reject submission' });
   await expect(reject).toBeDisabled();
@@ -628,8 +628,9 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
 
 test('audit: approved credit requires an audit reason for claim corrections or revocation', async ({ page }) => {
   const state = await liveAdmin(page);
-  state.detail.submission.status = 'approved';
   await page.goto('/admin');
+  await expect(page.getByRole('button', { name: /^Review .+ ·/ })).toBeEnabled();
+  state.detail.submission.status = 'approved';
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
   await page.getByRole('button', { name: /^Review .+ ·/ }).click();
   const editor = page.locator('.submission-editor');
