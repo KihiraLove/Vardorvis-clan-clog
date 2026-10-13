@@ -34,6 +34,13 @@ Hardcore appearance uses `GET /api/v1/branding/hardcore`,
 `GET /api/v1/admin/branding/hardcore` and
 `PUT` / `DELETE /api/v1/admin/branding/hardcore/logo` with the same contracts.
 The two modes have independent revisions, logos, favicons and audit histories.
+The bundled Nginx proxy permits up to 11 MiB of multipart body on exactly
+these two logo upload routes, leaving room for the documented 10 MiB file.
+Other API routes retain their normal 3 MiB proxy limit. Fastify separately
+rejects logo files larger than 10 MiB, and continues to enforce staff auth,
+CSRF, image decoding, dimensions and frame limits. A disposable Compose CI
+check uploads real images larger than 4 MiB through Nginx to **both** routes,
+then exercises oversize, malformed, and unauthorized requests.
 Hardcore logo controls remain available while its public release flag is off.
 The public website switches both logo and icon with its selected world mode.
 
