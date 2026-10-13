@@ -7,6 +7,7 @@ export interface ReviewRequirements {
   claimDirty: boolean;
   noteDirty: boolean;
   activeItem: boolean;
+  draftItemActive: boolean;
   validProof: boolean;
   acknowledged: boolean;
   reasonProvided: boolean;
@@ -34,7 +35,7 @@ export function reviewBlockers(x: ReviewRequirements): Record<ReviewActionHint, 
   const write = common ?? (!editable ? 'Only pending or approved claims can be edited.' : null);
   const claim = write
     ?? (!x.claimDirty ? 'No claim corrections to save.' : null)
-    ?? (!x.activeItem ? 'Select an active canonical item before saving corrections.' : null)
+    ?? (!x.draftItemActive ? 'Select an active canonical item before saving corrections.' : null)
     ?? (x.status === 'approved' && !x.reasonProvided
       ? 'Enter an audit reason before changing an approved credit.' : null);
   const note = write ?? (!x.noteDirty ? 'No review note changes to save.' : null);
