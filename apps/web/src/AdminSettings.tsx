@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ClanLogoSettings } from './ClanLogoSettings.tsx';
 import type { Branding } from './branding.ts';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import type { SiteSettings } from './site-settings.ts';
@@ -51,8 +52,7 @@ export function AdminSettings({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         ) {
           onAccessLost();
           return;
