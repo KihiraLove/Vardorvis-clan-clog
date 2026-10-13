@@ -42,6 +42,8 @@ export interface Submission {
   previewScreenshot?: string;
   hardcore: boolean;
   status: SubmissionStatus;
+  reviewNote: string;
+  reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
   itemId: number;
@@ -275,6 +277,13 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
   ): Promise<Submission>;
+  saveReviewNote(
+    id: string,
+    version: number,
+    note: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<Submission>;
   decide(
     id: string,
     version: number,
@@ -351,6 +360,13 @@ export function parseSubmission(value: unknown): Submission {
       : { screenshotPath: parseScreenshotPath(row.screenshotPath) }),
     hardcore: row.hardcore,
     status: choice(row.status, ['pending', 'approved', 'rejected', 'revoked']),
+    // Empty defaults keep existing review fixtures and older snapshots usable.
+    reviewNote:
+      row.reviewNote === undefined ? '' : String(row.reviewNote),
+    reviewReason:
+      row.reviewReason === undefined || row.reviewReason === null
+        ? null
+        : text(row.reviewReason),
   };
 }
 /** Verify status boundaries as well as row shape so a response cannot change queue meaning. */
