@@ -366,7 +366,9 @@ export function parseSubmission(value: unknown): Submission {
         ? ''
         : typeof row.reviewNote === 'string' && row.reviewNote.length <= 1000
           ? row.reviewNote
-          : (() => { throw new Error('Invalid saved review note.'); })(),
+          : (() => {
+              throw new Error('Invalid saved review note.');
+            })(),
     reviewReason:
       row.reviewReason === undefined || row.reviewReason === null
         ? null
