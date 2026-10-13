@@ -74,10 +74,7 @@ export function SubmissionEditor({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setReadError(
             'Could not load this submission and audit history. Reload before making a decision.',
