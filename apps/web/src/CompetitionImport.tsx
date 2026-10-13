@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { classifyAccessFailure } from './admin-session.ts';
 import type { CompetitionKind } from '@clog/domain';
 import {
   CompetitionRequestError,
@@ -11,10 +12,12 @@ export function CompetitionImport({
   client,
   session,
   onApplied,
+  onAccessLost,
 }: {
   client: CompetitionClient;
   session: AdminSession;
   onApplied: () => void;
+  onAccessLost: () => void;
 }) {
   const [url, setUrl] = useState(''),
     [kind, setKind] = useState<CompetitionKind | ''>('');
@@ -81,17 +84,35 @@ export function CompetitionImport({
         key.current = crypto.randomUUID();
       }
     } catch (e) {
-      if (!controller.signal.aborted)
-        setError(e instanceof Error ? e.message : 'Import failed.');
-      else
+      if (controller.signal.aborted) {
         setError(
           'Request timed out. Retry Apply to check the committed result safely.',
         );
+      } else {
+        const failure = classifyAccessFailure(e);
+        if (failure === 'expired') {
+          setPreview(undefined);
+          setPages(undefined);
+          onAccessLost();
+          return;
+        }
+        setError(
+          failure === 'denied'
+            ? 'Your account is not allowed to perform this competition import.'
+            : e instanceof CompetitionRequestError
+              ? e.message
+              : e instanceof Error
+                ? e.message
+                : 'Import failed.',
+        );
+      }
       if (
         e instanceof CompetitionRequestError &&
         [401, 403, 409].includes(e.status)
-      )
+      ) {
         setPreview(undefined);
+        setPages(undefined);
+      }
     } finally {
       clearTimeout(timeout);
       if (operation.current === controller) setBusy(false);
