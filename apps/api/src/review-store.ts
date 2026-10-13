@@ -11,6 +11,7 @@ import type {
   ManualSubmissionInput,
   ReviewAudit,
   ReviewCorrection,
+  ReviewNote,
   ReviewStore,
   ReviewSubmission,
 } from './review-types.js';
@@ -29,12 +30,15 @@ type Row = {
   proofImageId: string | null;
   hardcore: boolean;
   status: ReviewSubmission['status'];
+  reviewNote: string;
+  reviewReason: string | null;
 };
 const selection =
   'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",' +
   'collector_name AS "collectorName",to_char(collected_on,\'YYYY-MM-DD\') AS "collectedOn",' +
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
-  'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",hardcore,status';
+  'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",hardcore,status,' +
+  'review_note AS "reviewNote",review_reason AS "reviewReason"';
 const view = ({ proofImageId, ...row }: Row): ReviewSubmission => ({
   ...row,
   screenshotPath: proofImageId ? screenshotPath(proofImageId) : null,
@@ -384,7 +388,7 @@ export class PgReviewStore implements ReviewStore {
   async mutate(
     id: string,
     expectedVersion: number,
-    fields: ReviewCorrection | ReviewAction,
+    fields: ReviewCorrection | ReviewAction | ReviewNote,
     actorId: string,
     actorName: string,
   ) {
@@ -454,6 +458,29 @@ export class PgReviewStore implements ReviewStore {
               'review_reason=$4,version=version+1 WHERE id=$1 RETURNING ' +
               selection,
             [id, status, actorId, reason || null],
+          )
+        ).rows[0]!;
+      } else if ('note' in fields) {
+        // This branch never touches claim fields, review decision metadata, or
+        // the unique approved credit. It also handles unmatched pending claims.
+        action = 'edit';
+        if (row.status !== 'pending' && row.status !== 'approved')
+          throw conflict();
+        if (
+          typeof fields.note !== 'string' ||
+          fields.note.trim().length > 1000
+        )
+          throw new ApiError(422, 'Keep the review note to 1,000 characters.');
+        const note = fields.note.trim();
+        if (note === row.reviewNote)
+          throw new ApiError(422, 'There are no changes to save.');
+        reason = '';
+        result = (
+          await client.query<Row>(
+            'UPDATE submissions SET review_note=$2,version=version+1 ' +
+              'WHERE id=$1 RETURNING ' +
+              selection,
+            [id, note],
           )
         ).rows[0]!;
       } else {
