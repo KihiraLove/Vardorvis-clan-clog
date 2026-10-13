@@ -590,9 +590,9 @@ for (const hardcore of [false, true]) {
     const check = editor.getByLabel(/^I checked the linked proof/);
     await expect(approve).toBeDisabled();
     await expect(
-      editor.getByText(
-        'Select and save an active canonical item before approving.',
-      ).first(),
+      editor
+        .getByText('Select and save an active canonical item before approving.')
+        .first(),
     ).toBeVisible();
     await expect(check).toBeDisabled();
     await editor
@@ -600,7 +600,9 @@ for (const hardcore of [false, true]) {
       .selectOption(String((await adminFixtures()).detail.submission.itemId));
     await expect(approve).toBeDisabled();
     await expect(
-      editor.getByText('Save or discard claim corrections before deciding.').first(),
+      editor
+        .getByText('Save or discard claim corrections before deciding.')
+        .first(),
     ).toBeVisible();
     await editor.getByRole('button', { name: 'Save corrections' }).click();
     await expect.poll(() => state.claimWrites).toBe(1);
@@ -642,9 +644,11 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
     editor.getByRole('button', { name: 'Approve submission' }),
   ).toBeDisabled();
   await expect(
-    editor.getByText(
-      'A valid proof link or saved screenshot is required for approval.',
-    ).first(),
+    editor
+      .getByText(
+        'A valid proof link or saved screenshot is required for approval.',
+      )
+      .first(),
   ).toBeVisible();
   await expect(editor.getByLabel(/^I checked the linked proof/)).toBeDisabled();
   const reject = editor.getByRole('button', { name: 'Reject submission' });
@@ -665,7 +669,9 @@ test('audit: approved credit requires an audit reason for claim corrections or r
 }) => {
   const state = await liveAdmin(page);
   await page.goto('/admin');
-  await expect(page.getByRole('button', { name: /^Review .+ ·/ })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: /^Review .+ ·/ }),
+  ).toBeEnabled();
   state.detail.submission.status = 'approved';
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
   await page.getByRole('button', { name: /^Review .+ ·/ }).click();
