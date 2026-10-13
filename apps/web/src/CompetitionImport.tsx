@@ -142,9 +142,10 @@ export function CompetitionImport({
         }}
       >
         <fieldset disabled={busy} className="admin-fieldset">
-          <label>
+          <label className="admin-field-label">
             Wise Old Man competition link
             <input
+              className="admin-input"
               type="url"
               required
               value={url}
@@ -161,8 +162,16 @@ export function CompetitionImport({
           </button>
         </fieldset>
       </form>
-      {error && <p role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
+      {error && (
+        <p role="alert" className="admin-error">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="admin-success">
+          {message}
+        </p>
+      )}
       {preview && (
         <div className="xp-import-preview">
           <h4>{preview.competition.title}</h4>
@@ -209,23 +218,31 @@ export function CompetitionImport({
           {preview.competition.kind === 'ACTIVITY' &&
             preview.action === 'create-schedule' && (
               <>
-                <label>
+                <label className="admin-field-label">
                   Find opening pages
                   <input
+                    className="admin-input"
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </label>
-                <fieldset className="schedule-page-list" disabled={busy}>
+                <fieldset
+                  className="admin-choice-fieldset schedule-page-list"
+                  disabled={busy}
+                >
                   <legend>Opening pages</legend>
                   {preview.pages
                     .filter((p) =>
                       p.name.toLowerCase().includes(search.toLowerCase()),
                     )
                     .map((p) => (
-                      <label className="admin-checkbox" key={p.id}>
+                      <label
+                        className="admin-checkbox admin-checkbox--touch"
+                        key={p.id}
+                      >
                         <input
+                          className="admin-check"
                           type="checkbox"
                           checked={pages?.includes(p.id) ?? false}
                           onChange={(e) =>
@@ -314,8 +331,9 @@ export function CompetitionImport({
             </p>
           ))}
           {correction && (
-            <label className="admin-checkbox">
+            <label className="admin-checkbox admin-checkbox--touch">
               <input
+                className="admin-check"
                 type="checkbox"
                 checked={ack}
                 onChange={(e) => setAck(e.target.checked)}
@@ -324,7 +342,9 @@ export function CompetitionImport({
             </label>
           )}
           {expired && (
-            <p role="alert">Preview expired. Preview this competition again.</p>
+            <p role="alert" className="admin-error">
+              Preview expired. Preview this competition again.
+            </p>
           )}
           <button
             className="site-button"

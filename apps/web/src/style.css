@@ -1287,7 +1287,8 @@ main {
   margin-bottom: 15px;
 }
 .admin-fieldset label,
-.order-page-picker label {
+.order-page-picker label,
+.admin-field-label {
   display: block;
   margin: 12px 0;
   color: #c8bda2;
@@ -1295,7 +1296,8 @@ main {
 }
 .admin-panel input:not([type='checkbox']),
 .admin-panel select,
-.admin-panel textarea {
+.admin-panel textarea,
+.admin-input {
   display: block;
   width: 100%;
   min-width: 0;
@@ -1307,10 +1309,14 @@ main {
   color: #e3d5b8;
   font: inherit;
 }
+.admin-input {
+  min-height: 44px;
+}
 .admin-panel textarea {
   resize: vertical;
 }
-.admin-panel input[type='checkbox'] {
+.admin-panel input[type='checkbox'],
+.admin-check {
   accent-color: #c2a062;
   width: 16px;
   height: 16px;
@@ -1327,6 +1333,18 @@ main {
 }
 .admin-checkbox input {
   margin-top: 1px;
+}
+.admin-checkbox--touch {
+  min-height: 44px;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+.admin-choice-fieldset {
+  min-width: 0;
+  font:
+    12px/1.5 system-ui,
+    sans-serif;
+  color: #cfb989;
 }
 .admin-form-grid {
   display: grid;
@@ -2299,6 +2317,14 @@ main {
 }
 .competition-import {
   margin-bottom: 24px;
+}
+.competition-import p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b4aa95;
+}
+.competition-import .site-button {
+  min-height: 44px;
 }
 .competition-import input,
 .competition-import select {

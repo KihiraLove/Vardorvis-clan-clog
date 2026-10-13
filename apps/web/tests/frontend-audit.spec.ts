@@ -1,13 +1,8 @@
-/** Issue #60: live-adapter coverage and executable, explicitly expected regressions.
- * Remove each test.fail annotation when its acceptance criterion is implemented.
- * An unexpected pass fails CI so resolved defects cannot remain hidden here.
- */
+/** Issue #60: live-adapter coverage and executable regressions for remediated findings. */
 import { expect, test, type Page } from '@playwright/test';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
 import { zeroTotals } from '../src/xp-model.ts';
-
-const issue = 'https://github.com/KihiraLove/Vardorvis-clan-clog/issues/60';
 
 async function liveAdmin(page: Page, authenticated = true) {
   const f = await adminFixtures();
@@ -377,10 +372,6 @@ test('audit: XP and Scheduling competition fields share input styling', async ({
   const scheduling = await style();
   await page.getByRole('link', { name: 'XP imports', exact: true }).click();
   await expect(input).toBeVisible();
-  test.fail(
-    true,
-    issue + ': shared importer styling depends on its parent panel',
-  );
   expect(await style()).toEqual(scheduling);
 });
 
