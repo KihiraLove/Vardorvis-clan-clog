@@ -184,12 +184,15 @@ main {
 }
 .log-sizing {
   margin: 0 auto;
+  width: calc(500px * var(--log-scale));
+  height: var(--log-frame-height);
 }
 /* Native log geometry is scaled by CollectionLog; retain pixel dimensions here. */
 .game-window {
   width: 500px;
   height: 314px;
   transform-origin: top left;
+  transform: scale(var(--log-scale));
   padding: 3px;
   background: #4a473e;
   border: 2px solid #302f29;
@@ -2090,21 +2093,39 @@ main {
   max-width: 1336px;
 }
 .public-log-layout {
+  --log-frame-height: calc(314px * var(--log-scale));
   display: grid;
   grid-template-columns: 240px minmax(0, 1008px);
-  gap: 16px;
-  align-items: start;
+  column-gap: 16px;
 }
-.public-log-content {
+.public-log-layout > .log-help {
+  grid-column: 1 / -1;
+}
+.public-log-layout > .log-viewport {
+  grid-column: 2;
+  grid-row: 2;
   min-width: 0;
 }
+.public-log-layout > .refresh-error {
+  grid-column: 2;
+}
 .activity-competitions {
-  margin-top: 4px;
+  grid-column: 1;
+  grid-row: 2;
+  /* Use the renderer's frame height, excluding viewport padding and its scrollbar. */
+  height: var(--log-frame-height);
+  margin: 4px 0;
+  display: flex;
+  flex-direction: column;
   border: 4px solid #343328;
   border-radius: 5px;
   background: #191812;
   padding: 12px;
   min-width: 0;
+  min-height: 0;
+}
+.activity-competitions > :not(ol) {
+  flex-shrink: 0;
 }
 .activity-competitions h2 {
   font:
@@ -2122,8 +2143,11 @@ main {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 650px;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Keep link focus outlines inside the scrollport. */
+  padding-inline: 4px;
 }
 .activity-competition {
   padding: 12px 0;
@@ -2246,8 +2270,20 @@ main {
 @media (max-width: 1050px) {
   .public-log-layout {
     grid-template-columns: minmax(0, 1fr);
+    row-gap: 16px;
+  }
+  .public-log-layout > .log-viewport,
+  .public-log-layout > .refresh-error,
+  .activity-competitions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .activity-competitions {
+    height: auto;
+    margin: 0;
   }
   .activity-competitions ol {
+    flex: none;
     display: flex;
     gap: 16px;
     overflow-x: auto;

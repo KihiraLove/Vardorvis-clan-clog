@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
+  type CSSProperties,
 } from 'react';
 import {
   categories,
@@ -90,6 +92,7 @@ export function CollectionLog({
   hardcore = false,
   onPreview,
   copy = defaultSiteCopy,
+  activity,
 }: {
   data?: LogData | undefined;
   loading?: boolean;
@@ -99,6 +102,7 @@ export function CollectionLog({
   hardcore?: boolean;
   onPreview?: (() => void) | undefined;
   copy?: SiteCopy;
+  activity: ReactNode;
 }) {
   const requestedPage = new URLSearchParams(window.location.search).get('page');
   const firstPage =
@@ -192,17 +196,19 @@ export function CollectionLog({
   };
 
   return (
-    <section className="collection-section" aria-label="Clan collection log">
+    <section
+      className="collection-section public-log-layout"
+      aria-label="Clan collection log"
+      style={{ '--log-scale': scale } as CSSProperties}
+    >
       <h1 className="log-help">
         {copy.collectionCaption}
         {hardcore && ' · Hardcore worlds'}
       </h1>
+      {activity}
       <div className="log-viewport">
-        <div
-          className="log-sizing"
-          style={{ width: 500 * scale, height: 314 * scale }}
-        >
-          <div className="game-window" style={{ transform: `scale(${scale})` }}>
+        <div className="log-sizing">
+          <div className="game-window">
             <header className="game-titlebar">
               <h2>
                 Collection Log

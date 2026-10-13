@@ -8,6 +8,7 @@ import { ActivityCompetitions } from './ActivityCompetitions.tsx';
 import {
   LiveCompetitionClient,
   PreviewCompetitionClient,
+  type CompetitionClient,
 } from './competition-api.ts';
 import { LiveXpClient } from './xp-api.ts';
 import { PreviewXpClient } from './preview/xp.ts';
@@ -27,10 +28,12 @@ function LiveLog({
   preview,
   hardcore,
   copy,
+  competitionClient,
 }: {
   preview: () => void;
   hardcore: boolean;
   copy: SiteCopy;
+  competitionClient: CompetitionClient;
 }) {
   const state = usePublicLog();
   return (
@@ -39,6 +42,7 @@ function LiveLog({
       hardcore={hardcore}
       onPreview={preview}
       copy={copy}
+      activity={<ActivityCompetitions client={competitionClient} />}
     />
   );
 }
@@ -46,10 +50,12 @@ function PreviewLog({
   client,
   hardcore,
   copy,
+  competitionClient,
 }: {
   client: PreviewAdminClient;
   hardcore: boolean;
   copy: SiteCopy;
+  competitionClient: CompetitionClient;
 }) {
   const [scenario, setScenario] = useState<Scenario | 'reviewed'>('reviewed');
   const revision = useSyncExternalStore(client.subscribe, client.getRevision);
@@ -81,7 +87,13 @@ function PreviewLog({
           Review fixtures only. Reload resets changes; no clan data is changed.
         </p>
       </details>
-      <CollectionLog preview data={data} hardcore={hardcore} copy={copy} />
+      <CollectionLog
+        preview
+        data={data}
+        hardcore={hardcore}
+        copy={copy}
+        activity={<ActivityCompetitions client={competitionClient} />}
+      />
     </>
   );
 }
@@ -439,24 +451,21 @@ export function App() {
             </AdminPage>
           ) : (
             <>
-              <div className="public-log-layout">
-                <ActivityCompetitions client={competitionClient} />
-                <div className="public-log-content">
-                  {adminClient instanceof PreviewAdminClient ? (
-                    <PreviewLog
-                      client={adminClient}
-                      hardcore={hardcore}
-                      copy={copy}
-                    />
-                  ) : (
-                    <LiveLog
-                      preview={() => mode(true)}
-                      hardcore={hardcore}
-                      copy={copy}
-                    />
-                  )}
-                </div>
-              </div>
+              {adminClient instanceof PreviewAdminClient ? (
+                <PreviewLog
+                  client={adminClient}
+                  hardcore={hardcore}
+                  copy={copy}
+                  competitionClient={competitionClient}
+                />
+              ) : (
+                <LiveLog
+                  preview={() => mode(true)}
+                  hardcore={hardcore}
+                  copy={copy}
+                  competitionClient={competitionClient}
+                />
+              )}
               <XpPage
                 competitionClient={competitionClient}
                 client={xpClient}
