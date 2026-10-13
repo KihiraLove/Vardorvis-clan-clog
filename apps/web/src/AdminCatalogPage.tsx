@@ -34,10 +34,7 @@ export function AdminCatalogPage({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setReadError(
             'Catalog could not be loaded. The last successful snapshot is preserved.',
