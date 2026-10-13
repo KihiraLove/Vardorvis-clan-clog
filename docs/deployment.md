@@ -234,9 +234,10 @@ The JSON report includes `mode`, a database-clock cutoff, per-table
 preview tokens, snapshots, cookies, participant details, or credentials.
 Watch `after.eligible` for an increasing backlog and re-run within the
 configured batch limits if needed. With a dry run, deleted is always zero.
-The already provisioned `clog_runtime` role has **SELECT and INSERT but
-no DELETE** on either preview table; it also cannot modify receipt/audit
-tables. The one-shot `migrate` service is the separately credentialed
+The provisioned `clog_runtime` role has **SELECT, INSERT and UPDATE,
+but no DELETE** on the two transient preview tables. UPDATE is needed for
+PostgreSQL's `FOR KEY SHARE` read locks in live apply transactions; the
+role cannot delete previews or modify immutable receipt/audit tables. The one-shot `migrate` service is the separately credentialed
 schema-owner job, allowed to delete these preview rows. Do not grant the
 long-lived application role additional DELETE or expose the database-owner
 secret to `app`. These controls are checked in disposable PostgreSQL/Compose
