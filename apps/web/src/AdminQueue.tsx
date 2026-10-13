@@ -1,5 +1,5 @@
 /** Load catalog plus paged claims together, retaining cursor history for previous-page navigation. */
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
@@ -26,6 +26,7 @@ export function AdminQueue({
   const [view, setView] = useState<QueueView>('pending'),
     [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors[cursors.length - 1];
+  const pagingHintId = useId();
   const [refresh, setRefresh] = useState(0),
     [selected, setSelected] = useState<string>();
   const [snapshot, setSnapshot] = useState<{
@@ -76,6 +77,17 @@ export function AdminQueue({
   // A retained response must match the selected filter/page before it can be acted upon.
   const ready = snapshot?.view === view && snapshot.cursor === cursor;
   const changing = loading || (!ready && !error);
+  const pageProblem = error
+    ? 'The current page could not be loaded. Reload the submissions before paging.'
+    : !ready
+      ? 'The requested page is not loaded yet.'
+      : null;
+  const previousReason = loading
+    ? 'Loading submissions…'
+    : pageProblem ?? (cursors.length === 1 ? 'Already on the first page.' : null);
+  const nextReason = loading
+    ? 'Loading submissions…'
+    : pageProblem ?? (!snapshot?.queue.nextCursor ? 'Already on the last page.' : null);
   const choose = (next: QueueView) => {
     setView(next);
     setCursors([undefined]);
@@ -274,7 +286,9 @@ export function AdminQueue({
         <div className="admin-pagination">
           <button
             className="site-button"
-            disabled={changing || !ready || cursors.length === 1}
+            disabled={Boolean(previousReason)}
+            aria-describedby={previousReason ? pagingHintId + '-previous' : undefined}
+            aria-busy={loading}
             onClick={() => {
               setCursors((values) => values.slice(0, -1));
               setSelected(undefined);
@@ -285,9 +299,9 @@ export function AdminQueue({
           <span>Page {cursors.length}</span>
           <button
             className="site-button"
-            disabled={
-              loading || !ready || !snapshot.queue.nextCursor || Boolean(error)
-            }
+            disabled={Boolean(nextReason)}
+            aria-describedby={nextReason ? pagingHintId + '-next' : undefined}
+            aria-busy={loading}
             onClick={() => {
               setCursors((values) => [...values, snapshot!.queue.nextCursor!]);
               setSelected(undefined);
@@ -296,6 +310,16 @@ export function AdminQueue({
             Next page
           </button>
         </div>
+        {previousReason && (
+          <p id={pagingHintId + '-previous'} className="admin-note admin-action-explanation">
+            Previous page: {previousReason}
+          </p>
+        )}
+        {nextReason && (
+          <p id={pagingHintId + '-next'} className="admin-note admin-action-explanation">
+            Next page: {nextReason}
+          </p>
+        )}
       </section>
       {selected && ready && (
         <SubmissionEditor
