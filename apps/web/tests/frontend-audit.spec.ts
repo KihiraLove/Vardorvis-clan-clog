@@ -681,7 +681,7 @@ test('audit: approved credit requires an audit reason for claim corrections or r
   await expect(
     editor.getByText('Enter a reason before revoking a credit.'),
   ).toBeVisible();
-  await editor.getByLabel('Collected on hardcore worlds').check();
+  await editor.getByLabel('Collected on hardcore worlds').uncheck();
   const save = editor.getByRole('button', { name: 'Save corrections' });
   await expect(save).toBeDisabled();
   await expect(
