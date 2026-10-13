@@ -673,7 +673,11 @@ export class LiveAdminClient implements AdminClient {
         this.write(csrf, { expectedVersion: version, note }, 'PATCH'),
       ),
     );
-    if (result.id !== id || result.version <= version || result.reviewNote !== note.trim())
+    if (
+      result.id !== id ||
+      result.version <= version ||
+      result.reviewNote !== note.trim()
+    )
       throw new Error('Unexpected review note receipt.');
     return result;
   }
