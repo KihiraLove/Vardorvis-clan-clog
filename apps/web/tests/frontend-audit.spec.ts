@@ -698,7 +698,9 @@ test('audit: approved credit requires an audit reason for claim corrections or r
   await expect(
     editor.getByText('Enter a reason before revoking a credit.'),
   ).toBeVisible();
-  await editor.getByLabel('Review reason').fill('Revoking after independent proof review');
+  await editor
+    .getByLabel('Review reason')
+    .fill('Revoking after independent proof review');
   await expect(revoke).toBeEnabled();
   await revoke.click();
   expect(state.decisions[0]?.action).toBe('revoke');
