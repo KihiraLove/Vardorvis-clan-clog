@@ -195,8 +195,11 @@ test(
         receipt = await apply(p, key);
       assert.deepEqual(await apply(p, key), receipt);
       await pool.query(
-        "UPDATE competition_previews SET expires_at=now()-interval '1 hour' WHERE token_hash=encode(sha256($1::bytea),'hex')",
+        "UPDATE competition_previews SET expires_at=now()-interval '2 hours' WHERE token_hash=encode(sha256($1::bytea),'hex')",
         [p.previewToken],
+      );
+      await pool.query(
+        "DELETE FROM competition_previews WHERE expires_at <= now()-interval '1 hour'",
       );
       assert.deepEqual(
         await new PgCompetitionStore(pool).apply(
