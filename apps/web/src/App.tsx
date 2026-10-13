@@ -443,15 +443,19 @@ export function App() {
               onMode={mode}
               onNavigate={navigate}
             >
-              {route.path === '/admin/xp' && (
-                <XpPage
-                  competitionClient={competitionClient}
-                  client={xpClient}
-                  admin
-                  preview={route.preview}
-                  onMode={mode}
-                />
-              )}
+              {(session, onAccessLost) =>
+                route.path === '/admin/xp' ? (
+                  <XpPage
+                    competitionClient={competitionClient}
+                    client={xpClient}
+                    admin
+                    session={session}
+                    onAccessLost={onAccessLost}
+                    preview={route.preview}
+                    onMode={mode}
+                  />
+                ) : null
+              }
             </AdminPage>
           ) : (
             <>
