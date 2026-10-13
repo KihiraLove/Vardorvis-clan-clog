@@ -36,7 +36,7 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   collection_schedule_audit: append,
   collection_scheduling: update,
   competition_import_history: append,
-  competition_previews: append,
+  competition_previews: edit,
   game_item_ids: append,
   item_aliases: read,
   items: edit,
@@ -57,7 +57,7 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   wom_competitions: edit,
   xp_events: edit,
   xp_import_history: append,
-  xp_previews: append,
+  xp_previews: edit,
   xp_state: update,
 };
 const viewPolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
