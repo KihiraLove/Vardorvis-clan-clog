@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { ClanLogoSettings } from './ClanLogoSettings.tsx';
 import type { Branding } from './branding.ts';
-import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
