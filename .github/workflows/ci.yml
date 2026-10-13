@@ -133,6 +133,29 @@ jobs:
         run: docker compose exec -T -e REVIEW_SMOKE_TEST=1 app node --input-type=module < scripts/review-smoke.mjs
       - name: Proxy branding logos accept valid large images and enforce both upload limits
         run: docker compose exec -T -e BRANDING_PROXY_SMOKE_TEST=1 app node --input-type=module < scripts/branding-proxy-smoke.mjs
+      - name: Bounded import preview maintenance respects runtime role and receipts
+        run: |
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U clog -d clog -c "
+            INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at)
+              VALUES(repeat('a',64),'ci-test-actor','xp-1','{}',now()-interval '2 hours');
+            INSERT INTO competition_previews(token_hash,actor_id,expected_revision,schedule_revision,snapshot,page_ids,expires_at)
+              VALUES(repeat('b',64),'ci-test-actor','xp-1','schedule-1','{}','{}',now()-interval '2 hours');
+          "
+          docker compose run --rm --no-deps -T migrate node packages/database/dist/preview-maintenance.js --dry-run > /tmp/preview-maintenance-dry.json
+          jq -e '.mode=="dry-run" and .tables.xp_previews.before.eligible >= 1 and .tables.competition_previews.before.eligible >= 1 and .tables.xp_previews.deleted == 0 and .tables.competition_previews.deleted == 0' /tmp/preview-maintenance-dry.json
+          docker compose run --rm --no-deps -T migrate node packages/database/dist/preview-maintenance.js --apply --batch-size=1 --max-batches=1 > /tmp/preview-maintenance-applied.json
+          jq -e '.mode=="apply" and .tables.xp_previews.deleted == 1 and .tables.competition_previews.deleted == 1 and .maximumDeletesPerTable == 1' /tmp/preview-maintenance-applied.json
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT count(*) FROM xp_previews WHERE token_hash=repeat('a',64)")" = "0"
+          test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT count(*) FROM competition_previews WHERE token_hash=repeat('b',64)")" = "0"
+          docker compose exec -T app node --input-type=module -e "
+            import pg from 'pg';
+            const c = new pg.Client({connectionString:process.env.DATABASE_URL});
+            await c.connect();
+            try {
+              const p = (await c.query(\"SELECT has_table_privilege(current_user,'xp_previews','SELECT') AS xs,has_table_privilege(current_user,'xp_previews','INSERT') AS xi,has_table_privilege(current_user,'xp_previews','DELETE') AS xd,has_table_privilege(current_user,'competition_previews','SELECT') AS cs,has_table_privilege(current_user,'competition_previews','INSERT') AS ci,has_table_privilege(current_user,'competition_previews','DELETE') AS cd,has_table_privilege(current_user,'xp_import_history','DELETE') AS hd,has_table_privilege(current_user,'competition_import_history','DELETE') AS ch\")).rows[0];
+              if (JSON.stringify(p)!==JSON.stringify({xs:true,xi:true,xd:false,cs:true,ci:true,cd:false,hd:false,ch:false})) throw Error('Unexpected runtime maintenance privileges');
+            } finally { await c.end(); }
+          "
       - name: Admin catalog, durable icons and coordinated backup
         env:
           COMPOSE_FILE: compose.yaml:compose.dev.yaml
