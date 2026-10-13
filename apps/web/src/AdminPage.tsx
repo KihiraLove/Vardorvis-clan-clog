@@ -352,7 +352,7 @@ export function AdminPage({
         session.role === 'admin' ? null : (
           <p role="alert">Only the administrator can change site settings.</p>
         )
-      ) : children ? (
+      ) : children && path === '/admin/xp' ? (
         children(session, accessLost)
       ) : path === '/admin/catalog' ? (
         <AdminCatalogPage
