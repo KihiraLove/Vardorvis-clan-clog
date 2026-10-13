@@ -1,6 +1,7 @@
 /** Review saved claims, stage corrections separately and display before/after audit history. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import {
   safeProof,
   safeScreenshotPath,
@@ -74,8 +75,7 @@ export function SubmissionEditor({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         )
           onAccessLost();
         else
