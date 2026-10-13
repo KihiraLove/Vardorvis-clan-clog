@@ -46,6 +46,27 @@ The registration script uses the per-command Discord POST **upsert**, not a bulk
 - An unconfirmed interaction reports its **numeric Discord interaction ID** (not its token, raw request, SQL or proof URL) in the ephemeral response. A clan admin should search the submission/receipt history for this ID before taking further action. **Running /cc-clog submit again creates a new Discord interaction ID**, so it is not an idempotent replay of the original request and may create a second pending claim. Do not issue a fresh command until staff has reconciled the original interaction. No approval or credit is implied by an unconfirmed request.
 - Normal and hardcore credit are separate; a duplicate already-approved canonical item in the same mode is flagged for human review. Approval cannot add a second active credit in that mode.
 
+### Reconcile an unconfirmed receipt
+
+The interaction ID in the private Discord reply is the durable idempotency key.
+Staff with authorized **database access** can look up the existing receipt,
+without fetching the proof URL or exposing any credentials:
+
+```sql
+SELECT id, status, submitted_at
+FROM submissions
+WHERE discord_interaction_id = '345678901234567890';
+```
+
+Replace the sample ID with the **numeric** Discord interaction ID supplied in
+the reply. The `id` column is the stored submission receipt ID; `status`
+is its current review state. A match means the original interaction was saved:
+do **not** submit it again. If no matching row exists, investigate whether the
+original request was still in flight or failed before commit before asking the
+player to start a new command. Keep bot credentials, database errors and
+submission evidence out of Discord follow-up messages. The admin review UI
+need not expose private Discord IDs; this is an operator investigation query.
+
 ## Verification
 
 `npm run validate` covers command serialization, token/guild config, collector fallback, autocomplete refresh, explicit canonical selections, raw/ambiguous submissions, proof validation, request timeouts and idempotent retries, occupied-credit warnings, registration route, and gateway teardown/reconnect state. No live Discord token is needed for CI.
