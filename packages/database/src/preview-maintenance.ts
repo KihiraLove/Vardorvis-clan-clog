@@ -40,20 +40,19 @@ interface Counts {
 async function counts(client: pg.Client, table: Target, cutoff: Date) {
   // Names are hardcoded, never supplied by the user. The expiry index is used
   // for the eligible count; do not load any of the large JSON snapshots.
-  const [total, eligible, oldest] = await Promise.all([
-    client.query<{ count: number }>(
-      'SELECT count(*)::int AS count FROM ' + table,
-    ),
-    client.query<{ count: number }>(
-      'SELECT count(*)::int AS count FROM ' + table + ' WHERE expires_at <= $1',
-      [cutoff],
-    ),
-    client.query<{ expires_at: Date }>(
-      'SELECT expires_at FROM ' +
-        table +
-        ' ORDER BY expires_at,token_hash LIMIT 1',
-    ),
-  ]);
+  // A single pg.Client does not support concurrent query() execution.
+  const total = await client.query<{ count: number }>(
+    'SELECT count(*)::int AS count FROM ' + table,
+  );
+  const eligible = await client.query<{ count: number }>(
+    'SELECT count(*)::int AS count FROM ' + table + ' WHERE expires_at <= $1',
+    [cutoff],
+  );
+  const oldest = await client.query<{ expires_at: Date }>(
+    'SELECT expires_at FROM ' +
+      table +
+      ' ORDER BY expires_at,token_hash LIMIT 1',
+  );
   return {
     total: total.rows[0]!.count,
     eligible: eligible.rows[0]!.count,
