@@ -1,5 +1,5 @@
 /** Review saved claims, stage corrections separately and display before/after audit history. */
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
@@ -17,6 +17,7 @@ import type { AdminSession } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
 import { useAdminAction } from './use-admin-action.ts';
+import { reviewBlockers, type ReviewActionHint } from './review-prerequisites.ts';
 
 const draftOf = (row: Submission): Correction => ({
   itemId: row.itemId ?? 0,
@@ -52,6 +53,7 @@ export function SubmissionEditor({
   const [readError, setReadError] = useState<string>(),
     [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
+  const hintId = useId();
   // A new version invalidates both the draft and the user's previous proof acknowledgment.
   const accept = (next: SubmissionDetail) => {
     setDetail(next);
@@ -180,7 +182,7 @@ export function SubmissionEditor({
             'The change was saved, but audit history could not be refreshed. Reload before continuing.',
           );
       }
-    }, reload);
+    }, reload, decision ?? 'claim');
   };
   const saveNote = () => {
     void action.execute(async (signal) => {
@@ -213,8 +215,28 @@ export function SubmissionEditor({
             'The note was saved, but audit history could not be refreshed. Reload before continuing.',
           );
       }
-    }, reload);
+    }, reload, 'note');
   };
+  const blockers = reviewBlockers({
+    status: row.status,
+    requestBusy: action.busy,
+    queueUnavailable: disabled,
+    readError: Boolean(readError),
+    claimDirty,
+    noteDirty,
+    activeItem,
+    validProof: Boolean(proof) || row.source === 'manual',
+    acknowledged: checked,
+    reasonProvided: Boolean(draft.reason.trim()),
+  });
+  const describedBy = (key: ReviewActionHint) =>
+    blockers[key] ? `review-${hintId}-${key}` : undefined;
+  const explanations = (keys: ReviewActionHint[]) =>
+    keys.filter((key) => blockers[key]).map((key) => (
+      <p className="admin-note admin-action-explanation" id={`review-${hintId}-${key}`} key={key}>
+        {blockers[key]}
+      </p>
+    ));
   const selected = catalog.items.find((item) => item.id === draft.itemId);
   const matches = catalog.items.filter(
     (item) =>
@@ -276,6 +298,19 @@ export function SubmissionEditor({
           </dd>
         </div>
       </dl>
+      {action.busy && (
+        <p role="status" className="admin-note">
+          {action.operation === 'approve'
+            ? 'Approving saved claim…'
+            : action.operation === 'reject'
+              ? 'Rejecting submission…'
+              : action.operation === 'revoke'
+                ? 'Revoking credit…'
+                : action.operation === 'note'
+                  ? 'Saving review note…'
+                  : 'Saving claim corrections…'}
+        </p>
+      )}
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}
@@ -405,7 +440,9 @@ export function SubmissionEditor({
             <button
               className="site-button"
               type="button"
-              disabled={locked || !editable || !noteDirty}
+              disabled={Boolean(blockers.note)}
+              aria-describedby={describedBy('note')}
+              aria-busy={action.busy && action.operation === 'note'}
               onClick={saveNote}
             >
               Save review note
@@ -413,12 +450,14 @@ export function SubmissionEditor({
             <button
               className="site-button"
               type="button"
-              disabled={locked || !editable || !noteDirty}
+              disabled={Boolean(blockers.discardNote)}
+              aria-describedby={describedBy('discardNote')}
               onClick={() => setReviewNote(row.reviewNote)}
             >
               Discard review note
             </button>
           </div>
+          {explanations(['note', 'discardNote'])}
           <label>
             Review reason
             <textarea
@@ -438,14 +477,17 @@ export function SubmissionEditor({
             <button
               className="site-button"
               type="submit"
-              disabled={!claimDirty}
+              disabled={Boolean(blockers.claim)}
+              aria-describedby={describedBy('claim')}
+              aria-busy={action.busy && action.operation === 'claim'}
             >
               Save corrections
             </button>
             <button
               className="site-button"
               type="button"
-              disabled={!claimDirty}
+              disabled={Boolean(blockers.discardClaim)}
+              aria-describedby={describedBy('discardClaim')}
               onClick={() => {
                 setDraft(draftOf(row));
                 setChecked(false);
@@ -454,6 +496,7 @@ export function SubmissionEditor({
               Discard corrections
             </button>
           </div>
+          {explanations(['claim', 'discardClaim'])}
         </fieldset>
         {claimDirty && (
           <p className="admin-note">
@@ -465,12 +508,8 @@ export function SubmissionEditor({
             <input
               type="checkbox"
               checked={checked}
-              disabled={
-                locked ||
-                claimDirty ||
-                (!proof && row.source !== 'manual') ||
-                !activeItem
-              }
+              disabled={Boolean(blockers.acknowledge)}
+              aria-describedby={describedBy('acknowledge')}
               onChange={(event) => setChecked(event.target.checked)}
             />
             {row.source === 'manual'
@@ -478,19 +517,16 @@ export function SubmissionEditor({
               : 'I checked the linked proof for the saved item, collector, date and hardcore claim.'}
           </label>
         )}
+        {row.status === 'pending' && explanations(['acknowledge'])}
         <div className="admin-actions">
           {row.status === 'pending' && (
             <>
               <button
                 className="site-button site-button--approve"
                 type="button"
-                disabled={
-                  locked ||
-                  claimDirty ||
-                  !checked ||
-                  (!proof && row.source !== 'manual') ||
-                  !activeItem
-                }
+                disabled={Boolean(blockers.approve)}
+                aria-describedby={describedBy('approve')}
+                aria-busy={action.busy && action.operation === 'approve'}
                 onClick={() => perform('approve')}
               >
                 Approve submission
@@ -498,7 +534,9 @@ export function SubmissionEditor({
               <button
                 className="site-button"
                 type="button"
-                disabled={locked || claimDirty || !draft.reason.trim()}
+                disabled={Boolean(blockers.reject)}
+                aria-describedby={describedBy('reject')}
+                aria-busy={action.busy && action.operation === 'reject'}
                 onClick={() => perform('reject')}
               >
                 Reject submission
@@ -509,13 +547,20 @@ export function SubmissionEditor({
             <button
               className="site-button site-button--danger"
               type="button"
-              disabled={locked || claimDirty || !draft.reason.trim()}
+              disabled={Boolean(blockers.revoke)}
+              aria-describedby={describedBy('revoke')}
+              aria-busy={action.busy && action.operation === 'revoke'}
               onClick={() => perform('revoke')}
             >
               Revoke credit
             </button>
           )}
         </div>
+        {row.status === 'pending'
+          ? explanations(['approve', 'reject'])
+          : row.status === 'approved'
+            ? explanations(['revoke'])
+            : null}
       </form>
       <details className="admin-audit">
         <summary>Audit history ({detail.audit.length})</summary>
