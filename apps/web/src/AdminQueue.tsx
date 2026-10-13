@@ -84,10 +84,12 @@ export function AdminQueue({
       : null;
   const previousReason = loading
     ? 'Loading submissions…'
-    : pageProblem ?? (cursors.length === 1 ? 'Already on the first page.' : null);
+    : (pageProblem ??
+      (cursors.length === 1 ? 'Already on the first page.' : null));
   const nextReason = loading
     ? 'Loading submissions…'
-    : pageProblem ?? (!snapshot?.queue.nextCursor ? 'Already on the last page.' : null);
+    : (pageProblem ??
+      (!snapshot?.queue.nextCursor ? 'Already on the last page.' : null));
   const choose = (next: QueueView) => {
     setView(next);
     setCursors([undefined]);
@@ -287,7 +289,9 @@ export function AdminQueue({
           <button
             className="site-button"
             disabled={Boolean(previousReason)}
-            aria-describedby={previousReason ? pagingHintId + '-previous' : undefined}
+            aria-describedby={
+              previousReason ? pagingHintId + '-previous' : undefined
+            }
             aria-busy={loading}
             onClick={() => {
               setCursors((values) => values.slice(0, -1));
@@ -311,12 +315,18 @@ export function AdminQueue({
           </button>
         </div>
         {previousReason && (
-          <p id={pagingHintId + '-previous'} className="admin-note admin-action-explanation">
+          <p
+            id={pagingHintId + '-previous'}
+            className="admin-note admin-action-explanation"
+          >
             Previous page: {previousReason}
           </p>
         )}
         {nextReason && (
-          <p id={pagingHintId + '-next'} className="admin-note admin-action-explanation">
+          <p
+            id={pagingHintId + '-next'}
+            className="admin-note admin-action-explanation"
+          >
             Next page: {nextReason}
           </p>
         )}
