@@ -233,7 +233,7 @@ test(
       };
       assert.equal(catalog.items.length, 2);
       assert.equal(catalog.pages.length, 2);
-      // Authenticated browser endpoints, separate from bot Bearer credentials.
+      // Authenticated browser endpoints, separate from bot ***
       assert.equal(
         (await app.inject('/api/v1/admin/submissions')).statusCode,
         401,
@@ -555,7 +555,11 @@ test(
       const noteOnly = await create(null);
       const publicCredits = await backend.collections();
       const created = await review.mutate(
-        noteOnly, 1, { note: '  Check duplicate proof  ' }, adminId, 'Reviewer',
+        noteOnly,
+        1,
+        { note: '  Check duplicate proof  ' },
+        adminId,
+        'Reviewer',
       );
       assert.equal(created.reviewNote, 'Check duplicate proof');
       assert.equal(created.reviewReason, null);
@@ -566,10 +570,19 @@ test(
       assert.equal(noteDetail?.audit.length, 1);
       assert.equal(noteDetail?.audit[0]?.reason, null);
       assert.equal(noteDetail?.audit[0]?.before.reviewNote, '');
-      assert.equal(noteDetail?.audit[0]?.after.reviewNote, 'Check duplicate proof');
+      assert.equal(
+        noteDetail?.audit[0]?.after.reviewNote,
+        'Check duplicate proof',
+      );
       assert.deepEqual(await backend.collections(), publicCredits);
       await assert.rejects(
-        review.mutate(noteOnly, 2, { note: 'Check duplicate proof' }, adminId, 'Reviewer'),
+        review.mutate(
+          noteOnly,
+          2,
+          { note: 'Check duplicate proof' },
+          adminId,
+          'Reviewer',
+        ),
         { status: 422 },
       );
       await assert.rejects(
@@ -577,11 +590,21 @@ test(
         { status: 409 },
       );
       await assert.rejects(
-        review.mutate(noteOnly, 2, { note: 'x'.repeat(1001) }, adminId, 'Reviewer'),
+        review.mutate(
+          noteOnly,
+          2,
+          { note: 'x'.repeat(1001) },
+          adminId,
+          'Reviewer',
+        ),
         { status: 422 },
       );
       const cleared = await review.mutate(
-        noteOnly, 2, { note: '' }, adminId, 'Reviewer',
+        noteOnly,
+        2,
+        { note: '' },
+        adminId,
+        'Reviewer',
       );
       assert.equal(cleared.reviewNote, '');
       assert.equal((await review.detail(noteOnly))?.audit.length, 2);
@@ -591,8 +614,11 @@ test(
       const approvalBefore = (await review.detail(manualId))!.submission;
       assert.equal(approvalBefore.status, 'approved');
       const approvedNote = await review.mutate(
-        manualId, approvalBefore.version,
-        { note: 'Approved evidence reviewed' }, adminId, 'Reviewer',
+        manualId,
+        approvalBefore.version,
+        { note: 'Approved evidence reviewed' },
+        adminId,
+        'Reviewer',
       );
       assert.equal(approvedNote.reviewNote, 'Approved evidence reviewed');
       assert.equal(approvedNote.reviewReason, approvalBefore.reviewReason);
@@ -600,32 +626,61 @@ test(
       assert.equal(approvedNote.itemId, approvalBefore.itemId);
       assert.deepEqual(await backend.collections(), publicCredits);
       await assert.rejects(
-        review.mutate(second, 2, { note: 'Rejected cannot edit' }, adminId, 'Reviewer'),
+        review.mutate(
+          second,
+          2,
+          { note: 'Rejected cannot edit' },
+          adminId,
+          'Reviewer',
+        ),
         { status: 409 },
       );
 
       // The HTTP route uses the existing administrator cookie and CSRF
       // contract, not an unguarded generic note updater.
       const notePath = '/api/v1/admin/submissions/' + noteOnly + '/note';
-      assert.equal((await app.inject({
-        method: 'PATCH', url: notePath,
-        payload: { expectedVersion: 3, note: 'Unauthorized' },
-      })).statusCode, 401);
-      assert.equal((await app.inject({
-        method: 'PATCH', url: notePath, headers: { cookie },
-        payload: { expectedVersion: 3, note: 'Missing CSRF' },
-      })).statusCode, 403);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: notePath,
+            payload: { expectedVersion: 3, note: 'Unauthorized' },
+          })
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: notePath,
+            headers: { cookie },
+            payload: { expectedVersion: 3, note: 'Missing CSRF' },
+          })
+        ).statusCode,
+        403,
+      );
       const noteHttp = await app.inject({
-        method: 'PATCH', url: notePath,
-        headers: { cookie, origin: auth.origin, 'x-csrf-token': session.csrfToken },
+        method: 'PATCH',
+        url: notePath,
+        headers: {
+          cookie,
+          origin: auth.origin,
+          'x-csrf-token': session.csrfToken,
+        },
         payload: { expectedVersion: 3, note: 'Saved through HTTP' },
       });
       assert.equal(noteHttp.statusCode, 200);
       assert.equal(noteHttp.json().reviewNote, 'Saved through HTTP');
       assert.equal(noteHttp.json().version, 4);
       const staleHttp = await app.inject({
-        method: 'PATCH', url: notePath,
-        headers: { cookie, origin: auth.origin, 'x-csrf-token': session.csrfToken },
+        method: 'PATCH',
+        url: notePath,
+        headers: {
+          cookie,
+          origin: auth.origin,
+          'x-csrf-token': session.csrfToken,
+        },
         payload: { expectedVersion: 3, note: 'Old version' },
       });
       assert.equal(staleHttp.statusCode, 409);
