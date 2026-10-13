@@ -477,3 +477,64 @@ test('review date source labels differentiate collector claims, server defaults 
   assert.equal(dateSourceLabel('claim'), 'Collector supplied');
   assert.equal(dateSourceLabel('admin'), 'Admin correction');
 });
+
+test('preview staff notes are independent, versioned, auditable, and never change collection credits', async () => {
+  const client = new PreviewAdminClient();
+  const pending = await client.detail('sample-unmatched', signal());
+  assert.equal(pending.submission.itemId, null);
+  assert.equal(pending.submission.reviewNote, '');
+  const beforeCredits = client.publicLog().collections.credits;
+  const saved = await client.saveReviewNote(
+    pending.submission.id, pending.submission.version,
+    '  Staff note without item match  ', 'preview', signal(),
+  );
+  assert.equal(saved.reviewNote, 'Staff note without item match');
+  assert.equal(saved.status, 'pending');
+  assert.equal(saved.itemId, null);
+  assert.equal(saved.version, pending.submission.version + 1);
+  const detail = await client.detail(saved.id, signal());
+  assert.equal(detail.audit[0]?.reason, null);
+  assert.equal(detail.audit[0]?.before.reviewNote, '');
+  assert.equal(detail.audit[0]?.after.reviewNote, saved.reviewNote);
+  assert.deepEqual(client.publicLog().collections.credits, beforeCredits);
+  await assert.rejects(
+    client.saveReviewNote(saved.id, saved.version, saved.reviewNote, 'preview', signal()),
+    { status: 422 },
+  );
+  await assert.rejects(
+    client.saveReviewNote(saved.id, pending.submission.version, 'Stale', 'preview', signal()),
+    { status: 409 },
+  );
+  await assert.rejects(
+    client.saveReviewNote(saved.id, saved.version, 'x'.repeat(1001), 'preview', signal()),
+    { status: 422 },
+  );
+  const cleared = await client.saveReviewNote(saved.id, saved.version, '', 'preview', signal());
+  assert.equal(cleared.reviewNote, '');
+  assert.equal((await client.detail(saved.id, signal())).audit.length, 2);
+  assert.deepEqual(client.publicLog().collections.credits, beforeCredits);
+
+  const ready = await client.detail('sample-hardcore', signal());
+  const approved = await client.decide(
+    ready.submission.id, ready.submission.version, 'approve', '', 'preview', signal(),
+  );
+  assert.equal(approved.status, 'approved');
+  const approvedCredits = client.publicLog().collections.credits;
+  const note = await client.saveReviewNote(
+    approved.id, approved.version, 'Hardcore proof checked', 'preview', signal(),
+  );
+  assert.equal(note.reviewNote, 'Hardcore proof checked');
+  assert.equal(note.status, 'approved');
+  assert.equal(note.hardcore, true);
+  assert.deepEqual(client.publicLog().collections.credits, approvedCredits);
+  const rejectedPending = await client.detail('sample-ordinary', signal());
+  const rejected = await client.decide(
+    rejectedPending.submission.id, rejectedPending.submission.version,
+    'reject', 'Invalid proof', 'preview', signal(),
+  );
+  assert.equal(rejected.reviewReason, 'Invalid proof');
+  await assert.rejects(
+    client.saveReviewNote(rejected.id, rejected.version, 'Cannot edit after reject', 'preview', signal()),
+    { status: 422 },
+  );
+});
