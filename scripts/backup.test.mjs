@@ -173,3 +173,16 @@ for (const stage of faultStages) {
     if (stage === 'lock') assert.equal(log, '');
   });
 }
+
+// Temporary formatter diagnostics for a CI-only formatting mismatch.
+if (process.env.CI) {
+  const prettier = await import('prettier');
+  const config = await prettier.resolveConfig('scripts/backup.test.mjs');
+  const formatted = await prettier.format(readFileSync(new URL(import.meta.url), 'utf8'), {
+    ...config,
+    filepath: 'scripts/backup.test.mjs',
+  });
+  console.log('CANONICAL_FORMAT_BEGIN');
+  console.log(formatted);
+  console.log('CANONICAL_FORMAT_END');
+}
