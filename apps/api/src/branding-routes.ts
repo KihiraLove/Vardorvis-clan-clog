@@ -140,11 +140,8 @@ export function brandingRoutes(
           try {
             return await store!.save(record, revision, actor.id, hardcore);
           } catch (error) {
-            // Retain files if a database outage makes the commit outcome uncertain.
-            const existing = await store!
-              .asset(record.logo.id)
-              .catch(() => undefined);
-            if (existing === null) await storage!.removeLogo(record);
+            // A failed read after a lost write receipt cannot establish
+            // whether the new logo was committed. Defer reclamation.
             throw error;
           }
         },
