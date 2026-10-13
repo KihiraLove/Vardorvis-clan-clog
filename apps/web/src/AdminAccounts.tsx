@@ -1,6 +1,7 @@
 /** Administrator-only moderator management; temporary passwords are never redisplayed. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient, StaffAccount } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
@@ -33,8 +34,7 @@ export function AdminAccounts({
       .catch((failure: unknown) => {
         if (controller.signal.aborted) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         )
           onAccessLost();
         else
