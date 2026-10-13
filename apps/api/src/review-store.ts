@@ -466,10 +466,7 @@ export class PgReviewStore implements ReviewStore {
         action = 'edit';
         if (row.status !== 'pending' && row.status !== 'approved')
           throw conflict();
-        if (
-          typeof fields.note !== 'string' ||
-          fields.note.trim().length > 1000
-        )
+        if (typeof fields.note !== 'string' || fields.note.trim().length > 1000)
           throw new ApiError(422, 'Keep the review note to 1,000 characters.');
         const note = fields.note.trim();
         if (note === row.reviewNote)
