@@ -32,8 +32,7 @@ export function useAdminAction(onAccessLost: () => void) {
       await withAbort(work(current.signal), current.signal);
     } catch (failure) {
       if (controller.current !== current) return;
-      if (classifyAccessFailure(failure) === 'expired')
-        onAccessLost();
+      if (classifyAccessFailure(failure) === 'expired') onAccessLost();
       else {
         setError(
           current.signal.aborted
@@ -61,8 +60,7 @@ export function useAdminAction(onAccessLost: () => void) {
                       ' The latest data is loaded; review the credit before trying again.',
               );
           } catch (failure) {
-            if (classifyAccessFailure(failure) === 'expired')
-              onAccessLost();
+            if (classifyAccessFailure(failure) === 'expired') onAccessLost();
             else
               setError(
                 'The data changed, but the latest version could not be loaded. Reload before continuing.',
