@@ -193,6 +193,56 @@ unknown/reordered/partial ledgers, and advisory-lock timeouts run against
 disposable PostgreSQL in CI. Isolated restore rehearsal is tracked in
 [#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
 
+## Expired XP and competition preview maintenance
+
+Both `xp_previews` and `competition_previews` contain large, short-lived
+import snapshots. They expire for API use after **10 minutes**. A separate
+one-shot database-maintenance command purges rows only after an additional
+**60-minute grace period** (default: expiry older than one hour). This avoids
+competing with valid previews or delayed in-flight apply requests. The purge
+never modifies `xp_import_history`, `competition_import_history`, any audit
+table, or published XP/schedule state. Completed import keys continue to
+return their saved receipts after preview cleanup.
+
+Run the following in the deployment directory **with the database already
+running**, using the exact released `compose.yaml` and `.env`:
+
+```bash
+# Read-only report: counts, oldest expiry, cut-off, and would-be eligible rows.
+docker compose run --rm --no-deps migrate node packages/database/dist/preview-maintenance.js --dry-run
+
+# Explicit mutation: up to 200 rows/table/batch, five batches per table/run.
+docker compose run --rm --no-deps migrate node packages/database/dist/preview-maintenance.js --apply --batch-size=200 --max-batches=5 --grace-minutes=60
+```
+
+Schedule the **apply** command daily, for example at **03:00 local server
+time** with the host scheduler. Do not add a second permanent service or run
+this under an open admin HTTP route. Repeating the job is safe after a crash:
+each small transaction commits or rolls back independently, rows under
+concurrent apply locks are skipped and remain eligible for a subsequent run,
+and a session-scoped advisory lock prevents overlapping maintenance runs.
+A competing invocation reports an error and should be retried at the next
+scheduled run. Each run is bounded to at most
+`batch-size × max-batches` deletions **per table** (default 1,000; maximum
+10,000). Adjust `--batch-size=1..500`, `--max-batches=1..20`, or
+`--grace-minutes=60..10080` only when necessary. Never reduce the grace
+below 60 minutes. Use a scheduler timeout and alert on nonzero exit codes.
+
+The JSON report includes `mode`, a database-clock cutoff, per-table
+`before.total`, `before.eligible`, oldest expiry, actual `deleted`,
+`after.total`, `after.eligible`, and batches executed; it contains **no**
+preview tokens, snapshots, cookies, participant details, or credentials.
+Watch `after.eligible` for an increasing backlog and re-run within the
+configured batch limits if needed. With a dry run, deleted is always zero.
+The already provisioned `clog_runtime` role has **SELECT and INSERT but
+no DELETE** on either preview table; it also cannot modify receipt/audit
+tables. The one-shot `migrate` service is the separately credentialed
+schema-owner job, allowed to delete these preview rows. Do not grant the
+long-lived application role additional DELETE or expose the database-owner
+secret to `app`. These controls are checked in disposable PostgreSQL/Compose
+regressions. A partial run or interrupted transaction requires **no**
+manual receipt repair: inspect the next dry run and retry the normal job.
+
 ## Backups, Discord and release acceptance
 
 Migration `006_clan_logos.sql` adds administrator-configurable logos and matching
