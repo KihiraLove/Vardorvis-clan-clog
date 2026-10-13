@@ -2,6 +2,7 @@
 import { withAbort } from './with-abort.ts';
 import { useEffect, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 
 export function useAdminAction(onAccessLost: () => void) {
   const [busy, setBusy] = useState(false),
@@ -31,10 +32,7 @@ export function useAdminAction(onAccessLost: () => void) {
       await withAbort(work(current.signal), current.signal);
     } catch (failure) {
       if (controller.current !== current) return;
-      if (
-        failure instanceof AdminRequestError &&
-        [401, 403].includes(failure.status)
-      )
+      if (classifyAccessFailure(failure) === 'expired')
         onAccessLost();
       else {
         setError(
@@ -63,10 +61,7 @@ export function useAdminAction(onAccessLost: () => void) {
                       ' The latest data is loaded; review the credit before trying again.',
               );
           } catch (failure) {
-            if (
-              failure instanceof AdminRequestError &&
-              [401, 403].includes(failure.status)
-            )
+            if (classifyAccessFailure(failure) === 'expired')
               onAccessLost();
             else
               setError(
