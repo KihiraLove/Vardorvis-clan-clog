@@ -45,9 +45,7 @@ export function ClanApiKeySettings({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        ) {
+        if (classifyAccessFailure(failure) === 'expired') {
           onAccessLost();
           return;
         }
