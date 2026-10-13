@@ -166,8 +166,8 @@ jobs:
             const c = new pg.Client({connectionString:process.env.DATABASE_URL});
             await c.connect();
             try {
-              const p = (await c.query(\"SELECT has_table_privilege(current_user,'xp_previews','SELECT') AS xs,has_table_privilege(current_user,'xp_previews','INSERT') AS xi,has_table_privilege(current_user,'xp_previews','DELETE') AS xd,has_table_privilege(current_user,'competition_previews','SELECT') AS cs,has_table_privilege(current_user,'competition_previews','INSERT') AS ci,has_table_privilege(current_user,'competition_previews','DELETE') AS cd,has_table_privilege(current_user,'xp_import_history','DELETE') AS hd,has_table_privilege(current_user,'competition_import_history','DELETE') AS ch\")).rows[0];
-              if (JSON.stringify(p)!==JSON.stringify({xs:true,xi:true,xd:false,cs:true,ci:true,cd:false,hd:false,ch:false})) throw Error('Unexpected runtime maintenance privileges');
+              const p = (await c.query(\"SELECT has_table_privilege(current_user,'xp_previews','SELECT') AS xs,has_table_privilege(current_user,'xp_previews','INSERT') AS xi,has_table_privilege(current_user,'xp_previews','UPDATE') AS xu,has_table_privilege(current_user,'xp_previews','DELETE') AS xd,has_table_privilege(current_user,'competition_previews','SELECT') AS cs,has_table_privilege(current_user,'competition_previews','INSERT') AS ci,has_table_privilege(current_user,'competition_previews','UPDATE') AS cu,has_table_privilege(current_user,'competition_previews','DELETE') AS cd,has_table_privilege(current_user,'xp_import_history','DELETE') AS hd,has_table_privilege(current_user,'competition_import_history','DELETE') AS ch\")).rows[0];
+              if (JSON.stringify(p)!==JSON.stringify({xs:true,xi:true,xu:true,xd:false,cs:true,ci:true,cu:true,cd:false,hd:false,ch:false})) throw Error('Unexpected runtime maintenance privileges');
             } finally { await c.end(); }
           "
       - name: Admin catalog, durable icons and coordinated backup
