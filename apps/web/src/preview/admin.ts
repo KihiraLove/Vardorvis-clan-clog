@@ -852,9 +852,12 @@ export class PreviewAdminClient implements AdminClient {
   ) {
     this.access(signal);
     const row = this.row(id, version);
-    if (!['pending', 'approved'].includes(row.status) ||
-      typeof note !== 'string' || note.trim().length > 1000 ||
-      note.trim() === row.reviewNote)
+    if (
+      !['pending', 'approved'].includes(row.status) ||
+      typeof note !== 'string' ||
+      note.trim().length > 1000 ||
+      note.trim() === row.reviewNote
+    )
       throw new AdminRequestError(422);
     const before = structuredClone(row);
     row.reviewNote = note.trim();
