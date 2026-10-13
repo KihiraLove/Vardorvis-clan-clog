@@ -298,10 +298,14 @@ test('audit: XP and Scheduling competition fields share input styling', async ({
   expect(await style()).toEqual(scheduling);
 });
 
-test('audit: a pending session check gates navigation and concurrent private XP loads', async ({ page }) => {
+test('audit: a pending session check gates navigation and concurrent private XP loads', async ({
+  page,
+}) => {
   const f = await adminFixtures();
   let release!: () => void;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   let checks = 0;
   let privateReads = 0;
   await liveAdmin(page);
@@ -317,31 +321,43 @@ test('audit: a pending session check gates navigation and concurrent private XP 
   try {
     await page.goto('/admin/xp');
     await expect(page.getByText('Checking admin access…')).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toHaveCount(0);
-    await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
+    await expect(
+      page.getByRole('navigation', { name: 'Admin navigation' }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(
+      0,
+    );
     expect(privateReads).toBe(0);
   } finally {
     release();
   }
-  await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toBeVisible();
   await expect(page.getByLabel('Wise Old Man competition link')).toBeVisible();
   await expect.poll(() => privateReads).toBe(1);
   expect(checks).toBe(1);
 });
 
-test('audit: mandatory first-login password setup hides navigation and XP imports', async ({ page }) => {
+test('audit: mandatory first-login password setup hides navigation and XP imports', async ({
+  page,
+}) => {
   const f = await adminFixtures();
   await liveAdmin(page);
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill({ json: { ...f.session, mustChangePassword: true } }),
   );
   await page.goto('/admin/xp');
-  await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toHaveCount(0);
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
   await expect(page.getByLabel('Current password')).toBeVisible();
 });
 
-test('audit: XP history expiry clears private content without a second session waterfall', async ({ page }) => {
+test('audit: XP history expiry clears private content without a second session waterfall', async ({
+  page,
+}) => {
   const f = await adminFixtures();
   let checks = 0;
   let denied = false;
@@ -356,15 +372,17 @@ test('audit: XP history expiry clears private content without a second session w
         ? { status: 401, json: { error: 'expired' } }
         : {
             json: {
-              imports: [{
-                id: 'import-1',
-                competitionId: 42,
-                title: 'Private XP history',
-                actorName: 'Admin',
-                importedAt: '2026-10-13T06:00:00.000Z',
-                outcome: 'applied',
-                changes: [],
-              }],
+              imports: [
+                {
+                  id: 'import-1',
+                  competitionId: 42,
+                  title: 'Private XP history',
+                  actorName: 'Admin',
+                  importedAt: '2026-10-13T06:00:00.000Z',
+                  outcome: 'applied',
+                  changes: [],
+                },
+              ],
             },
           },
     ),
@@ -377,57 +395,97 @@ test('audit: XP history expiry clears private content without a second session w
   denied = true;
   await page.getByRole('link', { name: 'Your account' }).click();
   await page.getByRole('link', { name: 'XP imports' }).click();
-  await expect(page.getByRole('heading', { name: 'Admin session expired' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Admin session expired' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
   await expect(page.getByText('Private XP history')).toHaveCount(0);
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
   expect(checks).toBe(1);
 });
 
-test('audit: denied XP history is not mistaken for an expired login', async ({ page }) => {
+test('audit: denied XP history is not mistaken for an expired login', async ({
+  page,
+}) => {
   await liveAdmin(page);
   await page.route('**/api/v1/admin/xp/imports', (route) =>
     route.fulfill({ status: 403, json: { error: 'role denied' } }),
   );
   await page.goto('/admin/xp');
-  await expect(page.getByText('Your account is not allowed to view XP import history.')).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toBeVisible();
+  await expect(
+    page.getByText('Your account is not allowed to view XP import history.'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toBeVisible();
   await expect(page.getByLabel('Wise Old Man competition link')).toBeVisible();
 });
 
-test('audit: retrying a failed session refresh clears the prior error and restores navigation', async ({ page }) => {
+test('audit: retrying a failed session refresh clears the prior error and restores navigation', async ({
+  page,
+}) => {
   const f = await adminFixtures();
   let unavailable = true;
   await liveAdmin(page);
   await page.route('**/api/v1/auth/session', (route) =>
-    route.fulfill(unavailable ? { status: 503, json: { error: 'unavailable' } } : { json: f.session }),
+    route.fulfill(
+      unavailable
+        ? { status: 503, json: { error: 'unavailable' } }
+        : { json: f.session },
+    ),
   );
   await page.goto('/admin');
-  await expect(page.getByRole('heading', { name: 'Admin access unavailable' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Admin access unavailable' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
   unavailable = false;
   await page.getByRole('button', { name: 'Retry admin access' }).click();
-  await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Admin access unavailable' })).toHaveCount(0);
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Admin access unavailable' }),
+  ).toHaveCount(0);
 });
 
 for (const status of [401, 403]) {
-  test(`audit: competition preview ${status} ${status === 401 ? 'expires' : 'preserves'} the shell session`, async ({ page }) => {
+  test(`audit: competition preview ${status} ${status === 401 ? 'expires' : 'preserves'} the shell session`, async ({
+    page,
+  }) => {
     await liveAdmin(page);
     await page.route('**/api/v1/admin/competitions/preview', (route) =>
       route.fulfill({ status, json: { error: 'private diagnostic' } }),
     );
     await page.goto('/admin/xp');
-    await page.getByLabel('Wise Old Man competition link').fill('https://wiseoldman.net/competitions/42');
+    await page
+      .getByLabel('Wise Old Man competition link')
+      .fill('https://wiseoldman.net/competitions/42');
     await page.getByLabel('Competition kind').selectOption('SKILL');
     await page.getByRole('button', { name: 'Preview competition' }).click();
     if (status === 401) {
-      await expect(page.getByRole('heading', { name: 'Admin session expired' })).toBeVisible();
-      await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
-      await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'Admin session expired' }),
+      ).toBeVisible();
+      await expect(
+        page.getByLabel('Wise Old Man competition link'),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('navigation', { name: 'Admin navigation' }),
+      ).toHaveCount(0);
     } else {
-      await expect(page.getByText('Your account is not allowed to perform this competition import.')).toBeVisible();
-      await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toBeVisible();
+      await expect(
+        page.getByText(
+          'Your account is not allowed to perform this competition import.',
+        ),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('navigation', { name: 'Admin navigation' }),
+      ).toBeVisible();
     }
   });
 }
