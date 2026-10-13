@@ -9,6 +9,7 @@ import {
 import type { AdminClient, AdminCatalog } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import {
   localScheduleInput,
@@ -78,8 +79,7 @@ export function AdminScheduling({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         )
           onAccessLost();
         else setError('Scheduling could not be loaded.');
