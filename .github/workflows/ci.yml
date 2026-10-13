@@ -37,6 +37,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Show canonical B06 test formatting (temporary)
+        run: |
+          echo 'B06_FORMAT_BEGIN'
+          npx prettier apps/bot/src/retry-audit.test.ts
+          echo 'B06_FORMAT_END'
       - name: Inject backup orchestration failures
         run: node --test scripts/backup.test.mjs
       - run: npm run validate
