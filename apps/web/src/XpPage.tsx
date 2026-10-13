@@ -4,7 +4,7 @@ import { XpAmount } from './XpAmount.tsx';
 import { XpAdmin } from './XpAdmin.tsx';
 import { XpPodium } from './XpPodium.tsx';
 import type { CompetitionClient } from './competition-api.ts';
-import { skills, type XpClient } from './xp-model.ts';
+import { skills, type AdminSession, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
 import { PreviewXpClient } from './preview/xp.ts';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
@@ -14,6 +14,8 @@ export function XpPage({
   admin,
   preview,
   onMode,
+  session,
+  onAccessLost,
   copy = defaultSiteCopy,
 }: {
   client: XpClient;
@@ -21,6 +23,8 @@ export function XpPage({
   admin: boolean;
   preview: boolean;
   onMode: (next: boolean) => void;
+  session?: AdminSession;
+  onAccessLost?: () => void;
   copy?: SiteCopy;
 }) {
   const [data, setData] = useState<XpTracker>();
@@ -84,10 +88,12 @@ export function XpPage({
       aria-label={admin ? 'XP imports' : copy.xpTitle}
     >
       {!admin && <h1>{copy.xpTitle}</h1>}
-      {admin && (
+      {admin && session && onAccessLost && (
         <XpAdmin
           client={client}
           competitionClient={competitionClient}
+          session={session}
+          onAccessLost={onAccessLost}
           onApplied={() => setRefresh((n) => n + 1)}
           previewMode={preview}
         />
