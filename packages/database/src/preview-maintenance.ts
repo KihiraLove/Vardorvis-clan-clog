@@ -45,9 +45,7 @@ async function counts(client: pg.Client, table: Target, cutoff: Date) {
       'SELECT count(*)::int AS count FROM ' + table,
     ),
     client.query<{ count: number }>(
-      'SELECT count(*)::int AS count FROM ' +
-        table +
-        ' WHERE expires_at <= $1',
+      'SELECT count(*)::int AS count FROM ' + table + ' WHERE expires_at <= $1',
       [cutoff],
     ),
     client.query<{ expires_at: Date }>(
@@ -116,9 +114,7 @@ export async function runPreviewMaintenance(
   try {
     await client.query("SET statement_timeout = '10s'");
     const now = (
-      await client.query<{ now: Date }>(
-        'SELECT clock_timestamp() AS now',
-      )
+      await client.query<{ now: Date }>('SELECT clock_timestamp() AS now')
     ).rows[0]!.now;
     const cutoff = new Date(now.getTime() - graceMinutes * 60000);
     const report: {
@@ -140,7 +136,10 @@ export async function runPreviewMaintenance(
       cutoff: cutoff.toISOString(),
       graceMinutes,
       maximumDeletesPerTable: batchSize * maxBatches,
-      tables: {} as Record<Target, { before: Counts; deleted: number; after: Counts; batches: number }>,
+      tables: {} as Record<
+        Target,
+        { before: Counts; deleted: number; after: Counts; batches: number }
+      >,
     };
     for (const table of targets) {
       const before = await counts(client, table, cutoff);
@@ -184,7 +183,10 @@ function parseOptions(args: string[]): PreviewMaintenanceOptions {
       options.maxBatches = Number(arg.slice('--max-batches='.length));
     else if (arg.startsWith('--grace-minutes='))
       options.graceMinutes = Number(arg.slice('--grace-minutes='.length));
-    else throw new Error('Unknown maintenance option. Use --apply, --dry-run, --batch-size=N, --max-batches=N, --grace-minutes=N.');
+    else
+      throw new Error(
+        'Unknown maintenance option. Use --apply, --dry-run, --batch-size=N, --max-batches=N, --grace-minutes=N.',
+      );
   }
   return validatePreviewMaintenanceOptions(options);
 }
