@@ -41,10 +41,7 @@ export function ClanLogoSettings({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else setReadError(true);
       })
       .finally(() => clearTimeout(timeout));
