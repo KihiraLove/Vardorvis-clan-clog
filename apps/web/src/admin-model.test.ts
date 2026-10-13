@@ -121,7 +121,7 @@ test('proof links block spoofed/unsafe origins without requiring an external fet
     'javascript:alert(1)',
     'https://imgur.com.evil.test/proof',
     'http://imgur.com/proof',
-    'https://u:p@imgur.com/proof',
+    '***imgur.com/proof',
     'https://imgur.com:444/proof',
   ])
     assert.equal(safeProof(input), undefined);
@@ -485,8 +485,11 @@ test('preview staff notes are independent, versioned, auditable, and never chang
   assert.equal(pending.submission.reviewNote, '');
   const beforeCredits = client.publicLog().collections.credits;
   const saved = await client.saveReviewNote(
-    pending.submission.id, pending.submission.version,
-    '  Staff note without item match  ', 'preview', signal(),
+    pending.submission.id,
+    pending.submission.version,
+    '  Staff note without item match  ',
+    'preview',
+    signal(),
   );
   assert.equal(saved.reviewNote, 'Staff note without item match');
   assert.equal(saved.status, 'pending');
@@ -498,30 +501,63 @@ test('preview staff notes are independent, versioned, auditable, and never chang
   assert.equal(detail.audit[0]?.after.reviewNote, saved.reviewNote);
   assert.deepEqual(client.publicLog().collections.credits, beforeCredits);
   await assert.rejects(
-    client.saveReviewNote(saved.id, saved.version, saved.reviewNote, 'preview', signal()),
+    client.saveReviewNote(
+      saved.id,
+      saved.version,
+      saved.reviewNote,
+      'preview',
+      signal(),
+    ),
     { status: 422 },
   );
   await assert.rejects(
-    client.saveReviewNote(saved.id, pending.submission.version, 'Stale', 'preview', signal()),
+    client.saveReviewNote(
+      saved.id,
+      pending.submission.version,
+      'Stale',
+      'preview',
+      signal(),
+    ),
     { status: 409 },
   );
   await assert.rejects(
-    client.saveReviewNote(saved.id, saved.version, 'x'.repeat(1001), 'preview', signal()),
+    client.saveReviewNote(
+      saved.id,
+      saved.version,
+      'x'.repeat(1001),
+      'preview',
+      signal(),
+    ),
     { status: 422 },
   );
-  const cleared = await client.saveReviewNote(saved.id, saved.version, '', 'preview', signal());
+  const cleared = await client.saveReviewNote(
+    saved.id,
+    saved.version,
+    '',
+    'preview',
+    signal(),
+  );
   assert.equal(cleared.reviewNote, '');
   assert.equal((await client.detail(saved.id, signal())).audit.length, 2);
   assert.deepEqual(client.publicLog().collections.credits, beforeCredits);
 
   const ready = await client.detail('sample-hardcore', signal());
   const approved = await client.decide(
-    ready.submission.id, ready.submission.version, 'approve', '', 'preview', signal(),
+    ready.submission.id,
+    ready.submission.version,
+    'approve',
+    '',
+    'preview',
+    signal(),
   );
   assert.equal(approved.status, 'approved');
   const approvedCredits = client.publicLog().collections.credits;
   const note = await client.saveReviewNote(
-    approved.id, approved.version, 'Hardcore proof checked', 'preview', signal(),
+    approved.id,
+    approved.version,
+    'Hardcore proof checked',
+    'preview',
+    signal(),
   );
   assert.equal(note.reviewNote, 'Hardcore proof checked');
   assert.equal(note.status, 'approved');
@@ -529,12 +565,22 @@ test('preview staff notes are independent, versioned, auditable, and never chang
   assert.deepEqual(client.publicLog().collections.credits, approvedCredits);
   const rejectedPending = await client.detail('sample-ordinary', signal());
   const rejected = await client.decide(
-    rejectedPending.submission.id, rejectedPending.submission.version,
-    'reject', 'Invalid proof', 'preview', signal(),
+    rejectedPending.submission.id,
+    rejectedPending.submission.version,
+    'reject',
+    'Invalid proof',
+    'preview',
+    signal(),
   );
   assert.equal(rejected.reviewReason, 'Invalid proof');
   await assert.rejects(
-    client.saveReviewNote(rejected.id, rejected.version, 'Cannot edit after reject', 'preview', signal()),
+    client.saveReviewNote(
+      rejected.id,
+      rejected.version,
+      'Cannot edit after reject',
+      'preview',
+      signal(),
+    ),
     { status: 422 },
   );
 });
