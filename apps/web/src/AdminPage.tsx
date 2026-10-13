@@ -291,6 +291,8 @@ export function AdminPage({
             </p>
           )}
         </section>
+      ) : !session ? (
+        null
       ) : session.mustChangePassword || path === '/admin/account' ? (
         <AccountSettings
           client={client}
