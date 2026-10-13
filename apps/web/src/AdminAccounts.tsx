@@ -33,10 +33,7 @@ export function AdminAccounts({
       })
       .catch((failure: unknown) => {
         if (controller.signal.aborted) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setError('Accounts could not be loaded. Retry to refresh the list.');
       })
