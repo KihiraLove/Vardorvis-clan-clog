@@ -112,6 +112,7 @@ export function SubmissionEditor({
   const row = detail.submission,
     editable = ['pending', 'approved'].includes(row.status);
   const activeItem = catalog.items.some((item) => item.id === row.itemId);
+  const draftItemActive = catalog.items.some((item) => item.id === draft.itemId);
   const claimDirty =
     draft.itemId !== (row.itemId ?? 0) ||
     draft.collectorName.trim() !== row.collectorName ||
@@ -225,6 +226,7 @@ export function SubmissionEditor({
     claimDirty,
     noteDirty,
     activeItem,
+    draftItemActive,
     validProof: Boolean(proof) || row.source === 'manual',
     acknowledged: checked,
     reasonProvided: Boolean(draft.reason.trim()),
