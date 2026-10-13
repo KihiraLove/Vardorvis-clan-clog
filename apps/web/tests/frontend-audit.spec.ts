@@ -74,7 +74,9 @@ async function liveAdmin(page: Page, authenticated = true) {
       if (note === before.reviewNote)
         return route.fulfill({ status: 422, json: { error: 'No change' } });
       state.detail.submission = {
-        ...before, reviewNote: note, version: before.version + 1,
+        ...before,
+        reviewNote: note,
+        version: before.version + 1,
       };
       state.detail.audit.unshift({
         id: 'note-' + state.detail.submission.version,
@@ -254,7 +256,9 @@ test('audit: an ordinary-world review note can be saved, discarded, cleared and 
   await note.fill('Reviewed the collection date.');
   await expect(save).toBeEnabled();
   await expect(discard).toBeEnabled();
-  await expect(editor.getByRole('button', { name: 'Save corrections' })).toBeDisabled();
+  await expect(
+    editor.getByRole('button', { name: 'Save corrections' }),
+  ).toBeDisabled();
   await discard.click();
   await expect(note).toHaveValue('');
   await expect(save).toBeDisabled();
@@ -262,21 +266,32 @@ test('audit: an ordinary-world review note can be saved, discarded, cleared and 
   await save.click();
   await expect(note).toHaveValue('Reviewed the collection date.');
   await expect(save).toBeDisabled();
-  await expect(state.detail.submission.reviewNote).toBe('Reviewed the collection date.');
+  await expect(state.detail.submission.reviewNote).toBe(
+    'Reviewed the collection date.',
+  );
   await expect(state.detail.submission.version).toBe(2);
   await expect(state.detail.audit).toHaveLength(1);
   await expect(state.detail.audit[0]?.reason).toBeNull();
   await editor.getByRole('button', { name: 'Close review' }).click();
   await page.getByRole('button', { name: /^Review .+ ·/ }).click();
-  await expect(page.locator('.submission-editor').getByLabel('Review note')).toHaveValue('Reviewed the collection date.');
+  await expect(
+    page.locator('.submission-editor').getByLabel('Review note'),
+  ).toHaveValue('Reviewed the collection date.');
   await page.locator('.submission-editor').getByLabel('Review note').fill('');
-  await page.locator('.submission-editor').getByRole('button', { name: 'Save review note' }).click();
-  await expect(page.locator('.submission-editor').getByLabel('Review note')).toHaveValue('');
+  await page
+    .locator('.submission-editor')
+    .getByRole('button', { name: 'Save review note' })
+    .click();
+  await expect(
+    page.locator('.submission-editor').getByLabel('Review note'),
+  ).toHaveValue('');
   expect(state.detail.audit).toHaveLength(2);
   expect(state.detail.submission.reviewNote).toBe('');
 });
 
-test('audit: hardcore review note is versioned without changing claim mode or approval', async ({ page }) => {
+test('audit: hardcore review note is versioned without changing claim mode or approval', async ({
+  page,
+}) => {
   const state = await liveAdmin(page);
   state.detail.submission.hardcore = true;
   const editor = await openReview(page);
