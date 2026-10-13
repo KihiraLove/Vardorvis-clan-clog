@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
