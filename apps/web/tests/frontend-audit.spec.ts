@@ -249,9 +249,8 @@ test('audit: a pagination boundary does not use a loading cursor', async ({
 }) => {
   await liveAdmin(page);
   await page.goto('/admin');
-  await expect(
-    page.getByRole('button', { name: 'Next page', exact: true }),
-  ).toBeEnabled();
+  const next = page.getByRole('button', { name: 'Next page', exact: true });
+  await expect(next).toBeEnabled();
   const previous = page.getByRole('button', {
     name: 'Previous page',
     exact: true,
@@ -695,6 +694,11 @@ test('audit: approved credit requires an audit reason for claim corrections or r
   await expect(save).toBeEnabled();
   await expect(revoke).toBeDisabled();
   await editor.getByRole('button', { name: 'Discard corrections' }).click();
+  await expect(revoke).toBeDisabled();
+  await expect(
+    editor.getByText('Enter a reason before revoking a credit.'),
+  ).toBeVisible();
+  await editor.getByLabel('Review reason').fill('Revoking after independent proof review');
   await expect(revoke).toBeEnabled();
   await revoke.click();
   expect(state.decisions[0]?.action).toBe('revoke');
