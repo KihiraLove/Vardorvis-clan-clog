@@ -66,7 +66,8 @@ try {
       route + ': CSRF',
     );
     assert.equal(
-      (await put(route, tiny, { ...authorized, 'X-CSRF-Token': 'invalid' })).status,
+      (await put(route, tiny, { ...authorized, 'X-CSRF-Token': 'invalid' }))
+        .status,
       403,
       route + ': forged CSRF',
     );
@@ -96,15 +97,24 @@ try {
   assert.equal(ordinary.status, 200, 'ordinary >4 MiB through Nginx');
   const ordinaryReceipt = await ordinary.json();
   assert.equal(ordinaryReceipt.revision, 'branding-2');
-  assert.match(ordinaryReceipt.logoPath, /^\/api\/v1\/branding\/[a-zA-Z0-9_-]+\.webp$/u);
+  assert.match(
+    ordinaryReceipt.logoPath,
+    /^\/api\/v1\/branding\/[a-zA-Z0-9_-]+\.webp$/u,
+  );
 
   const hc = await put(hardcorePath, hardcore, authorized);
   assert.equal(hc.status, 200, 'hardcore >4 MiB through Nginx');
   const hcReceipt = await hc.json();
   assert.equal(hcReceipt.revision, 'branding-2');
   assert.notEqual(hcReceipt.logoPath, ordinaryReceipt.logoPath);
-  assert.equal((await (await request('/api/v1/branding')).json()).logoPath, ordinaryReceipt.logoPath);
-  assert.equal((await (await request('/api/v1/branding/hardcore')).json()).logoPath, hcReceipt.logoPath);
+  assert.equal(
+    (await (await request('/api/v1/branding')).json()).logoPath,
+    ordinaryReceipt.logoPath,
+  );
+  assert.equal(
+    (await (await request('/api/v1/branding/hardcore')).json()).logoPath,
+    hcReceipt.logoPath,
+  );
   assert.equal((await request(ordinaryReceipt.logoPath)).status, 200);
   assert.equal((await request(hcReceipt.logoPath)).status, 200);
 
@@ -114,7 +124,10 @@ try {
   for (const route of [ordinaryPath, hardcorePath]) {
     const response = await put(route, overFile, authorized);
     assert.equal(response.status, 413, route + ': >10 MiB file');
-    assert.match(response.headers.get('content-type') ?? '', /application\/json/u);
+    assert.match(
+      response.headers.get('content-type') ?? '',
+      /application\/json/u,
+    );
   }
 
   // The proxy itself rejects any multipart body over 11 MiB, for either logo
@@ -134,7 +147,9 @@ try {
     assert.equal(response.status, 413, route + ': unrelated 3 MiB cap');
     assert.match(response.headers.get('content-type') ?? '', /text\/html/u);
   }
-  console.log('Both exact Nginx branding routes accept valid >4 MiB images and reject excessive files/bodies; default cap and auth/CSRF remain enforced.');
+  console.log(
+    'Both exact Nginx branding routes accept valid >4 MiB images and reject excessive files/bodies; default cap and auth/CSRF remain enforced.',
+  );
 } finally {
   const logout = await request('/api/v1/auth/logout', {
     method: 'POST',
