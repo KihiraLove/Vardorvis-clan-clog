@@ -9,6 +9,7 @@ import {
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminAction } from './use-admin-action.ts';
 
 const worldOptions = [
@@ -58,8 +59,7 @@ export function RuneLiteReviewSettings({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         )
           onAccessLost();
         else setError('RuneLite review settings are unavailable.');
