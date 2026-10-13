@@ -6,7 +6,12 @@ import {
   type ChatInputCommandInteraction,
   type Interaction,
 } from 'discord.js';
-import { BotApiError, type BotApi, type Receipt } from './api.js';
+import {
+  BotApiError,
+  UnconfirmedSubmissionError,
+  type BotApi,
+  type Receipt,
+} from './api.js';
 import { closedCollectionPageMessage } from '@clog/domain';
 
 export function validProof(value: string): boolean {
@@ -60,7 +65,28 @@ export function receiptMessage(receipt: Receipt): string {
     receipt.submissionId
   );
 }
-export function failureMessage(error: unknown): string {
+/** Discord snowflakes are safe operator correlation IDs, not bearer credentials. */
+function interactionReference(id: string | undefined): string {
+  return id && /^\\d{17,20}$/u.test(id)
+    ? '\\nDiscord interaction ID: ' + id + '.'
+    : '';
+}
+
+function unconfirmedMessage(interactionId?: string): string {
+  return (
+    'Submission could not be confirmed. It might have reached the server ' +
+    'and been saved for review, but no valid receipt was received.' +
+    interactionReference(interactionId) +
+    '\\nAsk a clan admin to check this interaction ID in the submission history. ' +
+    'Do not repeat /cc-clog submit as a new command until checked: Discord ' +
+    'assigns a new interaction ID, which can create another submission. ' +
+    'No approval or collection credit is implied.'
+  );
+}
+
+export function failureMessage(error: unknown, interactionId?: string): string {
+  if (error instanceof UnconfirmedSubmissionError)
+    return unconfirmedMessage(error.interactionId);
   if (error instanceof BotApiError) {
     if (error.status === 403 && error.message === closedCollectionPageMessage)
       return closedCollectionPageMessage;
@@ -73,7 +99,7 @@ export function failureMessage(error: unknown): string {
     if (error.status === 429)
       return 'The submission service is temporarily rate-limited. No receipt could be confirmed; retry later.';
   }
-  return 'Submission could not be confirmed. It might have reached the server; please retry only with the same interaction details or ask an admin to check. No approval is implied.';
+  return unconfirmedMessage(interactionId);
 }
 export async function handleAutocomplete(
   interaction: AutocompleteInteraction,
@@ -161,7 +187,9 @@ export async function handleSubmission(
     });
     await interaction.editReply(receiptMessage(receipt));
   } catch (error) {
-    await interaction.editReply(failureMessage(error)).catch(() => undefined);
+    await interaction
+      .editReply(failureMessage(error, interaction.id))
+      .catch(() => undefined);
   }
 }
 export async function handleInteraction(
