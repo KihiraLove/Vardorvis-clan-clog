@@ -75,7 +75,11 @@ export async function migrate(
   databaseUrl: string,
   lockTimeoutMs = 10000,
 ): Promise<void> {
-  if (!Number.isInteger(lockTimeoutMs) || lockTimeoutMs < 1 || lockTimeoutMs > 10000)
+  if (
+    !Number.isInteger(lockTimeoutMs) ||
+    lockTimeoutMs < 1 ||
+    lockTimeoutMs > 10000
+  )
     throw new Error('Migration lock timeout must be 1–10000 ms');
   // Read all exact SQL bytes before opening the transaction; no partially
   // available image may mutate a database.
@@ -100,7 +104,9 @@ export async function migrate(
       lockTimeoutMs + 'ms',
     ]);
     await client.query("SET LOCAL statement_timeout = '120s'");
-    await client.query("SET LOCAL idle_in_transaction_session_timeout = '125s'");
+    await client.query(
+      "SET LOCAL idle_in_transaction_session_timeout = '125s'",
+    );
     await client.query('SELECT pg_advisory_xact_lock(74261005)');
     await client.query(
       'CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())',
