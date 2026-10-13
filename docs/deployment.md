@@ -93,8 +93,9 @@ SESSION_SECRET=replace-with-64-random-hex-characters
 
 The override enables `AUTH_ENABLED=true` and configures
 `PUBLIC_ORIGIN=https://<CLOG_HOST>` using the same hostname as the Host label.
-On the first account-enabled startup, sign in with `admin` / `admin` and change
-the password. Subsequent credentials persist in PostgreSQL; see
+For a fresh account-enabled install, set a unique `ADMIN_BOOTSTRAP_PASSWORD`
+before starting, then sign in as `admin` with that secret and change the password.
+Never use a known default password; subsequent credentials persist in PostgreSQL. See
 [staff-account setup and upgrades](environment.md#required-secrets-and-configuration).
 Traefik labels select existing HTTPS entrypoint and certificate resolver; they
 cannot themselves define Traefik's static resolver or issue DNS records.
@@ -153,10 +154,38 @@ website icons. Files under `catalog-icons/branding` are already included in
 `icons.tar.gz`; restore that archive together with its database backup. See the
 [clan branding guide](clan-branding.md) for upload and recovery behavior.
 
-`infra/backup.sh /safe/new/backup-directory` stops the `app` writer, captures
-a PostgreSQL custom-format dump and all durable uploaded icons and screenshots, writes
-checksums and a `COMPLETE` marker, then restarts the app. Store an encrypted
-copy off-host and rehearse an isolated restore before production approval.
+`infra/backup.sh /safe/new/backup-directory` holds the deployment lock, checks
+the running-service inventory, and stops the `app` writer before capturing
+PostgreSQL and both uploaded-image volumes. Backups **fail closed** if Docker
+Compose inventory fails, the database is not running, a migration or unknown
+service is running, the app cannot be confirmed stopped, a capture/checksum
+fails, or the originally running app cannot be confirmed restarted. An app that
+was already offline is left offline. A failed attempt leaves an incomplete
+directory **without `COMPLETE`**; do not restore it or mistake its individual
+archives for a valid backup. Inspect the failure and writer restart state,
+then retry with a fresh directory. Never bypass the shared deployment lock
+outside the coordinated deploy helper.
+
+A completed directory contains:
+
+- `database.dump`: PostgreSQL custom-format database, including accounts,
+  collection credits, receipts, settings and audit/history.
+- `icons.tar.gz`: complete `catalog-icons` volume, including uploaded
+  catalog icons and branding/logo files.
+- `screenshots.tar.gz`: complete `submission-images` volume, including
+  proof screenshots **and the hidden `.clan-api-key.secret` encryption root**.
+  The root must match the encrypted key records in the database; restoring
+  the database without it may prevent startup.
+- `SHA256SUMS`: verified checksums for the three captures.
+- `release.txt` when `.current-release` is available, for image provenance.
+- `COMPLETE`: written atomically **only after** capture, checksum validation
+  and writer restart verification succeed.
+
+Check the marker and `(cd BACKUP_DIR && sha256sum --check SHA256SUMS)`
+before copying the backup to encrypted off-host storage. Restore all three
+captures together, preserve file ownership and the encryption root, and
+rehearse an isolated restore before production approval. The automated
+end-to-end recovery drill remains tracked separately in [#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
 
 Migration `004_runelite_submissions.sql` adds the admin-editable clan name,
 private screenshot metadata and RuneLite intake receipts. Preserve the new
