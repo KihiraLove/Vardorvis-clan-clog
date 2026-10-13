@@ -158,7 +158,7 @@ jobs:
         run: |
           app_id="$(docker compose ps -q app)"
           app_started="$(docker inspect --format '{{.State.StartedAt}}' "$app_id")"
-          curl --fail http://127.0.0.1:8088/readyz
+          curl --fail --retry 15 --retry-delay 1 --retry-all-errors --retry-connrefused http://127.0.0.1:8088/readyz
           docker compose stop db
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/healthz)" = "200"
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/readyz)" = "503"
