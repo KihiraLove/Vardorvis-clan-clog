@@ -80,7 +80,10 @@ export function AdminPage({
   onSettingsSaved: (settings: SiteSettings) => void;
   onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
   onMode: (next: boolean) => void;
-  children?: (session: AdminSession, onAccessLost: () => void) => React.ReactNode;
+  children?: (
+    session: AdminSession,
+    onAccessLost: () => void,
+  ) => React.ReactNode;
 }) {
   const [access, setAccess] = useState<AdminAccess>({ phase: 'checking' }),
     [error, setError] = useState<string>();
@@ -252,7 +255,11 @@ export function AdminPage({
         <p role="status">Checking admin access…</p>
       ) : access.phase === 'signed-out' || access.phase === 'expired' ? (
         <section className="admin-panel">
-          <h2>{access.phase === 'expired' ? 'Admin session expired' : 'Admin sign-in required'}</h2>
+          <h2>
+            {access.phase === 'expired'
+              ? 'Admin session expired'
+              : 'Admin sign-in required'}
+          </h2>
           <p>Sign in with your administrator or moderator account.</p>
           <form
             className="admin-credential-form"
@@ -291,9 +298,8 @@ export function AdminPage({
             </p>
           )}
         </section>
-      ) : !session ? (
-        null
-      ) : session.mustChangePassword || path === '/admin/account' ? (
+      ) : !session ? null : session.mustChangePassword ||
+        path === '/admin/account' ? (
         <AccountSettings
           client={client}
           session={session}
