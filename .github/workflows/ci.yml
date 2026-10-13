@@ -37,6 +37,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Inject backup orchestration failures
+        run: node --test scripts/backup.test.mjs
       - run: npm run validate
 
   docker-smoke:
@@ -149,6 +151,7 @@ jobs:
           test -f /tmp/catalog-backup/COMPLETE
           (cd /tmp/catalog-backup && sha256sum --check SHA256SUMS)
           tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
+          tar -tzf /tmp/catalog-backup/screenshots.tar.gz | grep -Fx './.clan-api-key.secret'
       - name: Logs on failure
         if: failure()
         run: |
