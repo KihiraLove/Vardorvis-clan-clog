@@ -159,9 +159,14 @@ for (const stage of faultStages) {
     assert.notEqual(result.status, 0, `${stage} unexpectedly succeeded`);
     assert.equal(existsSync(join(target, 'COMPLETE')), false);
     if (
-      ['inventory', 'no-db', 'migrate', 'unknown', 'duplicate', 'lock'].includes(
-        stage,
-      )
+      [
+        'inventory',
+        'no-db',
+        'migrate',
+        'unknown',
+        'duplicate',
+        'lock',
+      ].includes(stage)
     ) {
       assert.doesNotMatch(log, /stop app|start app/);
     } else {
@@ -172,17 +177,4 @@ for (const stage of faultStages) {
     }
     if (stage === 'lock') assert.equal(log, '');
   });
-}
-
-// Temporary formatter diagnostics for a CI-only formatting mismatch.
-if (process.env.CI) {
-  const prettier = await import('prettier');
-  const config = await prettier.resolveConfig('scripts/backup.test.mjs');
-  const formatted = await prettier.format(readFileSync(new URL(import.meta.url), 'utf8'), {
-    ...config,
-    filepath: 'scripts/backup.test.mjs',
-  });
-  console.log('CANONICAL_FORMAT_BEGIN');
-  console.log(formatted);
-  console.log('CANONICAL_FORMAT_END');
 }
