@@ -140,7 +140,7 @@ export async function runPreviewMaintenance(
       cutoff: cutoff.toISOString(),
       graceMinutes,
       maximumDeletesPerTable: batchSize * maxBatches,
-      tables: {} as (typeof report)['tables'],
+      tables: {} as Record<Target, { before: Counts; deleted: number; after: Counts; batches: number }>,
     };
     for (const table of targets) {
       const before = await counts(client, table, cutoff);
