@@ -71,7 +71,12 @@ async function bundledMigrations(): Promise<
   return manifest;
 }
 
-export async function migrate(databaseUrl: string): Promise<void> {
+export async function migrate(
+  databaseUrl: string,
+  lockTimeoutMs = 10000,
+): Promise<void> {
+  if (!Number.isInteger(lockTimeoutMs) || lockTimeoutMs < 1 || lockTimeoutMs > 10000)
+    throw new Error('Migration lock timeout must be 1–10000 ms');
   // Read all exact SQL bytes before opening the transaction; no partially
   // available image may mutate a database.
   const manifest = await bundledMigrations();
@@ -90,7 +95,10 @@ export async function migrate(databaseUrl: string): Promise<void> {
     // deadlines also apply to the advisory lock, not only DDL statements.
     await client.query('BEGIN');
     started = true;
-    await client.query("SET LOCAL lock_timeout = '10s'");
+    await client.query('SELECT set_config($1,$2,true)', [
+      'lock_timeout',
+      lockTimeoutMs + 'ms',
+    ]);
     await client.query("SET LOCAL statement_timeout = '120s'");
     await client.query("SET LOCAL idle_in_transaction_session_timeout = '125s'");
     await client.query('SELECT pg_advisory_xact_lock(74261005)');
