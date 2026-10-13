@@ -381,7 +381,7 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
   await context.close();
 });
 
-test('anonymous access makes no private reads and forbidden review clears private records', async ({
+test('anonymous access makes no private reads while forbidden review preserves a valid login', async ({
   page,
 }) => {
   const state = await mockAdmin(page);
@@ -410,10 +410,15 @@ test('anonymous access makes no private reads and forbidden review clears privat
   await editor(page)
     .getByRole('button', { name: 'Approve submission', exact: true })
     .click();
-  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+  // This is a role/business-rule denial, not proof that authentication
+  // expired: keep the valid shell session and show only a safe error.
   await expect(
-    page.locator('.submission-editor, .submission-card'),
-  ).toHaveCount(0);
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText('Your account is not allowed to administer the clan.'),
+  ).toBeVisible();
   await expect(page.getByText('private details must not render')).toHaveCount(
     0,
   );
