@@ -173,7 +173,10 @@ investigating** the failure and removing the cause.
 - Older database whose applied history is a verified prefix of the image:
   apply only missing migrations in one transaction. The 013 → 014 upgrade
   preserves existing XP events and backfills WOM competition identity.
-- The 015 upgrade adds an independent persisted review note; legacy\n  `review_reason` values stay untouched for past correction/rejection/revocation\n  decisions and existing credits are not rewritten.\n- Restart, redeploy, or image rollback with an **identical applied manifest**:
+- The 015 upgrade adds an independent persisted review note; legacy
+  `review_reason` values stay untouched for past correction/rejection/revocation
+  decisions and existing credits are not rewritten.
+- Restart, redeploy, or image rollback with an **identical applied manifest**:
   accepted, provided the other application/schema contracts remain compatible.
 - Older image missing any already-applied migration, edited baseline, unknown
   future history, or historical gap: **rejected**. There is no automatic SQL
