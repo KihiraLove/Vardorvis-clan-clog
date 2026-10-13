@@ -1,6 +1,7 @@
 /** Runtime composition: validated auth config, durable store and graceful shutdown. */
 import { checkBotReadiness } from './readiness.js';
 import pg from 'pg';
+import { observePoolFailures } from './db-pool.js';
 import { join } from 'node:path';
 import { BrandingStorage } from './branding-storage.js';
 import { PgBrandingStore } from './branding-store.js';
@@ -30,6 +31,13 @@ const pool = process.env.DATABASE_URL
       max: 10,
     })
   : undefined;
+// An idle connection can fail asynchronously after a database restart.
+// pg evicts the client, but its EventEmitter 'error' must be consumed.
+// Report only a fixed category: driver errors may contain SQL and credentials.
+if (pool)
+  observePoolFailures(pool, (category) => {
+    process.stderr.write(`PostgreSQL idle pool failure: ${category}\n`);
+  });
 const store = pool ? new PgStore(pool) : undefined;
 const icons = config.iconDirectory
   ? new IconStorage(config.iconDirectory)
