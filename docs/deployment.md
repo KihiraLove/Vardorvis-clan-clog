@@ -134,7 +134,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: 001_baseline.sql and 002_manual_submission_requests.sql
+# Expected: contiguous 001_baseline.sql through 014_wom_competitions.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose
@@ -146,6 +146,49 @@ own isolated test data.
 
 Never run `down --volumes` on a production deployment. For later releases,
 add new forward-only migration files rather than editing this applied baseline.
+
+### Migration history and image compatibility (REVIEW-02/B05)
+
+The one-shot bootstrap first reads the **complete immutable SQL bundle**, then
+locks the migration transaction and validates the **entire applied ledger**.
+The on-disk manifest must be consecutively numbered (001, 002, ...) without
+missing/duplicate revisions. Applied history must be an exact **checksummed
+prefix** of that ordered bundle. Unknown/future revisions, missing middle
+entries, changed migration contents, reversed recorded timestamps, or
+non-prefix history abort the transaction **before any pending DDL**. Applied
+SQL files and database-ledger checksums must not be rewritten to force a
+release through.
+
+The migration connection must be acquired within 5 seconds. The migration
+transaction bounds advisory-lock/DDL lock waits to 10 seconds, statement
+execution to 120 seconds, and idle transactions to 125 seconds. A lock or
+statement timeout is a failed bootstrap: the application must not be started
+against an uncertain schema. The complete batch is transactional and guarded
+by the same advisory lock used by catalog imports; retries are safe **after
+investigating** the failure and removing the cause.
+
+**Supported image/database combinations:**
+
+- Fresh database + current image: apply all bundled SQL.
+- Older database whose applied history is a verified prefix of the image:
+  apply only missing migrations in one transaction. The 013 → 014 upgrade
+  preserves existing XP events and backfills WOM competition identity.
+- Restart, redeploy, or image rollback with an **identical applied manifest**:
+  accepted, provided the other application/schema contracts remain compatible.
+- Older image missing any already-applied migration, edited baseline, unknown
+  future history, or historical gap: **rejected**. There is no automatic SQL
+  downgrade or blanket "ignore unknown migrations" override. If restoring
+  an older release needs an older schema, restore the **matching coordinated
+  database, icons and screenshots backup**, including the clan-key encryption
+  root, and verify it on an isolated instance before changing production.
+
+Schema ledger checks run in the `migrate` Compose one-shot job before the app
+service is started; `depends_on: service_completed_successfully` gates startup.
+Do not start the runtime service while skipping a failed bootstrap. A populated
+013 → 014 regression, failure rollback, concurrent migration serialization,
+unknown/reordered/partial ledgers, and advisory-lock timeouts run against
+disposable PostgreSQL in CI. Isolated restore rehearsal is tracked in
+[#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
 
 ## Backups, Discord and release acceptance
 
