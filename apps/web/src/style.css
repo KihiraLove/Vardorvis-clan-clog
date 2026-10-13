@@ -983,7 +983,15 @@ main {
 }
 .site-button:disabled {
   opacity: 0.5;
+  cursor: not-allowed;
+}
+/* A boundary or missing prerequisite is never represented as an active request. */
+.site-button[aria-busy='true'] {
   cursor: wait;
+}
+.admin-action-explanation {
+  margin: 5px 0;
+  max-width: 65ch;
 }
 @media (max-width: 740px) {
   .xp-layout {
