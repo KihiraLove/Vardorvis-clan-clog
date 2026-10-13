@@ -47,6 +47,29 @@ Any reconciliation failure rolls back the password and privilege changes.
 SQL owner/migration access must never be exposed to the API service or publicly
 through Traefik.
 
+## Database connection failures (#66 / REVIEW-02 B04)
+
+The production API consumes PostgreSQL's asynchronous idle-client `error`
+events instead of allowing Node to terminate. These errors are categorized
+using a fixed allowlist of connection/termination codes and logged without
+driver error objects, connection strings, SQL statements or parameters.
+
+`GET /healthz` reports process liveness independently of PostgreSQL.
+`GET /readyz` performs fresh database checks on every request and responds
+with 503 when connections, reads or dependencies fail; when the database
+recovers, the pool establishes fresh connections and readiness recovers
+without an API restart. In-flight queries may fail with a sanitized 503.
+**No failed database write is automatically replayed**: a lost connection
+around a commit can leave the outcome uncertain. Clients must use the
+operation's original idempotency key/receipt reconciliation flow rather
+than issuing a new write blindly.
+
+Hosted integration coverage terminates both idle and blocked active
+PostgreSQL backends against the real API entry point, verifies readiness
+and clean signal shutdown, and restarts the Compose PostgreSQL service
+to confirm 503 → 200 recovery with the same API process. Database restart
+testing is isolated from production data.
+
 ## First deployment / migration
 
 1. Back up both database and catalog icons using `infra/backup.sh` before
