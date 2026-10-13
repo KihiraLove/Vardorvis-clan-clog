@@ -67,8 +67,8 @@ export function receiptMessage(receipt: Receipt): string {
 }
 /** Discord snowflakes are safe operator correlation IDs, not bearer credentials. */
 function interactionReference(id: string | undefined): string {
-  return id && /^\\d{17,20}$/u.test(id)
-    ? '\\nDiscord interaction ID: ' + id + '.'
+  return id && /^\d{17,20}$/u.test(id)
+    ? '\nDiscord interaction ID: ' + id + '.'
     : '';
 }
 
@@ -77,7 +77,7 @@ function unconfirmedMessage(interactionId?: string): string {
     'Submission could not be confirmed. It might have reached the server ' +
     'and been saved for review, but no valid receipt was received.' +
     interactionReference(interactionId) +
-    '\\nAsk a clan admin to check this interaction ID in the submission history. ' +
+    '\nAsk a clan admin to check this interaction ID in the submission history. ' +
     'Do not repeat /cc-clog submit as a new command until checked: Discord ' +
     'assigns a new interaction ID, which can create another submission. ' +
     'No approval or collection credit is implied.'
