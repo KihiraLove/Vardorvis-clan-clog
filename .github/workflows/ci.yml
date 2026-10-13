@@ -37,6 +37,62 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Capture F02 canonical formatting (temporary)
+        run: |
+          echo 'F02_FORMAT_0_BEGIN'
+          npx prettier apps/web/src/admin-session.ts
+          echo 'F02_FORMAT_0_END'
+          echo 'F02_FORMAT_1_BEGIN'
+          npx prettier apps/web/src/admin-session.test.ts
+          echo 'F02_FORMAT_1_END'
+          echo 'F02_FORMAT_2_BEGIN'
+          npx prettier apps/web/src/AdminPage.tsx
+          echo 'F02_FORMAT_2_END'
+          echo 'F02_FORMAT_3_BEGIN'
+          npx prettier apps/web/src/App.tsx
+          echo 'F02_FORMAT_3_END'
+          echo 'F02_FORMAT_4_BEGIN'
+          npx prettier apps/web/src/XpAdmin.tsx
+          echo 'F02_FORMAT_4_END'
+          echo 'F02_FORMAT_5_BEGIN'
+          npx prettier apps/web/src/XpPage.tsx
+          echo 'F02_FORMAT_5_END'
+          echo 'F02_FORMAT_6_BEGIN'
+          npx prettier apps/web/src/CompetitionImport.tsx
+          echo 'F02_FORMAT_6_END'
+          echo 'F02_FORMAT_7_BEGIN'
+          npx prettier apps/web/src/AdminScheduling.tsx
+          echo 'F02_FORMAT_7_END'
+          echo 'F02_FORMAT_8_BEGIN'
+          npx prettier apps/web/src/use-admin-action.ts
+          echo 'F02_FORMAT_8_END'
+          echo 'F02_FORMAT_9_BEGIN'
+          npx prettier apps/web/src/AdminQueue.tsx
+          echo 'F02_FORMAT_9_END'
+          echo 'F02_FORMAT_10_BEGIN'
+          npx prettier apps/web/src/AdminCatalogPage.tsx
+          echo 'F02_FORMAT_10_END'
+          echo 'F02_FORMAT_11_BEGIN'
+          npx prettier apps/web/src/AdminAccounts.tsx
+          echo 'F02_FORMAT_11_END'
+          echo 'F02_FORMAT_12_BEGIN'
+          npx prettier apps/web/src/AdminSettings.tsx
+          echo 'F02_FORMAT_12_END'
+          echo 'F02_FORMAT_13_BEGIN'
+          npx prettier apps/web/src/ClanApiKeySettings.tsx
+          echo 'F02_FORMAT_13_END'
+          echo 'F02_FORMAT_14_BEGIN'
+          npx prettier apps/web/src/ClanLogoSettings.tsx
+          echo 'F02_FORMAT_14_END'
+          echo 'F02_FORMAT_15_BEGIN'
+          npx prettier apps/web/src/RuneLiteReviewSettings.tsx
+          echo 'F02_FORMAT_15_END'
+          echo 'F02_FORMAT_16_BEGIN'
+          npx prettier apps/web/src/SubmissionEditor.tsx
+          echo 'F02_FORMAT_16_END'
+          echo 'F02_FORMAT_17_BEGIN'
+          npx prettier apps/web/tests/frontend-audit.spec.ts
+          echo 'F02_FORMAT_17_END'
       - name: Inject backup orchestration failures
         run: node --test scripts/backup.test.mjs
       - run: npm run validate
