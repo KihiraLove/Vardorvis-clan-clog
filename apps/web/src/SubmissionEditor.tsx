@@ -17,7 +17,10 @@ import type { AdminSession } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
 import { useAdminAction } from './use-admin-action.ts';
-import { reviewBlockers, type ReviewActionHint } from './review-prerequisites.ts';
+import {
+  reviewBlockers,
+  type ReviewActionHint,
+} from './review-prerequisites.ts';
 
 const draftOf = (row: Submission): Correction => ({
   itemId: row.itemId ?? 0,
@@ -112,7 +115,9 @@ export function SubmissionEditor({
   const row = detail.submission,
     editable = ['pending', 'approved'].includes(row.status);
   const activeItem = catalog.items.some((item) => item.id === row.itemId);
-  const draftItemActive = catalog.items.some((item) => item.id === draft.itemId);
+  const draftItemActive = catalog.items.some(
+    (item) => item.id === draft.itemId,
+  );
   const claimDirty =
     draft.itemId !== (row.itemId ?? 0) ||
     draft.collectorName.trim() !== row.collectorName ||
@@ -127,96 +132,104 @@ export function SubmissionEditor({
   };
   // Save corrections before approval so the acknowledgment refers to persisted claim fields.
   const perform = (decision?: 'approve' | 'reject' | 'revoke') => {
-    void action.execute(async (signal) => {
-      if (
-        decision === 'approve' &&
-        (claimDirty ||
-          !checked ||
-          (!proof && row.source !== 'manual') ||
-          !activeItem)
-      )
-        throw new Error(
-          'Save a specific item match and check the linked proof before approving.',
-        );
-      if (decision && decision !== 'approve' && !draft.reason.trim())
-        throw new Error('Enter a reason for this decision.');
-      if (!decision && row.status === 'approved' && !draft.reason.trim())
-        throw new Error('Enter a reason for correcting an approved credit.');
-      const next = decision
-        ? await client.decide(
-            id,
-            row.version,
-            decision,
-            draft.reason.trim(),
-            session.csrfToken,
-            signal,
-          )
-        : await client.edit(
-            id,
-            row.version,
-            validateCorrection(draft, catalog),
-            session.csrfToken,
-            signal,
-          );
-      if (signal.aborted) return;
-      setDetail({ ...detail, submission: next });
-      setDraft(draftOf(next));
-      setChecked(false);
-      action.setMessage(
-        decision
-          ? 'Submission ' +
-              next.status +
-              '. Public credit follows this saved decision.'
-          : 'Changes saved. Review the saved claim before approving.',
-      );
-      onChanged(next.status);
-      try {
-        await reload(signal);
-      } catch (failure) {
+    void action.execute(
+      async (signal) => {
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          decision === 'approve' &&
+          (claimDirty ||
+            !checked ||
+            (!proof && row.source !== 'manual') ||
+            !activeItem)
         )
-          throw failure;
-        if (!signal.aborted)
-          setReadError(
-            'The change was saved, but audit history could not be refreshed. Reload before continuing.',
+          throw new Error(
+            'Save a specific item match and check the linked proof before approving.',
           );
-      }
-    }, reload, decision ?? 'claim');
+        if (decision && decision !== 'approve' && !draft.reason.trim())
+          throw new Error('Enter a reason for this decision.');
+        if (!decision && row.status === 'approved' && !draft.reason.trim())
+          throw new Error('Enter a reason for correcting an approved credit.');
+        const next = decision
+          ? await client.decide(
+              id,
+              row.version,
+              decision,
+              draft.reason.trim(),
+              session.csrfToken,
+              signal,
+            )
+          : await client.edit(
+              id,
+              row.version,
+              validateCorrection(draft, catalog),
+              session.csrfToken,
+              signal,
+            );
+        if (signal.aborted) return;
+        setDetail({ ...detail, submission: next });
+        setDraft(draftOf(next));
+        setChecked(false);
+        action.setMessage(
+          decision
+            ? 'Submission ' +
+                next.status +
+                '. Public credit follows this saved decision.'
+            : 'Changes saved. Review the saved claim before approving.',
+        );
+        onChanged(next.status);
+        try {
+          await reload(signal);
+        } catch (failure) {
+          if (
+            failure instanceof AdminRequestError &&
+            [401, 403].includes(failure.status)
+          )
+            throw failure;
+          if (!signal.aborted)
+            setReadError(
+              'The change was saved, but audit history could not be refreshed. Reload before continuing.',
+            );
+        }
+      },
+      reload,
+      decision ?? 'claim',
+    );
   };
   const saveNote = () => {
-    void action.execute(async (signal) => {
-      if (!noteDirty) return;
-      const next = await client.saveReviewNote(
-        id,
-        row.version,
-        reviewNote.trim(),
-        session.csrfToken,
-        signal,
-      );
-      if (signal.aborted) return;
-      setDetail({ ...detail, submission: next });
-      setReviewNote(next.reviewNote);
-      setChecked(false);
-      action.setMessage('Review note saved.');
-      onChanged(next.status);
-      // Preserve draft corrections while reloading the updated audit history.
-      try {
-        const latest = await client.detail(id, signal);
-        if (!signal.aborted) {
-          setDetail(latest);
-          setReviewNote(latest.submission.reviewNote);
-          setReadError(undefined);
+    void action.execute(
+      async (signal) => {
+        if (!noteDirty) return;
+        const next = await client.saveReviewNote(
+          id,
+          row.version,
+          reviewNote.trim(),
+          session.csrfToken,
+          signal,
+        );
+        if (signal.aborted) return;
+        setDetail({ ...detail, submission: next });
+        setReviewNote(next.reviewNote);
+        setChecked(false);
+        action.setMessage('Review note saved.');
+        onChanged(next.status);
+        // Preserve draft corrections while reloading the updated audit history.
+        try {
+          const latest = await client.detail(id, signal);
+          if (!signal.aborted) {
+            setDetail(latest);
+            setReviewNote(latest.submission.reviewNote);
+            setReadError(undefined);
+          }
+        } catch (failure) {
+          if (classifyAccessFailure(failure) === 'expired') throw failure;
+          if (!signal.aborted)
+            setReadError(
+              'The note was saved, but audit history could not be refreshed. Reload before continuing.',
+            );
         }
-      } catch (failure) {
-        if (classifyAccessFailure(failure) === 'expired') throw failure;
-        if (!signal.aborted)
-          setReadError(
-            'The note was saved, but audit history could not be refreshed. Reload before continuing.',
-          );
-      }
-    }, reload, 'note');
+      },
+      reload,
+      'note',
+    );
   };
   const blockers = reviewBlockers({
     status: row.status,
@@ -234,11 +247,17 @@ export function SubmissionEditor({
   const describedBy = (key: ReviewActionHint) =>
     blockers[key] ? `review-${hintId}-${key}` : undefined;
   const explanations = (keys: ReviewActionHint[]) =>
-    keys.filter((key) => blockers[key]).map((key) => (
-      <p className="admin-note admin-action-explanation" id={`review-${hintId}-${key}`} key={key}>
-        {blockers[key]}
-      </p>
-    ));
+    keys
+      .filter((key) => blockers[key])
+      .map((key) => (
+        <p
+          className="admin-note admin-action-explanation"
+          id={`review-${hintId}-${key}`}
+          key={key}
+        >
+          {blockers[key]}
+        </p>
+      ));
   const selected = catalog.items.find((item) => item.id === draft.itemId);
   const matches = catalog.items.filter(
     (item) =>
