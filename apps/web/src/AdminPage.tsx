@@ -1,6 +1,11 @@
 /** Resolve the admin session before mounting private queue/catalog views; share navigation. */
 import { useCallback, useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import {
+  classifyAccessFailure,
+  visibleAdminSession,
+  type AdminAccess,
+} from './admin-session.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
@@ -27,6 +32,7 @@ export function AdminNavigation({
   onNavigate,
   session,
 }: AdminRouteProps & { session?: AdminSession | null | undefined }) {
+  if (!session || session.mustChangePassword) return null;
   return (
     <nav className="admin-navigation" aria-label="Admin navigation">
       {[
@@ -74,14 +80,22 @@ export function AdminPage({
   onSettingsSaved: (settings: SiteSettings) => void;
   onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
   onMode: (next: boolean) => void;
-  children?: React.ReactNode;
+  children?: (session: AdminSession, onAccessLost: () => void) => React.ReactNode;
 }) {
-  const [session, setSession] = useState<AdminSession | null>(),
+  const [access, setAccess] = useState<AdminAccess>({ phase: 'checking' }),
     [error, setError] = useState<string>();
+  const session = access.phase === 'authenticated' ? access.session : null;
   const [refresh, setRefresh] = useState(0);
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const accessLost = useCallback(() => setSession(null), []);
+  const accessLost = useCallback(() => {
+    setAccess({ phase: 'expired' });
+    setError(undefined);
+  }, []);
+  const signedOut = useCallback(() => {
+    setAccess({ phase: 'signed-out' });
+    setError(undefined);
+  }, []);
   const action = useAdminAction(accessLost);
   const loginAction = useAdminAction(accessLost);
   const loggingIn = loginAction.busy,
@@ -95,7 +109,8 @@ export function AdminPage({
         const next = await client.session(signal);
         if (signal.aborted) return;
         if (!next) throw new Error('Session not established.');
-        setSession(next);
+        setAccess({ phase: 'authenticated', session: next });
+        setError(undefined);
         setPassword('');
       } catch (failure) {
         if (signal.aborted) throw failure;
@@ -114,20 +129,28 @@ export function AdminPage({
     let active = true;
     const controller = new AbortController(),
       timer = window.setTimeout(() => controller.abort(), 10000);
-    setSession(undefined);
+    setAccess({ phase: 'checking' });
     setError(undefined);
     void client
       .session(controller.signal)
       .then((next) => {
-        if (active) setSession(next);
+        if (active)
+          setAccess(
+            next
+              ? { phase: 'authenticated', session: next }
+              : { phase: 'signed-out' },
+          );
       })
       .catch((failure: unknown) => {
-        if (active)
-          setError(
-            failure instanceof AdminRequestError
-              ? failure.message
-              : 'Could not check admin access. Reload to try again.',
-          );
+        if (!active) return;
+        const accessFailure = classifyAccessFailure(failure);
+        if (accessFailure !== 'other') {
+          setAccess({ phase: 'expired' });
+          setError(undefined);
+        } else {
+          setAccess({ phase: 'checking' });
+          setError('Could not check admin access. Reload to try again.');
+        }
       })
       .finally(() => clearTimeout(timer));
     return () => {
@@ -170,7 +193,7 @@ export function AdminPage({
               onClick={() => {
                 void action.execute(async (signal) => {
                   await client.logout(session.csrfToken, signal);
-                  if (!signal.aborted) accessLost();
+                  if (!signal.aborted) signedOut();
                 });
               }}
             >
@@ -179,7 +202,7 @@ export function AdminPage({
           </div>
         )}
       </div>
-      {!session?.mustChangePassword && (
+      {visibleAdminSession(access) && (
         <AdminNavigation
           preview={preview}
           path={path}
@@ -225,11 +248,11 @@ export function AdminPage({
             )}
           </div>
         </section>
-      ) : session === undefined ? (
+      ) : access.phase === 'checking' ? (
         <p role="status">Checking admin access…</p>
-      ) : session === null ? (
+      ) : access.phase === 'signed-out' || access.phase === 'expired' ? (
         <section className="admin-panel">
-          <h2>Admin sign-in required</h2>
+          <h2>{access.phase === 'expired' ? 'Admin session expired' : 'Admin sign-in required'}</h2>
           <p>Sign in with your administrator or moderator account.</p>
           <form
             className="admin-credential-form"
@@ -272,7 +295,10 @@ export function AdminPage({
         <AccountSettings
           client={client}
           session={session}
-          onSaved={setSession}
+          onSaved={(next) => {
+            setAccess({ phase: 'authenticated', session: next });
+            setError(undefined);
+          }}
           onAccessLost={accessLost}
         />
       ) : path === '/admin/schedules' ? (
@@ -319,7 +345,7 @@ export function AdminPage({
           <p role="alert">Only the administrator can change site settings.</p>
         )
       ) : children ? (
-        children
+        children(session, accessLost)
       ) : path === '/admin/catalog' ? (
         <AdminCatalogPage
           client={client}
