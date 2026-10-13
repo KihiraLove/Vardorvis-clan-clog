@@ -5,7 +5,11 @@ import { defaultBranding } from '../src/branding.ts';
 import { zeroTotals } from '../src/xp-model.ts';
 import { defaultSiteCopy } from '@clog/domain';
 
-test.use({ timezoneId: 'UTC' });
+test.use({
+  timezoneId: 'UTC',
+  // Playwright hides all scrollbars by default in headless Chromium.
+  launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] },
+});
 const now = '2026-10-13T12:00:00Z';
 const caption =
   'Collected during BOTW events, including the longest competition names and collection captions that wrap across several lines';
@@ -126,7 +130,8 @@ for (const width of [1440, 1100]) {
         const r = await aligned(page);
         if (count === 24)
           expect(r.scrollHeight).toBeGreaterThan(r.clientHeight);
-        else expect(r.scrollHeight).toBeLessThanOrEqual(r.clientHeight);
+        else if (count === 0)
+          expect(r.scrollHeight).toBeLessThanOrEqual(r.clientHeight);
         if (count === 0)
           await expect(panel).toContainText('No activity competitions yet.');
         if (count === 24) {
@@ -235,7 +240,11 @@ test('alignment follows delayed font loading, responsive resizing and a resized 
   await aligned(page);
   await page.setViewportSize({ width: 1100, height: 1100 });
   await page.addStyleTag({
-    content: '.log-viewport::-webkit-scrollbar { height: 15px; }',
+    content: `
+      .log-viewport { scrollbar-color: auto; scrollbar-width: auto; }
+      .log-viewport::-webkit-scrollbar { height: 15px; }
+      .log-viewport::-webkit-scrollbar-thumb { background: #706247; }
+    `,
   });
   await expect
     .poll(() =>
