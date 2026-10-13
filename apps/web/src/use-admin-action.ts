@@ -6,6 +6,7 @@ import { classifyAccessFailure } from './admin-session.ts';
 
 export function useAdminAction(onAccessLost: () => void) {
   const [busy, setBusy] = useState(false),
+    [operation, setOperation] = useState<string>(),
     [error, setError] = useState<string>(),
     [message, setMessage] = useState<string>();
   const controller = useRef<AbortController | undefined>(undefined);
@@ -19,6 +20,7 @@ export function useAdminAction(onAccessLost: () => void) {
   const execute = async (
     work: (signal: AbortSignal) => Promise<void>,
     conflict?: (signal: AbortSignal) => Promise<void>,
+    label?: string,
   ) => {
     // A ref closes the double-click gap before React renders the disabled busy state.
     if (controller.current) return;
@@ -26,6 +28,7 @@ export function useAdminAction(onAccessLost: () => void) {
     controller.current = current;
     const timer = window.setTimeout(() => current.abort(), 15000);
     setBusy(true);
+    setOperation(label ?? 'Saving changes');
     setError(undefined);
     setMessage(undefined);
     try {
@@ -73,8 +76,9 @@ export function useAdminAction(onAccessLost: () => void) {
       if (controller.current === current) {
         controller.current = undefined;
         setBusy(false);
+        setOperation(undefined);
       }
     }
   };
-  return { busy, error, message, execute, setMessage, setError };
+  return { busy, operation, error, message, execute, setMessage, setError };
 }
