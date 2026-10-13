@@ -314,6 +314,11 @@ test(
         false,
       );
       assert.equal(receipt.outcome, 'applied');
+      // Even after physical preview removal, immutable history must replay.
+      await pool.query(
+        "DELETE FROM xp_previews WHERE token_hash=$1",
+        [createHash('sha256').update(refresh.previewToken).digest('hex')],
+      );
       assert.deepEqual(
         await store.apply(
           refresh.previewToken,
