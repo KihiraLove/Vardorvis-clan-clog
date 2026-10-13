@@ -316,7 +316,7 @@ test('audit: a pending session check gates navigation and concurrent private XP 
   });
   try {
     await page.goto('/admin/xp');
-    await expect(page.getByRole('status', { name: 'Checking admin access…' })).toBeVisible();
+    await expect(page.getByText('Checking admin access…')).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Admin navigation' })).toHaveCount(0);
     await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
     expect(privateReads).toBe(0);
