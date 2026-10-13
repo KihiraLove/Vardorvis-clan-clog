@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { clanKeyBytes, clanKeyMinLength } from '@clog/domain';
@@ -45,8 +46,7 @@ export function ClanApiKeySettings({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         ) {
           onAccessLost();
           return;
