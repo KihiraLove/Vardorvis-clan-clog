@@ -431,7 +431,7 @@ export function SubmissionEditor({
             />
             <span className="admin-note">
               One-time audit reason for rejection, revocation and corrections to
-              approved credits. Not the persisted review note.
+              approved credits. Not saved as a lasting comment.
             </span>
           </label>
           <div className="admin-actions">
