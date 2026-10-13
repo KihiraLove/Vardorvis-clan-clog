@@ -92,7 +92,8 @@ export function catalogRoutes(
         try {
           return reply.code(201).send(await store.stage(record, actor.id));
         } catch (error) {
-          await icons.remove(record.id);
+          // A lost commit acknowledgement is not proof of non-persistence.
+          // Offline, reference-checked maintenance reclaims abandoned files.
           throw error;
         }
       },
