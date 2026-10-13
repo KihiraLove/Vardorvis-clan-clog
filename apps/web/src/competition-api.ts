@@ -99,7 +99,19 @@ export class LiveCompetitionClient implements CompetitionClient {
       credentials: 'same-origin',
       cache: 'no-store',
     });
-    const value: unknown = await response.json();
+    // Authentication status is authoritative even when a proxy returns HTML
+    // or an empty body, so expiry cannot be hidden by JSON parse failure.
+    let value: unknown;
+    try {
+      value = await response.json();
+    } catch {
+      if (!response.ok)
+        throw new CompetitionRequestError(
+          response.status,
+          'Competition request failed.',
+        );
+      throw new Error('Invalid competition response.');
+    }
     if (!response.ok)
       throw new CompetitionRequestError(
         response.status,
