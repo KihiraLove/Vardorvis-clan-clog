@@ -362,7 +362,11 @@ export function parseSubmission(value: unknown): Submission {
     status: choice(row.status, ['pending', 'approved', 'rejected', 'revoked']),
     // Empty defaults keep existing review fixtures and older snapshots usable.
     reviewNote:
-      row.reviewNote === undefined ? '' : String(row.reviewNote),
+      row.reviewNote === undefined
+        ? ''
+        : typeof row.reviewNote === 'string' && row.reviewNote.length <= 1000
+          ? row.reviewNote
+          : (() => { throw new Error('Invalid saved review note.'); })(),
     reviewReason:
       row.reviewReason === undefined || row.reviewReason === null
         ? null
