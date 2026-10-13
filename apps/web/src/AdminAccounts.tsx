@@ -1,6 +1,5 @@
 /** Administrator-only moderator management; temporary passwords are never redisplayed. */
 import { useEffect, useState } from 'react';
-import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient, StaffAccount } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
