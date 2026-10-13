@@ -216,7 +216,9 @@ test('approved corrections require a reason and move the single credit into a fr
     editor(page).getByRole('button', { name: 'Save corrections', exact: true }),
   ).toBeDisabled();
   await expect(
-    editor(page).getByText('Enter an audit reason before changing an approved credit.'),
+    editor(page).getByText(
+      'Enter an audit reason before changing an approved credit.',
+    ),
   ).toBeVisible();
   await editor(page)
     .getByLabel('Review reason')
