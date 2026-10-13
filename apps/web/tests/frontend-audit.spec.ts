@@ -198,7 +198,7 @@ test('audit: logged-out sessions have no admin navigation', async ({
   await expect(
     page.getByRole('heading', { name: 'Admin sign-in required' }),
   ).toBeVisible();
-  test.fail(true, issue + ': navigation renders for an absent session');
+  // F02: no navigation or private loader mounts without a verified session.
   await expect(
     page.getByRole('navigation', { name: 'Admin navigation' }),
   ).toHaveCount(0);
