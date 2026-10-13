@@ -659,6 +659,24 @@ export class LiveAdminClient implements AdminClient {
       throw new Error('Unexpected correction receipt.');
     return result;
   }
+  async saveReviewNote(
+    id: string,
+    version: number,
+    note: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSubmission(
+      await this.json(
+        '/api/v1/admin/submissions/' + encodeURIComponent(id) + '/note',
+        signal,
+        this.write(csrf, { expectedVersion: version, note }, 'PATCH'),
+      ),
+    );
+    if (result.id !== id || result.version <= version || result.reviewNote !== note.trim())
+      throw new Error('Unexpected review note receipt.');
+    return result;
+  }
   async decide(
     id: string,
     version: number,
