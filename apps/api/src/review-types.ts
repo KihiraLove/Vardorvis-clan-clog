@@ -13,6 +13,10 @@ export interface ReviewSubmission {
   screenshotPath?: string | null;
   hardcore: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  /** Persisted staff note; unrelated to approve/reject/revoke audit reason. */
+  reviewNote: string;
+  /** Last decision/correction reason, retained for historical transparency. */
+  reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
   itemId: number;
@@ -29,6 +33,9 @@ export interface ReviewCorrection {
   collectedOn: string;
   hardcore: boolean;
   reason: string;
+}
+export interface ReviewNote {
+  note: string;
 }
 export interface ReviewAction {
   expectedVersion: number;
@@ -69,7 +76,7 @@ export interface ReviewStore {
   mutate(
     id: string,
     expectedVersion: number,
-    fields: ReviewCorrection | ReviewAction,
+    fields: ReviewCorrection | ReviewAction | ReviewNote,
     actorId: string,
     actorName: string,
   ): Promise<ReviewSubmission>;
