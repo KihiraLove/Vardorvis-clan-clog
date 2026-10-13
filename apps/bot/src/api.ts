@@ -39,6 +39,21 @@ export class BotApiError extends Error {
     super(message);
   }
 }
+
+/**
+ * A submission may have committed even though its receipt could not be
+ * verified. Only the Discord interaction ID is carried for reconciliation,
+ * never a driver error, response body, credential or evidence URL.
+ */
+export class UnconfirmedSubmissionError extends Error {
+  constructor(
+    readonly interactionId: string,
+    readonly reason: 'retry-rejected' | 'retries-exhausted' | 'invalid-receipt',
+  ) {
+    super('Submission receipt unconfirmed');
+    this.name = 'UnconfirmedSubmissionError';
+  }
+}
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const candidate = (value: unknown): value is Candidate =>
@@ -133,9 +148,13 @@ export class HttpBotApi implements BotApi {
   }
 
   async submit(claim: Claim): Promise<Receipt> {
-    // A timeout may happen AFTER commit. Retry the identical interaction/payload
-    // and trust the durable 200/201 receipt; never invent a successful submission.
+    // Both attempts must have exactly the same idempotency key and body.
+    // Network/5xx failures can happen AFTER commit. A later 4xx response
+    // cannot prove an earlier attempt was rolled back.
+    const body = JSON.stringify(claim);
+    let uncertain = false;
     for (let attempt = 0; attempt < 2; attempt++) {
+      let accepted = false;
       try {
         const response = await this.request(
           new URL('/api/v1/bot/submissions', this.origin),
@@ -148,34 +167,56 @@ export class HttpBotApi implements BotApi {
               Authorization: 'Bearer ' + this.token,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(claim),
+            body,
           },
         );
         if (response.status === 403) {
-          let body: unknown;
+          let responseBody: unknown;
           try {
-            body = await response.json();
+            responseBody = await response.json();
           } catch {
             /* Keep unknown failures private. */
           }
-          if (record(body) && body.error === closedCollectionPageMessage)
+          if (
+            record(responseBody) &&
+            responseBody.error === closedCollectionPageMessage
+          )
             throw new BotApiError(403, closedCollectionPageMessage);
         }
         if (response.status !== 200 && response.status !== 201)
           throw new BotApiError(response.status);
+        accepted = true;
         const value: unknown = await response.json();
         return parseReceipt(value, claim.interactionId);
       } catch (error) {
-        // Do not retry malformed responses or permanent validation/auth conflicts.
-        if (error instanceof BotApiError && error.status < 500) throw error;
-        if (
-          error instanceof BotApiError &&
-          error.message.startsWith('Invalid durable')
-        )
+        // A 200/201 with a missing, malformed or mismatched receipt still
+        // cannot confirm the stored outcome. Do not retry or invent a receipt.
+        if (accepted)
+          throw new UnconfirmedSubmissionError(
+            claim.interactionId,
+            'invalid-receipt',
+          );
+        const retryable =
+          !(error instanceof BotApiError) || error.status >= 500;
+        if (retryable) uncertain = true;
+        if (!retryable) {
+          if (uncertain)
+            throw new UnconfirmedSubmissionError(
+              claim.interactionId,
+              'retry-rejected',
+            );
           throw error;
-        if (attempt === 1) throw error;
+        }
+        if (attempt === 1)
+          throw new UnconfirmedSubmissionError(
+            claim.interactionId,
+            'retries-exhausted',
+          );
       }
     }
-    throw new BotApiError(503);
+    throw new UnconfirmedSubmissionError(
+      claim.interactionId,
+      'retries-exhausted',
+    );
   }
 }
