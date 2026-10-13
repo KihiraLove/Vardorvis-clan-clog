@@ -14,6 +14,7 @@ const ready: ReviewRequirements = {
   claimDirty: false,
   noteDirty: false,
   activeItem: true,
+  draftItemActive: true,
   validProof: true,
   acknowledged: true,
   reasonProvided: true,
@@ -48,7 +49,7 @@ test('claim/note dirtiness and approved corrections have distinct prerequisites'
     null,
   );
   assert.match(
-    reviewBlockers({ ...ready, status: 'pending', claimDirty: true, activeItem: false }).claim!,
+    reviewBlockers({ ...ready, status: 'pending', claimDirty: true, draftItemActive: false }).claim!,
     /active canonical item/u,
   );
 });
