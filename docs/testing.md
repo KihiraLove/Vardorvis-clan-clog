@@ -7,6 +7,17 @@ The cleanup helper refuses unknown workspaces and linked output directories.
 PostgreSQL integration tests require `TEST_DATABASE_URL`; without it they report
 explicit skips. CI provides a disposable database and runs those tests.
 
+The runtime-role regression creates and drops its own uniquely named database
+and temporary parent role on that PostgreSQL 17 cluster. It requires the
+disposable cluster's bootstrap/superuser login, including CREATEDB and
+CREATEROLE authority, and rotates the cluster-level `clog_runtime` password.
+Do not point `TEST_DATABASE_URL` at a cluster serving a running application or
+run independent validation suites concurrently against the same cluster.
+The test verifies the complete table/view/sequence and column privilege matrix,
+grant options, PUBLIC/default/inherited access, unknown-object denial, actual
+receipt and trigger writes, credential rotation, repeated/concurrent
+provisioning, and transaction rollback on ownership or missing-object errors.
+
 Page-management acceptance tests exercise authenticated moderator writes,
 CSRF/role checks, idempotent creation, stale catalog/page versions, full page
 permutations, rollback on audit failure, shared-item preservation, historical

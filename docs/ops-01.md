@@ -13,16 +13,39 @@ receives only its own database URL. Neither database secret is built into web
 assets. The role provisioning is idempotent and runs **after** migrations and
 source/taxonomy import; it revalidates permissions after future migrations.
 
-The role has schema USAGE (not CREATE), SELECT on public views, DML only on
-application tables, and necessary sequence usage. It may **read**
-`catalog_versions` for the authenticated catalog view but cannot change it;
-`schema_migrations` and `catalog_taxonomy_updates` remain owner-only.
-Audit tables (`audit_events`, `site_settings_audit`, `catalog_audit`,
-`xp_import_history`) receive **SELECT and INSERT only**. No UPDATE, DELETE,
-TRUNCATE, ALTER or role-creation grants are given. Future audit tables must
-be added to the reviewed allowlist before grant reconciliation; new tables
-have no automatic default grants. SQL owner/migration access must never be
-exposed to the API service or publicly through Traefik.
+The application requires a **dedicated database**. Provisioning removes PUBLIC
+access to its public schema, tables, sequences and routines, and PUBLIC database
+CREATE/TEMPORARY rights. It also clears global/public-schema default grants from
+the bootstrap owner and existing default-ACL grantors. These changes affect
+other logins using PUBLIC privileges; do not run this bootstrap in a shared
+database. The bootstrap owner must have authority to reconcile those grants
+and runtime role memberships.
+
+[The runtime policy](../packages/database/src/runtime-role.ts) names every
+permitted public table, view and sequence. Unknown objects receive no access.
+Only `collection_credits` and `item_collection_state` are readable views;
+`catalog_versions` and `item_aliases` are read-only tables. Migration and
+taxonomy ledgers remain owner-only. Mutable tables receive only the operations
+their API paths need, rather than blanket DML. Append-only audit/history and
+request receipts, including `catalog_requests`, permit **SELECT and INSERT**
+but reject UPDATE, DELETE and TRUNCATE. Audit sequences cannot be reset; the
+canonical item sequence retains UPDATE for catalog allocation's `setval`.
+
+Reconciliation removes direct grants, column grants and inherited role access,
+then verifies the complete effective privilege matrix before committing.
+The runtime cannot create schemas, public objects, temporary tables or roles,
+delegate grants, bypass row security, or directly call public routines. Trigger
+writes still run with the intended table permissions. New objects must have
+an explicit reviewed policy before the API uses them; missing or incompatible
+required objects abort provisioning. Existing checksummed SQL migrations stay
+unchanged.
+
+If `clog_runtime` owns the database or a public schema object, provisioning
+fails: ownership rights cannot be removed by REVOKE. Repair ownership with the
+migration owner under the normal backup/deployment procedure, then retry.
+Any reconciliation failure rolls back the password and privilege changes.
+SQL owner/migration access must never be exposed to the API service or publicly
+through Traefik.
 
 ## First deployment / migration
 
