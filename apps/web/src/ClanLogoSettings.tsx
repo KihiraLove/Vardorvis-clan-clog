@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
   defaultBranding,
