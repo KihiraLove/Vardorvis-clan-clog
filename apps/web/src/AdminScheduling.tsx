@@ -127,6 +127,7 @@ export function AdminScheduling({
       <CompetitionImport
         client={competitionClient}
         session={session}
+        onAccessLost={onAccessLost}
         onApplied={() => setRefresh((n) => n + 1)}
       />
       <p>
