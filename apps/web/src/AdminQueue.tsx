@@ -1,6 +1,7 @@
 /** Load catalog plus paged claims together, retaining cursor history for previous-page navigation. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import {
   dateSourceLabel,
   type AdminCatalog,
@@ -55,8 +56,7 @@ export function AdminQueue({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         )
           onAccessLost();
         else
