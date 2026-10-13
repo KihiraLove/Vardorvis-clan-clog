@@ -134,7 +134,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: contiguous 001_baseline.sql through 014_wom_competitions.sql
+# Expected: contiguous 001_baseline.sql through 015_review_notes.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose
@@ -173,7 +173,7 @@ investigating** the failure and removing the cause.
 - Older database whose applied history is a verified prefix of the image:
   apply only missing migrations in one transaction. The 013 → 014 upgrade
   preserves existing XP events and backfills WOM competition identity.
-- Restart, redeploy, or image rollback with an **identical applied manifest**:
+- The 015 upgrade adds an independent persisted review note; legacy\n  `review_reason` values stay untouched for past correction/rejection/revocation\n  decisions and existing credits are not rewritten.\n- Restart, redeploy, or image rollback with an **identical applied manifest**:
   accepted, provided the other application/schema contracts remain compatible.
 - Older image missing any already-applied migration, edited baseline, unknown
   future history, or historical gap: **rejected**. There is no automatic SQL
