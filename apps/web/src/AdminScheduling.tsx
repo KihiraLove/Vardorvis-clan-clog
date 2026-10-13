@@ -78,10 +78,7 @@ export function AdminScheduling({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else setError('Scheduling could not be loaded.');
       })
       .finally(() => clearTimeout(timeout));
