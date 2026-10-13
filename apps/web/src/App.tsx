@@ -429,6 +429,7 @@ export function App() {
         <main id={admin ? 'admin-main' : 'collection-log'}>
           {admin ? (
             <AdminPage
+              key={route.preview ? 'preview-admin' : 'live-admin'}
               competitionClient={competitionClient}
               client={adminClient}
               clanName={clanName}
