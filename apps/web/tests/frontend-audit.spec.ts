@@ -65,6 +65,28 @@ async function liveAdmin(page: Page, authenticated = true) {
     const base = '/api/v1/admin/submissions/' + state.detail.submission.id;
     if (path === base && request.method() === 'GET')
       return route.fulfill({ json: state.detail });
+    if (path === base + '/note' && request.method() === 'PATCH') {
+      const input = request.postDataJSON();
+      if (input.expectedVersion !== state.detail.submission.version)
+        return route.fulfill({ status: 409, json: { error: 'Stale version' } });
+      const before = structuredClone(state.detail.submission);
+      const note = String(input.note).trim();
+      if (note === before.reviewNote)
+        return route.fulfill({ status: 422, json: { error: 'No change' } });
+      state.detail.submission = {
+        ...before, reviewNote: note, version: before.version + 1,
+      };
+      state.detail.audit.unshift({
+        id: 'note-' + state.detail.submission.version,
+        actorName: 'Audit fixture',
+        at: new Date().toISOString(),
+        action: 'edit',
+        reason: null,
+        before,
+        after: structuredClone(state.detail.submission),
+      });
+      return route.fulfill({ json: state.detail.submission });
+    }
     for (const [action, status] of [
       ['approve', 'approved'],
       ['reject', 'rejected'],
@@ -220,28 +242,51 @@ test('audit: a pagination boundary does not use a loading cursor', async ({
   await expect(previous).not.toHaveCSS('cursor', 'wait');
 });
 
-test('audit: a reason-only draft can be saved or discarded in ordinary worlds', async ({
+test('audit: an ordinary-world review note can be saved, discarded, cleared and reloaded independently', async ({
   page,
 }) => {
   const state = await liveAdmin(page);
   state.detail.submission.hardcore = false;
   const editor = await openReview(page);
-  await editor
-    .getByLabel('Review reason')
-    .fill('Reviewed the collection date.');
-  test.fail(
-    true,
-    issue +
-      ': reason is omitted from dirty tracking and the server rejects note-only edits',
-  );
-  await expect(
-    editor.getByRole('button', { name: 'Save corrections', exact: true }),
-  ).toBeEnabled();
-  await expect(
-    editor.getByRole('button', { name: 'Discard corrections', exact: true }),
-  ).toBeEnabled();
+  const note = editor.getByLabel('Review note');
+  const save = editor.getByRole('button', { name: 'Save review note' });
+  const discard = editor.getByRole('button', { name: 'Discard review note' });
+  await note.fill('Reviewed the collection date.');
+  await expect(save).toBeEnabled();
+  await expect(discard).toBeEnabled();
+  await expect(editor.getByRole('button', { name: 'Save corrections' })).toBeDisabled();
+  await discard.click();
+  await expect(note).toHaveValue('');
+  await expect(save).toBeDisabled();
+  await note.fill('Reviewed the collection date.');
+  await save.click();
+  await expect(note).toHaveValue('Reviewed the collection date.');
+  await expect(save).toBeDisabled();
+  await expect(state.detail.submission.reviewNote).toBe('Reviewed the collection date.');
+  await expect(state.detail.submission.version).toBe(2);
+  await expect(state.detail.audit).toHaveLength(1);
+  await expect(state.detail.audit[0]?.reason).toBeNull();
+  await editor.getByRole('button', { name: 'Close review' }).click();
+  await page.getByRole('button', { name: /^Review .+ ·/ }).click();
+  await expect(page.locator('.submission-editor').getByLabel('Review note')).toHaveValue('Reviewed the collection date.');
+  await page.locator('.submission-editor').getByLabel('Review note').fill('');
+  await page.locator('.submission-editor').getByRole('button', { name: 'Save review note' }).click();
+  await expect(page.locator('.submission-editor').getByLabel('Review note')).toHaveValue('');
+  expect(state.detail.audit).toHaveLength(2);
+  expect(state.detail.submission.reviewNote).toBe('');
 });
 
+test('audit: hardcore review note is versioned without changing claim mode or approval', async ({ page }) => {
+  const state = await liveAdmin(page);
+  state.detail.submission.hardcore = true;
+  const editor = await openReview(page);
+  await editor.getByLabel('Review note').fill('HC-only evidence checked');
+  await editor.getByRole('button', { name: 'Save review note' }).click();
+  await expect(editor.getByLabel('Collected on hardcore worlds')).toBeChecked();
+  expect(state.detail.submission.hardcore).toBe(true);
+  expect(state.detail.submission.status).toBe('pending');
+  expect(state.detail.submission.reviewNote).toBe('HC-only evidence checked');
+});
 test('audit: retain the current admin page until destination data is ready', async ({
   page,
 }) => {
