@@ -101,7 +101,7 @@ function exercise(t, failure = '', options = {}) {
   return { result, log, target };
 }
 
-test('backup stops writers, verifies snapshots and restart, and preserves the encryption root', (t) => {
+test('backup captures encryption root and restarts the writer', (t) => {
   const { result, log, target } = exercise(t);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readFileSync(join(target, 'COMPLETE'), 'utf8'), 'complete\n');
