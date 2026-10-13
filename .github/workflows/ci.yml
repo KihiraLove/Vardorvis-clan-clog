@@ -131,6 +131,8 @@ jobs:
           docker compose exec -T -e COMPETITION_SMOKE_DISPOSABLE=true app node /app/scripts/competitions-smoke.mjs
       - name: Proxy isolation and durable manual submission retries
         run: docker compose exec -T -e REVIEW_SMOKE_TEST=1 app node --input-type=module < scripts/review-smoke.mjs
+      - name: Proxy branding logos accept valid large images and enforce both upload limits
+        run: docker compose exec -T -e BRANDING_PROXY_SMOKE_TEST=1 app node --input-type=module < scripts/branding-proxy-smoke.mjs
       - name: Admin catalog, durable icons and coordinated backup
         env:
           COMPOSE_FILE: compose.yaml:compose.dev.yaml
