@@ -659,7 +659,15 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(page.locator('.submission-card')).toHaveCount(0);
-  await page.getByRole('link', { name: 'XP imports', exact: true }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
+  // Change routes in the same SPA instance: reloading preview would create a
+  // new fixture session and fail to test the original logout.
+  await page.evaluate(() => {
+    window.history.pushState(null, '', '/admin/xp?preview=1');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
   await expect(
     page.getByRole('heading', { name: 'Admin sign-in required' }),
   ).toBeVisible();
