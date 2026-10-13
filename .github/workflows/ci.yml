@@ -37,20 +37,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - name: Capture B08 canonical formatting (temporary)
-        run: |
-          echo 'B08_FORMAT_0_BEGIN'
-          npx prettier apps/api/src/competition-store.ts
-          echo 'B08_FORMAT_0_END'
-          echo 'B08_FORMAT_1_BEGIN'
-          npx prettier apps/api/src/xp.store.test.ts
-          echo 'B08_FORMAT_1_END'
-          echo 'B08_FORMAT_2_BEGIN'
-          npx prettier packages/database/src/preview-maintenance.test.ts
-          echo 'B08_FORMAT_2_END'
-          echo 'B08_FORMAT_3_BEGIN'
-          npx prettier packages/database/src/preview-maintenance.ts
-          echo 'B08_FORMAT_3_END'
       - name: Inject backup orchestration failures
         run: node --test scripts/backup.test.mjs
       - run: npm run validate
