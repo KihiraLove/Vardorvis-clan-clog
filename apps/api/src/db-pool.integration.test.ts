@@ -129,7 +129,7 @@ test(
         await waitUntil(() =>
           logs.includes('PostgreSQL idle pool failure:'),
         );
-        assert.doesNotMatch(logs, /postgresql:\\/\\/[^\\s]+@/iu);
+        assert.doesNotMatch(logs, /postgresql:/iu);
         assert.ok(child && child.exitCode === null);
         assert.equal(await status('/healthz'), 200);
         assert.equal(await status('/readyz'), 200);
