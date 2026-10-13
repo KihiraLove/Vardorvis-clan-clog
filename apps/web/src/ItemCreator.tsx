@@ -133,6 +133,11 @@ export function ItemCreator({
     setStaged(undefined);
   }, []);
   const locked = action.busy || Boolean(pending);
+  const visiblePages = catalog.pages.filter(
+    (page) =>
+      page.name.toLowerCase().includes(query.toLowerCase().trim()) ||
+      pageIds.includes(page.id),
+  );
   const save = () => {
     void action.execute(async (signal) => {
       // Preserve payload and idempotency key after an uncertain response to avoid duplicates.
@@ -268,15 +273,8 @@ export function ItemCreator({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            {catalog.pages
-              .filter(
-                (page) =>
-                  page.name
-                    .toLowerCase()
-                    .includes(query.toLowerCase().trim()) ||
-                  pageIds.includes(page.id),
-              )
-              .map((page) => (
+            <div className="page-picker-choices">
+              {visiblePages.map((page) => (
                 <label className="admin-checkbox" key={page.id}>
                   <input
                     type="checkbox"
@@ -292,6 +290,14 @@ export function ItemCreator({
                   {page.name}
                 </label>
               ))}
+              {!visiblePages.length && (
+                <p className="admin-empty">
+                  {catalog.pages.length
+                    ? 'No matching pages.'
+                    : 'No collection-log pages yet. Create a page in Page management below.'}
+                </p>
+              )}
+            </div>
           </fieldset>
           <p className="admin-note">
             {pageIds.length} pages selected. New items append to each selected
