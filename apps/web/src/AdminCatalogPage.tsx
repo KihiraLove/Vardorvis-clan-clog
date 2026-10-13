@@ -1,6 +1,7 @@
 /** Coordinate one catalog snapshot shared by item creation and per-page order editing. */
 import { useEffect, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { ItemCreator } from './ItemCreator.tsx';
@@ -34,8 +35,7 @@ export function AdminCatalogPage({
       .catch((failure: unknown) => {
         if (!active) return;
         if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
+          classifyAccessFailure(failure) === 'expired'
         )
           onAccessLost();
         else
