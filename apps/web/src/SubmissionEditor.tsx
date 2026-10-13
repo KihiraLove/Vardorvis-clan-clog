@@ -397,18 +397,25 @@ export function SubmissionEditor({
               onChange={(event) => setReviewNote(event.target.value)}
             />
             <span className="admin-note">
-              Saved staff note, separate from claim corrections and decision reasons.
-              Clear and save to remove the note.
+              Saved staff note, separate from claim corrections and decision
+              reasons. Clear and save to remove the note.
             </span>
           </label>
           <div className="admin-actions">
-            <button className="site-button" type="button"
-              disabled={locked || !editable || !noteDirty} onClick={saveNote}>
+            <button
+              className="site-button"
+              type="button"
+              disabled={locked || !editable || !noteDirty}
+              onClick={saveNote}
+            >
               Save review note
             </button>
-            <button className="site-button" type="button"
+            <button
+              className="site-button"
+              type="button"
               disabled={locked || !editable || !noteDirty}
-              onClick={() => setReviewNote(row.reviewNote)}>
+              onClick={() => setReviewNote(row.reviewNote)}
+            >
               Discard review note
             </button>
           </div>
@@ -428,7 +435,11 @@ export function SubmissionEditor({
             </span>
           </label>
           <div className="admin-actions">
-            <button className="site-button" type="submit" disabled={!claimDirty}>
+            <button
+              className="site-button"
+              type="submit"
+              disabled={!claimDirty}
+            >
               Save corrections
             </button>
             <button
