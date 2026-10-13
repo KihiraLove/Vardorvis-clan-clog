@@ -281,7 +281,7 @@ test('public competition viewer and podium fit 320px and retain desktop log prop
     window.scrollTo(0, 0);
   });
   await page.screenshot({
-    path: '../../docs/wom-competitions-desktop.png',
+    path: test.info().outputPath('wom-competitions-desktop.png'),
     fullPage: true,
   });
   await page.setViewportSize({ width: 320, height: 850 });
@@ -296,7 +296,7 @@ test('public competition viewer and podium fit 320px and retain desktop log prop
     page.getByRole('complementary', { name: 'XP podium for Total' }),
   ).toBeVisible();
   await page.screenshot({
-    path: '../../docs/wom-competitions-mobile.png',
+    path: test.info().outputPath('wom-competitions-mobile.png'),
     fullPage: true,
   });
 });
