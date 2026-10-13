@@ -36,7 +36,10 @@ const origin = 'http://api:3000';
 const token = 'a'.repeat(64);
 const expectedBody = JSON.stringify(claim);
 
-function assertUnconfirmed(error: unknown, reason: UnconfirmedSubmissionError['reason']) {
+function assertUnconfirmed(
+  error: unknown,
+  reason: UnconfirmedSubmissionError['reason'],
+) {
   assert.ok(error instanceof UnconfirmedSubmissionError);
   assert.equal(error.reason, reason);
   assert.equal(error.interactionId, claim.interactionId);
@@ -47,7 +50,10 @@ function assertUnconfirmed(error: unknown, reason: UnconfirmedSubmissionError['r
   assert.match(message, /new interaction ID/u);
   assert.match(message, /admin to check/u);
   assert.doesNotMatch(message, /Nothing was saved|Saved for admin review/u);
-  assert.doesNotMatch(message, /Bearer|secret|Connection lost|Credentials rotated/u);
+  assert.doesNotMatch(
+    message,
+    /Bearer|secret|Connection lost|Credentials rotated/u,
+  );
   return true;
 }
 
@@ -98,9 +104,8 @@ test('transport/5xx uncertainty followed by 401, 403 or 422 cannot claim nothing
         }
         return Response.json({ error: 'Credentials rotated' }, { status });
       });
-      await assert.rejects(
-        api.submit(claim),
-        (error: unknown) => assertUnconfirmed(error, 'retry-rejected'),
+      await assert.rejects(api.submit(claim), (error: unknown) =>
+        assertUnconfirmed(error, 'retry-rejected'),
       );
       assert.deepEqual(bodies, [expectedBody, expectedBody]);
     }
@@ -120,9 +125,8 @@ test('closed-page 403 after an uncertain write is still unconfirmed; initial clo
       );
     });
     if (afterTimeout)
-      await assert.rejects(
-        api.submit(claim),
-        (error: unknown) => assertUnconfirmed(error, 'retry-rejected'),
+      await assert.rejects(api.submit(claim), (error: unknown) =>
+        assertUnconfirmed(error, 'retry-rejected'),
       );
     else
       await assert.rejects(api.submit(claim), (error: unknown) => {
@@ -143,9 +147,8 @@ test('repeated transport and server errors stop after exactly two identical atte
         throw new Error('Connection lost after possible commit');
       return Response.json({ error: 'temporary failure' }, { status: 503 });
     });
-    await assert.rejects(
-      api.submit(claim),
-      (error: unknown) => assertUnconfirmed(error, 'retries-exhausted'),
+    await assert.rejects(api.submit(claim), (error: unknown) =>
+      assertUnconfirmed(error, 'retries-exhausted'),
     );
     assert.deepEqual(bodies, [expectedBody, expectedBody]);
   }
@@ -155,18 +158,27 @@ test('malformed, mismatched and unreadable successful receipts cannot confirm su
   for (const [status, response] of [
     [200, Response.json({ status: 'approved' })],
     [201, Response.json({ ...receipt, interactionId: '999999999999999999' })],
-    [200, new Response('{', { status: 200, headers: { 'content-type': 'application/json' } })],
+    [
+      200,
+      new Response('{', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ],
   ] as const) {
     let calls = 0;
     const api = new HttpBotApi(origin, token, async () => {
       calls++;
       return response;
     });
-    await assert.rejects(
-      api.submit(claim),
-      (error: unknown) => assertUnconfirmed(error, 'invalid-receipt'),
+    await assert.rejects(api.submit(claim), (error: unknown) =>
+      assertUnconfirmed(error, 'invalid-receipt'),
     );
-    assert.equal(calls, 1, 'a successful HTTP response with no durable receipt is not replayed');
+    assert.equal(
+      calls,
+      1,
+      'a successful HTTP response with no durable receipt is not replayed',
+    );
     assert.ok(status === 200 || status === 201);
   }
   let calls = 0;
@@ -174,9 +186,8 @@ test('malformed, mismatched and unreadable successful receipts cannot confirm su
     if (++calls === 1) throw new Error('timeout after commit');
     return Response.json({ status: 'not-a-durable-receipt' }, { status: 200 });
   });
-  await assert.rejects(
-    secondInvalid.submit(claim),
-    (error: unknown) => assertUnconfirmed(error, 'invalid-receipt'),
+  await assert.rejects(secondInvalid.submit(claim), (error: unknown) =>
+    assertUnconfirmed(error, 'invalid-receipt'),
   );
   assert.equal(calls, 2);
 });
@@ -188,6 +199,12 @@ test('staff correlation ID is numeric-only and does not reflect attacker-supplie
   );
   assert.doesNotMatch(message, /@everyone|secret|345678901234567890/u);
   assert.match(message, /could not be confirmed/u);
-  assert.match(failureMessage(new Error('private SQL data'), claim.interactionId), /345678901234567890/u);
-  assert.doesNotMatch(failureMessage(new Error('private SQL data'), claim.interactionId), /private SQL data/u);
+  assert.match(
+    failureMessage(new Error('private SQL data'), claim.interactionId),
+    /345678901234567890/u,
+  );
+  assert.doesNotMatch(
+    failureMessage(new Error('private SQL data'), claim.interactionId),
+    /private SQL data/u,
+  );
 });
