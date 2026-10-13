@@ -55,10 +55,7 @@ export function AdminQueue({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setError(
             failure instanceof AdminRequestError
