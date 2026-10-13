@@ -339,7 +339,7 @@ export class PgCompetitionStore {
           snapshot: CompetitionSnapshot;
           page_ids: string[];
           expires_at: Date;
-        }>('SELECT * FROM competition_previews WHERE token_hash=$1', [
+        }>('SELECT * FROM competition_previews WHERE token_hash=$1 FOR KEY SHARE', [
           hash(token),
         ])
       ).rows[0];
