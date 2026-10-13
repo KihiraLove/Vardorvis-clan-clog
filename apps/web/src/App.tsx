@@ -16,6 +16,7 @@ import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
 import { parseSettings, type SiteSettings } from './site-settings.ts';
 import { defaultBranding, parseBranding } from './branding.ts';
+import { useRouteNavigation } from './use-route-navigation.ts';
 import {
   defaultSiteCopy,
   type SiteCopy,
@@ -127,11 +128,7 @@ function PreviewSkull({
   ) : null;
 }
 export function App() {
-  const location = () => ({
-    path: window.location.pathname,
-    preview: new URLSearchParams(window.location.search).get('preview') === '1',
-  });
-  const [route, setRoute] = useState(location);
+  const { route, navigate, mode, register } = useRouteNavigation();
   const [hardcore, setHardcore] = useState(false);
   const [liveEnabled, setLiveEnabled] = useState(false);
   const [liveClanName, setLiveClanName] = useState('');
@@ -199,11 +196,6 @@ export function App() {
     };
   }, [route.preview]);
   useEffect(() => {
-    const change = () => setRoute(location());
-    window.addEventListener('popstate', change);
-    return () => window.removeEventListener('popstate', change);
-  }, []);
-  useEffect(() => {
     setHardcore(false);
     setLiveEnabled(false);
     if (route.preview) return;
@@ -259,27 +251,6 @@ export function App() {
       document.removeEventListener('visibilitychange', resume);
     };
   }, [route.preview]);
-  const mode = (next: boolean) => {
-    const url = new URL(window.location.href);
-    if (next) url.searchParams.set('preview', '1');
-    else url.searchParams.delete('preview');
-    window.history.replaceState(null, '', url);
-    setRoute(location());
-  };
-  const navigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    )
-      return;
-    event.preventDefault();
-    window.history.pushState(null, '', event.currentTarget.href);
-    setRoute(location());
-    window.scrollTo(0, 0);
-  };
   const admin = route.path === '/admin' || route.path.startsWith('/admin/');
   const hardcoreAppearance = hardcore && !admin;
   const adminClient = useMemo(
@@ -438,6 +409,8 @@ export function App() {
               key={route.preview ? 'preview-admin' : 'live-admin'}
               competitionClient={competitionClient}
               client={adminClient}
+              xpClient={xpClient}
+              registerNavigation={register}
               clanName={clanName}
               onSettingsSaved={settingsSaved}
               onBrandingSaved={(value, hardcoreMode) =>

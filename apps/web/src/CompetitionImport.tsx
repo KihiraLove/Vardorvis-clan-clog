@@ -7,6 +7,7 @@ import {
 } from './competition-api.ts';
 import { exactXp, signedXp, skillName, type AdminSession } from './xp-model.ts';
 import { localScheduleLabel, utcScheduleLabel } from './schedule-time.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 export function CompetitionImport({
   client,
   session,
@@ -41,6 +42,7 @@ export function CompetitionImport({
     !!preview &&
     JSON.stringify(pages?.slice().sort()) !==
       JSON.stringify(preview.pageIds.slice().sort());
+  useAdminDraft(!!preview || dirty, busy);
   const execute = async (apply: boolean) => {
     if (busy) return;
     const controller = new AbortController();

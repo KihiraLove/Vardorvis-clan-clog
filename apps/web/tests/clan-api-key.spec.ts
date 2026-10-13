@@ -25,7 +25,11 @@ test('a single editable key and save apply the key and requirement together, inc
     page.getByText('New key generated. Save to apply it.'),
   ).toBeVisible();
   // Navigating away before saving leaves both persisted values untouched.
+  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Submissions', exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('link', { name: 'RuneLite submissions', exact: true })
     .click();
@@ -37,6 +41,9 @@ test('a single editable key and save apply the key and requirement together, inc
   await save.click();
   await expect(page.getByText('Clan API key settings saved.')).toBeVisible();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Submissions', exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('link', { name: 'RuneLite submissions', exact: true })
     .click();

@@ -158,6 +158,9 @@ test('failed or malformed refresh retains the last exact snapshot', async ({
 test('direct admin imports require access, review corrections and send CSRF plus stable request identity', async ({
   page,
 }) => {
+  await page.route('**/api/v1/xp/tracker', (route) =>
+    route.fulfill({ json: tracker }),
+  );
   await page.route('**/api/v1/auth/session', (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );

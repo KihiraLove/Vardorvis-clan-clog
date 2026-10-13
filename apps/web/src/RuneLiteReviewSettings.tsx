@@ -10,6 +10,7 @@ import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 
 const worldOptions = [
   ['f2p', 'F2P worlds', true],
@@ -26,11 +27,21 @@ export function RuneLiteReviewSettings({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [saved, setSaved] = useState<RuneLiteSettings>();
+  const initial = usePreparedAdminData()?.runeLite;
+  const [saved, setSaved] = useState<RuneLiteSettings | undefined>(initial);
   const [rules, setRules] = useState<RuneLiteRules>(() =>
-    defaultRuneLiteRules(''),
+    initial
+      ? {
+          matchClanName: initial.matchClanName,
+          clanName: initial.clanName,
+          worldPolicies: initial.worldPolicies,
+          playerWhitelist: initial.playerWhitelist,
+        }
+      : defaultRuneLiteRules(''),
   );
-  const [whitelist, setWhitelist] = useState('');
+  const [whitelist, setWhitelist] = useState(
+    initial?.playerWhitelist.join('\n') ?? '',
+  );
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
@@ -45,6 +56,7 @@ export function RuneLiteReviewSettings({
     setWhitelist(value.playerWhitelist.join('\n'));
   };
   useEffect(() => {
+    if (initial && refresh === 0) return;
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
@@ -75,6 +87,7 @@ export function RuneLiteReviewSettings({
         JSON.stringify(saved.worldPolicies) ||
       whitelist !== saved.playerWhitelist.join('\n'));
   const disabled = action.busy || !saved;
+  useAdminDraft(!!changed, action.busy);
   return (
     <div className="clan-api-key-settings runelite-review-settings">
       <h3>Automatic review</h3>

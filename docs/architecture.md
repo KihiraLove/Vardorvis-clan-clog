@@ -15,6 +15,10 @@ instants and the database clock; the editor shows local and UTC times.
 
 # Architecture
 
+[Admin route preparation](admin-navigation.md) keeps the current staff page in
+place until authorized destination data is ready, then commits navigation and
+history together. Prepared snapshots are scoped to the current session and page.
+
 The [WOM competition registry](wom-competitions.md) introduced by migration 014
 owns one identity per source competition. SKILL results retain the existing XP
 ledger and immutable import history; ACTIVITY results stay outside XP. Metadata

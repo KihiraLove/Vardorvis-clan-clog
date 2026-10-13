@@ -1,5 +1,5 @@
 /** Load catalog plus paged claims together, retaining cursor history for previous-page navigation. */
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
@@ -14,6 +14,7 @@ import { xpTime } from './XpTables.tsx';
 import { SubmissionEditor } from './SubmissionEditor.tsx';
 import { ManualSubmissionForm } from './ManualSubmissionForm.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
+import { usePreparedAdminData } from './admin-route-data.ts';
 export function AdminQueue({
   client,
   session,
@@ -23,22 +24,40 @@ export function AdminQueue({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
+  const initial = usePreparedAdminData();
+  const preparedRead = useRef(!!initial?.queue);
   const [view, setView] = useState<QueueView>('pending'),
     [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors[cursors.length - 1];
   const pagingHintId = useId();
   const [refresh, setRefresh] = useState(0),
     [selected, setSelected] = useState<string>();
-  const [snapshot, setSnapshot] = useState<{
-    view: QueueView;
-    cursor: string | undefined;
-    catalog: AdminCatalog;
-    queue: QueueResult;
-  }>();
-  const [loading, setLoading] = useState(true),
+  const [snapshot, setSnapshot] = useState<
+    | {
+        view: QueueView;
+        cursor: string | undefined;
+        catalog: AdminCatalog;
+        queue: QueueResult;
+      }
+    | undefined
+  >(
+    initial?.catalog && initial.queue
+      ? {
+          catalog: initial.catalog,
+          queue: initial.queue,
+          view: 'pending',
+          cursor: undefined,
+        }
+      : undefined,
+  );
+  const [loading, setLoading] = useState(!initial?.queue),
     [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   useEffect(() => {
+    if (preparedRead.current) {
+      preparedRead.current = false;
+      return;
+    }
     let active = true;
     const controller = new AbortController(),
       timer = window.setTimeout(() => controller.abort(), 10000);

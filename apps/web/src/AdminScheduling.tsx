@@ -10,6 +10,7 @@ import type { AdminClient, AdminCatalog } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 import {
   localScheduleInput,
   localScheduleToUtc,
@@ -28,8 +29,13 @@ export function AdminScheduling({
   onAccessLost: () => void;
   competitionClient: CompetitionClient;
 }) {
-  const [state, setState] = useState<SchedulingState>();
-  const [catalog, setCatalog] = useState<AdminCatalog>();
+  const initial = usePreparedAdminData();
+  const [state, setState] = useState<SchedulingState | undefined>(
+    initial?.schedules,
+  );
+  const [catalog, setCatalog] = useState<AdminCatalog | undefined>(
+    initial?.catalog,
+  );
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [editingId, setEditingId] = useState<string>();
@@ -42,6 +48,17 @@ export function AdminScheduling({
   const deleteDialog = useRef<HTMLDialogElement>(null);
   const [now, setNow] = useState(() => new Date().toISOString());
   const action = useAdminAction(onAccessLost);
+  const edited = state?.schedules.find((schedule) => schedule.id === editingId);
+  useAdminDraft(
+    edited
+      ? title !== edited.title ||
+          startLocal !== localScheduleInput(edited.startsAt) ||
+          endLocal !== localScheduleInput(edited.endsAt) ||
+          JSON.stringify(pageIds.slice().sort()) !==
+            JSON.stringify(edited.pageIds.slice().sort())
+      : !!(title || startLocal || endLocal || pageIds.length),
+    action.busy,
+  );
   useEffect(() => {
     if (removing && !deleteDialog.current?.open)
       deleteDialog.current?.showModal();
@@ -61,6 +78,7 @@ export function AdminScheduling({
   }, []);
   useEffect(() => {
     let active = true;
+    if (initial?.schedules && initial.catalog && refresh === 0) return;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     setState(undefined);

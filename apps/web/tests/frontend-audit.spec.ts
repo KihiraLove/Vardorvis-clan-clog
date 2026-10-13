@@ -351,7 +351,6 @@ test('audit: retain the current admin page until destination data is ready', asy
   await expect(account).toBeVisible();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await expect.poll(() => requested).toBe(true);
-  test.fail(true, issue + ': route commits before its data loads');
   try {
     await expect(account).toBeVisible();
   } finally {

@@ -1040,8 +1040,13 @@ for (const approveImmediately of [false, true]) {
   );
 }
 
-test('leaving the manual form aborts its pending request', async ({ page }) => {
+test('navigation preserves a pending manual write; logout aborts and removes the private form', async ({
+  page,
+}) => {
   await mockAdmin(page);
+  await page.route('**/api/v1/auth/logout', (route) =>
+    route.fulfill({ status: 204 }),
+  );
   await page.addInitScript(() => {
     const original = window.fetch.bind(window);
     window.fetch = (input, options) => {
@@ -1075,8 +1080,19 @@ test('leaving the manual form aborts its pending request', async ({ page }) => {
     page.getByRole('button', { name: 'Saving…', exact: true }),
   ).toBeDisabled();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Wait for the current staff operation',
+  );
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-manual-aborted',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-manual-aborted',
     'true',
   );
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
 });

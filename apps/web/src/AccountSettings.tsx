@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 export function AccountSettings({
   client,
@@ -20,6 +21,11 @@ export function AccountSettings({
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(
+    username !== session.username ||
+      !!(currentPassword || newPassword || confirmation),
+    action.busy,
+  );
   return (
     <section className="admin-panel">
       <h2>

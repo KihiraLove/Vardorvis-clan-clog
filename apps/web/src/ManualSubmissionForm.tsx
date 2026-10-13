@@ -10,6 +10,7 @@ import {
   type Submission,
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 export function ManualSubmissionForm({
   catalog,
@@ -43,6 +44,17 @@ export function ManualSubmissionForm({
     key: string;
     screenshot?: File | undefined;
   }>();
+  useAdminDraft(
+    !!(
+      (open && itemId) ||
+      collectorName ||
+      proofUrl ||
+      screenshot ||
+      reason ||
+      pending
+    ),
+    busy,
+  );
   const options = catalog.items.filter(
     (item) =>
       item.name.toLowerCase().includes(search.toLowerCase().trim()) ||

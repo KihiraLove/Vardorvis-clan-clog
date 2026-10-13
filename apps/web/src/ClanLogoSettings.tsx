@@ -8,6 +8,7 @@ import {
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 export function ClanLogoSettings({
   client,
   session,
@@ -21,13 +22,16 @@ export function ClanLogoSettings({
   onSaved: (branding: Branding) => void;
   hardcore?: boolean;
 }) {
-  const [saved, setSaved] = useState<Branding>();
+  const initial = usePreparedAdminData()?.branding;
+  const [saved, setSaved] = useState<Branding | undefined>(initial);
   const [file, setFile] = useState<File>();
   const [readError, setReadError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [inputVersion, setInputVersion] = useState(0);
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(!!file, action.busy);
   useEffect(() => {
+    if (initial && refresh === 0) return;
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);

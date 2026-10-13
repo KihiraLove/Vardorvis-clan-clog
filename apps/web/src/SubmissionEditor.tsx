@@ -1,5 +1,6 @@
 /** Review saved claims, stage corrections separately and display before/after audit history. */
 import { useEffect, useId, useState } from 'react';
+import { useAdminDraft } from './admin-route-data.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
@@ -94,6 +95,17 @@ export function SubmissionEditor({
       clearTimeout(timer);
     };
   }, [client, id, refresh, onAccessLost]);
+  useAdminDraft(
+    !!detail &&
+      !!draft &&
+      (draft.itemId !== (detail.submission.itemId ?? 0) ||
+        draft.collectorName.trim() !== detail.submission.collectorName ||
+        draft.collectedOn !== detail.submission.collectedOn ||
+        draft.hardcore !== detail.submission.hardcore ||
+        reviewNote.trim() !== detail.submission.reviewNote ||
+        !!draft.reason),
+    action.busy,
+  );
   if (!detail || !draft)
     return (
       <section className="admin-panel">

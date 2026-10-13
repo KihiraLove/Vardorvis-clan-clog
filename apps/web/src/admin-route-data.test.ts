@@ -1,0 +1,132 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { loadAdminRoute } from './admin-route-data.ts';
+import { PreviewAdminClient } from './preview/admin.ts';
+import { PreviewXpClient } from './preview/xp.ts';
+import type { AdminSession } from './xp-model.ts';
+
+const signal = () => new AbortController().signal;
+test('route loaders prepare every destination with one shared catalog read and no session or write waterfall', async (t) => {
+  const client = new PreviewAdminClient(),
+    xp = new PreviewXpClient();
+  const session = (await client.session(signal()))!;
+  t.mock.method(client, 'session', async () => {
+    throw new Error('session already verified');
+  });
+  const catalog = t.mock.method(client, 'catalog');
+  for (const [path, kind] of [
+    ['/admin', 'queue'],
+    ['/admin/catalog', 'catalog'],
+    ['/admin/xp', 'xp'],
+    ['/admin/schedules', 'schedules'],
+    ['/admin/settings', 'settings'],
+    ['/admin/settings/hardcore', 'settings'],
+    ['/admin/runelite', 'runelite'],
+    ['/admin/accounts', 'accounts'],
+    ['/admin/account', 'account'],
+  ]) {
+    const result = await loadAdminRoute(path!, session, client, xp, signal());
+    assert.equal(result.kind, kind);
+    if (['queue', 'catalog', 'schedules'].includes(kind!))
+      assert.ok(result.catalog?.revision);
+    if (kind === 'xp') {
+      assert.ok(result.tracker);
+      assert.deepEqual(result.history, []);
+    }
+    if (kind === 'settings') {
+      assert.ok(result.settings);
+      assert.ok(result.branding);
+    }
+    if (kind === 'runelite') {
+      assert.ok(result.clanKey);
+      assert.ok(result.runeLite);
+    }
+  }
+  assert.equal(catalog.mock.callCount(), 3);
+});
+test('moderator and mandatory-password routes never issue unauthorized reads', async (t) => {
+  const client = new PreviewAdminClient(),
+    xp = new PreviewXpClient();
+  const session: AdminSession = {
+    ...(await client.session(signal()))!,
+    role: 'moderator',
+  };
+  for (const method of [
+    'settings',
+    'branding',
+    'clanApiKey',
+    'runeLiteSettings',
+    'accounts',
+  ] as const)
+    t.mock.method(client, method, async () => {
+      throw new Error('unauthorized read');
+    });
+  t.mock.method(xp, 'history', async () => {
+    throw new Error('private XP history');
+  });
+  for (const path of [
+    '/admin/settings',
+    '/admin/settings/hardcore',
+    '/admin/runelite',
+    '/admin/accounts',
+  ])
+    assert.equal(
+      (await loadAdminRoute(path, session, client, xp, signal())).kind,
+      'denied',
+    );
+  assert.deepEqual(
+    (await loadAdminRoute('/admin/xp', session, client, xp, signal())).history,
+    [],
+  );
+  assert.equal(
+    (
+      await loadAdminRoute(
+        '/admin/settings',
+        { ...session, mustChangePassword: true },
+        client,
+        xp,
+        signal(),
+      )
+    ).kind,
+    'account',
+  );
+});
+test('a canceled loader settles even when a source ignores its signal; late results cannot revive it', async (t) => {
+  const client = new PreviewAdminClient(),
+    xp = new PreviewXpClient();
+  const session = (await client.session(signal()))!;
+  const catalog = await client.catalog(signal());
+  let release!: (value: typeof catalog) => void;
+  t.mock.method(
+    client,
+    'catalog',
+    () =>
+      new Promise<typeof catalog>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const controller = new AbortController();
+  const loading = loadAdminRoute(
+    '/admin/catalog',
+    session,
+    client,
+    xp,
+    controller.signal,
+  );
+  controller.abort();
+  await assert.rejects(loading, { name: 'AbortError' });
+  release(catalog);
+  await assert.rejects(loading, { name: 'AbortError' });
+});
+test('multi-read destinations reject incomplete preparations instead of exposing a partial form', async (t) => {
+  const client = new PreviewAdminClient(),
+    xp = new PreviewXpClient();
+  const session = (await client.session(signal()))!;
+  t.mock.method(client, 'branding', async () => {
+    throw new Error('branding unavailable');
+  });
+  await assert.rejects(
+    loadAdminRoute('/admin/settings', session, client, xp, signal()),
+    /branding unavailable/,
+  );
+});

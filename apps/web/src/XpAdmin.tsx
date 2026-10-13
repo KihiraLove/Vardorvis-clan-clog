@@ -11,6 +11,7 @@ import {
   type XpClient,
 } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
+import { usePreparedAdminData } from './admin-route-data.ts';
 export function XpAdmin({
   client,
   competitionClient,
@@ -26,10 +27,15 @@ export function XpAdmin({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [error, setError] = useState<string>(),
-    [history, setHistory] = useState<ImportEntry[]>([]),
+  const prepared = usePreparedAdminData();
+  const initial = prepared?.history;
+  const [error, setError] = useState<string | undefined>(
+      prepared?.historyError,
+    ),
+    [history, setHistory] = useState<ImportEntry[]>(initial ?? []),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
+    if (initial && refresh === 0) return;
     let active = true;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
@@ -68,7 +74,17 @@ export function XpAdmin({
   return (
     <section className="xp-panel">
       <h2>{previewMode ? 'Preview XP imports' : 'XP competition imports'}</h2>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          {error}{' '}
+          <button
+            className="site-button"
+            onClick={() => setRefresh((n) => n + 1)}
+          >
+            Retry XP history
+          </button>
+        </p>
+      )}
       <>
         <CompetitionImport
           client={competitionClient}
@@ -82,7 +98,11 @@ export function XpAdmin({
         {session.role === 'admin' && (
           <details className="xp-history">
             <summary>Import history ({history.length})</summary>
-            {!history.length && <p>No imports recorded yet.</p>}
+            {error ? (
+              <p>Import history unavailable.</p>
+            ) : (
+              !history.length && <p>No imports recorded yet.</p>
+            )}
             <ol>
               {history.map((h) => (
                 <li key={h.id}>

@@ -4,6 +4,7 @@ import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient, StaffAccount } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 
 export function AdminAccounts({
   client,
@@ -14,14 +15,17 @@ export function AdminAccounts({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [accounts, setAccounts] = useState<StaffAccount[]>();
+  const initial = usePreparedAdminData()?.accounts;
+  const [accounts, setAccounts] = useState<StaffAccount[] | undefined>(initial);
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState<StaffAccount>();
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(!!(username || password), action.busy);
   useEffect(() => {
+    if (initial && refresh === 0) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     setError(undefined);

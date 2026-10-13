@@ -13,6 +13,7 @@ import {
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 /** Revoke preview URLs and close decoded bitmaps when replacing files or leaving the form. */
 function IconPicker({
@@ -126,6 +127,7 @@ export function ItemCreator({
     });
   }, [catalog.pages, pending]);
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(!!(name || file || pageIds.length || pending), action.busy);
   const iconChanged = useCallback((file: File | undefined) => {
     setFile(file);
     setStaged(undefined);

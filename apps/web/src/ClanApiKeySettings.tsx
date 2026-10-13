@@ -6,6 +6,7 @@ import { classifyAccessFailure } from './admin-session.ts';
 import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { clanKeyBytes, clanKeyMinLength } from '@clog/domain';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 
 export function ClanApiKeySettings({
   client,
@@ -16,18 +17,24 @@ export function ClanApiKeySettings({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [saved, setSaved] = useState<ClanKeySettings>();
-  const [enabled, setEnabled] = useState(true);
-  const [key, setKey] = useState('');
+  const initial = usePreparedAdminData()?.clanKey;
+  const [saved, setSaved] = useState<ClanKeySettings | undefined>(initial);
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [key, setKey] = useState(initial?.key ?? '');
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(
+    !!saved && (enabled !== saved.enabled || key !== saved.key),
+    action.busy,
+  );
   const accept = (value: ClanKeySettings) => {
     setSaved(value);
     setEnabled(value.enabled);
     setKey(value.key);
   };
   useEffect(() => {
+    if (initial && refresh === 0) return;
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);

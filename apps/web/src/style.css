@@ -2273,3 +2273,24 @@ main {
     grid-template-columns: 94px minmax(0, 1fr);
   }
 }
+/* Route preparation leaves the current document's layout and editable forms intact. */
+.admin-route-status {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100;
+  width: min(380px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid #a89970;
+  border-radius: 6px;
+  color: #f5e5bf;
+  background: #28241e;
+  box-shadow: 0 3px 16px #0008;
+}
+.admin-route-status p {
+  margin: 0 0 8px;
+}
+.admin-route-shell {
+  min-height: 22rem;
+}

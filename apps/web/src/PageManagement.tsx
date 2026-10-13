@@ -5,6 +5,7 @@ import type { AdminCatalog, AdminClient, CreatePage } from './admin-model.ts';
 import { categories, type Category } from './model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 export function PageManagement({
   client,
   catalog,
@@ -38,6 +39,7 @@ export function PageManagement({
   }, [catalog.items, pending]);
   const action = useAdminAction(onAccessLost),
     locked = action.busy || Boolean(pending);
+  useAdminDraft(!!(name || itemIds.length || pending), action.busy);
   const pages = catalog.pages.filter((page) => page.category === category);
   const choices = catalog.items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase().trim()),

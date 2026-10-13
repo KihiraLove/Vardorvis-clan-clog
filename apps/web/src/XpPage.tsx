@@ -8,6 +8,7 @@ import { skills, type AdminSession, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
 import { PreviewXpClient } from './preview/xp.ts';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
+import { usePreparedAdminData } from './admin-route-data.ts';
 export function XpPage({
   client,
   competitionClient,
@@ -27,10 +28,11 @@ export function XpPage({
   onAccessLost?: () => void;
   copy?: SiteCopy;
 }) {
-  const [data, setData] = useState<XpTracker>();
+  const initial = usePreparedAdminData()?.tracker;
+  const [data, setData] = useState<XpTracker | undefined>(initial);
   const [selected, setSelected] = useState<number>();
   const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initial);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true,
@@ -57,7 +59,7 @@ export function XpPage({
         if (active) setLoading(false);
       }
     };
-    void load();
+    if (!initial || refresh > 0) void load();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') void load();
     }, 25000);
@@ -73,7 +75,7 @@ export function XpPage({
     };
   }, [client, refresh]);
   useEffect(() => {
-    setData(undefined);
+    setData(initial);
     setSelected(undefined);
   }, [client]);
   const event = data?.events.find((entry) => entry.id === selected);

@@ -6,6 +6,7 @@ import type { AdminSession } from './xp-model.ts';
 import { ItemCreator } from './ItemCreator.tsx';
 import { PageOrderEditor } from './PageOrderEditor.tsx';
 import { PageManagement } from './PageManagement.tsx';
+import { usePreparedAdminData } from './admin-route-data.ts';
 
 export function AdminCatalogPage({
   client,
@@ -16,11 +17,13 @@ export function AdminCatalogPage({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [catalog, setCatalog] = useState<AdminCatalog>(),
+  const initial = usePreparedAdminData()?.catalog;
+  const [catalog, setCatalog] = useState<AdminCatalog | undefined>(initial),
     [readError, setReadError] = useState<string>();
-  const [loading, setLoading] = useState(true),
+  const [loading, setLoading] = useState(!initial),
     [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {
+    if (initial && refreshKey === 0) return;
     let active = true;
     const controller = new AbortController(),
       timer = window.setTimeout(() => controller.abort(), 10000);

@@ -12,6 +12,16 @@ for (const path of ['/admin/xp', '/admin/schedules']) {
       page,
     }) => {
       const fixtures = await adminFixtures();
+      await page.route('**/api/v1/xp/tracker', (r) =>
+        r.fulfill({
+          json: {
+            revision: 'xp-1',
+            totals: zeroTotals(),
+            podium: [],
+            events: [],
+          },
+        }),
+      );
       await page.route('**/api/v1/auth/session', (r) =>
         r.fulfill({ json: { ...fixtures.session, role: 'moderator' } }),
       );

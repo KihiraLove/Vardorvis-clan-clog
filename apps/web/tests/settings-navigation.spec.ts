@@ -65,7 +65,7 @@ async function delayedSettings(page: Page) {
   };
 }
 
-test('settings-navigation: forms, panel and footer keep their geometry while private settings load', async ({
+test('settings-navigation: current forms, focus, scroll, panel and footer stay stable until settings are ready', async ({
   page,
 }) => {
   const requests = await delayedSettings(page);
@@ -81,25 +81,33 @@ test('settings-navigation: forms, panel and footer keep their geometry while pri
       ['Hardcore worlds', 'Displayed clan name', 2],
       ['RuneLite submissions', 'Current shared API key', 2],
     ] as const) {
-      requests.hold();
-      await page.getByRole('link', { name, exact: true }).click();
-      await expect.poll(requests.pending).toBe(calls);
-      const input = page.getByLabel(field, { exact: true });
-      await expect(input).toBeDisabled();
+      const currentHeading = page.locator('main h2').first();
+      const currentText = await currentHeading.textContent();
+      const currentPath = new URL(page.url()).pathname;
       const geometry = async () => ({
         nav: await page
           .getByRole('navigation', { name: 'Admin navigation' })
           .boundingBox(),
-        panel: await page.locator('.admin-panel').boundingBox(),
-        input: await input.boundingBox(),
+        panel: await page.locator('.admin-panel').first().boundingBox(),
         footer: await page.locator('.site-footer').boundingBox(),
+        scroll: await page.evaluate(() => scrollY),
       });
+      const link = page.getByRole('link', { name, exact: true });
+      await link.focus();
       const before = await geometry();
+      requests.hold();
+      await link.press('Enter');
+      await expect.poll(requests.pending).toBe(calls);
+      const input = page.getByLabel(field, { exact: true });
+      await expect(input).toHaveCount(0);
+      await expect(currentHeading).toHaveText(currentText!);
+      await expect(link).toBeFocused();
+      expect(new URL(page.url()).pathname).toBe(currentPath);
+      expect(await geometry()).toEqual(before);
       requests.release();
       await expect(input).toBeEnabled();
       if (name !== 'RuneLite submissions')
         await expect(page.getByLabel('Logo image')).toBeEnabled();
-      expect(await geometry()).toEqual(before);
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

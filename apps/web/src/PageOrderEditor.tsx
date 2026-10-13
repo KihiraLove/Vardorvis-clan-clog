@@ -10,6 +10,7 @@ import {
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 export function PageOrderEditor({
   client,
@@ -33,6 +34,7 @@ export function PageOrderEditor({
   const action = useAdminAction(onAccessLost);
   const seen = useRef(catalog.revision);
   const dirty = JSON.stringify(ids) !== JSON.stringify(saved?.itemIds ?? []);
+  useAdminDraft(dirty, action.busy);
   const latest = catalog.pages.find((page) => page.id === pageId),
     stale = latest?.version !== saved?.version;
   const accept = (page: AdminPage | undefined) => {

@@ -8,6 +8,7 @@ import type { AdminSession } from './xp-model.ts';
 import type { SiteSettings } from './site-settings.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { defaultSiteCopy, parseSiteCopy, type SiteCopy } from '@clog/domain';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 export function AdminSettings({
   client,
   session,
@@ -23,13 +24,28 @@ export function AdminSettings({
   onBrandingSaved: (branding: Branding) => void;
   hardcore?: boolean;
 }) {
-  const [saved, setSaved] = useState<SiteSettings>();
-  const [enabled, setEnabled] = useState(false);
-  const [clanName, setClanName] = useState('');
-  const [copy, setCopy] = useState<SiteCopy>({ ...defaultSiteCopy });
+  const initial = usePreparedAdminData()?.settings;
+  const initialAppearance = hardcore ? initial?.hardcore : initial;
+  const [saved, setSaved] = useState<SiteSettings | undefined>(initial);
+  const [enabled, setEnabled] = useState(initial?.hardcoreEnabled ?? false);
+  const [clanName, setClanName] = useState(
+    initialAppearance?.clanName ?? initial?.clanName ?? '',
+  );
+  const [copy, setCopy] = useState<SiteCopy>(
+    initialAppearance?.copy ?? { ...defaultSiteCopy },
+  );
   const [readError, setReadError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
+  const savedAppearance = hardcore ? saved?.hardcore : saved;
+  useAdminDraft(
+    !!saved &&
+      (enabled !== saved.hardcoreEnabled ||
+        clanName !== (savedAppearance?.clanName ?? saved.clanName) ||
+        JSON.stringify(copy) !==
+          JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy)),
+    action.busy,
+  );
   const apply = (value: SiteSettings) => {
     const appearance = hardcore ? value.hardcore : value;
     setSaved(value);
@@ -38,6 +54,7 @@ export function AdminSettings({
     setCopy(appearance?.copy ?? { ...defaultSiteCopy });
   };
   useEffect(() => {
+    if (initial && refresh === 0) return;
     let active = true;
     setSaved(undefined);
     setReadError(undefined);
