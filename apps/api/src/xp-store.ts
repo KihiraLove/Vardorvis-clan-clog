@@ -262,7 +262,7 @@ export class PgXpStore implements XpStore {
           snapshot: XpSnapshot;
           expires_at: Date;
         }>(
-          'SELECT actor_discord_id,expected_revision,snapshot,expires_at FROM xp_previews WHERE token_hash=$1',
+          'SELECT actor_discord_id,expected_revision,snapshot,expires_at FROM xp_previews WHERE token_hash=$1 FOR KEY SHARE',
           [hash(token)],
         )
       ).rows[0];
