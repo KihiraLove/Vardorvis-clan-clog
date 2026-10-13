@@ -7,6 +7,7 @@ import { Events, MessageFlags, type Client } from 'discord.js';
 import {
   HttpBotApi,
   BotApiError,
+  UnconfirmedSubmissionError,
   type BotApi,
   type Candidate,
   type Claim,
@@ -386,7 +387,13 @@ test('HTTP conflicts and malformed API responses fail rather than inventing a re
   assert.equal(calls, 1);
   const corrupt = new HttpBotApi('http://api:3000', token, (async () =>
     Response.json({ status: 'approved' }, { status: 201 })) as typeof fetch);
-  await assert.rejects(corrupt.submit(claim), { status: 502 });
+  await assert.rejects(corrupt.submit(claim), (error: unknown) => {
+    assert.ok(error instanceof UnconfirmedSubmissionError);
+    assert.equal(error.reason, 'invalid-receipt');
+    assert.equal(error.interactionId, claim.interactionId);
+    assert.doesNotMatch(failureMessage(error), /Saved for admin review/u);
+    return true;
+  });
   const badSearch = new HttpBotApi('http://api:3000', token, (async () =>
     Response.json({ items: [{ id: 'bad', name: 'x' }] })) as typeof fetch);
   await assert.rejects(badSearch.search('x'), { status: 502 });
