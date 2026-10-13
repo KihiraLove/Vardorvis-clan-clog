@@ -47,7 +47,8 @@ export function SubmissionEditor({
   const [detail, setDetail] = useState<SubmissionDetail>(),
     [draft, setDraft] = useState<Correction>();
   const [query, setQuery] = useState(''),
-    [checked, setChecked] = useState(false);
+    [checked, setChecked] = useState(false),
+    [reviewNote, setReviewNote] = useState('');
   const [readError, setReadError] = useState<string>(),
     [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
@@ -55,6 +56,7 @@ export function SubmissionEditor({
   const accept = (next: SubmissionDetail) => {
     setDetail(next);
     setDraft(draftOf(next.submission));
+    setReviewNote(next.submission.reviewNote);
     setChecked(false);
     setReadError(undefined);
   };
@@ -108,11 +110,12 @@ export function SubmissionEditor({
   const row = detail.submission,
     editable = ['pending', 'approved'].includes(row.status);
   const activeItem = catalog.items.some((item) => item.id === row.itemId);
-  const dirty =
+  const claimDirty =
     draft.itemId !== (row.itemId ?? 0) ||
     draft.collectorName.trim() !== row.collectorName ||
     draft.collectedOn !== row.collectedOn ||
     draft.hardcore !== row.hardcore;
+  const noteDirty = reviewNote.trim() !== row.reviewNote;
   const locked = action.busy || disabled || Boolean(readError),
     proof = safeProof(row.proofUrl) || safeScreenshotPath(row.screenshotPath);
   const change = (fields: Partial<Correction>) => {
@@ -124,7 +127,7 @@ export function SubmissionEditor({
     void action.execute(async (signal) => {
       if (
         decision === 'approve' &&
-        (dirty ||
+        (claimDirty ||
           !checked ||
           (!proof && row.source !== 'manual') ||
           !activeItem)
@@ -175,6 +178,39 @@ export function SubmissionEditor({
         if (!signal.aborted)
           setReadError(
             'The change was saved, but audit history could not be refreshed. Reload before continuing.',
+          );
+      }
+    }, reload);
+  };
+  const saveNote = () => {
+    void action.execute(async (signal) => {
+      if (!noteDirty) return;
+      const next = await client.saveReviewNote(
+        id,
+        row.version,
+        reviewNote.trim(),
+        session.csrfToken,
+        signal,
+      );
+      if (signal.aborted) return;
+      setDetail({ ...detail, submission: next });
+      setReviewNote(next.reviewNote);
+      setChecked(false);
+      action.setMessage('Review note saved.');
+      onChanged(next.status);
+      // Preserve draft corrections while reloading the updated audit history.
+      try {
+        const latest = await client.detail(id, signal);
+        if (!signal.aborted) {
+          setDetail(latest);
+          setReviewNote(latest.submission.reviewNote);
+          setReadError(undefined);
+        }
+      } catch (failure) {
+        if (classifyAccessFailure(failure) === 'expired') throw failure;
+        if (!signal.aborted)
+          setReadError(
+            'The note was saved, but audit history could not be refreshed. Reload before continuing.',
           );
       }
     }, reload);
@@ -353,6 +389,30 @@ export function SubmissionEditor({
             Collected on hardcore worlds
           </label>
           <label>
+            Review note
+            <textarea
+              maxLength={1000}
+              rows={3}
+              value={reviewNote}
+              onChange={(event) => setReviewNote(event.target.value)}
+            />
+            <span className="admin-note">
+              Saved staff note, separate from claim corrections and decision reasons.
+              Clear and save to remove the note.
+            </span>
+          </label>
+          <div className="admin-actions">
+            <button className="site-button" type="button"
+              disabled={locked || !editable || !noteDirty} onClick={saveNote}>
+              Save review note
+            </button>
+            <button className="site-button" type="button"
+              disabled={locked || !editable || !noteDirty}
+              onClick={() => setReviewNote(row.reviewNote)}>
+              Discard review note
+            </button>
+          </div>
+          <label>
             Review reason
             <textarea
               maxLength={1000}
@@ -363,18 +423,18 @@ export function SubmissionEditor({
               }
             />
             <span className="admin-note">
-              Required for rejection, revocation and corrections to approved
-              credits.
+              One-time audit reason for rejection, revocation and corrections to
+              approved credits. Not the persisted review note.
             </span>
           </label>
           <div className="admin-actions">
-            <button className="site-button" type="submit" disabled={!dirty}>
+            <button className="site-button" type="submit" disabled={!claimDirty}>
               Save corrections
             </button>
             <button
               className="site-button"
               type="button"
-              disabled={!dirty}
+              disabled={!claimDirty}
               onClick={() => {
                 setDraft(draftOf(row));
                 setChecked(false);
@@ -384,7 +444,7 @@ export function SubmissionEditor({
             </button>
           </div>
         </fieldset>
-        {dirty && (
+        {claimDirty && (
           <p className="admin-note">
             Save or discard corrections before deciding on this claim.
           </p>
@@ -396,7 +456,7 @@ export function SubmissionEditor({
               checked={checked}
               disabled={
                 locked ||
-                dirty ||
+                claimDirty ||
                 (!proof && row.source !== 'manual') ||
                 !activeItem
               }
@@ -415,7 +475,7 @@ export function SubmissionEditor({
                 type="button"
                 disabled={
                   locked ||
-                  dirty ||
+                  claimDirty ||
                   !checked ||
                   (!proof && row.source !== 'manual') ||
                   !activeItem
@@ -427,7 +487,7 @@ export function SubmissionEditor({
               <button
                 className="site-button"
                 type="button"
-                disabled={locked || dirty || !draft.reason.trim()}
+                disabled={locked || claimDirty || !draft.reason.trim()}
                 onClick={() => perform('reject')}
               >
                 Reject submission
@@ -438,7 +498,7 @@ export function SubmissionEditor({
             <button
               className="site-button site-button--danger"
               type="button"
-              disabled={locked || dirty || !draft.reason.trim()}
+              disabled={locked || claimDirty || !draft.reason.trim()}
               onClick={() => perform('revoke')}
             >
               Revoke credit
@@ -473,6 +533,7 @@ export function SubmissionEditor({
                 entry.before.hardcore ? 'Yes' : 'No',
                 entry.after.hardcore ? 'Yes' : 'No',
               ],
+              ['Review note', entry.before.reviewNote, entry.after.reviewNote],
             ];
             return (
               <li key={entry.id}>
