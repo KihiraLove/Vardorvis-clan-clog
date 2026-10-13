@@ -152,6 +152,23 @@ jobs:
           (cd /tmp/catalog-backup && sha256sum --check SHA256SUMS)
           tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
           tar -tzf /tmp/catalog-backup/screenshots.tar.gz | grep -Fx './.clan-api-key.secret'
+      - name: Restart PostgreSQL and verify API recovers without a process restart
+        env:
+          COMPOSE_FILE: compose.yaml:compose.dev.yaml
+        run: |
+          app_id="$(docker compose ps -q app)"
+          app_started="$(docker inspect --format '{{.State.StartedAt}}' "$app_id")"
+          curl --fail http://127.0.0.1:8088/readyz
+          docker compose stop db
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/healthz)" = "200"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/readyz)" = "503"
+          docker compose start db
+          for attempt in $(seq 1 30); do
+            if curl --fail -sS http://127.0.0.1:8088/readyz; then break; fi
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:8088/readyz
+          test "$app_started" = "$(docker inspect --format '{{.State.StartedAt}}' "$app_id")"
       - name: Logs on failure
         if: failure()
         run: |
