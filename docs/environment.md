@@ -38,9 +38,26 @@ always trusts its internal Nginx loopback hop. Leave the list empty only when
 no external reverse proxy is used;
 see [the trust-chain configuration](deployment.md#existing-traefik).
 
+For a fresh installation, generate a fourth independent secret with
+`openssl rand -hex 32` and set it as `ADMIN_BOOTSTRAP_PASSWORD` in the private
+environment file. It must contain 64–256 hexadecimal characters. Authenticated
+startup fails before listening if no administrator exists and this value is
+missing; there is no default password. Compose passes it only to the API runtime,
+never to the web bundle.
+
 The first authenticated startup creates one administrator with username `admin`
-and password `admin`, and no moderators. Sign in at `/admin` and choose a new
-12–256 character password before staff tools become available. The administrator
+and that bootstrap password, and no moderators. Sign in at `/admin` using the
+generated value and choose a different 12–256 character password before staff
+tools become available. Remove `ADMIN_BOOTSTRAP_PASSWORD` from the environment
+after setup and recreate/restart the app to remove it from the running container.
+Later startups work without it; supplying another value cannot reset, reactivate
+or recreate an existing administrator, including one whose username changed.
+Concurrent initializers create only one account; use the credential from the
+initializer that created it. Keep a fresh installation private until setup is
+complete. If provisioning fails, resolve the error and retry with the same
+credential; account creation is not a password-reset mechanism.
+
+The administrator
 can create moderators under **Moderator accounts**; each receives a temporary
 password and must replace it on first login. Both roles can change their own
 username and password under **Your account**, confirming the current password.
@@ -49,7 +66,9 @@ underscores or hyphens. Credential changes revoke other sessions.
 
 Passwords are stored only as independently salted scrypt verifiers in PostgreSQL;
 the API never returns hashes. `ADMIN_PASSWORD` is no longer used. Renaming the
-administrator or restarting the app does not restore the default credentials.
+administrator or restarting the app does not restore bootstrap credentials.
+Upgrading preserves existing accounts and passwords; an operator must replace
+any legacy `admin` password through account settings before exposing that account.
 Moderators can review, submit, maintain the catalog and import XP; only the
 administrator can access the hardcore release switch and account creation.
 
@@ -82,6 +101,7 @@ Install Node 24 and Docker Compose v2, then:
 cp .env.example .env
 # Configure POSTGRES_PASSWORD, APP_DB_PASSWORD and SESSION_SECRET independently.
 # Set AUTH_ENABLED=true to enable staff login; keep PUBLIC_ORIGIN on HTTP loopback.
+# For the first installation, set ADMIN_BOOTSTRAP_PASSWORD from openssl rand -hex 32.
 npm ci
 npm run validate
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait

@@ -19,6 +19,7 @@ import type {
 } from './types.js';
 const admin = '00000000-0000-4000-8000-000000000001';
 const password = 'test-password-not-for-production';
+const bootstrapPassword = 'b'.repeat(64);
 const testPasswordHash = await hashPassword(password);
 const config: AuthConfig = {
   origin: 'https://clog.example.com',
@@ -39,16 +40,19 @@ export class MemoryStore implements BackendStore {
       },
     ],
   ]);
-  async ensureDefaultAdmin(passwordHash: string) {
-    if (![...this.staff.values()].some((account) => account.role === 'admin'))
-      this.staff.set(admin, {
-        id: admin,
-        username: 'admin',
-        role: 'admin',
-        passwordHash,
-        credentialVersion: 1,
-        mustChangePassword: true,
-      });
+  async ensureDefaultAdmin(passwordHash?: string) {
+    if ([...this.staff.values()].some((account) => account.role === 'admin'))
+      return;
+    if (!passwordHash)
+      throw new Error('No administrator exists. Set ADMIN_BOOTSTRAP_PASSWORD.');
+    this.staff.set(admin, {
+      id: admin,
+      username: 'admin',
+      role: 'admin',
+      passwordHash,
+      credentialVersion: 1,
+      mustChangePassword: true,
+    });
   }
   async accountByUsername(username: string) {
     return (
@@ -465,10 +469,24 @@ test('login rate limits and config fail closed without valid session configurati
   for (const patch of [
     { PUBLIC_ORIGIN: 'http://clog.example.com' },
     { SESSION_SECRET: 'weak' },
+    { ADMIN_BOOTSTRAP_PASSWORD: 'admin' },
+    { ADMIN_BOOTSTRAP_PASSWORD: 'a'.repeat(63) },
+    { ADMIN_BOOTSTRAP_PASSWORD: 'a'.repeat(257) },
+    { ADMIN_BOOTSTRAP_PASSWORD: ' ' + bootstrapPassword },
     { AUTH_ENABLED: 'maybe' },
     { TRUSTED_PROXY_CIDRS: 'true' },
   ])
     assert.throws(() => readConfig({ ...env, ...patch }));
+  assert.equal(
+    readConfig({ ...env, ADMIN_BOOTSTRAP_PASSWORD: bootstrapPassword }).auth
+      ?.bootstrapPassword,
+    bootstrapPassword,
+  );
+  assert.equal(
+    readConfig({ ...env, ADMIN_BOOTSTRAP_PASSWORD: '' }).auth
+      ?.bootstrapPassword,
+    undefined,
+  );
   assert.deepEqual(
     readConfig({ ...env, TRUSTED_PROXY_CIDRS: '127.0.0.1,172.18.0.0/16' })
       .trustProxy,
@@ -512,6 +530,7 @@ test('localhost requires password login and first-login setup even with the reti
     AUTH_ENABLED: 'true',
     PUBLIC_ORIGIN: 'http://127.0.0.1:8088',
     SESSION_SECRET: config.secret,
+    ADMIN_BOOTSTRAP_PASSWORD: bootstrapPassword,
   }).auth!;
   const store = new MemoryStore();
   store.staff.clear();
@@ -529,7 +548,7 @@ test('localhost requires password login and first-login setup even with the reti
       method: 'POST',
       url: '/api/v1/auth/login',
       headers: { origin: auth.origin },
-      payload: { username: 'admin', password: 'admin' },
+      payload: { username: 'admin', password: bootstrapPassword },
     });
     assert.equal(signedIn.statusCode, 200);
     assert.equal(signedIn.json().mustChangePassword, true);
@@ -636,7 +655,7 @@ test('proxy login buckets distinguish clients and ignore spoofed forwarding pref
   }
 });
 
-test('default admin setup, moderator permissions and self-service credentials are enforced server-side', async () => {
+test('explicit admin bootstrap, moderator permissions and self-service credentials are enforced server-side', async () => {
   const store = new MemoryStore();
   store.staff.clear();
   const actors: string[] = [];
@@ -668,7 +687,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
   } as unknown as XpStore;
   const app = createApp(undefined, undefined, {
     store,
-    auth: config,
+    auth: { ...config, bootstrapPassword },
     review,
     xp,
     logger: false,
@@ -701,7 +720,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
       payload,
     });
   try {
-    const first = await credentials('admin', 'admin');
+    const first = await credentials('admin', bootstrapPassword);
     assert.equal(first.response.json().mustChangePassword, true);
     assert.deepEqual(await store.accounts(), [
       { id: admin, username: 'admin', role: 'admin', mustChangePassword: true },
@@ -720,7 +739,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
     assert.equal(
       (
         await change(first.headers, {
-          currentPassword: 'admin',
+          currentPassword: bootstrapPassword,
           username: 'owner',
         })
       ).statusCode,
@@ -739,7 +758,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
       (
         await change(
           { cookie: first.headers.cookie },
-          { currentPassword: 'admin', newPassword: password },
+          { currentPassword: bootstrapPassword, newPassword: password },
         )
       ).statusCode,
       403,
@@ -747,14 +766,14 @@ test('default admin setup, moderator permissions and self-service credentials ar
     assert.equal(
       (
         await change(first.headers, {
-          currentPassword: 'admin',
+          currentPassword: bootstrapPassword,
           newPassword: 'short',
         })
       ).statusCode,
       400,
     );
     const saved = await change(first.headers, {
-      currentPassword: 'admin',
+      currentPassword: bootstrapPassword,
       newPassword: password,
       username: 'owner',
     });

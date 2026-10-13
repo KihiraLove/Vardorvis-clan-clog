@@ -71,7 +71,8 @@ export interface BackendStore {
     action: 'disable' | 'enable' | 'delete',
     actor: string,
   ): Promise<StaffAccount>;
-  ensureDefaultAdmin(passwordHash: string): Promise<void>;
+  /** Preserve an existing administrator; a fresh database requires an explicit verifier. */
+  ensureDefaultAdmin(bootstrapPasswordHash?: string): Promise<void>;
   accountByUsername(username: string): Promise<StoredAccount | null>;
   accountById(id: string): Promise<StoredAccount | null>;
   accounts(): Promise<StaffAccount[]>;

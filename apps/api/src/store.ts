@@ -38,13 +38,28 @@ const duplicateUsername = (error: unknown) => {
 export class PgStore implements BackendStore {
   constructor(private readonly pool: pg.Pool) {}
 
-  async ensureDefaultAdmin(passwordHash: string) {
+  async ensureDefaultAdmin(bootstrapPasswordHash?: string) {
+    const hasAdministrator = async () =>
+      (await this.pool.query("SELECT 1 FROM staff_accounts WHERE role='admin'"))
+        .rowCount !== 0;
+    // Look up the role, not the original username; disabled/renamed accounts
+    // must never trigger credential replacement or a second bootstrap.
+    if (await hasAdministrator()) return;
+    if (!bootstrapPasswordHash)
+      throw new Error(
+        'No administrator exists. Set ADMIN_BOOTSTRAP_PASSWORD to an independently generated bootstrap credential before enabling auth.',
+      );
     await this.pool.query(
       `INSERT INTO staff_accounts(id,username,role,password_hash)
-       VALUES('00000000-0000-4000-8000-000000000001','admin','admin',$1)
+       SELECT '00000000-0000-4000-8000-000000000001','admin','admin',$1
+       WHERE NOT EXISTS (SELECT 1 FROM staff_accounts WHERE role='admin')
        ON CONFLICT DO NOTHING`,
-      [passwordHash],
+      [bootstrapPasswordHash],
     );
+    // The single-admin unique index chooses one concurrent initializer. Other
+    // uniqueness conflicts (such as a moderator named admin) must fail closed.
+    if (!(await hasAdministrator()))
+      throw new Error('Administrator provisioning did not create an account.');
   }
   async accountByUsername(username: string): Promise<StoredAccount | null> {
     return (

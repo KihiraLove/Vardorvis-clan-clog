@@ -37,20 +37,24 @@ test(
         .filter((file) => /^\d+_.+\.sql$/u.test(file))
         .sort())
         await pool.query(await readFile(new URL(file, migrations), 'utf8'));
-      const originalHash = await hashPassword('admin');
+      const bootstrapPassword = 'b'.repeat(64);
+      const originalHash = await hashPassword(bootstrapPassword);
       await Promise.all(
         Array.from({ length: 8 }, () => store.ensureDefaultAdmin(originalHash)),
       );
       assert.equal((await store.accounts()).length, 1);
       const initial = (await store.accountByUsername('ADMIN'))!;
       assert.equal(initial.mustChangePassword, true);
-      assert.equal(await verifyPassword('admin', initial.passwordHash), true);
+      assert.equal(
+        await verifyPassword(bootstrapPassword, initial.passwordHash),
+        true,
+      );
       // First-login setup through real HTTP routes rotates the cookie and unlocks tools.
       const login = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
         headers: { origin: auth.origin },
-        payload: { username: 'admin', password: 'admin' },
+        payload: { username: 'admin', password: bootstrapPassword },
       });
       assert.equal(login.statusCode, 200, login.body);
       const headers = {
@@ -68,7 +72,7 @@ test(
         url: '/api/v1/auth/account',
         headers,
         payload: {
-          currentPassword: 'admin',
+          currentPassword: bootstrapPassword,
           newPassword: 'new-owner-password',
           username: 'owner',
         },
@@ -80,7 +84,7 @@ test(
         false,
       );
       const owner = (await store.accountByUsername('owner'))!;
-      await store.ensureDefaultAdmin(await hashPassword('admin'));
+      await store.ensureDefaultAdmin(await hashPassword('c'.repeat(64)));
       assert.equal(await store.accountByUsername('admin'), null);
       assert.equal(
         (await store.accountById(owner.id))!.passwordHash,

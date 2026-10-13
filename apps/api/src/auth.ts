@@ -45,8 +45,13 @@ export function authRoutes(
 ) {
   let dummyHash: string;
   app.addHook('onReady', async () => {
-    dummyHash = await hashPassword('admin');
-    await store.ensureDefaultAdmin(dummyHash);
+    // Unknown-account timing uses an unrelated verifier, never a usable default.
+    dummyHash = await hashPassword(nonce());
+    await store.ensureDefaultAdmin(
+      config.bootstrapPassword === undefined
+        ? undefined
+        : await hashPassword(config.bootstrapPassword),
+    );
   });
   const sessionName = config.secure ? '__Host-clog-session' : 'clog-session';
   const cookie = (value: string, seconds: number) =>

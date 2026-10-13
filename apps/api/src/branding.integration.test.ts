@@ -33,6 +33,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const app = createApp(undefined, undefined, {
       store: backend,
@@ -70,7 +71,7 @@ test(
           'x-csrf-token': result.json().csrfToken as string,
         };
       };
-      const setup = await login('admin', 'admin');
+      const setup = await login('admin', auth.bootstrapPassword);
       const admin = (await backend.accountByUsername('admin'))!;
       const svg = Buffer.from(
         '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="20"><rect width="10" height="20" fill="red"/></svg>',

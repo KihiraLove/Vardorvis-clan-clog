@@ -7,7 +7,9 @@ import pg from 'pg';
 if (process.env.REVIEW_SMOKE_TEST !== '1')
   throw new Error('For disposable CI databases only');
 const origin = process.env.PUBLIC_ORIGIN;
-const password = 'admin';
+const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+if (!password)
+  throw new Error('Disposable smoke test requires ADMIN_BOOTSTRAP_PASSWORD');
 function request(
   path,
   { ip = '127.0.0.3', method = 'GET', headers = {}, body } = {},

@@ -60,8 +60,13 @@ old shared sessions are invalidated. Password/username changes atomically advanc
 the credential version, revoke sessions and append an audit record without any
 credential material. The current browser receives a replacement session. Each
 request verifies its account version, preventing a late login from restoring
-access with old credentials. The sole administrator is seeded as `admin/admin`
-once and survives renaming/restarts. Only that role can manage accounts or the
+access with old credentials. A fresh authenticated installation requires an
+operator-generated `ADMIN_BOOTSTRAP_PASSWORD` to create the sole administrator
+as `admin`; no password is supplied by the application. Setup requires a different
+password, after which the bootstrap environment value can be removed. Provisioning
+checks the administrator role and the existing single-admin unique index, so
+renaming/restarts/concurrent startup cannot reset an account. Missing credentials
+on an uninitialized database prevent authenticated startup. Only that role can manage accounts or the
 hardcore release flag; both staff roles can use review, submission, catalog and
 XP tools after completing password setup.
 

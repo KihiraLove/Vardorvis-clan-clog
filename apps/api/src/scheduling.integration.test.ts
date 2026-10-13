@@ -42,6 +42,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const bot = { token: 'b'.repeat(64), guildId: '100000000000000001' };
     const app = createApp(
