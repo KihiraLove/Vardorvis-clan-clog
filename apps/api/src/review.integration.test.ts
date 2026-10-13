@@ -550,6 +550,86 @@ test(
           .status,
         'pending',
       );
+      // A saved note is not the review_reason used for decisions. It is
+      // versioned/audited independently, even for an unmatched pending claim.
+      const noteOnly = await create(null);
+      const publicCredits = await backend.collections();
+      const created = await review.mutate(
+        noteOnly, 1, { note: '  Check duplicate proof  ' }, adminId, 'Reviewer',
+      );
+      assert.equal(created.reviewNote, 'Check duplicate proof');
+      assert.equal(created.reviewReason, null);
+      assert.equal(created.version, 2);
+      assert.equal(created.itemId, null);
+      assert.equal(created.status, 'pending');
+      const noteDetail = await review.detail(noteOnly);
+      assert.equal(noteDetail?.audit.length, 1);
+      assert.equal(noteDetail?.audit[0]?.reason, null);
+      assert.equal(noteDetail?.audit[0]?.before.reviewNote, '');
+      assert.equal(noteDetail?.audit[0]?.after.reviewNote, 'Check duplicate proof');
+      assert.deepEqual(await backend.collections(), publicCredits);
+      await assert.rejects(
+        review.mutate(noteOnly, 2, { note: 'Check duplicate proof' }, adminId, 'Reviewer'),
+        { status: 422 },
+      );
+      await assert.rejects(
+        review.mutate(noteOnly, 1, { note: 'Stale' }, adminId, 'Reviewer'),
+        { status: 409 },
+      );
+      await assert.rejects(
+        review.mutate(noteOnly, 2, { note: 'x'.repeat(1001) }, adminId, 'Reviewer'),
+        { status: 422 },
+      );
+      const cleared = await review.mutate(
+        noteOnly, 2, { note: '' }, adminId, 'Reviewer',
+      );
+      assert.equal(cleared.reviewNote, '');
+      assert.equal((await review.detail(noteOnly))?.audit.length, 2);
+      assert.deepEqual(await backend.collections(), publicCredits);
+
+      // Approved notes cannot touch the existing credit or decision reason.
+      const approvalBefore = (await review.detail(manualId))!.submission;
+      assert.equal(approvalBefore.status, 'approved');
+      const approvedNote = await review.mutate(
+        manualId, approvalBefore.version,
+        { note: 'Approved evidence reviewed' }, adminId, 'Reviewer',
+      );
+      assert.equal(approvedNote.reviewNote, 'Approved evidence reviewed');
+      assert.equal(approvedNote.reviewReason, approvalBefore.reviewReason);
+      assert.equal(approvedNote.status, approvalBefore.status);
+      assert.equal(approvedNote.itemId, approvalBefore.itemId);
+      assert.deepEqual(await backend.collections(), publicCredits);
+      await assert.rejects(
+        review.mutate(second, 2, { note: 'Rejected cannot edit' }, adminId, 'Reviewer'),
+        { status: 409 },
+      );
+
+      // The HTTP route uses the existing administrator cookie and CSRF
+      // contract, not an unguarded generic note updater.
+      const notePath = '/api/v1/admin/submissions/' + noteOnly + '/note';
+      assert.equal((await app.inject({
+        method: 'PATCH', url: notePath,
+        payload: { expectedVersion: 3, note: 'Unauthorized' },
+      })).statusCode, 401);
+      assert.equal((await app.inject({
+        method: 'PATCH', url: notePath, headers: { cookie },
+        payload: { expectedVersion: 3, note: 'Missing CSRF' },
+      })).statusCode, 403);
+      const noteHttp = await app.inject({
+        method: 'PATCH', url: notePath,
+        headers: { cookie, origin: auth.origin, 'x-csrf-token': session.csrfToken },
+        payload: { expectedVersion: 3, note: 'Saved through HTTP' },
+      });
+      assert.equal(noteHttp.statusCode, 200);
+      assert.equal(noteHttp.json().reviewNote, 'Saved through HTTP');
+      assert.equal(noteHttp.json().version, 4);
+      const staleHttp = await app.inject({
+        method: 'PATCH', url: notePath,
+        headers: { cookie, origin: auth.origin, 'x-csrf-token': session.csrfToken },
+        payload: { expectedVersion: 3, note: 'Old version' },
+      });
+      assert.equal(staleHttp.statusCode, 409);
+      assert.deepEqual(await backend.collections(), publicCredits);
       for (const key of [undefined, 'invalid']) {
         const response: { statusCode: number } = await app.inject({
           method: 'POST',
