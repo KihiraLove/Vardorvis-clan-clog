@@ -212,8 +212,7 @@ export function proofRoutes(
               key,
               image,
             );
-            if (result.screenshotPath !== screenshotPath(image.id))
-              // Commit outcome may be uncertain: preserve the file for maintenance.
+            // A replay may leave an orphan; maintenance reclaims it later.
             return reply.code(201).send(result);
           } catch (error) {
             // Commit outcome may be uncertain: preserve the file for maintenance.
