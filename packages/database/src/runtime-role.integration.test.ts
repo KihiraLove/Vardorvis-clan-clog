@@ -16,7 +16,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT',
-    'audit_events catalog_audit catalog_page_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history competition_previews game_item_ids manual_submission_requests runelite_settings_audit runelite_submission_requests site_settings_audit staff_account_audit submission_images xp_import_history xp_previews',
+    'audit_events catalog_audit catalog_page_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history game_item_ids manual_submission_requests runelite_settings_audit runelite_submission_requests site_settings_audit staff_account_audit submission_images xp_import_history',
   ],
   [
     'SELECT UPDATE',
@@ -24,7 +24,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT UPDATE',
-    'catalog_assets clan_api_keys items pages staff_accounts submissions wom_competitions xp_events',
+    'catalog_assets clan_api_keys competition_previews items pages staff_accounts submissions wom_competitions xp_events xp_previews',
   ],
   [
     'SELECT INSERT DELETE',
