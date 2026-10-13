@@ -35,7 +35,9 @@ test(
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const schema = 'maintenance_' + randomUUID().replaceAll('-', '');
-    const root = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+    const root = new pg.Client({
+      connectionString: process.env.TEST_DATABASE_URL,
+    });
     await root.connect();
     const clients: pg.Client[] = [];
     async function connection() {
@@ -64,8 +66,12 @@ test(
         );
       }
       // Real receipt tables are immutable and unrelated to previews.
-      await worker.query('CREATE TABLE xp_import_history (request_key text PRIMARY KEY, receipt text NOT NULL)');
-      await worker.query('CREATE TABLE competition_import_history (request_key text PRIMARY KEY, receipt text NOT NULL)');
+      await worker.query(
+        'CREATE TABLE xp_import_history (request_key text PRIMARY KEY, receipt text NOT NULL)',
+      );
+      await worker.query(
+        'CREATE TABLE competition_import_history (request_key text PRIMARY KEY, receipt text NOT NULL)',
+      );
       await worker.query('CREATE TABLE import_audit (event text PRIMARY KEY)');
       await worker.query(
         "INSERT INTO xp_import_history VALUES ('xp-key','applied'), ('xp-key-2','unchanged')",
@@ -134,10 +140,16 @@ test(
       // Transaction rollback simulates a crash midway through a batch.
       await seed('xp_previews', 'xp-interrupted', 180);
       await worker.query('BEGIN');
-      await worker.query("DELETE FROM xp_previews WHERE token_hash='xp-interrupted'");
+      await worker.query(
+        "DELETE FROM xp_previews WHERE token_hash='xp-interrupted'",
+      );
       await worker.query('ROLLBACK');
       assert.equal(
-        (await worker.query("SELECT 1 FROM xp_previews WHERE token_hash='xp-interrupted'")).rowCount,
+        (
+          await worker.query(
+            "SELECT 1 FROM xp_previews WHERE token_hash='xp-interrupted'",
+          )
+        ).rowCount,
         1,
       );
       const restarted = await runPreviewMaintenance(second, options);
@@ -165,7 +177,9 @@ test(
       // outcome independently of the deleted token's preview snapshot.
       assert.deepEqual(
         (
-          await worker.query('SELECT request_key,receipt FROM xp_import_history ORDER BY request_key')
+          await worker.query(
+            'SELECT request_key,receipt FROM xp_import_history ORDER BY request_key',
+          )
         ).rows,
         [
           { request_key: 'xp-key', receipt: 'applied' },
@@ -173,7 +187,11 @@ test(
         ],
       );
       assert.deepEqual(
-        (await worker.query('SELECT request_key,receipt FROM competition_import_history')).rows,
+        (
+          await worker.query(
+            'SELECT request_key,receipt FROM competition_import_history',
+          )
+        ).rows,
         [{ request_key: 'competition-key', receipt: 'applied' }],
       );
       assert.equal(
