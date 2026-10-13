@@ -23,34 +23,34 @@ printf '%s\n' "$*" >> "$BACKUP_TEST_LOG"
 shift
 case "$1" in
   ps)
-    if [[ "${BACKUP_TEST_FAIL:-}" == inventory || ( "${BACKUP_TEST_FAIL:-}" == verify-stop && -e "$BACKUP_TEST_STATE/stopped" ) || ( "${BACKUP_TEST_FAIL:-}" == final-inventory && -e "$BACKUP_TEST_STATE/captured" ) || ( "${BACKUP_TEST_FAIL:-}" == verify-restart && -e "$BACKUP_TEST_STATE/restarted" ) ]]; then exit 50; fi
-    if [[ "${BACKUP_TEST_FAIL:-}" == no-db ]]; then printf 'app\n'; exit 0; fi
-    if [[ "${BACKUP_TEST_FAIL:-}" == migrate ]]; then printf 'db\nmigrate\n'; exit 0; fi
-    if [[ "${BACKUP_TEST_FAIL:-}" == unknown ]]; then printf 'db\napp\nsidecar\n'; exit 0; fi
-    if [[ "${BACKUP_TEST_FAIL:-}" == duplicate ]]; then printf 'db\napp\napp\n'; exit 0; fi
+    if [[ "\${BACKUP_TEST_FAIL:-}" == inventory || ( "\${BACKUP_TEST_FAIL:-}" == verify-stop && -e "$BACKUP_TEST_STATE/stopped" ) || ( "\${BACKUP_TEST_FAIL:-}" == final-inventory && -e "$BACKUP_TEST_STATE/captured" ) || ( "\${BACKUP_TEST_FAIL:-}" == verify-restart && -e "$BACKUP_TEST_STATE/restarted" ) ]]; then exit 50; fi
+    if [[ "\${BACKUP_TEST_FAIL:-}" == no-db ]]; then printf 'app\n'; exit 0; fi
+    if [[ "\${BACKUP_TEST_FAIL:-}" == migrate ]]; then printf 'db\nmigrate\n'; exit 0; fi
+    if [[ "\${BACKUP_TEST_FAIL:-}" == unknown ]]; then printf 'db\napp\nsidecar\n'; exit 0; fi
+    if [[ "\${BACKUP_TEST_FAIL:-}" == duplicate ]]; then printf 'db\napp\napp\n'; exit 0; fi
     printf 'db\n'
-    if [[ ! -e "$BACKUP_TEST_STATE/stopped" || -e "$BACKUP_TEST_STATE/restarted" || "${BACKUP_TEST_FAIL:-}" == still-running ]]; then
-      if [[ "${BACKUP_TEST_OFFLINE:-}" != 1 ]]; then printf 'app\n'; fi
+    if [[ ! -e "$BACKUP_TEST_STATE/stopped" || -e "$BACKUP_TEST_STATE/restarted" || "\${BACKUP_TEST_FAIL:-}" == still-running ]]; then
+      if [[ "\${BACKUP_TEST_OFFLINE:-}" != 1 ]]; then printf 'app\n'; fi
     fi
     ;;
   stop)
     touch "$BACKUP_TEST_STATE/stopped"
-    [[ "${BACKUP_TEST_FAIL:-}" != stop ]] || exit 50
+    [[ "\${BACKUP_TEST_FAIL:-}" != stop ]] || exit 50
     ;;
   start)
-    [[ "${BACKUP_TEST_FAIL:-}" != restart ]] || exit 50
+    [[ "\${BACKUP_TEST_FAIL:-}" != restart ]] || exit 50
     touch "$BACKUP_TEST_STATE/restarted"
     ;;
   exec)
-    [[ "${BACKUP_TEST_FAIL:-}" != dump ]] || exit 50
+    [[ "\${BACKUP_TEST_FAIL:-}" != dump ]] || exit 50
     printf 'PGDMP simulated custom dump\n'
     ;;
   run)
     if [[ "$*" == *'--entrypoint tar'* ]]; then
-      [[ "${BACKUP_TEST_FAIL:-}" != icons ]] || exit 50
+      [[ "\${BACKUP_TEST_FAIL:-}" != icons ]] || exit 50
       tar -C "$BACKUP_TEST_STATE/icons" -czf - .
     elif [[ "$*" == *'--entrypoint sh'* ]]; then
-      [[ "${BACKUP_TEST_FAIL:-}" != screenshots ]] || exit 50
+      [[ "\${BACKUP_TEST_FAIL:-}" != screenshots ]] || exit 50
       tar -C "$BACKUP_TEST_STATE/screenshots" -czf - .
       touch "$BACKUP_TEST_STATE/captured"
     else exit 50; fi
