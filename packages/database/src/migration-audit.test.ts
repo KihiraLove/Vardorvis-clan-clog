@@ -314,7 +314,7 @@ test(
             'SELECT competition_id,title,source_url,skills,gains,source_hash,source_snapshot,imported_at FROM xp_events',
           )
         ).rows,
-        recovered.map(({ kind: _kind, ...row }) => row),
+        recovered,
       );
       assert.deepEqual(
         (await client.query('SELECT clan_name,version FROM site_settings'))
