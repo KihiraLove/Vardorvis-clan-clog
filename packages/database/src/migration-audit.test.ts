@@ -35,7 +35,7 @@ test(
       await Promise.all([migrate(url), migrate(url)]);
       const rows = (await client.query('SELECT name FROM schema_migrations'))
         .rows;
-      assert.equal(rows.length, 14);
+      assert.equal(rows.length, 15);
       assert.equal(
         new Set(rows.map((row: { name: string }) => row.name)).size,
         14,
