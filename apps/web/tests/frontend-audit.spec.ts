@@ -259,12 +259,16 @@ test('audit: a pagination boundary does not use a loading cursor', async ({
   // F04: boundary disabled states are not ongoing requests.
   await expect(previous).not.toHaveCSS('cursor', 'wait');
   await expect(previous).toHaveAttribute('aria-describedby', /.+/);
-  await expect(page.getByText('Previous page: Already on the first page.')).toBeVisible();
+  await expect(
+    page.getByText('Previous page: Already on the first page.'),
+  ).toBeVisible();
   await expect(next).not.toHaveAttribute('aria-busy', 'true');
   await next.click();
   await expect(next).toBeDisabled();
   await expect(next).not.toHaveCSS('cursor', 'wait');
-  await expect(page.getByText('Next page: Already on the last page.')).toBeVisible();
+  await expect(
+    page.getByText('Next page: Already on the last page.'),
+  ).toBeVisible();
   await expect(previous).toBeEnabled();
 });
 
@@ -575,7 +579,9 @@ for (const status of [401, 403]) {
 }
 
 for (const hardcore of [false, true]) {
-  test(`audit: approval blockers explain unmatched, unsaved, proof acknowledgment and saved hardcore=${hardcore}`, async ({ page }) => {
+  test(`audit: approval blockers explain unmatched, unsaved, proof acknowledgment and saved hardcore=${hardcore}`, async ({
+    page,
+  }) => {
     const state = await liveAdmin(page);
     state.detail.submission.hardcore = hardcore;
     state.detail.submission.itemId = null;
@@ -583,65 +589,102 @@ for (const hardcore of [false, true]) {
     const approve = editor.getByRole('button', { name: 'Approve submission' });
     const check = editor.getByLabel(/^I checked the linked proof/);
     await expect(approve).toBeDisabled();
-    await expect(editor.getByText('Select and save an active canonical item before approving.').first()).toBeVisible();
+    await expect(
+      editor.getByText(
+        'Select and save an active canonical item before approving.',
+      ),
+    ).toBeVisible();
     await expect(check).toBeDisabled();
-    await editor.locator('#canonical-item').selectOption(String((await adminFixtures()).detail.submission.itemId));
+    await editor
+      .locator('#canonical-item')
+      .selectOption(String((await adminFixtures()).detail.submission.itemId));
     await expect(approve).toBeDisabled();
-    await expect(editor.getByText('Save or discard claim corrections before deciding.').first()).toBeVisible();
+    await expect(
+      editor.getByText('Save or discard claim corrections before deciding.'),
+    ).toBeVisible();
     await editor.getByRole('button', { name: 'Save corrections' }).click();
     await expect.poll(() => state.claimWrites).toBe(1);
     await expect(check).toBeEnabled();
     await expect(approve).toBeDisabled();
-    await expect(editor.getByText(/then tick the proof acknowledgement/u)).toBeVisible();
+    await expect(
+      editor.getByText(/then tick the proof acknowledgement/u),
+    ).toBeVisible();
     await check.check();
     await expect(approve).toBeEnabled();
     // Any claim-field change invalidates the saved proof acknowledgment.
-    await editor.getByLabel('Collected on hardcore worlds').setChecked(!hardcore);
+    await editor
+      .getByLabel('Collected on hardcore worlds')
+      .setChecked(!hardcore);
     await expect(check).not.toBeChecked();
     await expect(check).toBeDisabled();
     await editor.getByRole('button', { name: 'Discard corrections' }).click();
-    await expect(editor.getByLabel('Collected on hardcore worlds')).toHaveJSProperty('checked', hardcore);
+    await expect(
+      editor.getByLabel('Collected on hardcore worlds'),
+    ).toHaveJSProperty('checked', hardcore);
     await expect(check).toBeEnabled();
     await expect(check).not.toBeChecked();
     await check.check();
     await approve.click();
-    await expect(page.getByText('Saved submission state: approved.')).toBeVisible();
+    await expect(
+      page.getByText('Saved submission state: approved.'),
+    ).toBeVisible();
     expect(state.decisions).toHaveLength(1);
   });
 }
 
-test('audit: missing proof blocks approval but not reasoned rejection', async ({ page }) => {
+test('audit: missing proof blocks approval but not reasoned rejection', async ({
+  page,
+}) => {
   const state = await liveAdmin(page);
   state.detail.submission.proofUrl = 'https://example.com/not-valid';
   const editor = await openReview(page);
-  await expect(editor.getByRole('button', { name: 'Approve submission' })).toBeDisabled();
-  await expect(editor.getByText('A valid proof link or saved screenshot is required for approval.').first()).toBeVisible();
+  await expect(
+    editor.getByRole('button', { name: 'Approve submission' }),
+  ).toBeDisabled();
+  await expect(
+    editor.getByText(
+      'A valid proof link or saved screenshot is required for approval.',
+    ),
+  ).toBeVisible();
   await expect(editor.getByLabel(/^I checked the linked proof/)).toBeDisabled();
   const reject = editor.getByRole('button', { name: 'Reject submission' });
   await expect(reject).toBeDisabled();
-  await expect(editor.getByText('Enter a reason before rejecting a submission.')).toBeVisible();
-  await editor.getByLabel('Review reason').fill('The proof does not match the claimed item');
+  await expect(
+    editor.getByText('Enter a reason before rejecting a submission.'),
+  ).toBeVisible();
+  await editor
+    .getByLabel('Review reason')
+    .fill('The proof does not match the claimed item');
   await expect(reject).toBeEnabled();
   await reject.click();
   expect(state.decisions[0]?.action).toBe('reject');
 });
 
-test('audit: approved credit requires an audit reason for claim corrections or revocation', async ({ page }) => {
+test('audit: approved credit requires an audit reason for claim corrections or revocation', async ({
+  page,
+}) => {
   const state = await liveAdmin(page);
-  await page.goto('/admin');
-  await expect(page.getByRole('button', { name: /^Review .+ ·/ })).toBeEnabled();
   state.detail.submission.status = 'approved';
+  await page.goto('/admin');
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
   await page.getByRole('button', { name: /^Review .+ ·/ }).click();
   const editor = page.locator('.submission-editor');
   const revoke = editor.getByRole('button', { name: 'Revoke credit' });
   await expect(revoke).toBeDisabled();
-  await expect(editor.getByText('Enter a reason before revoking a credit.')).toBeVisible();
+  await expect(
+    editor.getByText('Enter a reason before revoking a credit.'),
+  ).toBeVisible();
   await editor.getByLabel('Collected on hardcore worlds').check();
   const save = editor.getByRole('button', { name: 'Save corrections' });
   await expect(save).toBeDisabled();
-  await expect(editor.getByText('Enter an audit reason before changing an approved credit.')).toBeVisible();
-  await editor.getByLabel('Review reason').fill('Corrected world mode after proof review');
+  await expect(
+    editor.getByText(
+      'Enter an audit reason before changing an approved credit.',
+    ),
+  ).toBeVisible();
+  await editor
+    .getByLabel('Review reason')
+    .fill('Corrected world mode after proof review');
   await expect(save).toBeEnabled();
   await expect(revoke).toBeDisabled();
   await editor.getByRole('button', { name: 'Discard corrections' }).click();
@@ -650,10 +693,14 @@ test('audit: approved credit requires an audit reason for claim corrections or r
   expect(state.decisions[0]?.action).toBe('revoke');
 });
 
-test('audit: a pending approve request shows progress, serializes clicks and never replays a rejected write', async ({ page }) => {
+test('audit: a pending approve request shows progress, serializes clicks and never replays a rejected write', async ({
+  page,
+}) => {
   const state = await liveAdmin(page);
   let release!: () => void;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   let attempts = 0;
   await page.route('**/api/v1/admin/submissions/*/approve', async (route) => {
     attempts++;
@@ -675,8 +722,12 @@ test('audit: a pending approve request shows progress, serializes clicks and nev
   }
   await expect(approve).not.toHaveAttribute('aria-busy', 'true');
   await expect(approve).toBeDisabled();
-  await expect(editor.getByLabel(/^I checked the linked proof/)).not.toBeChecked();
-  await expect(editor.getByRole('alert')).toContainText('Another change was saved.');
+  await expect(
+    editor.getByLabel(/^I checked the linked proof/),
+  ).not.toBeChecked();
+  await expect(editor.getByRole('alert')).toContainText(
+    'Another change was saved.',
+  );
   expect(attempts).toBe(1);
   expect(state.decisions).toHaveLength(0);
 });
