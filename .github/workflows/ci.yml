@@ -141,9 +141,9 @@ jobs:
             INSERT INTO competition_previews(token_hash,actor_id,expected_revision,schedule_revision,snapshot,page_ids,expires_at)
               VALUES(repeat('b',64),'ci-test-actor','xp-1','schedule-1','{}','{}',now()-interval '2 hours');
           "
-          docker compose run --rm --no-deps -T migrate node packages/database/dist/preview-maintenance.js --dry-run > /tmp/preview-maintenance-dry.json
+          docker compose -f compose.yaml -f compose.dev.yaml run --rm --no-deps -T migrate node packages/database/dist/preview-maintenance.js --dry-run > /tmp/preview-maintenance-dry.json
           jq -e '.mode=="dry-run" and .tables.xp_previews.before.eligible >= 1 and .tables.competition_previews.before.eligible >= 1 and .tables.xp_previews.deleted == 0 and .tables.competition_previews.deleted == 0' /tmp/preview-maintenance-dry.json
-          docker compose run --rm --no-deps -T migrate node packages/database/dist/preview-maintenance.js --apply --batch-size=1 --max-batches=1 > /tmp/preview-maintenance-applied.json
+          docker compose -f compose.yaml -f compose.dev.yaml run --rm --no-deps -T migrate node packages/database/dist/preview-maintenance.js --apply --batch-size=1 --max-batches=1 > /tmp/preview-maintenance-applied.json
           jq -e '.mode=="apply" and .tables.xp_previews.deleted == 1 and .tables.competition_previews.deleted == 1 and .maximumDeletesPerTable == 1' /tmp/preview-maintenance-applied.json
           test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT count(*) FROM xp_previews WHERE token_hash=repeat('a',64)")" = "0"
           test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT count(*) FROM competition_previews WHERE token_hash=repeat('b',64)")" = "0"
