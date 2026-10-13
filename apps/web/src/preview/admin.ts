@@ -337,6 +337,8 @@ export class PreviewAdminClient implements AdminClient {
       dateSource: 'submission',
       submittedAt: '2026-10-05T12:00:00Z',
       proofUrl: 'https://imgur.com/a/preview-proof',
+      reviewNote: '',
+      reviewReason: null,
     }));
   }
   subscribe = (listener: () => void) => {
@@ -447,6 +449,8 @@ export class PreviewAdminClient implements AdminClient {
       proofUrl: fields.proofUrl ?? '',
       hardcore: fields.hardcore,
       status: fields.approve ? 'approved' : 'pending',
+      reviewNote: '',
+      reviewReason: fields.approve ? fields.reason?.trim() || null : null,
     };
     this.rows.unshift(row);
     this.record(row, row, 'create', fields.reason ?? '');
@@ -839,6 +843,25 @@ export class PreviewAdminClient implements AdminClient {
     this.audit.set(before.id, events);
     this.changed();
   }
+  async saveReviewNote(
+    id: string,
+    version: number,
+    note: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const row = this.row(id, version);
+    if (!['pending', 'approved'].includes(row.status) ||
+      typeof note !== 'string' || note.trim().length > 1000 ||
+      note.trim() === row.reviewNote)
+      throw new AdminRequestError(422);
+    const before = structuredClone(row);
+    row.reviewNote = note.trim();
+    row.version++;
+    this.record(before, row, 'edit', '');
+    return structuredClone(row);
+  }
   async edit(
     id: string,
     version: number,
@@ -865,6 +888,7 @@ export class PreviewAdminClient implements AdminClient {
       dateSource:
         clean.collectedOn === before.collectedOn ? before.dateSource : 'admin',
       version: version + 1,
+      reviewReason: row.status === 'approved' ? clean.reason : row.reviewReason,
     });
     this.record(before, row, 'edit', clean.reason);
     return structuredClone(row);
@@ -895,6 +919,7 @@ export class PreviewAdminClient implements AdminClient {
       { approve: 'approved', reject: 'rejected', revoke: 'revoked' } as const
     )[action];
     row.version++;
+    row.reviewReason = action === 'approve' ? null : reason.trim();
     this.record(before, row, action, reason.trim());
     return structuredClone(row);
   }
