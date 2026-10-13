@@ -58,10 +58,7 @@ export function RuneLiteReviewSettings({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          classifyAccessFailure(failure) === 'expired'
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else setError('RuneLite review settings are unavailable.');
       })
       .finally(() => clearTimeout(timeout));
