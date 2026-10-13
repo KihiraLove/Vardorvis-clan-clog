@@ -62,7 +62,9 @@ export function CompetitionImport({
         setMessage(
           r.outcome === 'unchanged'
             ? 'Unchanged. No gains or schedules were added.'
-            : 'Competition imported.',
+            : preview.action === 'import-metadata'
+              ? 'Competition metadata imported. No pages were opened or XP added.'
+              : 'Competition imported.',
         );
         setPreview(undefined);
         setPages(undefined);
@@ -121,13 +123,14 @@ export function CompetitionImport({
       <h3>Import competition</h3>
       <p>
         WOM metrics determine whether this is a SKILL or ACTIVITY competition.
-        Future and running imports save metadata and an opening window; finished
-        imports save final results.
+        Future and running SKILL imports save metadata without opening pages or
+        adding XP. ACTIVITY imports can create opening windows. Finished imports
+        save final results.
       </p>
       {session.role === 'moderator' && (
         <p>
           Finished SKILL results require the administrator. You can prepare
-          skill schedules and import ACTIVITY competitions.
+          skill event metadata and import ACTIVITY competitions.
         </p>
       )}
       <form
@@ -182,15 +185,17 @@ export function CompetitionImport({
             <small>{utcScheduleLabel(preview.competition.endsAt)}</small>
           </p>
           <p>
-            {preview.action === 'import-results'
-              ? 'Import finished results. No opening window will be created.'
-              : preview.action === 'preserve-schedule'
-                ? 'Preserve the existing linked schedule.'
-                : preview.action === 'preserve-deletion'
-                  ? 'Preserve the deleted schedule.'
-                  : preview.lifecycle === 'running'
-                    ? 'Create an opening window starting immediately when Apply commits, ending at the WOM end time.'
-                    : 'Create an opening window for the WOM start and end times.'}
+            {preview.action === 'import-metadata'
+              ? 'Import competition metadata only. No pages will be opened and no XP will be added.'
+              : preview.action === 'import-results'
+                ? 'Import finished results. No opening window will be created.'
+                : preview.action === 'preserve-schedule'
+                  ? 'Preserve the existing linked schedule.'
+                  : preview.action === 'preserve-deletion'
+                    ? 'Preserve the deleted schedule.'
+                    : preview.lifecycle === 'running'
+                      ? 'Create an opening window starting immediately when Apply commits, ending at the WOM end time.'
+                      : 'Create an opening window for the WOM start and end times.'}
           </p>
           {preview.scheduleStartsAt && (
             <p>
@@ -199,64 +204,68 @@ export function CompetitionImport({
               <small>{utcScheduleLabel(preview.scheduleStartsAt)}</small>
             </p>
           )}
-          {preview.action === 'create-schedule' && (
-            <>
-              <label>
-                Find opening pages
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </label>
-              <fieldset className="schedule-page-list" disabled={busy}>
-                <legend>Opening pages</legend>
-                {preview.pages
-                  .filter((p) =>
-                    p.name.toLowerCase().includes(search.toLowerCase()),
-                  )
-                  .map((p) => (
-                    <label className="admin-checkbox" key={p.id}>
-                      <input
-                        type="checkbox"
-                        checked={pages?.includes(p.id) ?? false}
-                        onChange={(e) =>
-                          setPages(
-                            e.target.checked
-                              ? [...(pages ?? []), p.id]
-                              : (pages ?? []).filter((id) => id !== p.id),
-                          )
-                        }
-                      />
-                      {p.name}
-                    </label>
-                  ))}
-              </fieldset>
+          {preview.competition.kind === 'ACTIVITY' &&
+            preview.action === 'create-schedule' && (
+              <>
+                <label>
+                  Find opening pages
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+                <fieldset className="schedule-page-list" disabled={busy}>
+                  <legend>Opening pages</legend>
+                  {preview.pages
+                    .filter((p) =>
+                      p.name.toLowerCase().includes(search.toLowerCase()),
+                    )
+                    .map((p) => (
+                      <label className="admin-checkbox" key={p.id}>
+                        <input
+                          type="checkbox"
+                          checked={pages?.includes(p.id) ?? false}
+                          onChange={(e) =>
+                            setPages(
+                              e.target.checked
+                                ? [...(pages ?? []), p.id]
+                                : (pages ?? []).filter((id) => id !== p.id),
+                            )
+                          }
+                        />
+                        {p.name}
+                      </label>
+                    ))}
+                </fieldset>
+                <p>
+                  {pages?.length ?? 0} pages selected.
+                  {dirty ? ' Update the preview to confirm these pages.' : ''}
+                </p>
+                {dirty && (
+                  <button
+                    className="site-button"
+                    disabled={busy}
+                    onClick={() => {
+                      void execute(false);
+                    }}
+                  >
+                    Update preview
+                  </button>
+                )}
+              </>
+            )}
+          {preview.competition.kind === 'ACTIVITY' &&
+            preview.action === 'preserve-schedule' && (
               <p>
-                {pages?.length ?? 0} pages selected.
-                {dirty ? ' Update the preview to confirm these pages.' : ''}
+                Pages:{' '}
+                {preview.pageIds
+                  .map(
+                    (id) => preview.pages.find((p) => p.id === id)?.name ?? id,
+                  )
+                  .join(', ')}
               </p>
-              {dirty && (
-                <button
-                  className="site-button"
-                  disabled={busy}
-                  onClick={() => {
-                    void execute(false);
-                  }}
-                >
-                  Update preview
-                </button>
-              )}
-            </>
-          )}
-          {preview.action === 'preserve-schedule' && (
-            <p>
-              Pages:{' '}
-              {preview.pageIds
-                .map((id) => preview.pages.find((p) => p.id === id)?.name ?? id)
-                .join(', ')}
-            </p>
-          )}
+            )}
           {preview.lifecycle === 'finished' && (
             <details>
               <summary>

@@ -6,8 +6,8 @@ metric metadata and returns the detected kind in the preview. Both forms need
 only the competition link; neither has a kind selector. Each WOM ID has one persisted identity, and its kind and
 supported metric scope cannot be changed by importing a duplicate. A mismatched
 kind or changed scope requires staff reconciliation instead of silently changing
-the ledger. Both roles can import ACTIVITY competitions and prepare SKILL
-schedules. Only administrators can import finished SKILL results.
+the ledger. Both roles can import ACTIVITY competitions and save future/running
+SKILL metadata. Only administrators can import finished SKILL results.
 
 The [official competition API](https://docs.wiseoldman.net/api/competitions/competition-endpoints)
 returns all participants in the details response. Its bulk metrics override
@@ -29,11 +29,18 @@ order, names and icon filenames to API/web, including `runecrafting` → `runecr
 PostgreSQL's clock is authoritative. A competition is future before its start,
 running from its start until its end, and finished at or after its end.
 
-| Source state | Persisted import                                       | Opening schedule                  |
-| ------------ | ------------------------------------------------------ | --------------------------------- |
-| Future       | Link, title, detected kind, metrics and original dates | Source start to source end        |
-| Running      | The same minimal metadata                              | Database apply time to source end |
-| Finished     | Metadata plus validated, filtered final results        | None created                      |
+| Kind     | Source state   | Persisted import                                       | Opening schedule                       |
+| -------- | -------------- | ------------------------------------------------------ | -------------------------------------- |
+| SKILL    | Future/running | Link, title, detected kind, metrics and original dates | None created; `import-metadata` action |
+| ACTIVITY | Future         | The same minimal metadata                              | Source start to source end             |
+| ACTIVITY | Running        | The same minimal metadata                              | Database apply time to source end      |
+| Either   | Finished       | Metadata plus validated, filtered final results        | None created                           |
+
+SKILL previews contain no opening time, selectable pages, page links, participants
+or XP changes. Apply persists a new SKILL identity with `scheduleId=null` and
+does not change scheduling state, its revision or enforcement. Both import
+screens hide page selection for SKILL. Supplying nonempty SKILL `pageIds` is
+rejected with 422; older stored page-opening previews require a fresh preview.
 
 Future/running responses may contain live participant rows, but the importer
 discards those fields immediately. No live roster, gains, upstream update
@@ -44,8 +51,8 @@ effective opening start. Imports never enable the scheduling switch.
 Boss/activity mappings use current page IDs, including shared Wilderness boss
 pages, Dagannoth Kings, raid variants and the corrected clue taxonomy. Proposed
 pages are validated against active catalog pages and visible in the preview.
-Staff can correct them; changing pages requires an updated preview. Skills and
-ambiguous metrics such as collections logged require explicit page selections.
+Staff can correct them; changing pages requires an updated preview. Ambiguous
+ACTIVITY metrics such as collections logged require explicit page selections.
 No import silently opens all pages. Existing overlapping windows and the
 **any associated active page open** rule remain in force.
 
@@ -55,7 +62,17 @@ deletion. Staff can create a manual replacement through Scheduling. Final
 results can be imported after the competition ends without recreating a window.
 If a metadata-only preview reaches the end before apply, the API returns 409;
 fetch a fresh preview containing final results. A future preview that becomes
-running can apply with an immediate opening start.
+running remains metadata-only for SKILL; ACTIVITY can apply with an immediate
+opening start. Successful receipt replay remains valid after expiry or the end
+boundary and never creates another window or credits XP twice.
+
+Older SKILL imports may already link to staff-edited opening windows. Metadata
+and finished-results refreshes preserve those windows and deletion markers;
+the preview warns staff to manage an existing window through Scheduling.
+Do not automatically unlink or delete them. Review the linked window and its
+audit history with staff before any intentional removal. This change needs no
+database migration: migration 014 already allows null schedule links and remains
+immutable.
 
 ## Finished results and public display
 

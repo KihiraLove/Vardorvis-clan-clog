@@ -36,6 +36,26 @@ export function competitionScope(metrics: readonly string[]): {
   return { kind: 'ACTIVITY', skills: [] };
 }
 export type CompetitionLifecycle = 'future' | 'running' | 'finished';
+export type CompetitionImportAction =
+  | 'import-metadata'
+  | 'create-schedule'
+  | 'preserve-schedule'
+  | 'preserve-deletion'
+  | 'import-results';
+export function competitionImportAction(
+  kind: CompetitionKind,
+  lifecycle: CompetitionLifecycle,
+  scheduleCreated = false,
+  scheduleExists = false,
+): CompetitionImportAction {
+  if (lifecycle === 'finished') return 'import-results';
+  if (kind === 'SKILL') return 'import-metadata';
+  return scheduleCreated
+    ? scheduleExists
+      ? 'preserve-schedule'
+      : 'preserve-deletion'
+    : 'create-schedule';
+}
 export interface WomCompetition {
   id: number;
   kind: CompetitionKind;

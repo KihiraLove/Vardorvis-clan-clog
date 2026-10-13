@@ -15,6 +15,7 @@ import {
 } from '../xp-model.ts';
 import { XpRequestError } from '../xp-api.ts';
 import { podiumFromParticipants } from '../xp-tracker.ts';
+import { competitionScope, type WomCompetition } from '@clog/domain';
 
 export class PreviewXpClient implements XpClient {
   private readonly getSession:
@@ -27,9 +28,21 @@ export class PreviewXpClient implements XpClient {
   private revision = 0;
   private sourceVersion = 0;
   private stored = new Map<number, CompetitionDetail>();
+  private metadata = new Map<number, WomCompetition>();
   private previews = new Map<string, ImportPreview>();
   private receipts = new Map<string, { token: string; result: ApplyResult }>();
   private imports: ImportEntry[] = [];
+  storeMetadata(competition: WomCompetition) {
+    if (competition.kind !== 'SKILL')
+      throw new Error('Only SKILL competitions belong in the XP tracker.');
+    if (
+      JSON.stringify(this.metadata.get(competition.id)) !==
+      JSON.stringify(competition)
+    ) {
+      this.metadata.set(competition.id, structuredClone(competition));
+      this.revision++;
+    }
+  }
   private source(id: number): CompetitionDetail {
     const attack = id === 1001;
     if (![1001, 1002].includes(id))
@@ -96,28 +109,48 @@ export class PreviewXpClient implements XpClient {
       podium: podiumFromParticipants(
         [...this.stored.values()].flatMap((d) => d.participants),
       ),
-      events: [...this.stored.values()].map((detail) => ({
-        id: detail.competition.id,
-        title: detail.competition.title,
-        sourceUrl: detail.competition.sourceUrl,
-        skills: detail.competition.skills,
-        podium: podiumFromParticipants(detail.participants),
-        gains: Object.fromEntries(
-          detail.competition.skills.map((id) => {
-            const known = detail.participants
-              .map((row) => row.gains[id])
-              .filter((value) => value !== null && value !== undefined);
-            return [
-              id,
-              known.length
-                ? String(known.reduce((sum, value) => sum + BigInt(value), 0n))
-                : detail.participants.length
-                  ? null
-                  : '0',
-            ];
-          }),
+      events: [...this.stored.values()]
+        .map((detail) => ({
+          id: detail.competition.id,
+          title: detail.competition.title,
+          sourceUrl: detail.competition.sourceUrl,
+          skills: detail.competition.skills,
+          podium: podiumFromParticipants(detail.participants),
+          gains: Object.fromEntries(
+            detail.competition.skills.map((id) => {
+              const known = detail.participants
+                .map((row) => row.gains[id])
+                .filter((value) => value !== null && value !== undefined);
+              return [
+                id,
+                known.length
+                  ? String(
+                      known.reduce((sum, value) => sum + BigInt(value), 0n),
+                    )
+                  : detail.participants.length
+                    ? null
+                    : '0',
+              ];
+            }),
+          ),
+        }))
+        .concat(
+          [...this.metadata.values()]
+            .filter((competition) => !this.stored.has(competition.id))
+            .map((competition) => ({
+              id: competition.id,
+              title: competition.title,
+              sourceUrl: competition.sourceUrl,
+              skills: competitionScope(competition.metrics).skills,
+              podium: [],
+              gains: Object.fromEntries(
+                competitionScope(competition.metrics).skills.map((skill) => [
+                  skill,
+                  null,
+                ]),
+              ),
+            })),
         ),
-      })),
     });
   }
   async load(

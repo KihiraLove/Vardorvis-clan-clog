@@ -1,6 +1,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
-import { competitionLifecycle, type WomCompetition } from '@clog/domain';
+import {
+  competitionImportAction,
+  competitionLifecycle,
+  type WomCompetition,
+} from '@clog/domain';
 import { ApiError } from './types.js';
 import { readState } from './scheduling-store.js';
 import { competitionHash, mappedPages } from './competition-wom.js';
@@ -118,6 +122,12 @@ export class PgCompetitionStore {
           'Competition time state changed. Preview again.',
         );
       snapshot = { ...snapshot, lifecycle };
+      const skill = snapshot.competition.kind === 'SKILL';
+      if (skill && pageIds?.length)
+        throw new ApiError(
+          422,
+          'SKILL imports do not open collection log pages. Import the competition metadata without page selections.',
+        );
       const prior = await stored(client, snapshot.competition.id);
       requireScope(prior, snapshot);
       const schedules = await readState(client);
@@ -138,11 +148,13 @@ export class PgCompetitionStore {
           409,
           'Competition capacity reached; existing competitions can still be refreshed.',
         );
-      const pages = (
-        await client.query<{ id: string; name: string }>(
-          'SELECT id,name FROM pages WHERE active ORDER BY category,sort_order,id',
-        )
-      ).rows;
+      const pages = skill
+        ? []
+        : (
+            await client.query<{ id: string; name: string }>(
+              'SELECT id,name FROM pages WHERE active ORDER BY category,sort_order,id',
+            )
+          ).rows;
       const proposed = [
         ...new Set(snapshot.competition.metrics.flatMap(mappedPages)),
       ].filter((id) => pages.some((p) => p.id === id));
@@ -150,7 +162,7 @@ export class PgCompetitionStore {
         (s) => s.id === prior?.scheduleId,
       );
       const selected =
-        lifecycle === 'finished'
+        skill || lifecycle === 'finished'
           ? []
           : (linked?.pageIds ?? pageIds ?? proposed);
       if (
@@ -161,14 +173,12 @@ export class PgCompetitionStore {
           selected.some((id) => !pages.some((p) => p.id === id)))
       )
         throw new ApiError(422, 'Choose distinct active collection log pages.');
-      const action =
-        lifecycle === 'finished'
-          ? 'import-results'
-          : prior?.scheduleCreated
-            ? linked
-              ? 'preserve-schedule'
-              : 'preserve-deletion'
-            : 'create-schedule';
+      const action = competitionImportAction(
+        snapshot.competition.kind,
+        lifecycle,
+        prior?.scheduleCreated,
+        !!linked,
+      );
       const events = await xpEvents(client);
       const changes = snapshot.results?.xp
         ? diffTotals(
@@ -192,6 +202,12 @@ export class PgCompetitionStore {
       );
       await client.query('COMMIT');
       const warnings: string[] = [];
+      if (skill && prior?.scheduleCreated)
+        warnings.push(
+          linked
+            ? 'The previously linked staff schedule is preserved. This SKILL import will not edit or open pages; manage that schedule in Scheduling.'
+            : 'The previously linked schedule was deleted. This SKILL import will not recreate it.',
+        );
       if (
         snapshot.competition.metrics
           .flatMap(mappedPages)
@@ -212,7 +228,7 @@ export class PgCompetitionStore {
         warnings.push(
           'Choose at least one active page before applying. This metric has no automatic page mapping.',
         );
-      if (!schedules.enabled && lifecycle !== 'finished')
+      if (!skill && !schedules.enabled && lifecycle !== 'finished')
         warnings.push(
           'Scheduling is disabled. This import will not enable enforcement.',
         );
@@ -238,7 +254,7 @@ export class PgCompetitionStore {
         pages,
         action,
         scheduleStartsAt:
-          lifecycle === 'finished'
+          skill || lifecycle === 'finished'
             ? null
             : (linked?.startsAt ??
               (lifecycle === 'running'
@@ -348,6 +364,11 @@ export class PgCompetitionStore {
         );
       const snapshot = row.snapshot,
         c = snapshot.competition;
+      if (c.kind === 'SKILL' && row.page_ids.length)
+        throw new ApiError(
+          409,
+          'SKILL import behavior changed. Preview again to import without opening pages.',
+        );
       const lifecycle = competitionLifecycle(c, now.getTime());
       if ((lifecycle === 'finished') !== !!snapshot.results)
         throw new ApiError(
@@ -371,8 +392,13 @@ export class PgCompetitionStore {
       )
         throw new ApiError(409, 'Competition capacity reached.');
       let scheduleId = prior?.scheduleId ?? null;
-      const createSchedule =
-        lifecycle !== 'finished' && !prior?.scheduleCreated;
+      const action = competitionImportAction(
+        c.kind,
+        lifecycle,
+        prior?.scheduleCreated,
+        schedules.schedules.some((s) => s.id === scheduleId),
+      );
+      const createSchedule = action === 'create-schedule';
       if (createSchedule) {
         if (!row.page_ids.length || row.page_ids.length > 200)
           throw new ApiError(
@@ -521,6 +547,7 @@ export class PgCompetitionStore {
           JSON.stringify({
             ...c,
             lifecycle,
+            action,
             scheduleId,
             resultsImported: !!snapshot.results,
             changes,

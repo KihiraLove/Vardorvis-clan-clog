@@ -1,6 +1,8 @@
 import {
   competitionLifecycle,
+  competitionImportAction,
   competitionScope,
+  type CompetitionImportAction,
   type CompetitionKind,
   type CompetitionLifecycle,
   type WomCompetition,
@@ -27,11 +29,7 @@ export interface CompetitionImportPreview {
   expiresAt: string;
   competition: WomCompetition;
   lifecycle: CompetitionLifecycle;
-  action:
-    | 'create-schedule'
-    | 'preserve-schedule'
-    | 'preserve-deletion'
-    | 'import-results';
+  action: CompetitionImportAction;
   scheduleStartsAt: string | null;
   pageIds: string[];
   pages: { id: string; name: string }[];
@@ -160,6 +158,7 @@ export class LiveCompetitionClient implements CompetitionClient {
         'preserve-schedule',
         'preserve-deletion',
         'import-results',
+        'import-metadata',
       ].includes(String(p.action))
     )
       throw new Error('Invalid import action.');
@@ -179,6 +178,17 @@ export class LiveCompetitionClient implements CompetitionClient {
     unique(participants.map((r) => r.playerId));
     if (p.lifecycle !== 'finished' && participants.length)
       throw new Error('Live imports must contain metadata only.');
+    const metadataOnly =
+      competition.kind === 'SKILL' && p.lifecycle !== 'finished';
+    if (
+      metadataOnly !== (p.action === 'import-metadata') ||
+      (metadataOnly &&
+        (list(p.pageIds).length ||
+          list(p.pages).length ||
+          list(p.changes).length ||
+          p.scheduleStartsAt !== null))
+    )
+      throw new Error('Invalid metadata-only SKILL preview.');
     return {
       previewToken: text(p.previewToken),
       expectedRevision: text(p.expectedRevision),
@@ -231,9 +241,16 @@ export class LiveCompetitionClient implements CompetitionClient {
 export class PreviewCompetitionClient implements CompetitionClient {
   private readonly scheduleClient: AdminClient | undefined;
   private readonly xpClient: XpClient | undefined;
-  constructor(scheduleClient?: AdminClient, xpClient?: XpClient) {
+  private readonly onSkillMetadata:
+    ((competition: WomCompetition) => void) | undefined;
+  constructor(
+    scheduleClient?: AdminClient,
+    xpClient?: XpClient,
+    onSkillMetadata?: (competition: WomCompetition) => void,
+  ) {
     this.scheduleClient = scheduleClient;
     this.xpClient = xpClient;
+    this.onSkillMetadata = onSkillMetadata;
   }
   private readonly fixtureNow = Date.now();
   private stored = new Map<number, WomCompetition>();
@@ -243,7 +260,12 @@ export class PreviewCompetitionClient implements CompetitionClient {
   private xpPreviews = new Map<string, ImportPreview>();
   private receipts = new Map<
     string,
-    { token: string; outcome: 'applied' | 'unchanged' }
+    {
+      token: string;
+      acknowledged: boolean;
+      finishedSkill: boolean;
+      outcome: 'applied' | 'unchanged';
+    }
   >();
   async activities(signal: AbortSignal) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -294,6 +316,11 @@ export class PreviewCompetitionClient implements CompetitionClient {
         ? [id === 1002 ? 'overall' : 'attack']
         : ['vardorvis'];
     const { kind, skills: fixtureSkills } = competitionScope(fixtureMetrics);
+    if (kind === 'SKILL' && pageIds?.length)
+      throw new CompetitionRequestError(
+        422,
+        'SKILL imports do not open collection log pages.',
+      );
     const prior = this.stored.get(id);
     if (prior && prior.kind !== kind)
       throw new Error('This competition already has a different kind.');
@@ -336,27 +363,29 @@ export class PreviewCompetitionClient implements CompetitionClient {
           'Only the administrator can import XP results.',
         );
     }
-    const catalog = this.scheduleClient
-      ? await this.scheduleClient.catalog(signal)
-      : undefined;
+    const catalog =
+      kind === 'ACTIVITY' && this.scheduleClient
+        ? await this.scheduleClient.catalog(signal)
+        : undefined;
     const scheduleState = this.scheduleClient
       ? await this.scheduleClient.scheduling(signal)
       : undefined;
     const linked = scheduleState?.schedules.find(
       (s) => s.id === this.schedules.get(id),
     );
-    const pages = catalog?.pages.map((p) => ({ id: p.id, name: p.name })) ?? [
-      { id: 'vardorvis', name: 'Vardorvis' },
-      { id: 'the-whisperer', name: 'The Whisperer' },
-    ];
-    const action =
-      lifecycle === 'finished'
-        ? 'import-results'
-        : this.schedules.has(id)
-          ? linked
-            ? 'preserve-schedule'
-            : 'preserve-deletion'
-          : 'create-schedule';
+    const pages =
+      kind === 'SKILL'
+        ? []
+        : (catalog?.pages.map((p) => ({ id: p.id, name: p.name })) ?? [
+            { id: 'vardorvis', name: 'Vardorvis' },
+            { id: 'the-whisperer', name: 'The Whisperer' },
+          ]);
+    const action = competitionImportAction(
+      kind,
+      lifecycle,
+      this.schedules.has(id),
+      !!linked,
+    );
     const preview: CompetitionImportPreview = {
       previewToken: crypto.randomUUID(),
       expectedRevision: 'preview-' + this.version,
@@ -366,14 +395,16 @@ export class PreviewCompetitionClient implements CompetitionClient {
       lifecycle,
       action,
       scheduleStartsAt:
-        lifecycle === 'finished'
+        kind === 'SKILL' || lifecycle === 'finished'
           ? null
           : (linked?.startsAt ??
             (lifecycle === 'running' ? new Date().toISOString() : startsAt)),
       pageIds:
-        linked?.pageIds ??
-        pageIds ??
-        (kind === 'ACTIVITY' ? ['vardorvis'] : []),
+        kind === 'SKILL' || lifecycle === 'finished'
+          ? []
+          : (linked?.pageIds ??
+            pageIds ??
+            (kind === 'ACTIVITY' ? ['vardorvis'] : [])),
       pages,
       participants:
         lifecycle === 'finished'
@@ -405,7 +436,10 @@ export class PreviewCompetitionClient implements CompetitionClient {
           : []),
       warnings: [
         'Preview mode only. No server data is changed.',
-        ...(scheduleState && !scheduleState.enabled && lifecycle !== 'finished'
+        ...(kind === 'ACTIVITY' &&
+        scheduleState &&
+        !scheduleState.enabled &&
+        lifecycle !== 'finished'
           ? ['Scheduling is disabled. This import will not enable enforcement.']
           : []),
       ],
@@ -423,16 +457,35 @@ export class PreviewCompetitionClient implements CompetitionClient {
   ) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const replay = this.receipts.get(key);
+    const current = this.previews.get(p.previewToken);
+    const finishedSkill =
+      replay?.finishedSkill ??
+      (current?.competition.kind === 'SKILL' &&
+        current.lifecycle === 'finished');
+    if (this.scheduleClient) {
+      const session = await this.scheduleClient.session(signal);
+      if (!session)
+        throw new CompetitionRequestError(401, 'Sign in to continue.');
+      if (session.role !== 'admin' && finishedSkill)
+        throw new CompetitionRequestError(
+          403,
+          'Only the administrator can import XP results.',
+        );
+    }
     if (replay) {
-      if (replay.token !== p.previewToken) throw new Error('Key reused.');
+      if (replay.token !== p.previewToken || replay.acknowledged !== ack)
+        throw new CompetitionRequestError(409, 'Key reused.');
       return { outcome: replay.outcome };
     }
     if (
-      !this.previews.has(p.previewToken) ||
+      !current ||
       p.expectedRevision !== 'preview-' + this.version ||
-      Date.now() >= Date.parse(p.expiresAt)
+      p.expectedRevision !== current.expectedRevision ||
+      p.scheduleRevision !== current.scheduleRevision ||
+      Date.now() >= Date.parse(current.expiresAt)
     )
       throw new CompetitionRequestError(409, 'Preview changed. Preview again.');
+    p = current;
     const lifecycle = competitionLifecycle(p.competition, Date.now());
     if ((lifecycle === 'finished') !== (p.lifecycle === 'finished'))
       throw new CompetitionRequestError(
@@ -440,17 +493,13 @@ export class PreviewCompetitionClient implements CompetitionClient {
         'Competition finished. Preview again.',
       );
     if (this.scheduleClient) {
-      const session = await this.scheduleClient.session(signal);
-      if (!session)
-        throw new CompetitionRequestError(401, 'Sign in to continue.');
       if (
-        session.role !== 'admin' &&
-        p.competition.kind === 'SKILL' &&
-        lifecycle === 'finished'
+        (await this.scheduleClient.scheduling(signal)).revision !==
+        p.scheduleRevision
       )
         throw new CompetitionRequestError(
-          403,
-          'Only the administrator can import XP results.',
+          409,
+          'Scheduling changed. Preview again.',
         );
     }
     if (p.action === 'create-schedule') {
@@ -488,8 +537,14 @@ export class PreviewCompetitionClient implements CompetitionClient {
           ? 'unchanged'
           : 'applied';
     this.stored.set(p.competition.id, p.competition);
+    if (p.action === 'import-metadata') this.onSkillMetadata?.(p.competition);
     if (outcome === 'applied') this.version++;
-    this.receipts.set(key, { token: p.previewToken, outcome });
+    this.receipts.set(key, {
+      token: p.previewToken,
+      acknowledged: ack,
+      finishedSkill,
+      outcome,
+    });
     return { outcome };
   }
 }

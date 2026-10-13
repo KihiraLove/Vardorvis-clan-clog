@@ -7,6 +7,7 @@ import {
 } from './competition-api.ts';
 import { PreviewAdminClient } from './preview/admin.ts';
 import { PreviewXpClient } from './preview/xp.ts';
+import type { AdminSession } from './xp-model.ts';
 const signal = () => new AbortController().signal;
 const url = (id: number) => 'https://wiseoldman.net/competitions/' + id;
 const competition = {
@@ -126,6 +127,137 @@ test('preview mode enforces staff access and the administrator-only finished XP 
   );
   mocked.mock.mockImplementation(async () => null);
   await assert.rejects(client.preview(url(3002), 'csrf', signal()), {
+    status: 401,
+  });
+});
+
+test('live SKILL metadata previews exclude pages, opening times, changes and live participants', async (t) => {
+  const metadata = {
+    previewToken: 'metadata-token',
+    expectedRevision: 'xp-1',
+    scheduleRevision: 'schedules-1',
+    expiresAt: '2099-01-01T00:00:00Z',
+    competition,
+    lifecycle: 'running',
+    action: 'import-metadata',
+    scheduleStartsAt: null,
+    pageIds: [],
+    pages: [],
+    participants: [],
+    changes: [],
+    warnings: [],
+  };
+  let response: unknown = metadata;
+  t.mock.method(globalThis, 'fetch', async () => Response.json(response));
+  const client = new LiveCompetitionClient();
+  for (const lifecycle of ['future', 'running']) {
+    response = { ...metadata, lifecycle };
+    assert.equal(
+      (await client.preview(url(123), 'csrf', signal())).action,
+      'import-metadata',
+    );
+  }
+  for (const extra of [
+    { action: 'create-schedule' },
+    { pageIds: ['vardorvis'] },
+    { pages: [{ id: 'vardorvis', name: 'Vardorvis' }] },
+    { scheduleStartsAt: competition.startsAt },
+    { changes: [{ skill: 'attack', before: '0', after: '1', change: '1' }] },
+    {
+      participants: [{ playerId: 1, displayName: 'Live player', gained: '1' }],
+    },
+    { lifecycle: 'finished' },
+    {
+      competition: { ...competition, kind: 'ACTIVITY', metrics: ['vardorvis'] },
+    },
+  ]) {
+    response = { ...metadata, ...extra };
+    await assert.rejects(
+      client.preview(url(123), 'csrf', signal()),
+      /metadata/,
+    );
+  }
+});
+
+test('preview metadata imports preserve schedules and publish unavailable SKILL events without adding XP', async (t) => {
+  const admin = new PreviewAdminClient();
+  const session = (await admin.session(signal()))!;
+  t.mock.method(admin, 'session', async () => ({
+    ...session,
+    role: 'moderator' as const,
+  }));
+  const xp = new PreviewXpClient();
+  const client = new PreviewCompetitionClient(admin, xp, (c) =>
+    xp.storeMetadata(c),
+  );
+  const before = await admin.scheduling(signal());
+  for (const id of [1000, 1005]) {
+    const p = await client.preview(url(id), 'csrf', signal());
+    assert.equal(p.lifecycle, id === 1000 ? 'running' : 'future');
+    assert.equal(p.action, 'import-metadata');
+    assert.equal(p.scheduleStartsAt, null);
+    assert.deepEqual(p.pageIds, []);
+    assert.deepEqual(p.pages, []);
+    assert.deepEqual(p.changes, []);
+    assert.deepEqual(p.participants, []);
+    const key = crypto.randomUUID();
+    const receipt = await client.apply(p, 'csrf', key, false, signal());
+    assert.deepEqual(
+      await client.apply(p, 'csrf', key, false, signal()),
+      receipt,
+    );
+    await assert.rejects(client.apply(p, 'csrf', key, true, signal()), {
+      status: 409,
+    });
+    assert.equal(
+      (
+        await client.apply(
+          await client.preview(url(id), 'csrf', signal()),
+          'csrf',
+          crypto.randomUUID(),
+          false,
+          signal(),
+        )
+      ).outcome,
+      'unchanged',
+    );
+    await assert.rejects(
+      client.preview(url(id), 'csrf', signal(), ['vardorvis']),
+      { status: 422 },
+    );
+  }
+  assert.deepEqual(await admin.scheduling(signal()), before);
+  const tracker = await xp.tracker(signal());
+  assert.equal(tracker.events.length, 2);
+  assert.equal(tracker.totals.attack, '0');
+  assert.deepEqual(tracker.podium, []);
+  for (const event of tracker.events) {
+    assert.equal(event.gains.attack, null);
+    assert.deepEqual(event.podium, []);
+  }
+});
+
+test('preview receipt replay enforces current authentication and the original finished XP role', async (t) => {
+  const admin = new PreviewAdminClient();
+  const session = (await admin.session(signal()))!;
+  const mocked = t.mock.method(
+    admin,
+    'session',
+    async (): Promise<AdminSession | null> => session,
+  );
+  const client = new PreviewCompetitionClient(admin, new PreviewXpClient());
+  const p = await client.preview(url(1001), 'csrf', signal());
+  const key = crypto.randomUUID();
+  await client.apply(p, 'csrf', key, false, signal());
+  mocked.mock.mockImplementation(async () => ({
+    ...session,
+    role: 'moderator' as const,
+  }));
+  await assert.rejects(client.apply(p, 'csrf', key, false, signal()), {
+    status: 403,
+  });
+  mocked.mock.mockImplementation(async () => null);
+  await assert.rejects(client.apply(p, 'csrf', key, false, signal()), {
     status: 401,
   });
 });

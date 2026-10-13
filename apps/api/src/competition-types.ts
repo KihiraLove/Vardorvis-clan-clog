@@ -1,4 +1,8 @@
-import type { CompetitionLifecycle, WomCompetition } from '@clog/domain';
+import type {
+  CompetitionImportAction,
+  CompetitionLifecycle,
+  WomCompetition,
+} from '@clog/domain';
 import type { XpChange, XpParticipant, XpSnapshot, Skill } from './xp-types.js';
 export interface CompetitionSnapshot {
   competition: WomCompetition;
@@ -19,11 +23,7 @@ export interface CompetitionPreview {
   lifecycle: CompetitionLifecycle;
   pageIds: string[];
   pages: { id: string; name: string }[];
-  action:
-    | 'create-schedule'
-    | 'preserve-schedule'
-    | 'preserve-deletion'
-    | 'import-results';
+  action: CompetitionImportAction;
   scheduleStartsAt: string | null;
   participants: (
     XpParticipant | { playerId: number; displayName: string; gained: string }

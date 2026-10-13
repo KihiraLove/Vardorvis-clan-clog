@@ -302,7 +302,13 @@ export function App() {
   const competitionClient = useMemo(
     () =>
       route.preview
-        ? new PreviewCompetitionClient(adminClient, xpClient)
+        ? new PreviewCompetitionClient(
+            adminClient,
+            xpClient,
+            xpClient instanceof PreviewXpClient
+              ? (competition) => xpClient.storeMetadata(competition)
+              : undefined,
+          )
         : new LiveCompetitionClient(),
     [route.preview, adminClient, xpClient],
   );

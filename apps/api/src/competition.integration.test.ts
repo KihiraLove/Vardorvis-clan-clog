@@ -294,11 +294,15 @@ test(
         now + 2 * day,
       );
       p = await preview(skillFuture);
+      assert.equal(p.action, 'import-metadata');
       assert.deepEqual(p.pageIds, []);
-      await assert.rejects(apply(p), { status: 422 });
+      assert.deepEqual(p.pages, []);
+      const beforeSkillSchedules = await scheduling.state();
+      const skillReceipt = await apply(p, randomUUID(), 'moderator');
+      assert.equal(skillReceipt.scheduleId, null);
+      assert.deepEqual(await scheduling.state(), beforeSkillSchedules);
       await assert.rejects(preview(skillFuture, ['inactive']), { status: 422 });
-      p = await preview(skillFuture, ['other']);
-      await apply(p);
+      await assert.rejects(preview(skillFuture, ['other']), { status: 422 });
       const skillEntry = (await xp.tracker()).events.find((e) => e.id === 102)!;
       assert.equal(skillEntry.gains.attack, null);
       assert.deepEqual(skillEntry.podium, []);
@@ -618,6 +622,21 @@ test(
       assert.equal(futureSkill.statusCode, 200, futureSkill.body);
       assert.equal(futureSkill.json().competition.kind, 'SKILL');
       assert.equal(futureSkill.json().participants.length, 0);
+      assert.equal(futureSkill.json().action, 'import-metadata');
+      const beforeMetadataApply = await scheduling.state();
+      const appliedMetadata = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/competitions/imports',
+        headers: { ...moderator, 'idempotency-key': randomUUID() },
+        payload: {
+          previewToken: futureSkill.json().previewToken,
+          expectedRevision: futureSkill.json().expectedRevision,
+          scheduleRevision: futureSkill.json().scheduleRevision,
+        },
+      });
+      assert.equal(appliedMetadata.statusCode, 200, appliedMetadata.body);
+      assert.equal(appliedMetadata.json().scheduleId, null);
+      assert.deepEqual(await scheduling.state(), beforeMetadataApply);
       assert.equal(
         (
           await app.inject({

@@ -18,6 +18,11 @@ unavailable data rejects the import. Overlapping competitions count independent
 reported contributions, rather than deduplicated lifetime gains.
 
 The shared preview/apply form is available from Scheduling and XP imports.
+Future/running SKILL imports use `import-metadata`, persist their original dates
+without a schedule, and appear publicly with unavailable gains and an empty
+podium. Moderators can apply these imports. Crossing the source end requires a
+fresh finished-results preview; future-to-running apply stays metadata-only.
+Existing linked staff windows are preserved for reviewed management in Scheduling.
 Only administrators import finished XP results. Legacy
 `/api/v1/admin/xp/imports/preview` and `/api/v1/admin/xp/imports` remain available
 for finished SKILL imports, with the existing session, Origin, CSRF, optimistic
