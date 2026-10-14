@@ -38,6 +38,10 @@ run it only for repository code you trust, on your development machine.
    permissions, Nginx routing, auth/review, competitions, large branding uploads,
    preview maintenance, owner archival/restore, catalog/icon persistence, coordinated backup and recovery
    after database restart. The Traefik configuration is validated as well.
+   [Runtime operations](runtime-operations.md) acceptance also covers real query/COMMIT
+   termination, supervisor ordering/deadlines/crashes, independent Discord health and
+   committed-response uncertainty with durable receipt replay. Gateway health uses
+   a local fixture; no live Discord login or command registration occurs.
 
 Every run uses unique containers, network and volumes; it publishes no host
 ports and does not read your `.env`. Development/production stacks can remain

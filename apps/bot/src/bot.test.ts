@@ -431,7 +431,7 @@ test('explicit guild registration uses POST upsert, not bulk PUT, and never happ
   assert.equal(writes.length, 2);
   assert.equal((writes[1]?.body as { name: string }).name, 'cc-clog');
 });
-test('gateway handlers survive reconnect; stop prevents new interactions and destroys client once', () => {
+test('gateway handlers survive reconnect; stop prevents new interactions and destroys client once', async () => {
   class FakeGateway extends EventEmitter {
     online = false;
     destroyed = 0;
@@ -456,8 +456,8 @@ test('gateway handlers survive reconnect; stop prevents new interactions and des
   fake.online = true;
   assert.equal(gateway.ready(), true);
   assert.equal(fake.listenerCount(Events.InteractionCreate), 1);
-  gateway.stop();
-  gateway.stop();
+  await gateway.stop();
+  await gateway.stop();
   assert.equal(gateway.ready(), false);
   assert.equal(fake.destroyed, 1);
   assert.equal(fake.listenerCount(Events.InteractionCreate), 1);

@@ -10,11 +10,13 @@ Administrator-managed labels, a dedicated site-settings page, moderator disable/
 
 - `app`: a single image/container runs Nginx on 8080, Fastify on internal
   127.0.0.1:3000, and optionally the Discord gateway (`BOT_ENABLED=true`).
-  An exit of any active process stops the others and restarts the container.
-  Only Nginx is reachable from Traefik. Both `/readyz` and the container health
-  check require the database and, when `BOT_ENABLED=true`, the bot readiness
-  probe (Discord gateway plus authenticated intake). Disabled bots are not
-  probed. Checks time out within 3.5 seconds and recover when dependencies recover.
+  API/proxy crashes stop peers and restart the container; bot crashes restart only
+  the bot with bounded backoff. Only Nginx is reachable from Traefik. `/readyz` and
+  container health require the database-backed API, independently of Discord.
+  `/api/v1/discord/status` monitors enabled gateway/intake health separately.
+  Checks time out within 3.5 seconds and recover when dependencies recover.
+  [Shutdown/availability policy and diagnostics](runtime-operations.md) define
+  ordered bot → API → proxy draining within the 70-second Compose stop window.
 - `db`: PostgreSQL 17, privately networked with a persistent named volume.
 - `migrate`: an **exiting**, one-shot bootstrap job using the same `app`
   image. It alone receives the database owner password; the running app uses

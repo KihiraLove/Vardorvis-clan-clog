@@ -220,6 +220,37 @@ async function login(app: FastifyInstance) {
     'x-csrf-token': session.json().csrfToken as string,
   };
 }
+
+test('operational counters and queue gauges require owner access and expose no credential or session data', async () => {
+  const { app, store } = fixture();
+  try {
+    assert.equal(
+      (await app.inject('/api/v1/admin/diagnostics')).statusCode,
+      401,
+    );
+    const headers = await login(app);
+    const response = await app.inject({
+      url: '/api/v1/admin/diagnostics',
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
+    assert.equal(response.json().queues.passwords.active, 0);
+    assert.equal(typeof response.json().counters, 'object');
+    assert.doesNotMatch(
+      response.body,
+      /passwordHash|csrf|cookie|scrypt\$|postgresql:/iu,
+    );
+    store.staff.get(admin)!.role = 'moderator';
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/diagnostics', headers }))
+        .statusCode,
+      403,
+    );
+  } finally {
+    await app.close();
+  }
+});
 test('public snapshots have stable ETags, isolated world credits and automatic content invalidation', async () => {
   const { app, store } = fixture();
   try {

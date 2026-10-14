@@ -9,12 +9,16 @@ In the combined `app` container, set `BOT_ENABLED=true` and configure
 the gateway. The internal API origin is `http://127.0.0.1:3000` and needs no
 separate service DNS name. Set `BOT_ENABLED=false` (the default) to run the
 web/API without attempting a Discord connection. Incorrect or partial bot
-credentials with the bot enabled cause container startup to fail and restart.
+credentials needed by the API fail API startup closed. Gateway-only login failures
+restart the bot with bounded backoff while the website remains available.
 
 The Discord gateway exposes internal `127.0.0.1:3001/healthz` and
 `/readyz`; `/readyz` succeeds only when Discord and the bot's authenticated
-API route are available. No bot port is published. A child process crash
-causes the combined container to restart. Slash commands must still be
+API route are available. No bot port is published. A bot child crash restarts only
+that child; API/proxy crashes still fail the combined container. Website readiness
+is independent of Discord, with separate `/api/v1/discord/status` monitoring.
+See [ordered shutdown, safe diagnostics and receipt recovery](runtime-operations.md).
+Slash commands must still be
 registered explicitly, not during startup.
 
 The only gateway intent is Guilds; the command is rejected in DMs or other
@@ -71,4 +75,9 @@ need not expose private Discord IDs; this is an operator investigation query.
 
 `npm run validate` covers command serialization, token/guild config, collector fallback, autocomplete refresh, explicit canonical selections, raw/ambiguous submissions, proof validation, request timeouts and idempotent retries, occupied-credit warnings, registration route, and gateway teardown/reconnect state. No live Discord token is needed for CI.
 
-The Docker smoke workflow runs the combined application with `BOT_ENABLED=false`, without contacting Discord. Unit tests cover the bot's liveness/readiness states. A live configured guild/gateway test remains an environment-dependent release check; do not mistake CI mocks for an actual Discord login. Registration and deployment are deliberately opt-in.
+Local production smoke covers both disabled mode and an enabled local gateway-health
+fixture, without contacting Discord. It verifies independent health, child restart,
+ordered shutdown and durable receipts through the real bot HTTP/handler code.
+A live configured guild/gateway test remains an environment-dependent release check;
+do not mistake fixtures for an actual Discord login. Registration and deployment
+are deliberately opt-in.

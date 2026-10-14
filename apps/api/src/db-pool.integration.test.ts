@@ -134,7 +134,7 @@ test(
             [idle],
           );
           assert.equal(terminated.rows[0]?.stopped, true);
-          await waitUntil(() => logs.includes('PostgreSQL idle pool failure:'));
+          await waitUntil(() => logs.includes('"operation":"pool"'));
           assert.doesNotMatch(logs, /postgresql:/iu);
           assert.ok(child && child.exitCode === null);
           assert.equal(await status('/healthz'), 200);

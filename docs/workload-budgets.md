@@ -37,7 +37,7 @@ errors or new diagnostics. Password queues retain at most six bounded inputs;
 expiry/close removes waiting jobs, rejects new admission and lets active native
 scrypt calls finish. The existing salted verifier format and work factor are
 unchanged (about 32 MiB per active derive). API close also closes its hash queue.
-Full API/bot/supervisor shutdown coordination remains tracked separately in #89.
+Full API/bot/supervisor shutdown now follows the [ordered drain policy](runtime-operations.md).
 
 ## WOM response and cancellation contract
 

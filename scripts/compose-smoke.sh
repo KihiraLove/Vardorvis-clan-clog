@@ -168,3 +168,9 @@ for _attempt in $(seq 1 30); do
 done
 curl --fail http://app:8080/readyz
 test "$app_started" = "$(docker inspect --format '{{.State.StartedAt}}' "$app_id")"
+
+printf "\nIndependent Discord availability, ordered shutdown and durable response uncertainty\n"
+docker compose run --rm --no-deps -T -e AVAILABILITY_SMOKE_DISPOSABLE=true -e BOT_ENABLED=true \
+  -e BOT_API_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  -e DISCORD_GUILD_ID=234567890123456789 -e DISCORD_BOT_TOKEN=local-gateway-fixture \
+  app node --input-type=module < scripts/availability-smoke.mjs

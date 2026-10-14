@@ -38,6 +38,7 @@ services:
     image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-app:${IMAGE_TAG:?Set IMAGE_TAG}
     restart: unless-stopped
     init: true
+    stop_grace_period: 70s
     environment:
       DATABASE_URL: postgresql://clog_runtime:${APP_DB_PASSWORD:?Generate a distinct runtime database password}@db:5432/clog
       HOST: 127.0.0.1

@@ -1,5 +1,9 @@
 /** Restrict Discord data access to two bot-only API routes. No direct database access. */
-import { closedCollectionPageMessage } from '@clog/domain';
+import {
+  closedCollectionPageMessage,
+  safeFailure,
+  WorkloadError,
+} from '@clog/domain';
 export interface Candidate {
   id: number;
   name: string;
@@ -32,6 +36,9 @@ export interface BotApi {
   submit(claim: Claim): Promise<Receipt>;
 }
 export class BotApiError extends Error {
+  get category() {
+    return safeFailure(undefined, this.status).category;
+  }
   constructor(
     readonly status: number,
     message = 'Bot intake API unavailable',
@@ -46,6 +53,7 @@ export class BotApiError extends Error {
  * never a driver error, response body, credential or evidence URL.
  */
 export class UnconfirmedSubmissionError extends Error {
+  readonly category = 'uncertain';
   constructor(
     readonly interactionId: string,
     readonly reason: 'retry-rejected' | 'retries-exhausted' | 'invalid-receipt',
@@ -53,6 +61,24 @@ export class UnconfirmedSubmissionError extends Error {
     super('Submission receipt unconfirmed');
     this.name = 'UnconfirmedSubmissionError';
   }
+}
+export function botFailure(error: unknown) {
+  if (error instanceof WorkloadError) return safeFailure(error, 429);
+  if (error instanceof UnconfirmedSubmissionError)
+    return {
+      category: 'uncertain' as const,
+      code: (
+        {
+          'retry-rejected': 'RETRY_REJECTED',
+          'retries-exhausted': 'RETRIES_EXHAUSTED',
+          'invalid-receipt': 'INVALID_RECEIPT',
+        } as const
+      )[error.reason],
+    };
+  return safeFailure(
+    error,
+    error instanceof BotApiError ? error.status : undefined,
+  );
 }
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
