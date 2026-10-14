@@ -282,7 +282,7 @@ See [contracts.md](contracts.md) for the broader intended API and Discord contra
 
 Build order is domain → database → API → bot → web. Compiled workspace exports must exist before dependents resolve them. Backend/domain/database unit tests execute compiled `dist/*.test.js`; web unit tests use Node 24's TypeScript execution on `src/*.test.ts`. The API dev script watches built `dist/server.js`; source changes still need TypeScript compilation.
 
-`npm run validate` runs formatting → lint → build → typecheck → workspace tests → documentation links, stopping on failure. It does not include browser tests or Docker smoke tests; CI runs those as independent jobs.
+`npm run validate` runs formatting → lint → build → catalog verification → typecheck → workspace tests → documentation links, stopping on failure. `npm run test:all` adds isolated PostgreSQL, script tests, Chromium and production-container smoke checks; local development and explicit/release CI share this complete command.
 
 ## 8. Containers and deployment
 
@@ -298,46 +298,56 @@ After health succeeds, the helper preserves the prior recorded release, atomical
 
 ## 9. CI and release pipeline
 
+Development uses [local acceptance](local-testing.md): `npm run test:all` creates
+disposable Linux containers, requires PostgreSQL integration tests, runs the
+script tests and Chromium suite, and exercises the production image through the
+shared [Compose smoke script](../scripts/compose-smoke.sh). Node 24 and Docker
+are the only host prerequisites. Logs and browser evidence stay in
+`.data/local-checks/<run-id>/`.
+
 ```mermaid
 flowchart TD
-  Trigger[PR / main push / manual CI] --> Validate[validate]
-  Trigger --> Smoke[docker-smoke]
-  Trigger --> Browser[frontend-browser]
-  Validate --> Gate{All pass AND main push?}
-  Smoke --> Gate
-  Browser --> Gate
-  Gate -->|yes| Images[Reusable Images workflow]
-  Images --> Web[web amd64 + arm64]
-  Images --> API[api amd64 + arm64]
-  Images --> Bot[bot amd64 + arm64]
-  Dispatch[Separate manual Deploy home dispatch] --> Verify[Verify successful main CI for SHA]
-  Verify --> Deploy[home-production / installed deploy.sh]
+  Edit[Development changes] --> Local[npm run test:all locally]
+  Local --> Review[Record results in PR]
+  Manual[Explicit manual CI] --> Acceptance[Same full acceptance command]
+  Release[Published GitHub Release] --> Identity[Verify version tag and main ancestry]
+  Identity --> Acceptance
+  Acceptance --> Gate{Passed and release event?}
+  Gate -->|yes| Image[One app image: amd64 and arm64]
+  Dispatch[Manual Deploy home] --> Verify[Verify successful release CI for SHA]
+  Verify --> Deploy[Installed deploy.sh]
 ```
 
-### Validation: `.github/workflows/ci.yml`
+### Validation and publishing
 
-Runs on pull requests, pushes to `main` and manual dispatch. Default permissions are `contents: read`. Concurrency is grouped by Git ref; only PR runs cancel superseded runs. Checkout disables persistent Git credentials. Referenced actions are pinned to commit SHAs.
+[ci.yml](../.github/workflows/ci.yml) runs only on manual dispatch or published
+GitHub Releases. Pushes and PR updates start no hosted jobs. One acceptance job
+runs the exact local command with a 40-minute limit. Only failures upload
+evidence, retained for one day. Local results are review evidence; they do not
+forge GitHub status checks. Repository admins must update required-check rules
+when adopting this policy.
 
-| Job                | Steps and purpose                                                                                                                                                                                                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `validate`         | Ubuntu runner, 15-minute timeout, PostgreSQL 17 service with health checks and disposable CI credentials. Sets `TEST_DATABASE_URL`, installs Node from `.nvmrc`, restores npm cache, uses `npm ci`, then `npm run validate`                                                                                                 |
-| `docker-smoke`     | Ubuntu runner, 20-minute timeout. Validates combined Compose configuration, builds all three targets, starts the bot profile with migration/health waiting, requests web health and proxied API status, then probes bot health inside its container. Prints logs on failure and always removes the disposable stack/volumes |
-| `frontend-browser` | Ubuntu runner, 15-minute timeout. Installs dependencies, builds domain, installs Chromium/system dependencies and runs Playwright. Uploads `apps/web/test-results/` as `frontend-browser-review` for seven days unless cancelled                                                                                            |
-| `publish`          | Needs all three jobs; runs only on a push to `refs/heads/main`. Grants package-write permission and calls reusable `images.yml` with the exact commit SHA                                                                                                                                                                   |
+A release tag must be a version such as `v1.2.3` or `v1.2.3-rc.1`, resolve to
+the event commit and belong to `main`. Only successful release acceptance calls
+[images.yml](../.github/workflows/images.yml). The reusable workflow independently
+restricts publishing to a published-release event and validates its inputs.
+Manual validation, tag pushes and draft releases do not publish packages.
 
-PR validation and manual CI do not publish images. A successful foundation CI run proves the implemented checks passed; it does not demonstrate real Discord intake, OAuth or feature APIs.
+The one unified application image has version, `release-<full SHA>` and
+`sha-<full SHA>` aliases, architecture manifests for amd64/arm64 and provenance.
+Build record uploads and GitHub-hosted build caches are disabled.
+Package cleanup is manual and defaults to dry-run, preserving release manifest
+graphs; no hourly job runs. Existing storage remains until explicit cleanup or
+expiration.
 
-### Image publishing: `.github/workflows/images.yml`
+### Home deployment
 
-This workflow accepts calls with a commit input. A fail-fast-disabled matrix builds `web`, `api` and `bot` separately on Ubuntu, each with a 45-minute timeout. It checks out that commit, configures QEMU/Buildx and logs into GHCR with the repository `GITHUB_TOKEN`.
-
-Names are lowercase `ghcr.io/<owner>/<repository>-<service>:sha-<full SHA>`. Each tag contains `linux/amd64` and `linux/arm64`, source/revision labels and build provenance, using per-service GitHub Actions caches. SHA-shaped tags identify a release but are registry tags, not a digest-pinned deployment manifest. Actual GHCR visibility/access is registry configuration and is not established by the workflow text.
-
-### Home deployment: `.github/workflows/deploy-home.yml`
-
-Deployment is a separate manual dispatch with `image_sha`, and verification runs only when dispatched on `main`. The GitHub-hosted verifier validates a lowercase 40-character SHA and queries `ci.yml` push runs to require a successful run for that SHA on `main`. Success includes the image-publishing job because it is part of that CI run.
-
-Only then does the `home-production` environment job execute on a runner labelled `self-hosted`, `Linux`, `clog-production`. It calls the preinstalled deployment helper without checking out PR or repository scripts onto that runner. Deployments share concurrency group `home-production` without cancelling one another. Environment protection/approval rules and runner installation must be configured outside the repository; the YAML alone does not guarantee a human approval gate.
+[deploy-home.yml](../.github/workflows/deploy-home.yml) remains a manual dispatch
+on `main` with a full commit SHA. It verifies a successful **release-triggered**
+CI run for that SHA before calling the installed helper on the
+`self-hosted, Linux, clog-production` runner. It does not create package tags.
+Environment approval rules and runner installation remain repository/server
+configuration. See [deployment](deployment.md).
 
 ### Dependency proposals and collaboration files
 
@@ -362,16 +372,13 @@ Only then does the `home-production` environment job execute on a runner labelle
 | `apps/web/tests/admin-fixtures.ts`, `xp-fixtures.ts`    | Fresh reusable response fixtures, including zero/unavailable XP; not runtime data sources                                                                                                        |
 | `apps/web/playwright.config.ts`                         | Chromium at 1100 × 850 by default, Vite test server, local parallel workers, one CI worker/retry, forbidden focused CI tests and retained failure traces/screenshots                             |
 
-Standard local checks with Node 24 and npm installed:
+Complete local checks with Node 24 and Docker installed:
 
 ```bash
-npm ci
-npm run validate
-npx playwright install chromium
-npm run test:e2e -w @clog/web
+npm run test:all
 ```
 
-Set `TEST_DATABASE_URL` to a separate disposable PostgreSQL database before validation to include integration coverage. Runtime/image/configuration changes additionally need the Compose smoke flow in CI or an equivalent disposable local stack. Browser tests use previews and mocked routes; production backend and restore tests remain separate acceptance work.
+The runner supplies fresh PostgreSQL instances and Linux tooling automatically. Browser tests use previews and mocked routes; production-container smoke exercises the real backend separately. External Discord and full recovery rehearsals still need their dedicated environments. See [local testing](local-testing.md) for focused commands, result evidence and cleanup.
 
 ## 11. Review findings and integration priorities
 

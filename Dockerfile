@@ -1,5 +1,5 @@
 # Install workspace dependencies once and compile all packages before splitting targets.
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -8,6 +8,29 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY packages/domain/package.json ./packages/domain/package.json
 COPY packages/database/package.json ./packages/database/package.json
 RUN npm ci --no-audit --no-fund
+
+# Cached local/CI tooling; never copied into the production image.
+FROM docker:28-cli AS docker-tools
+FROM rhysd/actionlint:1.7.7 AS workflow-tools
+FROM mcr.microsoft.com/playwright:v1.62.1-noble AS checks-dependencies
+WORKDIR /app
+# Match apps/web's exact Playwright version; use our Node 24/npm runtime.
+COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
+COPY --from=dependencies /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+  && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+  && apt-get update && apt-get install -y --no-install-recommends bash curl jq util-linux shellcheck \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=dependencies /app /app
+COPY --from=docker-tools /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker-tools /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+COPY --from=workflow-tools /usr/local/bin/actionlint /usr/local/bin/actionlint
+
+FROM checks-dependencies AS checks
+COPY . .
+CMD ["bash", "scripts/check-container.sh"]
+
+FROM dependencies AS build
 COPY . .
 RUN npm run build && npm run catalog:check
 

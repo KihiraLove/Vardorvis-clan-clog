@@ -2,7 +2,7 @@
 
 Create a feature branch and PR linked to a development issue. Read [requirements](docs/requirements.md) and [architecture](docs/architecture.md) before implementing business behavior. Keep foundation endpoints honest about unavailable functionality.
 
-Use Node 24 and `npm ci`, then run `npm run validate`. Run database integration tests against a separate disposable database. Include visual references for collection-log changes and run the Compose smoke check for runtime/image/configuration changes.
+Before pushing, run `npm run test:all` with Node 24 and Docker running. This covers the complete automated suite using isolated Linux databases, Chromium and a production Compose stack; see [local acceptance](docs/local-testing.md). Record the tested commit and local results in the PR. Use focused host tests during iteration. Include visual references for collection-log changes. Hosted CI is manual or release-triggered; ordinary PR updates do not consume runner time.
 
 Shared item identities belong in the domain/database packages; do not add separate collected flags to individual pages. Catalog changes need provenance, a reviewed import diff and coverage validation. Approval/revocation must be a transaction with an authenticated actor and audit record.
 

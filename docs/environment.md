@@ -5,6 +5,10 @@ optional Discord gateway) and PostgreSQL `db`. The `migrate` service is a
 one-shot bootstrap that uses the **same application image** and exits.
 See [release deployment](deployment.md) before recreating an existing DB.
 
+For the full automated suite, use `npm run test:all` with Node 24 and Docker.
+The [local test runner](local-testing.md) supplies disposable databases, test
+credentials, Linux tooling and Chromium; it does not load your runtime `.env`.
+
 ## Required secrets and configuration
 
 Copy `.env.example` to `.env` and keep it private (`chmod 600 .env`).

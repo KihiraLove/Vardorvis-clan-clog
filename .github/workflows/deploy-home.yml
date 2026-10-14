@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_sha:
-        description: Full 40-character SHA from a successful main CI run
+        description: Full 40-character SHA from a successful published-release CI run
         required: true
         type: string
 permissions:
@@ -19,7 +19,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      packages: write
     concurrency:
       group: container-package-maintenance
       cancel-in-progress: false
@@ -28,7 +27,7 @@ jobs:
     outputs:
       sha: ${{ steps.verify.outputs.sha }}
     steps:
-      - name: Verify release came from successful main CI
+      - name: Verify successful published-release CI
         id: verify
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,23 +36,9 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "Expected a full commit SHA"; exit 1; }
-          gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?event=push&head_sha=$RELEASE_SHA&per_page=100" > "$RUNNER_TEMP/runs.json"
-          jq -e --arg sha "$RELEASE_SHA" '.workflow_runs | any(.head_sha == $sha and .head_branch == "main" and .conclusion == "success")' "$RUNNER_TEMP/runs.json" >/dev/null
+          gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?event=release&head_sha=$RELEASE_SHA&per_page=100" > "$RUNNER_TEMP/runs.json"
+          jq -e --arg sha "$RELEASE_SHA" '.workflow_runs | any(.event == "release" and .head_sha == $sha and .conclusion == "success")' "$RUNNER_TEMP/runs.json" >/dev/null
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Preserve selected image as a release before deployment
-        env:
-          REPOSITORY: ${{ github.repository }}
-          RELEASE_SHA: ${{ steps.verify.outputs.sha }}
-        run: |
-          set -euo pipefail
-          image="ghcr.io/${REPOSITORY,,}-app"
-          docker buildx imagetools create --tag "$image:release-$RELEASE_SHA" "$image:sha-$RELEASE_SHA"
   deploy:
     # Call the preinstalled helper without checking out repository code on this runner.
     needs: verify

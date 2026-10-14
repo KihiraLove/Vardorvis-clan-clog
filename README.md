@@ -14,21 +14,21 @@ The backend serves PostgreSQL-backed catalog/collections, individual administrat
 
 This branch adds the **collection-log, clan XP and admin frontends** to the project foundation. Further backend feature routes and release approval remain pending.
 
-Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and independent hardcore mode, a release switch, silhouette outlines and collected-item menus; an inline RuneScape-style event XP tracker with a scrollable sidebar, million labels and exact tooltips and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, PostgreSQL schema with per-mode unique credits, default-off hardcore visibility and migration runner, Discord command definition, a single Docker application image, Compose, PR validation, and validated-main image publishing. The Discord gateway is implemented and starts only when BOT_ENABLED=true and its credentials are configured; command registration is a separate action.
+Implemented: a collection-log frontend with five tabs, page/item navigation, approved-credit and independent hardcore mode, a release switch, silhouette outlines and collected-item menus; an inline RuneScape-style event XP tracker with a scrollable sidebar, million labels and exact tooltips and an admin preview/apply/history interface; an admin queue with exact matching, corrections, approval/rejection/revocation and audit history; an Add item form and drag/keyboard/touch page ordering; validated HTTP adapters, explicit shared preview ledgers and frontend browser tests; npm workspaces, Fastify health/status endpoints, shared catalog/collection rules, PostgreSQL schema with per-mode unique credits, default-off hardcore visibility and migration runner, Discord command definition, a single Docker application image, Compose, complete local acceptance, and release-only image publishing. The Discord gateway is implemented and starts only when BOT_ENABLED=true and its credentials are configured; command registration is a separate action.
 
 Planned: reviewed catalog refreshes, final reference-approved pixel matching, Discord submission persistence, transactional review API, end-to-end hardcore claim persistence/review, Wise Old Man import persistence, production operational testing. No sample item is presented as a complete catalog; no submission is silently accepted.
 
 ## Workspace
 
-| Path                | Responsibility                                                |
-| ------------------- | ------------------------------------------------------------- |
-| `apps/web`          | Public collection log and admin UI; React + Vite              |
-| `apps/api`          | Public read API, future auth/review/submission API; Fastify   |
-| `apps/bot`          | Discord gateway adapter and `/cc-clog submit` contract        |
-| `packages/domain`   | Canonical items, collection projection, proof/date validation |
-| `packages/database` | PostgreSQL schema, checksummed migrations, integration tests  |
-| `infra`             | Web proxy and self-host deployment helper                     |
-| `.github/workflows` | PR checks, private GHCR publishing, opt-in home deployment    |
+| Path                | Responsibility                                                    |
+| ------------------- | ----------------------------------------------------------------- |
+| `apps/web`          | Public collection log and admin UI; React + Vite                  |
+| `apps/api`          | Public read API, future auth/review/submission API; Fastify       |
+| `apps/bot`          | Discord gateway adapter and `/cc-clog submit` contract            |
+| `packages/domain`   | Canonical items, collection projection, proof/date validation     |
+| `packages/database` | PostgreSQL schema, checksummed migrations, integration tests      |
+| `infra`             | Web proxy and self-host deployment helper                         |
+| `.github/workflows` | Manual/release checks, release GHCR publishing, opt-in deployment |
 
 ## Start locally
 
@@ -45,7 +45,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 
 Open `http://localhost:8088`. Compose imports the pinned full catalog after migrations. The default page loads 1,717 items from the real API, all initially uncollected. Host-run setups must also run `npm run catalog:import` after migrations. The local override builds images rather than pulling GHCR. The placeholder `IMAGE_TAG` in `.env` is sufficient for local builds; a real published SHA tag is required for production.
 
-For host-run development, see [environment setup](docs/environment.md). The PostgreSQL integration test requires `TEST_DATABASE_URL`; it is mandatory in GitHub CI and explicitly skipped when absent locally.
+Before pushing, run **`npm run test:all`** (or `node scripts/check-local.mjs`). With Node 24 and Docker running, this creates disposable Linux databases and runs all Node, browser, backup and production-container smoke checks locally. No GitHub credentials or host npm dependencies are needed. See [local testing and release-only CI](docs/local-testing.md) for logs, cleanup and faster focused checks. For host-run development, see [environment setup](docs/environment.md).
 
 ## Review the frontend without a database
 

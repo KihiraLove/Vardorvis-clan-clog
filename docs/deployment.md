@@ -27,35 +27,43 @@ unnecessarily fragile and is not supported.
 
 ## Image build and release
 
-GitHub CI validates workspaces, browser tests, a fresh PostgreSQL instance and
-Docker Compose smoke tests. A **successful push to main** publishes one
-`linux/amd64` + `linux/arm64` image:
+Development runs the complete automated suite with `npm run test:all`; see
+[local acceptance and release-only CI](local-testing.md). Pushes and PR updates
+do not run hosted CI or create packages. Manual **CI → Run workflow** remains
+available for an explicitly requested hosted check and never publishes.
 
-`ghcr.io/kihiralove/vardorvis-clan-clog-app:sha-<40-character-commit>`
+Publish a GitHub Release with a version tag such as `v1.2.3` or
+`v1.2.3-rc.1` pointing to a commit on `main`. Release CI verifies the tag/commit,
+runs the same local acceptance command, then publishes ONE
+`linux/amd64` + `linux/arm64` application image with three aliases:
 
-SHA-only images are development builds. The hourly **Clean up development
-images** workflow deletes versions older than 24 hours (measured from the later
-of creation/update), including old `web`, `api` and `bot` images. GitHub scheduling
-can delay deletion past that threshold. Only images tagged exactly `release` or
-with a `release-` prefix are retained indefinitely. Their untagged architecture
-and provenance manifests are retained too, as are dependencies of recent builds.
-The home deployment workflow adds `release-<full SHA>` before deployment, keeping
-the existing `sha-<full SHA>` pull reference usable for deployment and rollback.
-Promote a development build within 24 hours or rebuild it before deployment.
-Release tags must not be removed while that release is needed.
+- `ghcr.io/kihiralove/vardorvis-clan-clog-app:v1.2.3`
+- `ghcr.io/kihiralove/vardorvis-clan-clog-app:release-<40-character-commit>`
+- `ghcr.io/kihiralove/vardorvis-clan-clog-app:sha-<40-character-commit>`
 
-Cleanup runs immediately when its workflow/script changes on main. Manual runs
-default to a dry run; turn off `dry_run` to apply deletion. The workflow needs
-package admin access through the repository's `GITHUB_TOKEN`; packages must be
-linked to this repository. It stops on manifest/API failures and preserves
-dependencies shared with retained images. Publishing, promotion and cleanup
-share one concurrency group. Do not retag packages externally during cleanup.
+A tag push or draft release does not publish. The release workflow needs available
+GitHub Actions budget; ordinary local development does not. Successful runs
+upload no test artifacts; failure evidence expires after one day. Image build
+records and GitHub-hosted build caches are not uploaded.
 
-Pull requests do **not** deploy or publish images. The home deployment workflow
-uses successful main CI provenance and a manual dispatch. It calls
-`/srv/vardorvis-clan-clog/deploy.sh` on a labelled self-hosted runner, backs up
-existing DB and icon data, and only records a release tag after Compose health
-checks pass. Image rollback cannot reverse an incompatible schema automatically.
+**Clean up development images** is manual, with dry-run enabled by default.
+It can remove old development versions (including retired `web`, `api` and
+`bot` images) after 24 hours from the later creation/update timestamp.
+Images tagged exactly `release` or with a `release-` prefix and their
+architecture/provenance dependencies are retained indefinitely, as are recent
+build dependencies. Every newly published release gets its retention alias
+during publishing. Do not remove release aliases while needed for rollback.
+
+Cleanup requires package admin access and stops on manifest/API failures.
+Publishing and cleanup share a concurrency group. Review the dry-run plan
+before applying deletion; the policy change does not itself delete old storage.
+
+Home deployment remains a separate manual dispatch with a full commit SHA.
+It requires a successful **release-triggered** CI run, which includes image
+publishing, and no longer promotes or creates package tags. It calls
+`/srv/vardorvis-clan-clog/deploy.sh` on the labelled self-hosted runner, backs up
+existing data and records the release only after Compose health checks pass.
+Image rollback cannot reverse an incompatible schema automatically.
 
 Copy reviewed `compose.yaml`, `compose.traefik.yaml`, `.env.example`
 and the `infra/` scripts into your server directory. Do not copy test secrets

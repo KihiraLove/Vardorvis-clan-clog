@@ -16,6 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
+    "test:all": "node scripts/check-local.mjs",
+    "test:tools": "node --test scripts/*.test.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "validate": "npm run format:check && npm run lint && npm run build && npm run catalog:check && npm run typecheck && npm test && npm run check:docs",
     "db:migrate": "npm run migrate -w @clog/database",
