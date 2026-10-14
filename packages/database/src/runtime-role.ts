@@ -16,6 +16,7 @@ const mutable = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 
 // New objects require a reviewed policy. There is no fallback grant category.
 const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
+  asset_retirements: read,
   admin_sessions: replace,
   audit_events: append,
   auth_rate_limits: mutable,

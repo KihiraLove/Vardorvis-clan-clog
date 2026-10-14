@@ -25,6 +25,11 @@ services:
     environment:
       DATABASE_URL: postgresql://clog:${POSTGRES_PASSWORD}@db:5432/clog
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Generate a distinct runtime database password}
+      ICON_STORAGE_PATH: /data/catalog-icons
+      PROOF_STORAGE_PATH: /data/submission-images
+    volumes:
+      - catalog-icons:/data/catalog-icons
+      - submission-images:/data/submission-images
     depends_on:
       db: { condition: service_healthy }
     security_opt: ['no-new-privileges:true']

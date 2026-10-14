@@ -12,7 +12,7 @@ for (const [privileges, names] of [
   ['', 'schema_migrations catalog_taxonomy_updates'],
   [
     'SELECT',
-    'catalog_versions item_aliases collection_credits item_collection_state',
+    'asset_retirements catalog_versions item_aliases collection_credits item_collection_state',
   ],
   [
     'SELECT INSERT',

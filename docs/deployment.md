@@ -142,7 +142,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: contiguous 001_baseline.sql through 015_review_notes.sql
+# Expected: contiguous 001_baseline.sql through 016_asset_maintenance.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose
@@ -200,6 +200,15 @@ Do not start the runtime service while skipping a failed bootstrap. A populated
 unknown/reordered/partial ledgers, and advisory-lock timeouts run against
 disposable PostgreSQL in CI. Isolated restore rehearsal is tracked in
 [#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
+
+## Abandoned upload maintenance
+
+Use the bounded, dry-run-first [asset maintenance command](asset-maintenance.md)
+to collect abandoned uploads from the shared icon/proof volumes. Migration 016
+guards against late commits; historical references and the clan-key encryption
+root are retained. The command uses the owner-credentialed `migrate` service,
+whose volume mounts now match the application. Coordinate it with backups and
+deployment using `.deploy.lock`; no periodic GitHub job is required.
 
 ## Expired XP and competition preview maintenance
 

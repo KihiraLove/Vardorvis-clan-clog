@@ -27,7 +27,7 @@ jq -e '
 printf "\nStart and smoke test\n"
 docker compose up -d --wait --wait-timeout 120
 # Fresh install applies the immutable baseline and forward-only upgrades.
-test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql,014_wom_competitions.sql,015_review_notes.sql"
+test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql,014_wom_competitions.sql,015_review_notes.sql,016_asset_maintenance.sql"
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
 curl --fail http://app:8080/api/v1/status
 curl --fail --output /tmp/catalog.json http://app:8080/api/v1/catalog
@@ -122,6 +122,14 @@ test -f /tmp/catalog-backup/COMPLETE
 (cd /tmp/catalog-backup && sha256sum --check SHA256SUMS)
 tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
 tar -tzf /tmp/catalog-backup/screenshots.tar.gz | grep -Fx './.clan-api-key.secret'
+
+printf "\nBounded asset maintenance preserves evidence and resumes safely\n"
+docker compose exec -T -e ASSET_SMOKE_DISPOSABLE=true app node --input-type=module - seed < scripts/asset-maintenance-smoke.mjs
+docker compose run --rm --no-deps -T migrate node packages/database/dist/asset-maintenance.js --dry-run > /tmp/asset-inspect.json
+jq -e '.mode=="dry-run" and .eligible>=2 and .removed==0 and .errors==0' /tmp/asset-inspect.json
+docker compose run --rm --no-deps -T migrate node packages/database/dist/asset-maintenance.js --apply > /tmp/asset-applied.json
+jq -e '.mode=="apply" and .removed>=2 and .referenced>=1 and .errors==0' /tmp/asset-applied.json
+docker compose exec -T -e ASSET_SMOKE_DISPOSABLE=true app node --input-type=module - verify < scripts/asset-maintenance-smoke.mjs
 
 printf "\nRestart PostgreSQL and verify API recovers without a process restart\n"
 app_id="$(docker compose ps -q app)"
