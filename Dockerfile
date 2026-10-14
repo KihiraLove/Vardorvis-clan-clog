@@ -32,7 +32,10 @@ CMD ["bash", "scripts/check-container.sh"]
 
 FROM dependencies AS build
 COPY . .
+ARG RELEASE_REVISION=working-tree
+ARG RELEASE_EVIDENCE=local-acceptance
 RUN npm run build && npm run catalog:check
+RUN RELEASE_REVISION="$RELEASE_REVISION" RELEASE_EVIDENCE="$RELEASE_EVIDENCE" node scripts/release-bundle.mjs /opt/clog-release
 
 # Preserve workspace links while stripping build/test dependencies from Node service images.
 FROM build AS production-dependencies
@@ -60,6 +63,10 @@ USER node
 
 # Web proxy, API and optional bot use one deployment image.
 FROM service-base AS app
+ARG RELEASE_REVISION=working-tree
+ARG RELEASE_EVIDENCE=local-acceptance
+LABEL org.opencontainers.image.revision="$RELEASE_REVISION" io.clog.release-evidence="$RELEASE_EVIDENCE"
+COPY --from=build /opt/clog-release /opt/clog-release
 USER root
 RUN apt-get update \
   && apt-get install -y --no-install-recommends nginx-light \

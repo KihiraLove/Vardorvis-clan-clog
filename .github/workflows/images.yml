@@ -54,6 +54,9 @@ jobs:
           context: .
           file: Dockerfile
           target: app
+          build-args: |
+            RELEASE_REVISION=${{ inputs.commit }}
+            RELEASE_EVIDENCE=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |

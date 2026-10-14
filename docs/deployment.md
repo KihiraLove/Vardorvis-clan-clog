@@ -63,15 +63,17 @@ before applying deletion; the policy change does not itself delete old storage.
 Home deployment remains a separate manual dispatch with a full commit SHA.
 It requires a successful **release-triggered** CI run, which includes image
 publishing, and no longer promotes or creates package tags. It calls
-`/srv/vardorvis-clan-clog/deploy.sh` on the labelled self-hosted runner, backs up
-existing data and records the release only after Compose health checks pass.
-Image rollback cannot reverse an incompatible schema automatically.
+`/srv/vardorvis-clan-clog/deploy.sh` on the labelled self-hosted runner after
+verifying its reviewed checksum. The launcher resolves the image digest and
+extracts its checksummed infrastructure bundle; the versioned helper backs up
+existing data and records image/infrastructure/schema evidence after health
+checks pass. See [versioned deployment and isolated recovery](release-recovery.md).
 
-Copy reviewed `compose.yaml`, `compose.traefik.yaml`, `.env.example`
-and the `infra/` scripts into your server directory. Do not copy test secrets
-to production. Create `.env` with `chmod 600` and set unique independently
+Install the reviewed launcher and its protected checksum as described in that
+guide. Release Compose/helper files then come from the image rather than a mutable
+host checkout. Do not copy test secrets to production. Create `.env` with `chmod 600` and set unique independently
 generated 32-byte hex `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`,
-`SESSION_SECRET` and the published `IMAGE_TAG`.
+`SESSION_SECRET` and retain the approved release SHA for the launcher.
 Use `openssl rand -hex 32` for the three independent hex secrets.
 
 ```bash
@@ -200,8 +202,9 @@ service is started; `depends_on: service_completed_successfully` gates startup.
 Do not start the runtime service while skipping a failed bootstrap. A populated
 013 → 014 regression, failure rollback, concurrent migration serialization,
 unknown/reordered/partial ledgers, and advisory-lock timeouts run against
-disposable PostgreSQL in CI. Isolated restore rehearsal is tracked in
-[#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
+disposable PostgreSQL locally and in release CI. The complete
+[isolated recovery job](release-recovery.md) adds database/filesystem restore,
+credential rotation, migration failure and compatible rollback evidence.
 
 ## Ended competition and schedule archival
 
@@ -309,7 +312,8 @@ Check the marker and `(cd BACKUP_DIR && sha256sum --check SHA256SUMS)`
 before copying the backup to encrypted off-host storage. Restore all three
 captures together, preserve file ownership and the encryption root, and
 rehearse an isolated restore before production approval. The automated
-end-to-end recovery drill remains tracked separately in [#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
+end-to-end recovery drill and versioned backup metadata are documented in the
+[recovery guide](release-recovery.md), implementing #92 and #93.
 
 Migration `004_runelite_submissions.sql` adds the admin-editable clan name,
 private screenshot metadata and RuneLite intake receipts. Preserve the new

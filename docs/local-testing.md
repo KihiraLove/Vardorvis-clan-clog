@@ -67,6 +67,15 @@ integration tests if `TEST_DATABASE_URL` is absent.
 
 ## GitHub usage policy
 
+Production smoke also runs the [complete isolated recovery job](release-recovery.md):
+real coordinated backup, fresh database and file-volume restore, complete state
+fingerprints, restored logins/assets/private proof/clan-key decryption, rejected
+corrupt backups and namespace reuse, versioned deployment/schema failures,
+credential rotation, compatible rollback and process-crash recovery. Sanitized
+scenario/version/inventory evidence is retained in the run's `recovery/` directory;
+clone secrets, raw dumps and private filesystem contents are excluded. Cleanup is
+limited to the drill's labelled `clog-restore-*` namespace and temporary image tags.
+
 - Pushes and PR updates run no hosted CI. Use local acceptance for development.
 - **CI → Run workflow** explicitly runs the same full command on GitHub, without
   publishing. Use it only when a hosted confirmation is worth the budget.

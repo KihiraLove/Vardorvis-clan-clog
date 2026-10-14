@@ -126,5 +126,22 @@ mv "$backup_dir/database.dump.tmp" "$backup_dir/database.dump"
 mv "$backup_dir/icons.tar.gz.tmp" "$backup_dir/icons.tar.gz"
 mv "$backup_dir/screenshots.tar.gz.tmp" "$backup_dir/screenshots.tar.gz"
 (cd "$backup_dir" && sha256sum database.dump icons.tar.gz screenshots.tar.gz > SHA256SUMS.tmp && sha256sum --check SHA256SUMS.tmp > /dev/null && mv SHA256SUMS.tmp SHA256SUMS)
+if [[ -n "${CLOG_RELEASE_DIR:-}" ]]; then
+  # A versioned backup binds actual containers, schema and installed helper bytes.
+  [[ -f .current-release.json && ! -L "$CLOG_RELEASE_DIR" ]] || exit 1
+  (cd "$CLOG_RELEASE_DIR" && sha256sum --check SHA256SUMS >/dev/null)
+  [[ "$(jq -er .bundleChecksum .current-release.json)" == "$(sha256sum "$CLOG_RELEASE_DIR/manifest.json" | cut -d' ' -f1)" ]] || { echo 'Backup infrastructure/state mismatch' >&2; exit 1; }
+  app_id="$(docker compose ps --all -q app)"
+  db_id="$(docker compose ps -q db)"
+  actual_image="$(docker inspect --format '{{.Image}}' "$app_id")"
+  expected_image="$(docker image inspect --format '{{.Id}}' "$(jq -er .image .current-release.json)")"
+  [[ "$actual_image" == "$expected_image" ]] || { echo 'Backup image/state mismatch' >&2; exit 1; }
+  source "$CLOG_RELEASE_DIR/infra/release-compose.sh"
+  db_image="$(resolved_image "$(docker inspect --format '{{.Image}}' "$db_id")")"
+  docker compose run --rm --no-deps -T migrate node packages/database/dist/release-state.js --exact > "$backup_dir/schema.json"
+  cp -a "$CLOG_RELEASE_DIR" "$backup_dir/infrastructure"
+  jq --arg imageId "$actual_image" --arg dbImage "$db_image" --slurpfile schema "$backup_dir/schema.json" '. + {imageId:$imageId,dbImage:$dbImage,schema:$schema[0]}' .current-release.json > "$backup_dir/release.json"
+  (cd "$backup_dir" && sha256sum schema.json release.json > META-SHA256SUMS && sha256sum --check META-SHA256SUMS >/dev/null)
+fi
 if [[ -f .current-release ]]; then cp .current-release "$backup_dir/release.txt"; fi
 # COMPLETE is written by finish *after* restart succeeds.

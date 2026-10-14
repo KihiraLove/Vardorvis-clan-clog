@@ -174,3 +174,6 @@ docker compose run --rm --no-deps -T -e AVAILABILITY_SMOKE_DISPOSABLE=true -e BO
   -e BOT_API_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   -e DISCORD_GUILD_ID=234567890123456789 -e DISCORD_BOT_TOKEN=local-gateway-fixture \
   app node --input-type=module < scripts/availability-smoke.mjs
+
+printf "\nComplete isolated restore and versioned deployment recovery\n"
+node scripts/recovery-drill.mjs

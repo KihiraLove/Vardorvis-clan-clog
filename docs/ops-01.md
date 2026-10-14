@@ -118,9 +118,10 @@ secrets from logs, source control, CI artifacts and command history.
 - Guild/endpoint rate budgets and WOM import throttling, with safe
   per-source error behavior.
 - Production hostname/TLS, ARM/AMD64 host, session/cookie and restart drills.
-- Coordinated isolated recovery test including XP/audit tables and durable
-  uploaded icon assets. The existing backup script includes the whole DB
-  and icon volume; restoring and verifying them is a separate gate.
+- The [automated isolated recovery job](release-recovery.md) now restores the
+  complete database, uploaded icons/logos, private screenshots and encryption root,
+  and checks state, role grants, credentials, schema failure and compatible rollback.
+  Off-host transport, production cutover and actual host recovery remain separate gates.
 
 Do not close #11 solely from CI; Docker smoke tests cover container security
 and grants, not a running home-host deployment.

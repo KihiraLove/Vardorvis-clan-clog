@@ -179,7 +179,16 @@ export async function main(args = process.argv.slice(2)) {
       '.',
     ]);
     if (interrupted) throw new Error('Interrupted');
-    await docker(['build', '--target', 'app', '--tag', config.appImage, '.']);
+    await docker([
+      'build',
+      '--target',
+      'app',
+      '--build-arg',
+      `RELEASE_REVISION=${revision}`,
+      '--tag',
+      config.appImage,
+      '.',
+    ]);
     if (interrupted) throw new Error('Interrupted');
     await docker([
       'network',

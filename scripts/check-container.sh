@@ -15,7 +15,7 @@ run_gate() {
   "$@" 2>&1 | tee ".data/local-checks/$gate.log"
 }
 run_gate workflows actionlint -config-file .github/actionlint.yaml .github/workflows/*.yml
-run_gate supervisor shellcheck infra/start-app.sh
+run_gate supervisor shellcheck -x infra/*.sh
 run_gate tools npm run test:tools
 run_gate validate npm run validate
 # A missing TEST_DATABASE_URL must never silently turn the full gate green.
