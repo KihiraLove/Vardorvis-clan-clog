@@ -17,7 +17,7 @@ import {
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const maxEvents = 2000;
-function requireCapacity(count: number, existing: boolean) {
+export function requireXpCapacity(count: number, existing: boolean) {
   if (!existing && count >= maxEvents)
     throw new ApiError(
       409,
@@ -118,23 +118,38 @@ export class PgXpStore implements XpStore {
       const revision = await this.state(client);
       const rows = await this.events(client);
       const totals = sumTotals(rows.map(event));
-      const metadata = (
+      const currentMetadata = (
         await client.query<{
           id: number;
           title: string;
           sourceUrl: string;
           skills: XpEvent['skills'];
         }>(
-          'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills FROM wom_competitions WHERE kind=\'SKILL\' ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
+          'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills FROM wom_competitions WHERE kind=\'SKILL\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
         )
       ).rows;
-      if (metadata.length > maxEvents)
+      if (currentMetadata.length > maxEvents)
         throw new ApiError(503, 'XP event limit exceeded.');
+      // Archived contributions stay in all-time totals and event browsing. Both
+      // branches are independently bounded; archived metadata without XP is paged separately.
+      const archivedMetadata = (
+        await client.query<{
+          id: number;
+          title: string;
+          sourceUrl: string;
+          skills: XpEvent['skills'];
+        }>(
+          'SELECT c.competition_id::float8 AS id,c.title,c.source_url AS "sourceUrl",c.skills FROM (SELECT competition_id FROM xp_events ORDER BY competition_id LIMIT 2001) e CROSS JOIN LATERAL (SELECT competition_id,title,source_url,skills,ends_at FROM wom_competitions WHERE competition_id=e.competition_id AND archived_at IS NOT NULL LIMIT 1) c ORDER BY c.ends_at DESC,c.competition_id DESC LIMIT 2001',
+        )
+      ).rows;
+      if (archivedMetadata.length > maxEvents)
+        throw new ApiError(503, 'XP event limit exceeded.');
+      const metadata = [...currentMetadata, ...archivedMetadata];
       const totalPlayers = new Map<number, PodiumPlayer>();
       // Name snapshots follow the latest successful import; stable ID breaks timestamp ties.
       const imported = (
         await client.query<{ competition_id: string }>(
-          'SELECT competition_id::text FROM xp_events ORDER BY imported_at,competition_id',
+          'SELECT competition_id::text FROM xp_events ORDER BY imported_at,competition_id LIMIT 2001',
         )
       ).rows;
       for (const item of imported) {
@@ -195,7 +210,7 @@ export class PgXpStore implements XpStore {
       const prior =
         events.find((x) => Number(x.competition_id) === snapshot.event.id) ??
         null;
-      requireCapacity(events.length, !!prior);
+      requireXpCapacity(events.length, !!prior);
       if (
         prior &&
         JSON.stringify(prior.skills) !== JSON.stringify(snapshot.event.skills)
@@ -331,7 +346,7 @@ export class PgXpStore implements XpStore {
         all.find((x) => Number(x.competition_id) === row.snapshot.event.id) ??
         null;
       // The state lock serializes consumption of the final slot; replays return above.
-      requireCapacity(all.length, !!prior);
+      requireXpCapacity(all.length, !!prior);
       const changes = diffTotals(
         sumTotals(all.map(event)),
         prior ? event(prior) : null,
@@ -461,11 +476,20 @@ async function requireFinishedSkill(
   snapshot: XpSnapshot,
 ) {
   const row = (
-    await client.query<{ kind: string; skills: XpEvent['skills'] }>(
-      'SELECT kind,skills FROM wom_competitions WHERE competition_id=$1',
+    await client.query<{
+      kind: string;
+      skills: XpEvent['skills'];
+      archived_at: Date | null;
+    }>(
+      'SELECT kind,skills,archived_at FROM wom_competitions WHERE competition_id=$1',
       [snapshot.event.id],
     )
   ).rows[0];
+  if (row?.archived_at)
+    throw new ApiError(
+      409,
+      'Competition is archived. Restore it before importing again.',
+    );
   if (row && row.kind !== 'SKILL')
     throw new ApiError(
       422,
@@ -479,10 +503,10 @@ async function requireFinishedSkill(
       422,
       'WOM competition skill scope changed; manual reconciliation is required.',
     );
-  requireCapacity(
+  requireXpCapacity(
     (
       await client.query<{ count: number }>(
-        'SELECT count(*)::int AS count FROM wom_competitions',
+        'SELECT count(*)::int AS count FROM (SELECT 1 FROM wom_competitions WHERE archived_at IS NULL LIMIT 2000) slots',
       )
     ).rows[0]!.count,
     !!row,

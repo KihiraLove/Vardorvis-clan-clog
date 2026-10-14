@@ -52,7 +52,7 @@ export async function requireScheduledItem(
       await client.query(
         'SELECT 1 FROM page_items pi JOIN pages p ON p.id=pi.page_id AND p.active ' +
           'JOIN collection_log_schedule_pages sp ON sp.page_id=p.id JOIN collection_log_schedules s ON s.id=sp.schedule_id ' +
-          'WHERE pi.item_id=$1 AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at LIMIT 1',
+          'WHERE pi.item_id=$1 AND s.archived_at IS NULL AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at LIMIT 1',
         [itemId],
       )
     ).rowCount === 1;
@@ -76,7 +76,7 @@ export async function readState(
       pageIds: string[];
     }>(
       'SELECT s.id::text,s.title,s.starts_at AS "startsAt",s.ends_at AS "endsAt",array_agg(p.page_id ORDER BY p.page_id) AS "pageIds" ' +
-        'FROM collection_log_schedules s JOIN collection_log_schedule_pages p ON p.schedule_id=s.id GROUP BY s.id ORDER BY s.starts_at,s.id LIMIT 501',
+        'FROM collection_log_schedules s JOIN collection_log_schedule_pages p ON p.schedule_id=s.id WHERE s.archived_at IS NULL GROUP BY s.id ORDER BY s.starts_at,s.id LIMIT 501',
     )
   ).rows;
   if (schedules.length > 500)

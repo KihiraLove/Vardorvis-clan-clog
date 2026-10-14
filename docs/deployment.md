@@ -142,7 +142,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: contiguous 001_baseline.sql through 018_xp_history_pagination.sql
+# Expected: contiguous 001_baseline.sql through 019_lifecycle_archive.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose
@@ -200,6 +200,14 @@ Do not start the runtime service while skipping a failed bootstrap. A populated
 unknown/reordered/partial ledgers, and advisory-lock timeouts run against
 disposable PostgreSQL in CI. Isolated restore rehearsal is tracked in
 [#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93).
+
+## Ended competition and schedule archival
+
+Use the owner-operated [lifecycle command](lifecycle-archive.md) to archive one
+selected ended competition or schedule and recover a current capacity slot.
+Dry-run is the default; actor/reason and explicit `--apply` are required for
+changes. Original results, XP contributions, receipts and linked staff windows
+are retained. Archiving never frees an all-time XP slot.
 
 ## Abandoned upload maintenance
 

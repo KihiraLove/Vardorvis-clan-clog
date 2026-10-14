@@ -203,7 +203,7 @@ export function CompetitionImport({
                 : preview.action === 'preserve-schedule'
                   ? 'Preserve the existing linked schedule.'
                   : preview.action === 'preserve-deletion'
-                    ? 'Preserve the deleted schedule.'
+                    ? 'Keep the linked window closed.'
                     : preview.lifecycle === 'running'
                       ? 'Create an opening window starting immediately when Apply commits, ending at the WOM end time.'
                       : 'Create an opening window for the WOM start and end times.'}

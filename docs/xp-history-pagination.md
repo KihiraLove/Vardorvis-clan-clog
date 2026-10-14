@@ -78,10 +78,10 @@ after expiry or owner maintenance deletes a preview and after history exceeds
 2,000 rows. Exact original outcomes/revisions remain replayable across process
 restarts. Existing append-only grants remain enforced.
 
-This change removes the **receipt-count** cap. The separate 2,000 distinct
-competition/event capacity and bounded public tracker projection remain in place;
-competition archival is tracked in
-[#83](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/83).
+This change removes the **receipt-count** cap. The separate capacity contract is
+2,000 current competition identities and 2,000 all-time published XP contributions.
+[Competition and schedule archival](lifecycle-archive.md) frees current identity
+slots while retaining every XP contribution, receipt and historical result.
 Each page statement has a five-second timeout. Two data SELECTs return at most
 22 rows in total: one revision plus 21 receipts for a 20-row page. Authorization
 and transaction commands are additional fixed work. PostgreSQL chooses its plan,

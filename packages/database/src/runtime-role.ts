@@ -41,6 +41,8 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   game_item_ids: append,
   item_aliases: read,
   items: edit,
+  lifecycle_archive_audit: read,
+  lifecycle_state: update,
   manual_submission_requests: append,
   oauth_states: replace,
   page_items: replace,

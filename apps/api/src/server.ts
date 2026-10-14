@@ -18,6 +18,7 @@ import { PgRuneLiteSettingsStore } from './runelite-settings.js';
 import { PgSchedulingStore } from './scheduling-store.js';
 import { PgCompetitionStore } from './competition-store.js';
 import { PgReviewStore } from './review-store.js';
+import { PgLifecycleStore } from '@clog/database/dist/lifecycle.js';
 const config = readConfig();
 if ((config.auth || config.bot) && !process.env.DATABASE_URL)
   throw new Error(
@@ -78,6 +79,7 @@ const app = createApp(
     runeLiteSettings: pool ? new PgRuneLiteSettingsStore(pool) : undefined,
     scheduling: pool ? new PgSchedulingStore(pool) : undefined,
     competitions: pool ? new PgCompetitionStore(pool) : undefined,
+    lifecycle: pool ? new PgLifecycleStore(pool) : undefined,
     xp: pool ? new PgXpStore(pool) : undefined,
     review: pool && store ? new PgReviewStore(pool, store) : undefined,
     ...config,

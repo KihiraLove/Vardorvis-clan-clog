@@ -12,7 +12,7 @@ for (const [privileges, names] of [
   ['', 'schema_migrations catalog_taxonomy_updates'],
   [
     'SELECT',
-    'asset_retirements catalog_versions item_aliases collection_credits item_collection_state',
+    'asset_retirements lifecycle_archive_audit catalog_versions item_aliases collection_credits item_collection_state',
   ],
   [
     'SELECT INSERT',
@@ -20,7 +20,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT UPDATE',
-    'catalog_state clan_branding collection_scheduling review_state runelite_settings site_settings xp_state',
+    'catalog_state clan_branding collection_scheduling lifecycle_state review_state runelite_settings site_settings xp_state',
   ],
   [
     'SELECT INSERT UPDATE',

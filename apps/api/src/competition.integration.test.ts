@@ -126,7 +126,7 @@ test(
       const files = (await readdir(migrations))
         .filter((f) => f.endsWith('.sql'))
         .sort();
-      for (const file of files.filter((f) => !f.startsWith('014')))
+      for (const file of files.filter((f) => f < '014'))
         await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       const legacy = await snapshot(
         99,
@@ -166,6 +166,8 @@ test(
       await pool.query(
         await readFile(new URL('014_wom_competitions.sql', migrations), 'utf8'),
       );
+      for (const file of files.filter((f) => f > '014_wom_competitions.sql'))
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       assert.equal(
         (await pool.query('SELECT count(*)::int AS count FROM xp_previews'))
           .rows[0].count,

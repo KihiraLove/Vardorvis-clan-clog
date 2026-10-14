@@ -27,7 +27,7 @@ jq -e '
 printf "\nStart and smoke test\n"
 docker compose up -d --wait --wait-timeout 120
 # Fresh install applies the immutable baseline and forward-only upgrades.
-test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql,014_wom_competitions.sql,015_review_notes.sql,016_asset_maintenance.sql,017_review_pagination.sql,018_xp_history_pagination.sql"
+test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql,014_wom_competitions.sql,015_review_notes.sql,016_asset_maintenance.sql,017_review_pagination.sql,018_xp_history_pagination.sql,019_lifecycle_archive.sql"
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
 curl --fail http://app:8080/api/v1/status
 curl --fail --output /tmp/catalog.json http://app:8080/api/v1/catalog
@@ -130,6 +130,26 @@ jq -e '.mode=="dry-run" and .eligible>=2 and .removed==0 and .errors==0' /tmp/as
 docker compose run --rm --no-deps -T migrate node packages/database/dist/asset-maintenance.js --apply > /tmp/asset-applied.json
 jq -e '.mode=="apply" and .removed>=2 and .referenced>=1 and .errors==0' /tmp/asset-applied.json
 docker compose exec -T -e ASSET_SMOKE_DISPOSABLE=true app node --input-type=module - verify < scripts/asset-maintenance-smoke.mjs
+
+printf "\nExplicit ended-record archival retains results and staff schedules\n"
+docker compose exec -T -e LIFECYCLE_SMOKE_DISPOSABLE=true app node --input-type=module - seed < scripts/lifecycle-smoke.mjs > /tmp/lifecycle-seed.json
+schedule_id="$(jq -r '.scheduleId' /tmp/lifecycle-seed.json)"
+docker compose run --rm --no-deps -T migrate node packages/database/dist/lifecycle.js --resource=competitions --action=archive --id=900004 --actor="Smoke operator" --reason="Retain ended XP" > /tmp/lifecycle-dry.json
+jq -e '.mode=="dry-run" and .outcome=="eligible"' /tmp/lifecycle-dry.json
+for competition_id in 900004 900005; do
+  docker compose run --rm --no-deps -T migrate node packages/database/dist/lifecycle.js --resource=competitions --action=archive --id="$competition_id" --actor="Smoke operator" --reason="Retain ended competition" --apply > /tmp/lifecycle-apply.json
+  jq -e '.mode=="apply" and .outcome=="applied"' /tmp/lifecycle-apply.json
+done
+docker compose run --rm --no-deps -T migrate node packages/database/dist/lifecycle.js --resource=schedules --action=archive --id="$schedule_id" --actor="Smoke operator" --reason="Retain ended schedule" --apply > /tmp/lifecycle-schedule.json
+jq -e '.outcome=="applied"' /tmp/lifecycle-schedule.json
+docker compose run --rm --no-deps -T migrate node packages/database/dist/lifecycle.js --resource=competitions --view=archived --limit=1 > /tmp/lifecycle-page.json
+jq -e '(.records | length)==1 and .nextCursor!=null' /tmp/lifecycle-page.json
+docker compose run --rm --no-deps -T migrate node packages/database/dist/lifecycle.js --resource=competitions --action=detail --id=900004 > /tmp/lifecycle-detail.json
+jq -e '.record.archived_at!=null and .xp.source_snapshot.participants!=null' /tmp/lifecycle-detail.json
+docker compose exec -T -e LIFECYCLE_SMOKE_DISPOSABLE=true app node --input-type=module - verify < scripts/lifecycle-smoke.mjs
+docker compose run --rm --no-deps -T migrate node packages/database/dist/lifecycle.js --resource=competitions --action=restore --id=900005 --actor="Smoke operator" --reason="Inspect retained activity" --apply > /tmp/lifecycle-restore.json
+jq -e '.outcome=="applied"' /tmp/lifecycle-restore.json
+docker compose exec -T -e LIFECYCLE_SMOKE_DISPOSABLE=true app node --input-type=module - restored < scripts/lifecycle-smoke.mjs
 
 printf "\nRestart PostgreSQL and verify API recovers without a process restart\n"
 app_id="$(docker compose ps -q app)"

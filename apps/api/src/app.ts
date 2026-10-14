@@ -3,6 +3,7 @@ import { proofRoutes } from './proof-routes.js';
 import { runeLiteSettingsRoutes } from './runelite-settings-routes.js';
 import { schedulingRoutes } from './scheduling-routes.js';
 import { competitionRoutes } from './competition-routes.js';
+import { lifecycleRoutes } from './lifecycle-routes.js';
 import { brandingRoutes } from './branding-routes.js';
 import type { BrandingStorage } from './branding-storage.js';
 import type { BrandingStore } from './branding-store.js';
@@ -23,6 +24,8 @@ import { fetchWomCompetition } from './wom.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  lifecycle?:
+    import('@clog/database/dist/lifecycle.js').PgLifecycleStore | undefined;
   competitions?:
     import('./competition-store.js').PgCompetitionStore | undefined;
   fetchCompetition?: typeof import('./competition-wom.js').fetchCompetition;
@@ -205,6 +208,7 @@ export function createApp(
   brandingRoutes(app, options.branding, options.logos, requireAdmin);
   runeLiteSettingsRoutes(app, options.runeLiteSettings, requireAdmin);
   schedulingRoutes(app, options.scheduling, requireAdmin);
+  lifecycleRoutes(app, options.lifecycle, requireAdmin);
   competitionRoutes(
     app,
     options.competitions,

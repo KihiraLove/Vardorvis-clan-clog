@@ -14,12 +14,15 @@ import type {
   CompetitionReceipt,
   CompetitionSnapshot,
 } from './competition-types.js';
+import { requireXpCapacity } from './xp-store.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 type Stored = WomCompetition & {
   skills: string[];
   scheduleId: string | null;
   scheduleCreated: boolean;
+  scheduleArchived: boolean;
   sourceHash: string | null;
+  archivedAt: Date | null;
   resultsImportedAt: Date | null;
 };
 async function stored(
@@ -28,7 +31,7 @@ async function stored(
 ): Promise<Stored | undefined> {
   const row = (
     await client.query<Stored & { startsAt: Date; endsAt: Date }>(
-      'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,skills,starts_at AS "startsAt",ends_at AS "endsAt",schedule_id AS "scheduleId",schedule_created AS "scheduleCreated",source_hash AS "sourceHash",results_imported_at AS "resultsImportedAt" FROM wom_competitions WHERE competition_id=$1',
+      'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,skills,starts_at AS "startsAt",ends_at AS "endsAt",schedule_id AS "scheduleId",schedule_created AS "scheduleCreated",(SELECT archived_at IS NOT NULL FROM collection_log_schedules WHERE id=wom_competitions.schedule_id) IS TRUE AS "scheduleArchived",source_hash AS "sourceHash",archived_at AS "archivedAt",results_imported_at AS "resultsImportedAt" FROM wom_competitions WHERE competition_id=$1',
       [id],
     )
   ).rows[0];
@@ -45,6 +48,11 @@ function requireScope(
   snapshot: CompetitionSnapshot,
 ) {
   if (!prior) return;
+  if (prior.archivedAt)
+    throw new ApiError(
+      409,
+      'Competition is archived. Restore it before importing again.',
+    );
   if (prior.kind !== snapshot.competition.kind)
     throw new ApiError(
       422,
@@ -65,11 +73,13 @@ function requireScope(
     );
 }
 async function xpEvents(client: pg.PoolClient): Promise<XpEvent[]> {
-  return (
+  const rows = (
     await client.query<XpEvent>(
-      'SELECT e.competition_id::float8 AS id,e.title,e.source_url AS "sourceUrl",e.skills,e.gains FROM xp_events e JOIN wom_competitions c USING(competition_id) WHERE c.kind=\'SKILL\' ORDER BY e.competition_id',
+      'SELECT e.competition_id::float8 AS id,e.title,e.source_url AS "sourceUrl",e.skills,e.gains FROM xp_events e JOIN wom_competitions c USING(competition_id) WHERE c.kind=\'SKILL\' ORDER BY e.competition_id LIMIT 2001',
     )
   ).rows;
+  if (rows.length > 2000) throw new ApiError(503, 'XP event limit exceeded.');
+  return rows;
 }
 export class PgCompetitionStore {
   constructor(private readonly pool: pg.Pool) {}
@@ -81,7 +91,7 @@ export class PgCompetitionStore {
   async activities() {
     const rows = (
       await this.pool.query<WomCompetition & { startsAt: Date; endsAt: Date }>(
-        'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,starts_at AS "startsAt",ends_at AS "endsAt" FROM wom_competitions WHERE kind=\'ACTIVITY\' ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
+        'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,starts_at AS "startsAt",ends_at AS "endsAt" FROM wom_competitions WHERE kind=\'ACTIVITY\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
       )
     ).rows;
     if (rows.length > 2000)
@@ -140,7 +150,7 @@ export class PgCompetitionStore {
         ).rows[0]!.version;
       const count = (
         await client.query<{ count: number }>(
-          'SELECT count(*)::int AS count FROM wom_competitions',
+          'SELECT count(*)::int AS count FROM (SELECT 1 FROM wom_competitions WHERE archived_at IS NULL LIMIT 2000) slots',
         )
       ).rows[0]!.count;
       if (!prior && count >= 2000)
@@ -180,6 +190,11 @@ export class PgCompetitionStore {
         !!linked,
       );
       const events = await xpEvents(client);
+      if (snapshot.results?.xp)
+        requireXpCapacity(
+          events.length,
+          events.some((e) => e.id === snapshot.competition.id),
+        );
       const changes = snapshot.results?.xp
         ? diffTotals(
             sumTotals(events),
@@ -202,7 +217,11 @@ export class PgCompetitionStore {
       );
       await client.query('COMMIT');
       const warnings: string[] = [];
-      if (skill && prior?.scheduleCreated)
+      if (prior?.scheduleArchived)
+        warnings.push(
+          'The linked staff schedule is archived and retained. This import will not restore or reopen it; manage its lifecycle separately.',
+        );
+      else if (skill && prior?.scheduleCreated)
         warnings.push(
           linked
             ? 'The previously linked staff schedule is preserved. This SKILL import will not edit or open pages; manage that schedule in Scheduling.'
@@ -220,7 +239,7 @@ export class PgCompetitionStore {
         warnings.push(
           'The existing linked schedule and staff edits will be preserved. Edit its window in Scheduling.',
         );
-      if (action === 'preserve-deletion')
+      if (action === 'preserve-deletion' && !prior?.scheduleArchived)
         warnings.push(
           'The linked schedule was deleted by staff. Importing again will preserve that deletion. Create a manual schedule to reopen pages.',
         );
@@ -387,7 +406,7 @@ export class PgCompetitionStore {
         !prior &&
         (
           await client.query<{ count: number }>(
-            'SELECT count(*)::int AS count FROM wom_competitions',
+            'SELECT count(*)::int AS count FROM (SELECT 1 FROM wom_competitions WHERE archived_at IS NULL LIMIT 2000) slots',
           )
         ).rows[0]!.count >= 2000
       )
@@ -456,6 +475,11 @@ export class PgCompetitionStore {
         !prior || prior.sourceHash !== sourceHash || createSchedule;
       const events = await xpEvents(client);
       const xp = snapshot.results?.xp;
+      if (xp)
+        requireXpCapacity(
+          events.length,
+          events.some((e) => e.id === c.id),
+        );
       const changes = xp
         ? diffTotals(
             sumTotals(events),
