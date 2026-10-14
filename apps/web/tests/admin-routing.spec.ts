@@ -23,7 +23,12 @@ async function routedAdmin(page: Page) {
     '/api/v1/admin/runelite-settings': await client.runeLiteSettings(signal),
     '/api/v1/admin/accounts': { accounts: await client.accounts(signal) },
     '/api/v1/xp/tracker': await new PreviewXpClient().tracker(signal),
-    '/api/v1/admin/xp/imports': { imports: [] },
+    '/api/v1/admin/xp/imports': {
+      imports: [],
+      revision: 'xp-history-1',
+      pageCursor: 'xp-first',
+      nextCursor: null,
+    },
     '/api/v1/competitions/activities': {
       serverNow: new Date().toISOString(),
       competitions: [],

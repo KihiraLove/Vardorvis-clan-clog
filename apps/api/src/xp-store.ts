@@ -24,6 +24,54 @@ function requireCapacity(count: number, existing: boolean) {
       'The XP tracker has reached its 2000-event capacity. Existing events can still be refreshed.',
     );
 }
+type HistoryKey = { at: string; id: string };
+const historyCursor = (
+  revision: string,
+  limit: number,
+  key: HistoryKey | null,
+) =>
+  Buffer.from(JSON.stringify({ revision, limit, key })).toString('base64url');
+function readHistoryCursor(
+  cursor: string | undefined,
+  revision: string,
+  limit: number,
+): HistoryKey | null {
+  if (cursor === undefined) return null;
+  const expired = () =>
+    new ApiError(
+      409,
+      'XP import history changed or cursor expired. Reload the first page.',
+    );
+  try {
+    if (!cursor || cursor.length > 1024 || !/^[A-Za-z0-9_-]+$/u.test(cursor))
+      throw expired();
+    const value = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as { revision?: unknown; limit?: unknown; key?: HistoryKey | null };
+    if (!value || value.revision !== revision || value.limit !== limit)
+      throw expired();
+    const key = value.key;
+    if (key === null) return null;
+    if (
+      !key ||
+      typeof key.at !== 'string' ||
+      key.at.startsWith('0000-') ||
+      typeof key.id !== 'string' ||
+      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/u.test(
+        key.at,
+      ) ||
+      !Number.isFinite(Date.parse(key.at)) ||
+      new Date(key.at).toISOString() !== key.at.slice(0, 23) + 'Z' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(
+        key.id,
+      )
+    )
+      throw expired();
+    return key;
+  } catch {
+    throw expired();
+  }
+}
 type Row = {
   competition_id: string;
   title: string;
@@ -343,33 +391,68 @@ export class PgXpStore implements XpStore {
       client.release();
     }
   }
-  async history() {
-    const rows = (
-      await this.pool.query<{
-        id: string;
-        competition_id: string;
-        title: string;
-        actor_name: string;
-        imported_at: Date;
-        outcome: 'applied' | 'unchanged';
-        changes: XpChange[];
-      }>(
-        'SELECT id::text,competition_id::text,title,actor_name,imported_at,outcome,changes FROM xp_import_history ORDER BY imported_at DESC,id DESC LIMIT 2001',
-      )
-    ).rows;
-    if (rows.length > 2000)
-      throw new ApiError(503, 'XP history requires pagination.');
-    return {
-      imports: rows.map((row) => ({
-        id: row.id,
-        competitionId: Number(row.competition_id),
-        title: row.title,
-        actorName: row.actor_name,
-        importedAt: row.imported_at.toISOString(),
-        outcome: row.outcome,
-        changes: row.changes,
-      })),
-    };
+  async history(cursor?: string, limit = 20) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 20)
+      throw new ApiError(400, 'Page size must be between 1 and 20.');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout = '5s'");
+      const state = (
+        await client.query<{ version: string }>(
+          'SELECT history_version::text AS version FROM xp_state WHERE singleton',
+        )
+      ).rows[0];
+      if (!state) throw new ApiError(503, 'XP history state unavailable.');
+      const revision = 'xp-history-' + state.version;
+      const key = readHistoryCursor(cursor, revision, limit);
+      const rows = (
+        await client.query<{
+          id: string;
+          competition_id: string;
+          title: string;
+          actor_name: string;
+          imported_at: Date;
+          pageTime: string;
+          outcome: 'applied' | 'unchanged';
+          changes: XpChange[];
+        }>(
+          'SELECT id::text,competition_id::text,title,actor_name,imported_at,outcome,changes,' +
+            'to_char(imported_at AT TIME ZONE \'UTC\',\'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\') AS "pageTime" ' +
+            'FROM xp_import_history ' +
+            (key
+              ? 'WHERE (imported_at,id) < ($2::timestamptz,$3::uuid) '
+              : '') +
+            'ORDER BY xp_import_history.imported_at DESC,xp_import_history.id DESC LIMIT $1',
+          key ? [limit + 1, key.at, key.id] : [limit + 1],
+        )
+      ).rows;
+      const page = rows.slice(0, limit),
+        last = page.at(-1);
+      await client.query('COMMIT');
+      return {
+        revision,
+        pageCursor: historyCursor(revision, limit, key),
+        nextCursor:
+          rows.length > limit && last
+            ? historyCursor(revision, limit, { at: last.pageTime, id: last.id })
+            : null,
+        imports: page.map((row) => ({
+          id: row.id,
+          competitionId: Number(row.competition_id),
+          title: row.title,
+          actorName: row.actor_name,
+          importedAt: row.imported_at.toISOString(),
+          outcome: row.outcome,
+          changes: row.changes,
+        })),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 

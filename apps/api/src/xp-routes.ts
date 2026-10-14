@@ -102,16 +102,26 @@ export function xpAdminRoutes(
       );
     },
   );
-  app.get(
+  app.get<{ Querystring: { cursor?: string; limit?: string } }>(
     '/api/v1/admin/xp/imports',
     {
       onRequest: async (req) => {
         await requireAdmin(req);
       },
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            cursor: { type: 'string', maxLength: 1024 },
+            limit: { type: 'string', pattern: '^([1-9]|1[0-9]|20)$' },
+          },
+        },
+      },
     },
     async (req) => {
       await requireAdmin(req);
-      return store.history();
+      return store.history(req.query.cursor, Number(req.query.limit ?? '20'));
     },
   );
 }

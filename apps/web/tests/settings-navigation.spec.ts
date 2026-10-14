@@ -44,7 +44,12 @@ async function delayedSettings(page: Page) {
         ],
       },
       '/api/v1/xp/tracker': tracker,
-      '/api/v1/admin/xp/imports': { imports: [] },
+      '/api/v1/admin/xp/imports': {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'xp-first',
+        nextCursor: null,
+      },
     };
     if (hold && path.startsWith('/api/v1/admin/'))
       await new Promise<void>((resolve) => pending.push(resolve));

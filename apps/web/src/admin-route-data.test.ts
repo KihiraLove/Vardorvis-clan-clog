@@ -31,7 +31,7 @@ test('route loaders prepare every destination with one shared catalog read and n
       assert.ok(result.catalog?.revision);
     if (kind === 'xp') {
       assert.ok(result.tracker);
-      assert.deepEqual(result.history, []);
+      assert.deepEqual(result.history?.imports, []);
     }
     if (kind === 'settings') {
       assert.ok(result.settings);
@@ -76,7 +76,7 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
     );
   assert.deepEqual(
     (await loadAdminRoute('/admin/xp', session, client, xp, signal())).history,
-    [],
+    undefined,
   );
   assert.equal(
     (

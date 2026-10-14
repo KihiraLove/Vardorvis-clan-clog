@@ -975,6 +975,7 @@ main {
   padding-left: 20px;
 }
 .xp-history li {
+  overflow-wrap: anywhere;
   padding: 12px 0;
   border-bottom: 1px solid #4c402c;
 }

@@ -8,6 +8,7 @@ import {
   exactXp,
   millionXp,
   parseChanges,
+  parseImportHistory,
   parseCompetition,
   parseParticipants,
   skills,
@@ -17,6 +18,92 @@ import { PreviewXpClient } from './preview/xp.ts';
 
 const signal = () => new AbortController().signal;
 const url = (id: number) => 'https://wiseoldman.net/competitions/' + id;
+
+test('preview XP history pages include unchanged receipts, bind appends and preserve exact validated evidence', async () => {
+  const client = new PreviewXpClient();
+  for (let n = 0; n < 25; n++) {
+    const preview = await client.preview(url(1001), 'preview-only', signal());
+    await client.apply(preview, 'preview-only', 'history-' + n, signal());
+  }
+  const first = parseImportHistory(await client.history(signal()));
+  const second = parseImportHistory(
+    await client.history(signal(), first.nextCursor!),
+  );
+  assert.equal(first.imports.length, 20);
+  assert.equal(second.imports.length, 5);
+  assert.equal(second.nextCursor, null);
+  assert.equal(
+    new Set([...first.imports, ...second.imports].map((row) => row.id)).size,
+    25,
+  );
+  assert.ok(first.imports.every((row) => row.outcome === 'unchanged'));
+  assert.equal(second.imports.at(-1)!.outcome, 'applied');
+  assert.deepEqual(await client.history(signal(), first.pageCursor), first);
+  const preview = await client.preview(url(1001), 'preview-only', signal());
+  await client.apply(preview, 'preview-only', 'history-new', signal());
+  await assert.rejects(client.history(signal(), first.pageCursor), {
+    status: 409,
+  });
+  const value = {
+    ...first,
+    imports: [
+      {
+        ...first.imports[0]!,
+        changes: [
+          {
+            skill: 'attack',
+            before: '9007199254740993',
+            after: '9007199254740994',
+            change: '1',
+          },
+        ],
+      },
+    ],
+  };
+  assert.equal(
+    parseImportHistory(value).imports[0]!.changes[0]!.before,
+    '9007199254740993',
+  );
+  assert.throws(
+    () =>
+      parseImportHistory({
+        ...value,
+        imports: [...value.imports, ...value.imports],
+      }),
+    /Duplicate/,
+  );
+  assert.throws(
+    () =>
+      parseImportHistory({
+        ...first,
+        imports: [...first.imports, ...second.imports],
+      }),
+    /size/,
+  );
+  assert.throws(
+    () => parseImportHistory({ ...value, nextCursor: undefined }),
+    /text/,
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(client.history(controller.signal), {
+    name: 'AbortError',
+  });
+  await assert.rejects(
+    new PreviewXpClient(async () => null).history(signal()),
+    { status: 401 },
+  );
+  await assert.rejects(
+    new PreviewXpClient(async () => ({
+      csrfToken: 'test',
+      displayName: 'Staff',
+      username: 'staff',
+      role: 'moderator',
+      mustChangePassword: false,
+    })).history(signal()),
+    { status: 403 },
+  );
+});
 
 test('million labels never round above recorded XP, and hover values retain integer precision', () => {
   assert.equal(millionXp('0'), '0.00m');
@@ -155,7 +242,7 @@ test('preview imports add each contribution once; unchanged and incremental refr
   assert.equal(result.members.find((m) => m.playerId === 3)!.xp, '0');
   assert.equal(result.members.find((m) => m.playerId === 4)!.xp, null);
   assert.equal(
-    (await client.history()).length,
+    (await client.history()).imports.length,
     3,
     'idempotent retry adds no second history entry',
   );

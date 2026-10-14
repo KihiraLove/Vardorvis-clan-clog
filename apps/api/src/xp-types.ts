@@ -73,7 +73,13 @@ export interface XpStore {
     actorName: string,
     acknowledgeCorrections: boolean,
   ): Promise<XpApply>;
-  history(): Promise<{
+  history(
+    cursor?: string,
+    limit?: number,
+  ): Promise<{
+    revision: string;
+    pageCursor: string;
+    nextCursor: string | null;
     imports: {
       id: string;
       competitionId: number;

@@ -687,7 +687,12 @@ test('explicit admin bootstrap, moderator permissions and self-service credentia
   } as unknown as ReviewStore;
   const xp = {
     async history() {
-      return { imports: [] };
+      return {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'first',
+        nextCursor: null,
+      };
     },
   } as unknown as XpStore;
   const app = createApp(undefined, undefined, {

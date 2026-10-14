@@ -10,6 +10,60 @@ const json = (data: unknown, etag = 'xp-one') =>
     headers: { 'Content-Type': 'application/json', ETag: etag },
   });
 
+test('XP history transport encodes opaque cursors, never caches private pages and rejects malformed receipts', async () => {
+  const page = {
+    revision: 'xp-history-7',
+    pageCursor: 'first',
+    nextCursor: null,
+    imports: [
+      {
+        id: 'receipt',
+        competitionId: 42,
+        title: 'Exact XP',
+        actorName: 'Staff',
+        importedAt: '2026-10-14T00:00:00Z',
+        outcome: 'unchanged',
+        changes: [
+          {
+            skill: 'attack',
+            before: '9007199254740993',
+            after: '9007199254740993',
+            change: '0',
+          },
+        ],
+      },
+    ],
+  };
+  const client = new LiveXpClient(async (path, options) => {
+    const parsed = new URL(String(path), 'https://clog.example.com');
+    assert.equal(parsed.pathname, '/api/v1/admin/xp/imports');
+    assert.equal(parsed.searchParams.get('cursor'), 'opaque/:?value');
+    assert.equal(options?.credentials, 'same-origin');
+    assert.equal(options?.cache, 'no-store');
+    return json(page);
+  });
+  assert.equal(
+    (await client.history(signal(), 'opaque/:?value')).imports[0]!.changes[0]!
+      .before,
+    '9007199254740993',
+  );
+  for (const value of [
+    { ...page, pageCursor: undefined },
+    { ...page, nextCursor: 12 },
+    { ...page, imports: [{ ...page.imports[0], outcome: 'deleted' }] },
+  ])
+    await assert.rejects(
+      new LiveXpClient(async () => json(value)).history(signal()),
+    );
+  for (const status of [401, 403, 409])
+    await assert.rejects(
+      new LiveXpClient(async () => new Response('{}', { status })).history(
+        signal(),
+      ),
+      { status },
+    );
+});
+
 test('public reads preserve exact large XP and reuse conditional snapshots with native fetch context', async () => {
   const data = publicXp('9007199254740993');
   let phase = 0;

@@ -112,7 +112,14 @@ async function mockAccounts(
     if (path === '/api/v1/admin/submissions')
       return route.fulfill({ json: fixture.pending });
     if (path === '/api/v1/admin/xp/imports')
-      return route.fulfill({ json: { imports: [] } });
+      return route.fulfill({
+        json: {
+          imports: [],
+          revision: 'xp-history-1',
+          pageCursor: 'xp-first',
+          nextCursor: null,
+        },
+      });
     return route.fulfill({ status: 404, json: {} });
   });
   return state;

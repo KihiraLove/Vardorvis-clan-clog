@@ -26,6 +26,8 @@ run it only for repository code you trust, on your development machine.
 2. `npm run validate`: formatting, ESLint, workspace builds, catalog verification,
    typechecks, all Node tests and documentation links. A fresh PostgreSQL 17
    instance is mandatory; skipped/TODO workspace tests fail the full gate.
+   This includes large-ledger [review](review-pagination.md) and
+   [XP history](xp-history-pagination.md) traversal, concurrency and query-plan checks.
 3. All Chromium tests, with CI's focused-test protection and retry policy.
 4. A production image and a second disposable database: migrations, runtime
    permissions, Nginx routing, auth/review, competitions, large branding uploads,

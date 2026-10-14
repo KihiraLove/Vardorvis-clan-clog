@@ -86,7 +86,12 @@ async function formFixture(page: Page) {
         enabled: false,
         schedules: [],
       },
-      '/api/v1/admin/xp/imports': { imports: [] },
+      '/api/v1/admin/xp/imports': {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'xp-first',
+        nextCursor: null,
+      },
       '/api/v1/xp/tracker': {
         revision: 'xp-style',
         totals: zeroTotals(),

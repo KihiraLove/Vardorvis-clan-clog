@@ -6,7 +6,6 @@ import {
   identity,
   list,
   object,
-  parseChanges,
   parseCompetition,
   parseParticipants,
   parsePreview,
@@ -19,7 +18,8 @@ import {
   type AdminSession,
   parseAdminSession,
   type ApplyResult,
-  type ImportEntry,
+  type ImportHistoryPage,
+  parseImportHistory,
   type ImportPreview,
   type Member,
   type SkillId,
@@ -255,24 +255,17 @@ export class LiveXpClient implements XpClient {
       revision: text(value.revision),
     };
   }
-  async history(signal: AbortSignal): Promise<ImportEntry[]> {
-    const value = object(await this.json('/api/v1/admin/xp/imports', signal));
-    const rows = list(value.imports).map((entry) => {
-      const row = object(entry),
-        outcome = text(row.outcome);
-      if (!['applied', 'unchanged'].includes(outcome))
-        throw new Error('Invalid import outcome.');
-      return {
-        id: text(row.id),
-        competitionId: identity(row.competitionId),
-        title: text(row.title),
-        actorName: text(row.actorName),
-        importedAt: timestamp(row.importedAt),
-        outcome: outcome as ImportEntry['outcome'],
-        changes: parseChanges(row.changes),
-      };
-    });
-    unique(rows.map((row) => row.id));
-    return rows;
+  async history(
+    signal: AbortSignal,
+    cursor?: string,
+  ): Promise<ImportHistoryPage> {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    return parseImportHistory(
+      await this.json(
+        '/api/v1/admin/xp/imports' + (cursor ? '?' + params : ''),
+        signal,
+      ),
+    );
   }
 }

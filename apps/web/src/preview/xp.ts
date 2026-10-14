@@ -7,6 +7,7 @@ import {
   type ApplyResult,
   type CompetitionDetail,
   type ImportEntry,
+  type ImportHistoryPage,
   type ImportPreview,
   type Member,
   type SkillId,
@@ -280,8 +281,36 @@ export class PreviewXpClient implements XpClient {
     });
     return result;
   }
-  async history(): Promise<ImportEntry[]> {
-    return structuredClone(this.imports);
+  async history(
+    signal = new AbortController().signal,
+    cursor?: string,
+  ): Promise<ImportHistoryPage> {
+    signal.throwIfAborted();
+    if (this.getSession) {
+      const session = await this.getSession(signal);
+      if (!session) throw new XpRequestError(401);
+      if (session.role !== 'admin' || session.mustChangePassword)
+        throw new XpRequestError(403);
+    }
+    signal.throwIfAborted();
+    // Each append counts, including unchanged imports whose tracker revision stays put.
+    const revision = 'preview-xp-history-' + this.imports.length;
+    const match = cursor ? /^(\d+):(.*)$/u.exec(cursor) : null;
+    if (
+      cursor &&
+      (!match ||
+        match[2] !== revision ||
+        !Number.isSafeInteger(Number(match[1])))
+    )
+      throw new XpRequestError(409);
+    const start = match ? Number(match[1]) : 0;
+    return structuredClone({
+      revision,
+      pageCursor: start + ':' + revision,
+      nextCursor:
+        start + 20 < this.imports.length ? start + 20 + ':' + revision : null,
+      imports: this.imports.slice(start, start + 20),
+    });
   }
   advance() {
     this.sourceVersion++;

@@ -184,7 +184,14 @@ test('direct admin imports require access, review corrections and send CSRF plus
     }),
   );
   await page.route('**/api/v1/admin/xp/imports', (route) =>
-    route.fulfill({ json: { imports: [] } }),
+    route.fulfill({
+      json: {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'xp-first',
+        nextCursor: null,
+      },
+    }),
   );
   await page.route('**/api/v1/admin/competitions/preview', (route) =>
     route.fulfill({
@@ -236,7 +243,14 @@ test('direct admin imports require access, review corrections and send CSRF plus
       expect(route.request().headers()['idempotency-key']).toBeTruthy();
       return route.fulfill({ json: { outcome: 'applied', revision: 'two' } });
     }
-    return route.fulfill({ json: { imports: [] } });
+    return route.fulfill({
+      json: {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'xp-first',
+        nextCursor: null,
+      },
+    });
   });
   await page.getByRole('button', { name: 'Apply import' }).click();
   await expect(

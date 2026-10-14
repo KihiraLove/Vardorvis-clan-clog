@@ -6,7 +6,7 @@ import type {
   QueueResult,
   StaffAccount,
 } from './admin-model.ts';
-import type { AdminSession, ImportEntry, XpClient } from './xp-model.ts';
+import type { AdminSession, ImportHistoryPage, XpClient } from './xp-model.ts';
 import type { XpTracker } from './xp-tracker.ts';
 import type { Branding } from './branding.ts';
 import type { SiteSettings } from './site-settings.ts';
@@ -29,7 +29,7 @@ export interface PreparedAdminData {
   catalog?: AdminCatalog;
   queue?: QueueResult;
   tracker?: XpTracker;
-  history?: ImportEntry[];
+  history?: ImportHistoryPage;
   historyError?: string;
   schedules?: SchedulingState;
   settings?: SiteSettings;
@@ -103,13 +103,12 @@ async function readAdminRoute(
               .catch((failure: unknown) => {
                 if (classifyAccessFailure(failure) === 'denied')
                   return {
-                    history: [],
                     historyError:
                       'Your account is not allowed to view XP import history.',
                   };
                 throw failure;
               })
-          : Promise.resolve({ history: [] }),
+          : Promise.resolve({}),
       ]);
       return { kind: 'xp', tracker, ...historyData };
     }

@@ -46,7 +46,14 @@ async function liveAdmin(page: Page, authenticated = true) {
         },
       });
     if (path === '/api/v1/admin/xp/imports')
-      return route.fulfill({ json: { imports: [] } });
+      return route.fulfill({
+        json: {
+          imports: [],
+          revision: 'xp-history-1',
+          pageCursor: 'xp-first',
+          nextCursor: null,
+        },
+      });
     if (path === '/api/v1/admin/submissions') {
       const cursor = url.searchParams.get('cursor');
       state.cursors.push(cursor);
@@ -545,7 +552,14 @@ test('audit: a pending session check gates navigation and concurrent private XP 
   });
   await page.route('**/api/v1/admin/xp/imports', async (route) => {
     privateReads++;
-    await route.fulfill({ json: { imports: [] } });
+    await route.fulfill({
+      json: {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'xp-first',
+        nextCursor: null,
+      },
+    });
   });
   try {
     await page.goto('/admin/xp');
@@ -601,6 +615,9 @@ test('audit: XP history expiry clears private content without a second session w
         ? { status: 401, json: { error: 'expired' } }
         : {
             json: {
+              revision: 'xp-history-1',
+              pageCursor: 'xp-first',
+              nextCursor: null,
               imports: [
                 {
                   id: 'import-1',
@@ -617,8 +634,8 @@ test('audit: XP history expiry clears private content without a second session w
     ),
   );
   await page.goto('/admin/xp');
-  await expect(page.getByText('Import history (1)')).toBeVisible();
-  await page.getByText('Import history (1)').click();
+  await expect(page.getByText('Import history (1 on this page)')).toBeVisible();
+  await page.getByText('Import history (1 on this page)').click();
   await expect(page.getByText('Private XP history')).toBeVisible();
   expect(checks).toBe(1);
   denied = true;
