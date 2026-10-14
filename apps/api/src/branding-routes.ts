@@ -137,13 +137,9 @@ export function brandingRoutes(
           }
           if (!input) throw new ApiError(400, 'Upload one logo image.');
           const record = await storage!.saveLogo(input);
-          try {
-            return await store!.save(record, revision, actor.id, hardcore);
-          } catch (error) {
-            // A failed read after a lost write receipt cannot establish
-            // whether the new logo was committed. Defer reclamation.
-            throw error;
-          }
+          // A failed read after a lost write receipt cannot establish
+          // whether the new logo was committed. Defer reclamation.
+          return store!.save(record, revision, actor.id, hardcore);
         },
       );
     });

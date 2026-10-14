@@ -337,7 +337,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((name) => name.endsWith('.png'))
           .length,
-        filesBefore,
+        filesBefore + 2, // Rejected RuneLite files are retained, without DB references.
       );
       assert.deepEqual((await runelite(1, runeKey)).json(), initialRune.json());
       assert.deepEqual(

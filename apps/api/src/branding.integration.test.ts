@@ -177,7 +177,9 @@ test(
       assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 409]);
       const saved = results.find((r) => r.statusCode === 200)!.json();
       assert.deepEqual((await app.inject('/api/v1/branding')).json(), saved);
-      assert.equal((await readdir(directory)).length, 2);
+      // Both uploads retain their logo/favicon files; only one is committed.
+      // Reference-checked maintenance handles the losing upload later.
+      assert.equal((await readdir(directory)).length, 4);
       const logo = await app.inject(saved.logoPath),
         icon = await app.inject(saved.faviconPath);
       assert.equal(logo.statusCode, 200);

@@ -89,13 +89,9 @@ export function catalogRoutes(
         }
         if (!input) throw new ApiError(400, 'Choose an icon.');
         const record = await icons.save(input, mime);
-        try {
-          return reply.code(201).send(await store.stage(record, actor.id));
-        } catch (error) {
-          // A lost commit acknowledgement is not proof of non-persistence.
-          // Offline, reference-checked maintenance reclaims abandoned files.
-          throw error;
-        }
+        // A lost commit acknowledgement is not proof of non-persistence.
+        // Offline, reference-checked maintenance reclaims abandoned files.
+        return reply.code(201).send(await store.stage(record, actor.id));
       },
     );
   });

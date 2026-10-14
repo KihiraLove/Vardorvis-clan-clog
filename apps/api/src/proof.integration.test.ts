@@ -252,6 +252,11 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
+        1, // The rejected clan write leaves an unreferenced file for maintenance.
+      );
+      assert.equal(
+        (await pool.query('SELECT count(*)::int AS n FROM submission_images'))
+          .rows[0].n,
         0,
       );
       const key = randomUUID();
@@ -272,7 +277,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        1,
+        3, // Both concurrent uploads survive; the durable receipt is still unique.
       );
       assert.equal(
         (
@@ -364,7 +369,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        2,
+        7, // Replay/conflict uploads are retained until reference-checked maintenance.
       );
       const noImage = await app.inject({
         method: 'POST',
@@ -453,7 +458,11 @@ test(
       assert.equal((await runelite(fields, png, key)).statusCode, 401);
       apiKey = enabledKey.json().key;
       assert.deepEqual((await runelite(fields, png, key)).json(), receipt);
-      // Rotate after the onRequest check but before transaction validation: no claim or file commits.
+      // Rotate after onRequest but before transaction validation: no claim/image
+      // metadata commits, while the file remains for reference-checked maintenance.
+      const filesBeforeRotation = (await readdir(directory)).filter((file) =>
+        file.endsWith('.png'),
+      ).length;
       const createRuneLite = store.createRuneLite.bind(store);
       store.createRuneLite = async (...args) => {
         await clanKeys.update(
@@ -488,6 +497,11 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
+        filesBeforeRotation + 1,
+      );
+      assert.equal(
+        (await pool.query('SELECT count(*)::int AS n FROM submission_images'))
+          .rows[0].n,
         2,
       );
       const rename = {

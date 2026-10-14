@@ -3,13 +3,8 @@ import { randomUUID } from 'node:crypto';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { RequireAdmin } from './catalog-routes.js';
-import { assetIdPattern, type IconRecord } from './icon-storage.js';
-import {
-  runeLiteWorld,
-  screenshotPath,
-  uuidPattern,
-  type ProofStore,
-} from './proof-store.js';
+import { assetIdPattern } from './icon-storage.js';
+import { runeLiteWorld, uuidPattern, type ProofStore } from './proof-store.js';
 import { MAX_SCREENSHOT_BYTES, type ProofStorage } from './proof-storage.js';
 import type { ManualSubmissionInput, ReviewStore } from './review-types.js';
 import { ApiError } from './types.js';
@@ -175,19 +170,15 @@ export function proofRoutes(
         };
         await store.validateSubmission(submission);
         const image = await storage.save(file.bytes, file.mime);
-        try {
-          const result = await store.createRuneLite(
-            submission,
-            image,
-            key,
-            suppliedClanKey(req.headers),
-          );
-          // A replay may leave an orphan; maintenance will check it later.
-          return reply.code(201).send(result.receipt);
-        } catch (error) {
-          // Commit outcome may be uncertain: preserve the file for maintenance.
-          throw error;
-        }
+        // Commit outcome may be uncertain: preserve the file for maintenance.
+        const result = await store.createRuneLite(
+          submission,
+          image,
+          key,
+          suppliedClanKey(req.headers),
+        );
+        // A replay may leave an orphan; maintenance will check it later.
+        return reply.code(201).send(result.receipt);
       },
     );
     if (review)
@@ -204,20 +195,16 @@ export function proofRoutes(
           const { fields, file } = await parts(req, ['submission']);
           const input = manualFields(fields.submission!);
           const image = await storage.save(file.bytes, file.mime);
-          try {
-            const result = await review.createManual(
-              input,
-              actor.id,
-              actor.displayName,
-              key,
-              image,
-            );
-            // A replay may leave an orphan; maintenance reclaims it later.
-            return reply.code(201).send(result);
-          } catch (error) {
-            // Commit outcome may be uncertain: preserve the file for maintenance.
-            throw error;
-          }
+          // Commit outcome may be uncertain: preserve the file for maintenance.
+          const result = await review.createManual(
+            input,
+            actor.id,
+            actor.displayName,
+            key,
+            image,
+          );
+          // A replay may leave an orphan; maintenance reclaims it later.
+          return reply.code(201).send(result);
         },
       );
   });
