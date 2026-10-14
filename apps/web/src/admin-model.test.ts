@@ -22,6 +22,71 @@ import { PreviewAdminClient } from './preview/admin.ts';
 
 const signal = () => new AbortController().signal;
 
+test('preview audit pagination retains every event, binds scope/revision and validates bounded wire pages', async () => {
+  const client = new PreviewAdminClient();
+  const queue = await client.queue('pending', undefined, signal());
+  let row = queue.submissions[0]!;
+  for (let n = 1; n <= 25; n++)
+    row = await client.saveReviewNote(
+      row.id,
+      row.version,
+      'Staff note ' + n,
+      'csrf',
+      signal(),
+    );
+  const first = parseDetail(await client.detail(row.id, signal()));
+  const second = parseDetail(
+    await client.detail(row.id, signal(), first.nextAuditCursor!),
+  );
+  assert.equal(first.audit.length, 20);
+  assert.equal(second.audit.length, 5);
+  assert.equal(second.nextAuditCursor, null);
+  assert.equal(
+    new Set([...first.audit, ...second.audit].map((a) => a.id)).size,
+    25,
+  );
+  assert.equal(second.audit.at(-1)!.after.reviewNote, 'Staff note 1');
+  assert.deepEqual(
+    await client.detail(row.id, signal(), first.auditCursor),
+    first,
+  );
+  await assert.rejects(
+    client.detail(queue.submissions[1]!.id, signal(), first.nextAuditCursor!),
+    { status: 409 },
+  );
+  const freshQueue = await client.queue('pending', undefined, signal());
+  await assert.rejects(
+    client.queue('reviewed', freshQueue.pageCursor, signal()),
+    { status: 409 },
+  );
+  await client.saveReviewNote(
+    row.id,
+    row.version,
+    'Newer event',
+    'csrf',
+    signal(),
+  );
+  await assert.rejects(client.detail(row.id, signal(), first.auditCursor), {
+    status: 409,
+  });
+  await assert.rejects(
+    client.queue('pending', freshQueue.pageCursor, signal()),
+    { status: 409 },
+  );
+  assert.throws(
+    () => parseDetail({ ...first, audit: [...first.audit, ...second.audit] }),
+    /size/,
+  );
+  assert.throws(
+    () => parseDetail({ ...first, nextAuditCursor: undefined }),
+    /text/,
+  );
+  assert.throws(
+    () => parseQueue({ ...freshQueue, pageCursor: undefined }, 'pending'),
+    /text/,
+  );
+});
+
 test('stored evidence accepts only generated private PNG paths and survives RuneLite parsing', async () => {
   const client = new PreviewAdminClient();
   const fixture = (await client.queue('pending', undefined, signal()))

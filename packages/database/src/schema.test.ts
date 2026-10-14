@@ -39,6 +39,7 @@ test(
           '014_wom_competitions.sql',
           '015_review_notes.sql',
           '016_asset_maintenance.sql',
+          '017_review_pagination.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

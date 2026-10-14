@@ -73,11 +73,15 @@ export interface AuditEntry {
 export interface SubmissionDetail {
   submission: Submission;
   audit: AuditEntry[];
+  auditRevision: string;
+  auditCursor: string;
+  nextAuditCursor: string | null;
 }
 export interface QueueResult {
   revision: string;
   submissions: Submission[];
   nextCursor: string | null;
+  pageCursor: string;
 }
 export interface AdminItem extends Item {
   origin: 'source' | 'manual';
@@ -269,7 +273,11 @@ export interface AdminClient {
     cursor: string | undefined,
     signal: AbortSignal,
   ): Promise<QueueResult>;
-  detail(id: string, signal: AbortSignal): Promise<SubmissionDetail>;
+  detail(
+    id: string,
+    signal: AbortSignal,
+    cursor?: string,
+  ): Promise<SubmissionDetail>;
   edit(
     id: string,
     version: number,
@@ -380,6 +388,8 @@ export function parseQueue(value: unknown, view: QueueView): QueueResult {
   const data = object(value),
     submissions = list(data.submissions).map(parseSubmission);
   unique(submissions.map((s) => s.id));
+  if (submissions.length > 20)
+    throw new Error('Queue page exceeds supported size.');
   if (
     submissions.some((s) =>
       view === 'reviewed'
@@ -392,6 +402,7 @@ export function parseQueue(value: unknown, view: QueueView): QueueResult {
     revision: text(data.revision),
     submissions,
     nextCursor: data.nextCursor === null ? null : text(data.nextCursor),
+    pageCursor: text(data.pageCursor),
   };
 }
 /** Every before/after audit snapshot must refer to the selected submission. */
@@ -421,7 +432,15 @@ export function parseDetail(value: unknown): SubmissionDetail {
     };
   });
   unique(audit.map((a) => a.id));
-  return { submission, audit };
+  if (audit.length > 20) throw new Error('Audit page exceeds supported size.');
+  return {
+    submission,
+    audit,
+    auditRevision: text(data.auditRevision),
+    auditCursor: text(data.auditCursor),
+    nextAuditCursor:
+      data.nextAuditCursor === null ? null : text(data.nextAuditCursor),
+  };
 }
 export function parseAdminItem(value: unknown): AdminItem {
   const data = object(value);

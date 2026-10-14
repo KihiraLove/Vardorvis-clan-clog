@@ -96,12 +96,17 @@ test('private reads use same-origin/no-store, native fetch receiver and encoded 
   await client.catalog(signal());
   await client.queue('unmatched', 'cursor/:?one', signal());
   await client.detail('opaque/id?one', signal());
+  await client.detail('opaque/id?one', signal(), 'audit/:?cursor');
   const params = new URL('https://example.test' + paths[1]).searchParams;
   assert.equal(params.get('status'), 'pending');
   assert.equal(params.get('unmatched'), 'true');
   assert.equal(params.get('cursor'), 'cursor/:?one');
   assert.equal(params.get('limit'), '20');
   assert.ok(paths[2]!.endsWith('/opaque%2Fid%3Fone'));
+  assert.equal(
+    new URL('https://example.test' + paths[3]).searchParams.get('cursor'),
+    'audit/:?cursor',
+  );
 });
 
 test('correction and review writes carry CSRF/versions and never caller-provided actors or credits', async () => {

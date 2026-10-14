@@ -16,6 +16,7 @@ import {
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
+import { ReviewAuditHistory } from './ReviewAuditHistory.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
 import { useAdminAction } from './use-admin-action.ts';
 import {
@@ -595,69 +596,22 @@ export function SubmissionEditor({
             ? explanations(['revoke'])
             : null}
       </form>
-      <details className="admin-audit">
-        <summary>Audit history ({detail.audit.length})</summary>
-        {!detail.audit.length && <p>No review events recorded yet.</p>}
-        <ol>
-          {detail.audit.map((entry) => {
-            const fields: [string, string, string][] = [
-              ['Status', entry.before.status, entry.after.status],
-              [
-                'Item',
-                entry.before.itemId === null
-                  ? 'Unmatched'
-                  : '#' + entry.before.itemId,
-                entry.after.itemId === null
-                  ? 'Unmatched'
-                  : '#' + entry.after.itemId,
-              ],
-              [
-                'Collector',
-                entry.before.collectorName,
-                entry.after.collectorName,
-              ],
-              ['Date', entry.before.collectedOn, entry.after.collectedOn],
-              [
-                'Hardcore',
-                entry.before.hardcore ? 'Yes' : 'No',
-                entry.after.hardcore ? 'Yes' : 'No',
-              ],
-              ['Review note', entry.before.reviewNote, entry.after.reviewNote],
-            ];
-            return (
-              <li key={entry.id}>
-                <strong>
-                  {entry.action} · {entry.actorName}
-                </strong>
-                <p>{xpTime(entry.at)}</p>
-                {entry.reason && <p>Reason: {entry.reason}</p>}
-                <div className="admin-table-scroll">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Field</th>
-                        <th>Before</th>
-                        <th>After</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fields
-                        .filter(([, before, after]) => before !== after)
-                        .map(([label, before, after]) => (
-                          <tr key={label}>
-                            <th scope="row">{label}</th>
-                            <td>{before}</td>
-                            <td>{after}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </details>
+      <ReviewAuditHistory
+        key={
+          detail.auditRevision +
+          ':' +
+          row.version +
+          ':' +
+          refresh +
+          ':' +
+          detail.audit[0]?.id
+        }
+        initial={detail}
+        client={client}
+        disabled={action.busy}
+        onAccessLost={onAccessLost}
+        onReload={() => setRefresh((v) => v + 1)}
+      />
     </section>
   );
 }

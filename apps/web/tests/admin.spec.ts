@@ -80,6 +80,7 @@ async function mockAdmin(page: Page) {
         json: {
           revision: 'queue-' + row.version,
           submissions: visible ? [row] : [],
+          pageCursor: 'first-page',
           nextCursor: null,
         },
       });

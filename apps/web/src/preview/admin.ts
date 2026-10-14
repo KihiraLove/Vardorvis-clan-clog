@@ -790,8 +790,13 @@ export class PreviewAdminClient implements AdminClient {
   ) {
     this.access(signal);
     // Revision-bound cursors reject pagination through a ledger changed by another action.
-    const match = cursor ? /^(\d+):(\d+)$/u.exec(cursor) : undefined;
-    if (cursor && (!match || Number(match[2]) !== this.queueRevision))
+    const match = cursor
+      ? /^(\d+):(\d+):(pending|unmatched|reviewed)$/u.exec(cursor)
+      : undefined;
+    if (
+      cursor &&
+      (!match || Number(match[2]) !== this.queueRevision || match[3] !== view)
+    )
       throw new AdminRequestError(409);
     const start = match ? Number(match[1]) : 0;
     const rows = this.rows.filter((row) =>
@@ -802,10 +807,11 @@ export class PreviewAdminClient implements AdminClient {
     );
     return structuredClone({
       revision: 'preview-queue-' + this.queueRevision,
+      pageCursor: start + ':' + this.queueRevision + ':' + view,
       submissions: rows.slice(start, start + 2),
       nextCursor:
         start + 2 < rows.length
-          ? String(start + 2) + ':' + this.queueRevision
+          ? String(start + 2) + ':' + this.queueRevision + ':' + view
           : null,
     });
   }
@@ -816,11 +822,29 @@ export class PreviewAdminClient implements AdminClient {
       throw new AdminRequestError(409);
     return row;
   }
-  async detail(id: string, signal: AbortSignal) {
+  async detail(id: string, signal: AbortSignal, cursor?: string) {
     this.access(signal);
+    const row = this.row(id);
+    const revision = 'preview-audit-' + this.queueRevision + '-' + id;
+    let start = 0;
+    if (cursor) {
+      const match = /^(\d+):(.*)$/u.exec(cursor);
+      if (
+        !match ||
+        match[2] !== revision ||
+        !Number.isSafeInteger(Number(match[1]))
+      )
+        throw new AdminRequestError(409);
+      start = Number(match[1]);
+    }
+    const events = this.audit.get(id) ?? [];
     return structuredClone({
-      submission: this.row(id),
-      audit: this.audit.get(id) ?? [],
+      submission: row,
+      audit: events.slice(start, start + 20),
+      auditRevision: revision,
+      auditCursor: start + ':' + revision,
+      nextAuditCursor:
+        start + 20 < events.length ? start + 20 + ':' + revision : null,
     });
   }
   /** Copy snapshots before notifying subscribers so later edits cannot rewrite audit history. */

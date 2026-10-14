@@ -104,13 +104,30 @@ export function reviewRoutes(
       );
     },
   );
-  app.get<{ Params: { id: string } }>(
+  app.get<{
+    Params: { id: string };
+    Querystring: { cursor?: string; limit?: string };
+  }>(
     '/api/v1/admin/submissions/:id',
     {
       onRequest: guard(),
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            cursor: { type: 'string', maxLength: 1024 },
+            limit: { type: 'string', pattern: '^([1-9]|1[0-9]|20)$' },
+          },
+        },
+      },
     },
     async (req) => {
-      const result = await store.detail(req.params.id);
+      const result = await store.detail(
+        req.params.id,
+        req.query.cursor,
+        Number(req.query.limit ?? '20'),
+      );
       if (!result) throw new ApiError(404, 'Submission not found.');
       return result;
     },

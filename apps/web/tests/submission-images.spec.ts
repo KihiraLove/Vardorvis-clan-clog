@@ -74,12 +74,15 @@ test('moderators can review stored RuneLite screenshots without access to clan s
     if (url.pathname === '/api/v1/admin/catalog')
       return route.fulfill({ json: f.catalog });
     if (url.pathname === '/api/v1/admin/submissions/' + row.id)
-      return route.fulfill({ json: { submission: row, audit: [] } });
+      return route.fulfill({
+        json: { ...f.detail, submission: row, audit: [] },
+      });
     if (url.pathname === '/api/v1/admin/submissions')
       return route.fulfill({
         json: {
           revision: 'reviews-fixture',
           submissions: [row],
+          pageCursor: 'first-page',
           nextCursor: null,
         },
       });

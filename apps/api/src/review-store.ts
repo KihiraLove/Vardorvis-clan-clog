@@ -39,9 +39,20 @@ const selection =
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
   'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",hardcore,status,' +
   'review_note AS "reviewNote",review_reason AS "reviewReason"';
-const view = ({ proofImageId, ...row }: Row): ReviewSubmission => ({
-  ...row,
-  screenshotPath: proofImageId ? screenshotPath(proofImageId) : null,
+const view = (row: Row): ReviewSubmission => ({
+  id: row.id,
+  version: row.version,
+  source: row.source,
+  itemId: row.itemId,
+  rawItemText: row.rawItemText,
+  collectorName: row.collectorName,
+  collectedOn: row.collectedOn,
+  proofUrl: row.proofUrl,
+  hardcore: row.hardcore,
+  status: row.status,
+  reviewNote: row.reviewNote,
+  reviewReason: row.reviewReason,
+  screenshotPath: row.proofImageId ? screenshotPath(row.proofImageId) : null,
   dateSource:
     row.dateSource === 'submission_default'
       ? 'submission'
@@ -78,25 +89,54 @@ function reasonOf(input: unknown, required: boolean) {
     );
   return input.trim();
 }
-function parseCursor(value: string): { revision: string; offset: number } {
+type Cursor = { revision: string; key: string[] | null };
+const cursorError = () =>
+  new ApiError(
+    409,
+    'Review history changed or cursor expired. Reload the first page.',
+  );
+const encodeCursor = (revision: string, key: string[] | null) =>
+  Buffer.from(JSON.stringify({ revision, key })).toString('base64url');
+function parseCursor(
+  value: string | undefined,
+  revision: string,
+  audit = false,
+): Cursor {
+  if (value === undefined) return { revision, key: null };
   try {
-    if (value.length > 1024) throw new Error('Bad cursor');
-    const x = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as {
-      revision?: unknown;
-      offset?: unknown;
-    };
+    if (!value || value.length > 1024 || !/^[A-Za-z0-9_-]+$/u.test(value))
+      throw cursorError();
+    const x = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    ) as Cursor;
     if (
       !x ||
-      typeof x.revision !== 'string' ||
-      !/^reviews-[a-f0-9]{64}$/u.test(x.revision) ||
-      !Number.isSafeInteger(x.offset) ||
-      Number(x.offset) < 0
+      x.revision !== revision ||
+      (x.key !== null &&
+        (!Array.isArray(x.key) ||
+          !x.key.every((value) => typeof value === 'string') ||
+          (audit
+            ? x.key.length !== 1 ||
+              !/^[1-9][0-9]{0,18}$/u.test(x.key[0]!) ||
+              BigInt(x.key[0]!) > 9223372036854775807n
+            : x.key.length !== 2 ||
+              !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/u.test(
+                x.key[0]!,
+              ) ||
+              !Number.isFinite(Date.parse(x.key[0]!)) ||
+              new Date(x.key[0]!).toISOString() !==
+                x.key[0]!.slice(0, 23) + 'Z' ||
+              !uuid.test(x.key[1]!))))
     )
-      throw new Error('Bad cursor');
-    return { revision: x.revision, offset: Number(x.offset) };
+      throw cursorError();
+    return x;
   } catch {
-    throw new ApiError(409, 'Review cursor expired. Reload the first page.');
+    throw cursorError();
   }
+}
+function pageLimit(limit: number) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20)
+    throw new ApiError(400, 'Page size must be between 1 and 20.');
 }
 export class PgReviewStore implements ReviewStore {
   constructor(
@@ -280,48 +320,44 @@ export class PgReviewStore implements ReviewStore {
             ? "WHERE status='pending' AND item_id IS NULL"
             : "WHERE status='pending'"
           : "WHERE status IN ('approved','rejected','revoked')";
-      const fingerprint = (
-        await client.query<{
-          id: string;
-          version: number;
-          status: string;
-          itemId: number | null;
-        }>(
-          'SELECT id::text,version,status,item_id AS "itemId" FROM submissions ' +
-            where +
-            ' ORDER BY id LIMIT 20001',
+      pageLimit(limit);
+      await client.query("SET LOCAL statement_timeout = '5s'");
+      const state = (
+        await client.query<{ version: string }>(
+          'SELECT version::text FROM review_state WHERE singleton',
         )
-      ).rows;
-      if (fingerprint.length > 20000)
-        throw new ApiError(503, 'Review queue exceeds supported bounds.');
+      ).rows[0]!;
       const revision =
-        'reviews-' + digest(JSON.stringify([status, unmatched, fingerprint]));
-      const decoded = cursor ? parseCursor(cursor) : { revision, offset: 0 };
-      if (decoded.revision !== revision || decoded.offset > fingerprint.length)
-        throw new ApiError(409, 'Review queue changed. Reload the first page.');
+        'reviews-' +
+        digest(
+          JSON.stringify(['queue', state.version, status, unmatched, limit]),
+        );
+      const decoded = parseCursor(cursor, revision);
       const rows = (
-        await client.query<Row>(
+        await client.query<Row & { pageTime: string }>(
           'SELECT ' +
             selection +
-            ' FROM submissions ' +
+            ',to_char(submitted_at AT TIME ZONE \'UTC\',\'YYYY-MM-DD"T"HH24:MI:SS.US"Z"\') AS "pageTime" FROM submissions ' +
             where +
-            ' ORDER BY submitted_at DESC,id DESC LIMIT $1 OFFSET $2',
-          [limit + 1, decoded.offset],
+            (decoded.key
+              ? ' AND (submitted_at,id) < ($2::timestamptz,$3::uuid)'
+              : '') +
+            ' ORDER BY submissions.submitted_at DESC,submissions.id DESC LIMIT $1',
+          decoded.key ? [limit + 1, ...decoded.key] : [limit + 1],
         )
       ).rows;
       const hasNext = rows.length > limit;
+      const page = rows.slice(0, limit);
+      const last = page.at(-1);
       await client.query('COMMIT');
       return {
         revision,
-        submissions: rows.slice(0, limit).map(view),
-        nextCursor: hasNext
-          ? Buffer.from(
-              JSON.stringify({
-                revision,
-                offset: decoded.offset + limit,
-              }),
-            ).toString('base64url')
-          : null,
+        submissions: page.map(view),
+        pageCursor: encodeCursor(revision, decoded.key),
+        nextCursor:
+          hasNext && last
+            ? encodeCursor(revision, [last.pageTime, last.id])
+            : null,
       };
     } catch (e) {
       await client.query('ROLLBACK');
@@ -330,11 +366,13 @@ export class PgReviewStore implements ReviewStore {
       client.release();
     }
   }
-  async detail(id: string) {
+  async detail(id: string, cursor?: string, limit = 20) {
+    pageLimit(limit);
     requireId(id);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout = '5s'");
       const submission = (
         await client.query<Row>(
           'SELECT ' + selection + ' FROM submissions WHERE id=$1',
@@ -345,6 +383,15 @@ export class PgReviewStore implements ReviewStore {
         await client.query('COMMIT');
         return null;
       }
+      const state = (
+        await client.query<{ version: string }>(
+          'SELECT version::text FROM review_state WHERE singleton',
+        )
+      ).rows[0]!;
+      const auditRevision =
+        'reviews-' +
+        digest(JSON.stringify(['audit', state.version, id, limit]));
+      const decoded = parseCursor(cursor, auditRevision, true);
       const audits = (
         await client.query<{
           id: string;
@@ -357,16 +404,25 @@ export class PgReviewStore implements ReviewStore {
         }>(
           'SELECT id::text,actor_name AS "actorName",created_at AS at,action,reason,' +
             'old_values AS before,new_values AS after FROM audit_events ' +
-            'WHERE submission_id=$1 ORDER BY id DESC LIMIT 5001',
-          [id],
+            'WHERE submission_id=$1 ' +
+            (decoded.key
+              ? 'AND (submission_id,id) < ($1::uuid,$3::bigint) '
+              : '') +
+            'ORDER BY audit_events.id DESC LIMIT $2',
+          decoded.key ? [id, limit + 1, decoded.key[0]] : [id, limit + 1],
         )
       ).rows;
-      if (audits.length > 5000)
-        throw new ApiError(503, 'Review audit exceeds supported bounds.');
+
       await client.query('COMMIT');
       return {
         submission: view(submission),
-        audit: audits.map((a) => ({
+        auditRevision,
+        auditCursor: encodeCursor(auditRevision, decoded.key),
+        nextAuditCursor:
+          audits.length > limit
+            ? encodeCursor(auditRevision, [audits[limit - 1]!.id])
+            : null,
+        audit: audits.slice(0, limit).map((a) => ({
           id: a.id,
           actorName: a.actorName,
           at: a.at.toISOString(),

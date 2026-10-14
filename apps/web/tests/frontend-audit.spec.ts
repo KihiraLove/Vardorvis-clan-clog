@@ -54,7 +54,8 @@ async function liveAdmin(page: Page, authenticated = true) {
         json: {
           revision: 'queue-audit',
           submissions: [state.detail.submission],
-          nextCursor: cursor ? null : 'audit-page-2',
+          pageCursor: 'first-page',
+          nextCursor: cursor === 'audit-page-2' ? null : 'audit-page-2',
         },
       });
     }
@@ -133,6 +134,157 @@ async function openReview(page: Page) {
   return editor;
 }
 
+async function pagedHistory(page: Page) {
+  const state = await liveAdmin(page);
+  const history = {
+    generation: 1,
+    failure: 0,
+    cursors: [] as (string | null)[],
+  };
+  const row = structuredClone(state.detail.submission);
+  const events = Array.from({ length: 45 }, (_, index) => ({
+    id: String(45 - index),
+    actorName: 'History reviewer',
+    action: 'edit',
+    at: '2026-10-01T12:00:00.000Z',
+    reason: 'Evidence ' + (45 - index),
+    before: { ...row, reviewNote: 'Before ' + (45 - index) },
+    after: { ...row, reviewNote: 'After ' + (45 - index) },
+  }));
+  await page.route('**/api/v1/admin/submissions/' + row.id + '*', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const cursor = new URL(route.request().url()).searchParams.get('cursor');
+    history.cursors.push(cursor);
+    if (
+      cursor &&
+      (history.failure || !cursor.startsWith(history.generation + ':'))
+    )
+      return route.fulfill({
+        status: history.failure || 409,
+        json: { error: 'History changed. Reload.' },
+      });
+    const start = cursor ? Number(cursor.split(':')[1]) : 0;
+    return route.fulfill({
+      json: {
+        ...state.detail,
+        audit: events.slice(start, start + 20),
+        auditRevision: 'history-' + history.generation,
+        auditCursor: history.generation + ':' + start,
+        nextAuditCursor:
+          start + 20 < events.length
+            ? history.generation + ':' + (start + 20)
+            : null,
+      },
+    });
+  });
+  return history;
+}
+
+for (const width of [1100, 320]) {
+  test(`audit history pages preserve evidence and unsaved claim/note drafts at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 850 });
+    const history = await pagedHistory(page);
+    const editor = await openReview(page);
+    await editor
+      .getByLabel('Collector name', { exact: true })
+      .fill('Unsaved collector');
+    await editor.getByLabel(/^Review note/).fill('Unsaved note');
+    await editor.getByText(/^Audit history/).click();
+    const audit = editor.locator('.admin-audit');
+    await expect(
+      audit.getByRole('button', { name: 'Newer events' }),
+    ).toBeDisabled();
+    await expect(
+      audit.getByText('Reason: Evidence 45', { exact: true }),
+    ).toBeVisible();
+    await audit.getByRole('button', { name: 'Older events' }).click();
+    await expect(audit.getByText('History page 2')).toBeVisible();
+    await expect(
+      audit.getByText('Reason: Evidence 25', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      audit.getByRole('cell', { name: 'Before 25', exact: true }),
+    ).toBeVisible();
+    await expect(
+      audit.getByRole('cell', { name: 'After 25', exact: true }),
+    ).toBeVisible();
+    await audit.getByRole('button', { name: 'Older events' }).click();
+    await expect(audit.getByText('History page 3')).toBeVisible();
+    await expect(audit.locator('ol > li')).toHaveCount(5);
+    await expect(
+      audit.getByRole('button', { name: 'Older events' }),
+    ).toBeDisabled();
+    await expect(
+      audit.getByText('Reason: Evidence 1', { exact: true }),
+    ).toBeVisible();
+    await audit.getByRole('button', { name: 'Newer events' }).click();
+    await expect(audit.getByText('History page 2')).toBeVisible();
+    await audit.getByRole('button', { name: 'Newer events' }).click();
+    await expect(audit.getByText('History page 1')).toBeVisible();
+    await expect(
+      audit.getByText('Reason: Evidence 45', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      editor.getByLabel('Collector name', { exact: true }),
+    ).toHaveValue('Unsaved collector');
+    await expect(editor.getByLabel(/^Review note/)).toHaveValue('Unsaved note');
+    expect(history.cursors).toEqual([null, '1:20', '1:40', '1:20', '1:0']);
+  });
+}
+
+test('audit history invalidation retains the last page and requires explicit reload', async ({
+  page,
+}) => {
+  const history = await pagedHistory(page);
+  const editor = await openReview(page);
+  await editor.getByLabel(/^Review note/).fill('Keep until reload');
+  await editor.getByText(/^Audit history/).click();
+  const audit = editor.locator('.admin-audit');
+  await audit.getByRole('button', { name: 'Older events' }).click();
+  await expect(audit.getByText('History page 2')).toBeVisible();
+  history.generation++;
+  await audit.getByRole('button', { name: 'Newer events' }).click();
+  await expect(audit.getByRole('alert')).toContainText('History changed');
+  await expect(
+    audit.getByText('Reason: Evidence 25', { exact: true }),
+  ).toBeVisible();
+  await expect(editor.getByLabel(/^Review note/)).toHaveValue(
+    'Keep until reload',
+  );
+  await audit.getByRole('button', { name: 'Reload submission' }).click();
+  await editor.getByText(/^Audit history/).click();
+  await expect(audit.getByText('History page 1')).toBeVisible();
+  await expect(audit.getByRole('alert')).toHaveCount(0);
+});
+
+for (const status of [401, 403, 503]) {
+  test(`audit history read ${status} ${status === 401 ? 'clears private content' : 'preserves the page and offers reload'}`, async ({
+    page,
+  }) => {
+    const history = await pagedHistory(page);
+    const editor = await openReview(page);
+    await editor.getByText(/^Audit history/).click();
+    history.failure = status;
+    await editor.getByRole('button', { name: 'Older events' }).click();
+    if (status === 401) {
+      await expect(page.locator('.submission-editor')).toHaveCount(0);
+      await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+    } else {
+      await expect(
+        editor.locator('.admin-audit').getByRole('alert'),
+      ).toContainText('last page is preserved');
+      await expect(
+        editor.getByText('Reason: Evidence 45', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        editor.getByRole('button', { name: 'Older events' }),
+      ).toBeDisabled();
+    }
+  });
+}
+
 test('audit: live queue follows next and previous cursors and respects boundaries', async ({
   page,
 }) => {
@@ -151,7 +303,7 @@ test('audit: live queue follows next and previous cursors and respects boundarie
   await expect(next).toBeDisabled();
   await previous.click();
   await expect(next).toBeEnabled();
-  expect(state.cursors).toEqual([null, 'audit-page-2', null]);
+  expect(state.cursors).toEqual([null, 'audit-page-2', 'first-page']);
 });
 
 for (const hardcore of [false, true]) {

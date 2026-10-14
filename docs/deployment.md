@@ -142,7 +142,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: contiguous 001_baseline.sql through 016_asset_maintenance.sql
+# Expected: contiguous 001_baseline.sql through 017_review_pagination.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose

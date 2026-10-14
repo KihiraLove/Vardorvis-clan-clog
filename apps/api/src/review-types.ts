@@ -69,10 +69,19 @@ export interface ReviewStore {
     revision: string;
     submissions: ReviewSubmission[];
     nextCursor: string | null;
+    pageCursor: string;
   }>;
   detail(
     id: string,
-  ): Promise<{ submission: ReviewSubmission; audit: ReviewAudit[] } | null>;
+    cursor?: string,
+    limit?: number,
+  ): Promise<{
+    submission: ReviewSubmission;
+    audit: ReviewAudit[];
+    auditRevision: string;
+    auditCursor: string;
+    nextAuditCursor: string | null;
+  } | null>;
   mutate(
     id: string,
     expectedVersion: number,

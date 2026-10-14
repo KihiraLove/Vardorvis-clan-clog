@@ -629,10 +629,14 @@ export class LiveAdminClient implements AdminClient {
       view,
     );
   }
-  async detail(id: string, signal: AbortSignal) {
+  async detail(id: string, signal: AbortSignal, cursor?: string) {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
     const result = parseDetail(
       await this.json(
-        '/api/v1/admin/submissions/' + encodeURIComponent(id),
+        '/api/v1/admin/submissions/' +
+          encodeURIComponent(id) +
+          (cursor ? '?' + params : ''),
         signal,
       ),
     );

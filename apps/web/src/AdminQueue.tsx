@@ -326,7 +326,11 @@ export function AdminQueue({
             aria-describedby={nextReason ? pagingHintId + '-next' : undefined}
             aria-busy={loading}
             onClick={() => {
-              setCursors((values) => [...values, snapshot!.queue.nextCursor!]);
+              setCursors((values) => [
+                ...values.slice(0, -1),
+                snapshot!.queue.pageCursor,
+                snapshot!.queue.nextCursor!,
+              ]);
               setSelected(undefined);
             }}
           >

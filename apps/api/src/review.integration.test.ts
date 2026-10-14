@@ -258,6 +258,33 @@ test(
       });
       assert.equal(login.statusCode, 200);
       const cookie = String(login.headers['set-cookie']).split(';')[0]!;
+      const historyUrl = '/api/v1/admin/submissions/' + one;
+      assert.equal((await app.inject(historyUrl + '?limit=1')).statusCode, 401);
+      const historyPage = await app.inject({
+        url: historyUrl + '?limit=1',
+        headers: { cookie },
+      });
+      assert.equal(historyPage.statusCode, 200);
+      assert.equal(historyPage.json().audit.length, 1);
+      const historyNext = await app.inject({
+        url:
+          historyUrl + '?limit=1&cursor=' + historyPage.json().nextAuditCursor,
+        headers: { cookie },
+      });
+      assert.equal(historyNext.statusCode, 200);
+      assert.notEqual(
+        historyNext.json().audit[0].id,
+        historyPage.json().audit[0].id,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            url: historyUrl + '?limit=21',
+            headers: { cookie },
+          })
+        ).statusCode,
+        400,
+      );
       const session = (
         await app.inject({ url: '/api/v1/auth/session', headers: { cookie } })
       ).json();

@@ -35,10 +35,10 @@ test(
       await Promise.all([migrate(url), migrate(url)]);
       const rows = (await client.query('SELECT name FROM schema_migrations'))
         .rows;
-      assert.equal(rows.length, 16);
+      assert.equal(rows.length, 17);
       assert.equal(
         new Set(rows.map((row: { name: string }) => row.name)).size,
-        16,
+        17,
       );
       assert.equal(
         (await client.query('SELECT count(*)::int AS count FROM xp_state'))

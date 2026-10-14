@@ -20,7 +20,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT UPDATE',
-    'catalog_state clan_branding collection_scheduling runelite_settings site_settings xp_state',
+    'catalog_state clan_branding collection_scheduling review_state runelite_settings site_settings xp_state',
   ],
   [
     'SELECT INSERT UPDATE',
@@ -281,6 +281,23 @@ test(
           assert.ok(
             (await runtime.query('SELECT version FROM catalog_state')).rows[0]
               .version > 1,
+          );
+          const revisionBefore = BigInt(
+            (await runtime.query('SELECT version FROM review_state')).rows[0]
+              .version,
+          );
+          await runtime.query(
+            "INSERT INTO submissions(id,source,raw_item_text,collector_name,collected_on,date_source,proof_url) VALUES('00000000-0000-4000-8000-000000009981','manual','Runtime fixture','Collector','2026-10-01','admin','')",
+          );
+          await runtime.query(
+            "INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,old_values,new_values) VALUES('00000000-0000-4000-8000-000000009981','staff','Runtime fixture','create','{}','{}')",
+          );
+          assert.equal(
+            BigInt(
+              (await runtime.query('SELECT version FROM review_state')).rows[0]
+                .version,
+            ),
+            revisionBefore + 2n,
           );
           const tables = (
             await owner.query<{ name: string; column: string }>(

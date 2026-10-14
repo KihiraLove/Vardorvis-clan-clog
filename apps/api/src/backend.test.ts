@@ -661,7 +661,12 @@ test('explicit admin bootstrap, moderator permissions and self-service credentia
   const actors: string[] = [];
   const review = {
     async queue() {
-      return { revision: 'queue-1', submissions: [], nextCursor: null };
+      return {
+        revision: 'queue-1',
+        submissions: [],
+        nextCursor: null,
+        pageCursor: 'first',
+      };
     },
     async adminCatalog() {
       return { items: [], pages: [] };
