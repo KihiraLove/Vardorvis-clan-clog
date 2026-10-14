@@ -42,6 +42,7 @@ test(
           '017_review_pagination.sql',
           '018_xp_history_pagination.sql',
           '019_lifecycle_archive.sql',
+          '020_public_projections.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

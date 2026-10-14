@@ -77,7 +77,14 @@ export class LiveXpClient implements XpClient {
         ...options.headers,
       },
     });
-    if (response.status === 304 && cached) {
+    if (
+      cached &&
+      (response.status === 304 ||
+        (response.ok &&
+          cached.etag &&
+          response.headers.get('ETag') === cached.etag))
+    ) {
+      void response.body?.cancel();
       staged?.set(path, cached);
       return cached.data;
     }

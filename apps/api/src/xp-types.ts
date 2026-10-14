@@ -55,6 +55,7 @@ export interface XpApply {
   revision: string;
 }
 export interface XpStore {
+  trackerSnapshot?(): Promise<{ revision: string; body: string }>;
   tracker(): Promise<{
     revision: string;
     totals: Record<Skill, string>;

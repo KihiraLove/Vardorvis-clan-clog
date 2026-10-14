@@ -1,6 +1,7 @@
 /** Transactional snapshots; retries survive process restarts and preview expiry. */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { ProjectionCache, projection } from './projection-cache.js';
 import { ApiError } from './types.js';
 import {
   diffTotals,
@@ -89,6 +90,9 @@ const event = (row: Row): XpEvent => ({
   gains: row.gains,
 });
 export class PgXpStore implements XpStore {
+  private readonly trackerCache = new ProjectionCache<
+    Awaited<ReturnType<XpStore['tracker']>>
+  >();
   constructor(private readonly pool: pg.Pool) {}
   private async state(client: pg.PoolClient, lock = false) {
     const row = (
@@ -111,93 +115,98 @@ export class PgXpStore implements XpStore {
       throw new ApiError(503, 'XP event limit exceeded.');
     return rows;
   }
-  async tracker() {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const revision = await this.state(client);
-      const rows = await this.events(client);
-      const totals = sumTotals(rows.map(event));
-      const currentMetadata = (
-        await client.query<{
-          id: number;
-          title: string;
-          sourceUrl: string;
-          skills: XpEvent['skills'];
-        }>(
-          'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills FROM wom_competitions WHERE kind=\'SKILL\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
-        )
-      ).rows;
-      if (currentMetadata.length > maxEvents)
-        throw new ApiError(503, 'XP event limit exceeded.');
-      // Archived contributions stay in all-time totals and event browsing. Both
-      // branches are independently bounded; archived metadata without XP is paged separately.
-      const archivedMetadata = (
-        await client.query<{
-          id: number;
-          title: string;
-          sourceUrl: string;
-          skills: XpEvent['skills'];
-        }>(
-          'SELECT c.competition_id::float8 AS id,c.title,c.source_url AS "sourceUrl",c.skills FROM (SELECT competition_id FROM xp_events ORDER BY competition_id LIMIT 2001) e CROSS JOIN LATERAL (SELECT competition_id,title,source_url,skills,ends_at FROM wom_competitions WHERE competition_id=e.competition_id AND archived_at IS NOT NULL LIMIT 1) c ORDER BY c.ends_at DESC,c.competition_id DESC LIMIT 2001',
-        )
-      ).rows;
-      if (archivedMetadata.length > maxEvents)
-        throw new ApiError(503, 'XP event limit exceeded.');
-      const metadata = [...currentMetadata, ...archivedMetadata];
-      const totalPlayers = new Map<number, PodiumPlayer>();
-      // Name snapshots follow the latest successful import; stable ID breaks timestamp ties.
-      const imported = (
-        await client.query<{ competition_id: string }>(
-          'SELECT competition_id::text FROM xp_events ORDER BY imported_at,competition_id LIMIT 2001',
-        )
-      ).rows;
-      for (const item of imported) {
-        const source = rows.find(
-          (r) => r.competition_id === item.competition_id,
+  private async buildTracker(client: pg.PoolClient) {
+    const revision = await this.state(client);
+    const rows = await this.events(client);
+    const totals = sumTotals(rows.map(event));
+    const byIdentity = new Map(rows.map((row) => [row.competition_id, row]));
+    const currentMetadata = (
+      await client.query<{
+        id: number;
+        title: string;
+        sourceUrl: string;
+        skills: XpEvent['skills'];
+      }>(
+        'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills FROM wom_competitions WHERE kind=\'SKILL\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
+      )
+    ).rows;
+    if (currentMetadata.length > maxEvents)
+      throw new ApiError(503, 'XP event limit exceeded.');
+    // Archived contributions stay in all-time totals and event browsing. Both
+    // branches are independently bounded; archived metadata without XP is paged separately.
+    const archivedMetadata = (
+      await client.query<{
+        id: number;
+        title: string;
+        sourceUrl: string;
+        skills: XpEvent['skills'];
+      }>(
+        'SELECT c.competition_id::float8 AS id,c.title,c.source_url AS "sourceUrl",c.skills FROM (SELECT competition_id FROM xp_events ORDER BY competition_id LIMIT 2001) e CROSS JOIN LATERAL (SELECT competition_id,title,source_url,skills,ends_at FROM wom_competitions WHERE competition_id=e.competition_id AND archived_at IS NOT NULL LIMIT 1) c ORDER BY c.ends_at DESC,c.competition_id DESC LIMIT 2001',
+      )
+    ).rows;
+    if (archivedMetadata.length > maxEvents)
+      throw new ApiError(503, 'XP event limit exceeded.');
+    const metadata = [...currentMetadata, ...archivedMetadata];
+    const totalPlayers = new Map<number, PodiumPlayer>();
+    // Name snapshots follow the latest successful import; stable ID breaks timestamp ties.
+    const imported = (
+      await client.query<{ competition_id: string }>(
+        'SELECT competition_id::text FROM xp_events ORDER BY imported_at,competition_id LIMIT 2001',
+      )
+    ).rows;
+    for (const item of imported) {
+      const source = byIdentity.get(item.competition_id);
+      if (!source) continue;
+      for (const p of source.source_snapshot.participants) {
+        const gained = Object.values(p.gains).reduce(
+          (sum, n) => sum + BigInt(n!),
+          0n,
         );
-        if (!source) continue;
-        for (const p of source.source_snapshot.participants) {
-          const gained = Object.values(p.gains).reduce(
-            (sum, n) => sum + BigInt(n!),
-            0n,
-          );
-          if (gained <= 0n) continue;
-          const prior = totalPlayers.get(p.playerId);
-          totalPlayers.set(p.playerId, {
-            playerId: p.playerId,
-            displayName: p.displayName,
-            gained: (BigInt(prior?.gained ?? '0') + gained).toString(),
-          });
-        }
+        if (gained <= 0n) continue;
+        const prior = totalPlayers.get(p.playerId);
+        totalPlayers.set(p.playerId, {
+          playerId: p.playerId,
+          displayName: p.displayName,
+          gained: (BigInt(prior?.gained ?? '0') + gained).toString(),
+        });
       }
-      const events = metadata.map((m) => {
-        const r = rows.find((r) => Number(r.competition_id) === m.id);
-        return {
-          ...m,
-          gains: r?.gains ?? Object.fromEntries(m.skills.map((s) => [s, null])),
-          podium: r
-            ? rankPodium(
-                r.source_snapshot.participants.map((p) => ({
-                  playerId: p.playerId,
-                  displayName: p.displayName,
-                  gained: Object.values(p.gains)
-                    .reduce((sum, n) => sum + BigInt(n!), 0n)
-                    .toString(),
-                })),
-              )
-            : [],
-        };
-      });
-      const podium = rankPodium([...totalPlayers.values()]);
-      await client.query('COMMIT');
-      return { revision, totals, events, podium };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
     }
+    const events = metadata.map((m) => {
+      const r = byIdentity.get(String(m.id));
+      return {
+        ...m,
+        gains: r?.gains ?? Object.fromEntries(m.skills.map((s) => [s, null])),
+        podium: r
+          ? rankPodium(
+              r.source_snapshot.participants.map((p) => ({
+                playerId: p.playerId,
+                displayName: p.displayName,
+                gained: Object.values(p.gains)
+                  .reduce((sum, n) => sum + BigInt(n!), 0n)
+                  .toString(),
+              })),
+            )
+          : [],
+      };
+    });
+    const podium = rankPodium([...totalPlayers.values()]);
+    return { revision, totals, events, podium };
+  }
+  async tracker() {
+    return (
+      await projection(this.pool, this.trackerCache, 'xp', (client) =>
+        this.buildTracker(client),
+      )
+    ).data;
+  }
+  async trackerSnapshot() {
+    const value = await projection(
+      this.pool,
+      this.trackerCache,
+      'xp',
+      (client) => this.buildTracker(client),
+    );
+    return { revision: value.key, body: value.json };
   }
   async preview(snapshot: XpSnapshot, actor: string): Promise<XpPreview> {
     const client = await this.pool.connect(),

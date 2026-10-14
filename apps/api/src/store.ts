@@ -8,6 +8,7 @@ import {
 } from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
+import { ProjectionCache, projection } from './projection-cache.js';
 import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
 import {
   ApiError,
@@ -36,6 +37,9 @@ const duplicateUsername = (error: unknown) => {
   throw error;
 };
 export class PgStore implements BackendStore {
+  private readonly catalogCache = new ProjectionCache<CatalogData>();
+  private readonly collectionCache = new ProjectionCache<PublicCredit[]>();
+  private readonly matchCache = new ProjectionCache<MatchItem[]>();
   constructor(private readonly pool: pg.Pool) {}
 
   async ensureDefaultAdmin(bootstrapPasswordHash?: string) {
@@ -210,24 +214,32 @@ export class PgStore implements BackendStore {
     }
   }
   private async matchItems(client: pg.PoolClient): Promise<MatchItem[]> {
-    const items = (
-      await client.query<{ id: number; name: string }>(
-        'SELECT id,name FROM items WHERE active ORDER BY id LIMIT 10001',
+    const version = (
+      await client.query<{ version: string }>(
+        "SELECT version::text FROM projection_state WHERE resource='matches'",
       )
-    ).rows;
-    const aliases = (
-      await client.query<{ item_id: number; alias: string }>(
-        'SELECT a.item_id,a.alias FROM item_aliases a JOIN items i ON i.id=a.item_id WHERE i.active ORDER BY a.item_id,a.alias LIMIT 20001',
+    ).rows[0]?.version;
+    if (!version) throw new ApiError(503, 'Matching revision unavailable.');
+    const hit = this.matchCache.peek(version);
+    if (hit) return hit.data;
+    // One SQL snapshot also supports READ COMMITTED submission transactions.
+    const packet = (
+      await client.query<{
+        version: string;
+        items: { id: number; name: string }[];
+        aliases: { item_id: number; alias: string }[];
+      }>(
+        "SELECT version::text,(SELECT COALESCE(jsonb_agg(i),'[]'::jsonb) FROM (SELECT id,name FROM items WHERE active ORDER BY id LIMIT 10001) i) AS items,(SELECT COALESCE(jsonb_agg(a),'[]'::jsonb) FROM (SELECT a.item_id,a.alias FROM item_aliases a JOIN items i ON i.id=a.item_id WHERE i.active ORDER BY a.item_id,a.alias LIMIT 20001) a) AS aliases FROM projection_state WHERE resource='matches'",
       )
-    ).rows;
-    if (items.length > 10000 || aliases.length > 20000)
+    ).rows[0];
+    if (!packet || packet.items.length > 10000 || packet.aliases.length > 20000)
       throw new ApiError(503, 'Bot catalog exceeds supported limits.');
     const mapped = new Map<number, MatchItem>(
-      items.map((item) => [item.id, { ...item, aliases: [] }]),
+      packet.items.map((item) => [item.id, { ...item, aliases: [] }]),
     );
-    for (const alias of aliases)
+    for (const alias of packet.aliases)
       mapped.get(alias.item_id)?.aliases.push(alias.alias);
-    return [...mapped.values()];
+    return this.matchCache.put(packet.version, [...mapped.values()]).data;
   }
 
   async botItems(query: string, limit: number) {
@@ -376,85 +388,104 @@ export class PgStore implements BackendStore {
     await this.pool.query('SELECT token_hash FROM admin_sessions LIMIT 1');
     await this.settings();
   }
-  async catalog(): Promise<CatalogData> {
-    const client = await this.pool.connect();
-    try {
-      // A repeatable snapshot prevents memberships from racing catalog updates.
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const items = (
-        await client.query<{ id: number; name: string; iconPath: string }>(
-          'SELECT id, name, icon_path AS "iconPath" FROM items WHERE active ORDER BY id LIMIT 10001',
-        )
-      ).rows;
-      const pages = (
-        await client.query<{ id: string; name: string; category: string }>(
-          'SELECT id, name, category FROM pages WHERE active ORDER BY sort_order, id LIMIT 2001',
-        )
-      ).rows;
-      const slots = (
-        await client.query<{ page_id: string; item_id: number }>(
-          'SELECT p.page_id, p.item_id FROM page_items p JOIN items i ON i.id=p.item_id JOIN pages g ON g.id=p.page_id WHERE i.active AND g.active ORDER BY p.page_id, p.slot LIMIT 50001',
-        )
-      ).rows;
-      if (
-        (!pages.length &&
-          !(await client.query('SELECT 1 FROM pages LIMIT 1')).rowCount) ||
-        items.length > 10000 ||
-        pages.length > 2000 ||
-        slots.length > 50000
+  private async loadCatalog(client: pg.PoolClient): Promise<CatalogData> {
+    const items = (
+      await client.query<{ id: number; name: string; iconPath: string }>(
+        'SELECT id, name, icon_path AS "iconPath" FROM items WHERE active ORDER BY id LIMIT 10001',
       )
-        throw unavailable();
-      const ids = new Set(items.map((i) => i.id));
-      const pageIds = new Set(pages.map((p) => p.id));
-      if (
-        items.some(
-          (i) =>
-            !i.name.trim() ||
-            typeof i.iconPath !== 'string' ||
-            !i.iconPath.startsWith('/') ||
-            i.iconPath.startsWith('//') ||
-            /[\\\s?#]/u.test(i.iconPath),
-        ) ||
-        pages.some(
-          (p) =>
-            !p.name.trim() ||
-            !['bosses', 'raids', 'clues', 'minigames', 'other'].includes(
-              p.category,
-            ),
-        ) ||
-        slots.some((s) => !ids.has(s.item_id) || !pageIds.has(s.page_id))
+    ).rows;
+    const pages = (
+      await client.query<{ id: string; name: string; category: string }>(
+        'SELECT id, name, category FROM pages WHERE active ORDER BY sort_order, id LIMIT 2001',
       )
-        throw unavailable();
-      const membership = new Map<string, number[]>();
-      for (const slot of slots) {
-        const rows = membership.get(slot.page_id) ?? [];
-        rows.push(slot.item_id);
-        membership.set(slot.page_id, rows);
-      }
-      const version = (
-        await client.query<{ version: string }>(
-          'SELECT version::text FROM catalog_state WHERE singleton',
-        )
-      ).rows[0]!.version;
-      await client.query('COMMIT');
-      return {
-        catalogVersion: 'catalog-' + version,
-        items,
-        pages: pages.map((p) => ({
-          ...p,
-          itemIds: membership.get(p.id) ?? [],
-        })),
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    ).rows;
+    const slots = (
+      await client.query<{ page_id: string; item_id: number }>(
+        'SELECT p.page_id, p.item_id FROM page_items p JOIN items i ON i.id=p.item_id JOIN pages g ON g.id=p.page_id WHERE i.active AND g.active ORDER BY p.page_id, p.slot LIMIT 50001',
+      )
+    ).rows;
+    if (
+      (!pages.length &&
+        !(await client.query('SELECT 1 FROM pages LIMIT 1')).rowCount) ||
+      items.length > 10000 ||
+      pages.length > 2000 ||
+      slots.length > 50000
+    )
+      throw unavailable();
+    const ids = new Set(items.map((i) => i.id));
+    const pageIds = new Set(pages.map((p) => p.id));
+    if (
+      items.some(
+        (i) =>
+          !i.name.trim() ||
+          typeof i.iconPath !== 'string' ||
+          !i.iconPath.startsWith('/') ||
+          i.iconPath.startsWith('//') ||
+          /[\\\s?#]/u.test(i.iconPath),
+      ) ||
+      pages.some(
+        (p) =>
+          !p.name.trim() ||
+          !['bosses', 'raids', 'clues', 'minigames', 'other'].includes(
+            p.category,
+          ),
+      ) ||
+      slots.some((s) => !ids.has(s.item_id) || !pageIds.has(s.page_id))
+    )
+      throw unavailable();
+    const membership = new Map<string, number[]>();
+    for (const slot of slots) {
+      const rows = membership.get(slot.page_id) ?? [];
+      rows.push(slot.item_id);
+      membership.set(slot.page_id, rows);
     }
+    const version = (
+      await client.query<{ version: string }>(
+        'SELECT version::text FROM catalog_state WHERE singleton',
+      )
+    ).rows[0]!.version;
+    return {
+      catalogVersion: 'catalog-' + version,
+      items,
+      pages: pages.map((p) => ({
+        ...p,
+        itemIds: membership.get(p.id) ?? [],
+      })),
+    };
   }
-  async collections(): Promise<PublicCredit[]> {
+  async catalog(): Promise<CatalogData> {
+    return (
+      await projection(this.pool, this.catalogCache, 'catalog', (client) =>
+        this.loadCatalog(client),
+      )
+    ).data;
+  }
+  async publicSnapshot(resource: 'catalog' | 'collections') {
+    const value =
+      resource === 'catalog'
+        ? await projection(this.pool, this.catalogCache, 'catalog', (client) =>
+            this.loadCatalog(client),
+          )
+        : await projection(
+            this.pool,
+            this.collectionCache,
+            'collections',
+            (client) => this.loadCollections(client),
+          );
+    const payload =
+      resource === 'catalog'
+        ? value.json.slice(1)
+        : '"credits":' + value.json + '}';
+    return {
+      revision: value.key,
+      body: '{"revision":' + JSON.stringify(value.key) + ',' + payload,
+    };
+  }
+  private async loadCollections(
+    client: pg.PoolClient,
+  ): Promise<PublicCredit[]> {
     const rows = (
-      await this.pool.query<PublicCredit>(
+      await client.query<PublicCredit>(
         `SELECT c.submission_id AS "submissionId", c.item_id AS "itemId", c.collector_name AS "collectorName", to_char(c.collected_on, 'YYYY-MM-DD') AS "collectedOn", c.hardcore FROM collection_credits c JOIN items i ON i.id=c.item_id WHERE i.active ORDER BY c.item_id, c.hardcore LIMIT 20001`,
       )
     ).rows;
@@ -464,6 +495,16 @@ export class PgStore implements BackendStore {
         'Collection snapshot exceeds the supported size.',
       );
     return rows;
+  }
+  async collections(): Promise<PublicCredit[]> {
+    return (
+      await projection(
+        this.pool,
+        this.collectionCache,
+        'collections',
+        (client) => this.loadCollections(client),
+      )
+    ).data;
   }
   async settings(): Promise<Settings> {
     const row = (

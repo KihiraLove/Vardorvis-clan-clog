@@ -4,6 +4,7 @@ import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
 import type { PgCompetitionStore } from './competition-store.js';
 import { fetchCompetition } from './competition-wom.js';
 import { PreviewWork } from './preview-work.js';
+import { matchesEtag } from './projection-cache.js';
 type Authorize = (
   request: FastifyRequest,
   write?: boolean,
@@ -23,9 +24,21 @@ export function competitionRoutes(
     if (!authorize) throw new ApiError(503, 'Staff sign-in is not configured.');
     return authorize(request, write);
   };
-  app.get('/api/v1/competitions/activities', async (_req, reply) => {
+  app.get('/api/v1/competitions/activities', async (request, reply) => {
+    const service = available();
+    if (typeof service.activitySnapshot === 'function') {
+      const snapshot = await service.activitySnapshot(),
+        etag = 'W/"' + snapshot.revision + '"';
+      reply
+        .header('Cache-Control', 'public, max-age=0, must-revalidate')
+        .header('ETag', etag)
+        .header('X-Server-Now', snapshot.serverNow);
+      if (matchesEtag(request.headers['if-none-match'], etag))
+        return reply.code(304).send();
+      return reply.type('application/json').send(snapshot.body);
+    }
     reply.header('Cache-Control', 'no-store');
-    return available().activities();
+    return service.activities();
   });
   app.post<{
     Body: CompetitionPreviewInput;

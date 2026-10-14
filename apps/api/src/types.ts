@@ -65,6 +65,9 @@ export interface BotReceipt {
   creditOccupied: boolean;
 }
 export interface BackendStore {
+  publicSnapshot?(
+    resource: 'catalog' | 'collections',
+  ): Promise<{ revision: string; body: string }>;
   manageModerator?(
     id: string,
     expectedVersion: number,

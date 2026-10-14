@@ -23,6 +23,7 @@ if grep -Eq 'ℹ (skipped|todo) [1-9]' .data/local-checks/validate.log; then
   exit 1
 fi
 run_gate workloads node scripts/benchmark-workloads.mjs
+run_gate projections env PROJECTION_BENCH_DISPOSABLE=true node scripts/benchmark-projections.mjs
 run_gate browser npm run test:e2e -w @clog/web
 run_gate smoke bash scripts/compose-smoke.sh
 printf 'All local gates passed.\n'

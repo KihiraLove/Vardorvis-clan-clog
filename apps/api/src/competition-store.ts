@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { ProjectionCache, projection } from './projection-cache.js';
 import {
   competitionImportAction,
   competitionLifecycle,
@@ -82,27 +83,55 @@ async function xpEvents(client: pg.PoolClient): Promise<XpEvent[]> {
   return rows;
 }
 export class PgCompetitionStore {
+  private readonly activityCache = new ProjectionCache<{
+    competitions: WomCompetition[];
+  }>();
   constructor(private readonly pool: pg.Pool) {}
   async clock(): Promise<number> {
     return (
       await this.pool.query<{ now: Date }>('SELECT clock_timestamp() AS now')
     ).rows[0]!.now.getTime();
   }
-  async activities() {
+  private async loadActivities(client: pg.PoolClient) {
     const rows = (
-      await this.pool.query<WomCompetition & { startsAt: Date; endsAt: Date }>(
+      await client.query<WomCompetition & { startsAt: Date; endsAt: Date }>(
         'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,starts_at AS "startsAt",ends_at AS "endsAt" FROM wom_competitions WHERE kind=\'ACTIVITY\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
       )
     ).rows;
     if (rows.length > 2000)
       throw new ApiError(503, 'Competition listing exceeds supported limits.');
     return {
-      serverNow: new Date(await this.clock()).toISOString(),
       competitions: rows.map((r) => ({
         ...r,
         startsAt: r.startsAt.toISOString(),
         endsAt: r.endsAt.toISOString(),
       })),
+    };
+  }
+  async activities() {
+    const value = await projection(
+      this.pool,
+      this.activityCache,
+      'activities',
+      (client) => this.loadActivities(client),
+    );
+    return { serverNow: value.serverNow, ...value.data };
+  }
+  async activitySnapshot() {
+    const value = await projection(
+      this.pool,
+      this.activityCache,
+      'activities',
+      (client) => this.loadActivities(client),
+    );
+    return {
+      revision: value.key,
+      serverNow: value.serverNow,
+      body:
+        '{"serverNow":' +
+        JSON.stringify(value.serverNow) +
+        ',' +
+        value.json.slice(1),
     };
   }
   async preview(

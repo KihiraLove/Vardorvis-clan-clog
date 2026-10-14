@@ -77,7 +77,8 @@ command. It never asserts that previous attempts saved nothing.
 Overloaded autocomplete returns a named retry hint or allows a typed item name.
 Selecting the hint cannot submit it as an unmatched item: the handler explains how
 to retry without calling intake. Other search failures retain empty suggestions.
-Successful admitted searches still fetch the current catalog on every interaction.
+Successful admitted searches probe the current matching revision on every interaction;
+the [versioned public/matching cache](public-performance.md) reuses immutable names/aliases.
 
 The following optional Compose/.env settings change rates within the fixed global
 ceilings. They must be positive integers; invalid values fail enabled-bot startup.
@@ -124,11 +125,15 @@ not instrumented. Discord's synthetic timings measure local admission/catalog
 simulation, not gateway/network/database latency.
 
 A separate required PostgreSQL test uses 1,717 items and 1,717 aliases with 500
-autocomplete requests from ten users. It counts real data SELECTs/rows and emits
-p50/p95 and CPU/RSS evidence: baseline 500 admitted lookups means 1,000 SELECTs and
-1,717,000 rows; admission allows 300, meaning 600 SELECTs and 1,030,200 rows. No
-catalog-query optimization is claimed; that remains #87. All counts are asserted,
-while host-dependent timings are recorded without brittle pass/fail thresholds.
+autocomplete requests from ten users. The original #86 measurement admitted 500
+lookups with 1,000 SELECTs / 1,717,000 rows; admission reduced that to 300 lookups
+with 600 SELECTs / 1,030,200 rows. Task #87 subsequently adds a transactional
+revision probe and one bounded cold packet. The same test now asserts 501 SELECTs
+and returned packet/counter rows for 500 cold-then-warm lookups, then 300 SELECTs /
+rows for the 300 admitted warm lookups. Packet contents remain 1,717 items/aliases;
+one JSON packet row is not one item. See the linked guide for byte/latency evidence,
+including the cold autocomplete p95 regression. Host-dependent timings are recorded
+without brittle pass/fail thresholds.
 
 Tests also cover multi-scope fairness, identity churn/expiry, saturation and
 recovery, exact byte boundaries, malformed/stalled streams, client disconnect,

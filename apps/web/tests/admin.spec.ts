@@ -34,11 +34,13 @@ async function mockAdmin(page: Page) {
     detail: SubmissionDetail;
     authenticated: boolean;
     privateReads: number;
+    catalogReads: number;
   } = {
     catalog: structuredClone(f.catalog),
     detail: structuredClone(f.detail),
     authenticated: true,
     privateReads: 0,
+    catalogReads: 0,
   };
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
@@ -66,8 +68,10 @@ async function mockAdmin(page: Page) {
         },
       });
     if (path.startsWith('/api/v1/admin/')) state.privateReads++;
-    if (path === '/api/v1/admin/catalog')
+    if (path === '/api/v1/admin/catalog') {
+      state.catalogReads++;
       return route.fulfill({ json: state.catalog });
+    }
     if (path === '/api/v1/admin/submissions') {
       const row = state.detail.submission;
       const visible =
@@ -95,9 +99,43 @@ async function mockAdmin(page: Page) {
   return state;
 }
 
+test('review filters reuse the authorized catalog until an explicit refresh', async ({
+  page,
+}) => {
+  const state = await mockAdmin(page);
+  await page.goto('/admin');
+  await expect(page.locator('.submission-results')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+  const initial = state.catalogReads;
+  expect(initial).toBeGreaterThan(0);
+  for (const name of ['Reviewed', 'Unmatched', 'Pending']) {
+    await page
+      .getByRole('group', { name: 'Submission views' })
+      .getByRole('button', { name, exact: true })
+      .click();
+    await expect(page.locator('.submission-results')).toHaveAttribute(
+      'aria-busy',
+      'false',
+    );
+    expect(state.catalogReads).toBe(initial);
+  }
+  await page
+    .getByRole('button', { name: 'Refresh submissions', exact: true })
+    .click();
+  await expect.poll(() => state.catalogReads).toBe(initial + 1);
+  await expect(page.locator('.submission-results')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+});
+
 test('paged unmatched review saves a specific shared item, approves hardcore credit and revokes it with an audit reason', async ({
   page,
 }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   const f = await adminFixtures(),
     maskId = f.detail.submission.itemId!;
   await page.goto('/admin?preview=1');
@@ -202,6 +240,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   ).toBeVisible();
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot--collected')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
 
 test('approved corrections require a reason and move the single credit into a free normal slot', async ({

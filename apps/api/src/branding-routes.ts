@@ -4,6 +4,7 @@ import { BrandingStorage, MAX_LOGO_BYTES } from './branding-storage.js';
 import { defaultBranding, type BrandingStore } from './branding-store.js';
 import { assetIdPattern } from './icon-storage.js';
 import { ApiError } from './types.js';
+import { matchesEtag } from './projection-cache.js';
 export function brandingRoutes(
   app: FastifyInstance,
   store?: BrandingStore,
@@ -16,9 +17,15 @@ export function brandingRoutes(
   for (const hardcore of [false, true])
     app.get(
       '/api/v1/branding' + (hardcore ? '/hardcore' : ''),
-      async (_request, reply) => {
-        reply.header('Cache-Control', 'no-store');
-        return store ? store.settings(hardcore) : defaultBranding;
+      async (request, reply) => {
+        const value = store ? await store.settings(hardcore) : defaultBranding,
+          etag = '"' + value.revision + '"';
+        reply
+          .header('Cache-Control', 'public, max-age=0, must-revalidate')
+          .header('ETag', etag);
+        if (matchesEtag(request.headers['if-none-match'], etag))
+          return reply.code(304).send();
+        return value;
       },
     );
   for (const favicon of [false, true])

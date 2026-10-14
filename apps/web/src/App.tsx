@@ -1,5 +1,11 @@
 /** Public log and event tracker share one page; admin routes remain directly addressable. */
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { AdminPage } from './AdminPage.tsx';
 import { LiveAdminClient } from './admin-api.ts';
 import { PreviewAdminClient } from './preview/admin.ts';
@@ -15,8 +21,10 @@ import { PreviewXpClient } from './preview/xp.ts';
 import { CollectionLog } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
 import { scenarios, type Scenario } from './preview/scenarios.ts';
-import { parseSettings, type SiteSettings } from './site-settings.ts';
-import { defaultBranding, parseBranding } from './branding.ts';
+import { type SiteSettings } from './site-settings.ts';
+import { defaultBranding } from './branding.ts';
+import { PublicMetadataClient } from './public-metadata.ts';
+import { usePublicPolling } from './use-public-polling.ts';
 import { useRouteNavigation } from './use-route-navigation.ts';
 import {
   defaultSiteCopy,
@@ -150,119 +158,72 @@ export function App() {
     useState(defaultBranding);
   const [liveHardcoreAppearance, setLiveHardcoreAppearance] =
     useState<HardcoreAppearance>();
+  const metadata = useMemo(() => new PublicMetadataClient(), [route.preview]);
+  const readSettings = useCallback(
+    (signal: AbortSignal) => metadata.settings(signal),
+    [metadata],
+  );
+  const readNormal = useCallback(
+    (signal: AbortSignal) => metadata.branding(false, signal),
+    [metadata],
+  );
+  const readHardcore = useCallback(
+    (signal: AbortSignal) => metadata.branding(true, signal),
+    [metadata],
+  );
+  const settings = usePublicPolling(
+    readSettings,
+    'Settings could not be refreshed.',
+    { enabled: !route.preview },
+  );
+  const normalBrand = usePublicPolling(
+    readNormal,
+    'Logo could not be refreshed.',
+    { enabled: !route.preview },
+  );
+  const hardcoreBrand = usePublicPolling(
+    readHardcore,
+    'Logo could not be refreshed.',
+    { enabled: !route.preview },
+  );
   useEffect(() => {
     setLiveBranding(defaultBranding);
     setLiveHardcoreBranding(defaultBranding);
-    if (route.preview) return;
-    let stopped = false,
-      pending = false;
-    let controller: AbortController | undefined;
-    const load = async () => {
-      if (stopped || pending) return;
-      pending = true;
-      controller = new AbortController();
-      const timeout = setTimeout(() => controller?.abort(), 10000);
-      const signal = controller.signal;
-      try {
-        await Promise.all(
-          [false, true].map(async (hardcoreMode) => {
-            try {
-              const response = await fetch(
-                '/api/v1/branding' + (hardcoreMode ? '/hardcore' : ''),
-                {
-                  signal,
-                  cache: 'no-store',
-                },
-              );
-              if (!response.ok) throw new Error('Branding unavailable');
-              const value = parseBranding(await response.json());
-              if (!stopped)
-                (hardcoreMode ? setLiveHardcoreBranding : setLiveBranding)(
-                  (current) =>
-                    Number(value.revision.slice(9)) >=
-                    Number(current.revision.slice(9))
-                      ? value
-                      : current,
-                );
-            } catch {
-              /* Keep each mode's last verified logo independently. */
-            }
-          }),
-        );
-      } finally {
-        clearTimeout(timeout);
-        pending = false;
-      }
-    };
-    void load();
-    const resume = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    const interval = setInterval(resume, 25000);
-    document.addEventListener('visibilitychange', resume);
-    return () => {
-      stopped = true;
-      controller?.abort();
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', resume);
-    };
+    setLiveEnabled(false);
+    setHardcore(false);
   }, [route.preview]);
   useEffect(() => {
-    setHardcore(false);
-    setLiveEnabled(false);
-    if (route.preview) return;
-    let stopped = false;
-    let pending = false;
-    let controller: AbortController | undefined;
-    const load = async () => {
-      if (pending || stopped) return;
-      pending = true;
-      controller = new AbortController();
-      const timeout = setTimeout(() => controller?.abort(), 10000);
-      try {
-        const response = await fetch('/api/v1/settings', {
-          signal: controller.signal,
-          cache: 'no-store',
-        });
-        if (!response.ok) throw new Error('Settings unavailable');
-        const value = parseSettings(await response.json());
-        if (!stopped) {
-          setLiveEnabled(value.hardcoreEnabled);
-          setLiveClanName(value.clanName);
-          setLiveCopy(value.copy ?? defaultSiteCopy);
-          setLiveHardcoreAppearance(
-            value.hardcore ?? {
-              clanName: value.clanName,
-              copy: value.copy ?? defaultSiteCopy,
-            },
-          );
-          if (!value.hardcoreEnabled) setHardcore(false);
-        }
-      } catch {
-        if (!stopped) {
-          setLiveEnabled(false);
-          setHardcore(false);
-        }
-      } finally {
-        clearTimeout(timeout);
-        pending = false;
-      }
-    };
-    void load();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') void load();
-    }, 25000);
-    const resume = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    document.addEventListener('visibilitychange', resume);
-    return () => {
-      stopped = true;
-      controller?.abort();
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', resume);
-    };
-  }, [route.preview]);
+    if (normalBrand.data)
+      setLiveBranding((current) =>
+        Number(normalBrand.data!.revision.slice(9)) >=
+        Number(current.revision.slice(9))
+          ? normalBrand.data!
+          : current,
+      );
+  }, [normalBrand.data]);
+  useEffect(() => {
+    if (hardcoreBrand.data)
+      setLiveHardcoreBranding((current) =>
+        Number(hardcoreBrand.data!.revision.slice(9)) >=
+        Number(current.revision.slice(9))
+          ? hardcoreBrand.data!
+          : current,
+      );
+  }, [hardcoreBrand.data]);
+  useEffect(() => {
+    const value = settings.data;
+    if (!value) return;
+    setLiveEnabled(value.hardcoreEnabled);
+    setLiveClanName(value.clanName);
+    setLiveCopy(value.copy ?? defaultSiteCopy);
+    setLiveHardcoreAppearance(
+      value.hardcore ?? {
+        clanName: value.clanName,
+        copy: value.copy ?? defaultSiteCopy,
+      },
+    );
+    if (!value.hardcoreEnabled) setHardcore(false);
+  }, [settings.data]);
   const admin = route.path === '/admin' || route.path.startsWith('/admin/');
   const hardcoreAppearance = hardcore && !admin;
   const adminClient = useMemo(

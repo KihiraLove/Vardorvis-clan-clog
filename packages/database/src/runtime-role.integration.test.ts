@@ -20,7 +20,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT UPDATE',
-    'catalog_state clan_branding collection_scheduling lifecycle_state review_state runelite_settings site_settings xp_state',
+    'catalog_state clan_branding collection_scheduling lifecycle_state projection_state review_state runelite_settings site_settings xp_state',
   ],
   [
     'SELECT INSERT UPDATE',

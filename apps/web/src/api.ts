@@ -39,7 +39,16 @@ export class PublicLogClient {
       cache: 'no-cache',
       headers: cache?.etag ? { 'If-None-Match': cache.etag } : {},
     });
-    if (response.status === 304 && cache) return cache;
+    if (
+      cache &&
+      (response.status === 304 ||
+        (response.ok &&
+          cache.etag &&
+          response.headers.get('ETag') === cache.etag))
+    ) {
+      void response.body?.cancel();
+      return cache;
+    }
     if (!response.ok) throw new LogUnavailable(response.status);
     return {
       data: parse(await response.json()),

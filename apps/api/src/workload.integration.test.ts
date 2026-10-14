@@ -84,8 +84,9 @@ test(
         }
         assert.equal(accepted, bounded ? 300 : 500);
         assert.equal(denied, bounded ? 200 : 0);
-        assert.equal(selects, accepted * 2);
-        assert.equal(rows, accepted * 3434);
+        // Revision probe on every read; one cold bounded catalog packet, then reuse.
+        assert.equal(selects, accepted + (bounded ? 0 : 1));
+        assert.equal(rows, selects);
         latency.sort((a, b) => a - b);
         const used = process.cpuUsage(cpu);
         t.diagnostic(

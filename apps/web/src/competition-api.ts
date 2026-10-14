@@ -87,6 +87,12 @@ export class CompetitionRequestError extends Error {
   }
 }
 export class LiveCompetitionClient implements CompetitionClient {
+  private activityCache:
+    | {
+        etag: string | null;
+        data: { serverNow: string; competitions: WomCompetition[] };
+      }
+    | undefined;
   private async json(
     path: string,
     signal: AbortSignal,
@@ -121,14 +127,45 @@ export class LiveCompetitionClient implements CompetitionClient {
     return value;
   }
   async activities(signal: AbortSignal) {
-    const value = object(
-      await this.json('/api/v1/competitions/activities', signal),
-    );
+    const response = await fetch('/api/v1/competitions/activities', {
+      signal,
+      cache: 'no-cache',
+      credentials: 'same-origin',
+      headers: this.activityCache?.etag
+        ? { 'If-None-Match': this.activityCache.etag }
+        : {},
+    });
+    const clock = response.headers.get('X-Server-Now');
+    if (
+      this.activityCache &&
+      (response.status === 304 ||
+        (response.ok &&
+          clock &&
+          this.activityCache.etag &&
+          response.headers.get('ETag') === this.activityCache.etag))
+    ) {
+      signal.throwIfAborted();
+      if (!clock) throw new Error('Missing current competition clock.');
+      void response.body?.cancel();
+      return { ...this.activityCache.data, serverNow: timestamp(clock) };
+    }
+    if (!response.ok)
+      throw new CompetitionRequestError(
+        response.status,
+        'Competitions could not be refreshed.',
+      );
+    const value = object(await response.json());
     const competitions = list(value.competitions).map(parseWomCompetition);
     if (competitions.some((c) => c.kind !== 'ACTIVITY'))
       throw new Error('Invalid activity listing.');
     unique(competitions.map((c) => c.id));
-    return { serverNow: timestamp(value.serverNow), competitions };
+    const data = {
+      serverNow: timestamp(clock ?? value.serverNow),
+      competitions,
+    };
+    signal.throwIfAborted();
+    this.activityCache = { etag: response.headers.get('ETag'), data };
+    return data;
   }
   async preview(
     url: string,

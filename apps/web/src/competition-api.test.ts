@@ -19,6 +19,62 @@ const competition = {
   startsAt: '2026-10-01T00:00:00Z',
   endsAt: '2026-10-08T00:00:00Z',
 };
+
+test('activity revalidation retains metadata identity, refreshes the clock and rejects malformed or aborted updates', async (t) => {
+  const client = new LiveCompetitionClient();
+  const data = {
+    serverNow: '2026-10-14T12:00:00Z',
+    competitions: [
+      { ...competition, kind: 'ACTIVITY', metrics: ['vardorvis'] },
+    ],
+  };
+  let response = Response.json(data, { headers: { ETag: 'W/"a"' } });
+  let sent: string | undefined;
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async (_path: string, options: RequestInit) => {
+      sent = (options.headers as Record<string, string>)['If-None-Match'];
+      return response;
+    },
+  );
+  const first = await client.activities(signal());
+  response = new Response(null, {
+    status: 304,
+    headers: { 'X-Server-Now': '2026-10-14T12:01:00Z' },
+  });
+  const next = await client.activities(signal());
+  assert.equal(sent, 'W/"a"');
+  assert.equal(next.competitions, first.competitions);
+  assert.equal(next.serverNow, '2026-10-14T12:01:00Z');
+  // Browser-managed revalidation can expose the cached body as 200 with fresh headers.
+  response = Response.json(
+    {},
+    { headers: { ETag: 'W/"a"', 'X-Server-Now': '2026-10-14T12:02:00Z' } },
+  );
+  assert.equal(
+    (await client.activities(signal())).competitions,
+    first.competitions,
+  );
+  response = Response.json(
+    { ...data, competitions: [competition] },
+    { headers: { ETag: 'W/"bad"' } },
+  );
+  await assert.rejects(client.activities(signal()));
+  response = Response.json(data, { headers: { ETag: 'W/"canceled"' } });
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(client.activities(controller.signal));
+  response = new Response(null, {
+    status: 304,
+    headers: { 'X-Server-Now': '2026-10-14T12:03:00Z' },
+  });
+  assert.equal(
+    (await client.activities(signal())).competitions,
+    first.competitions,
+  );
+  assert.equal(sent, 'W/"a"');
+});
 test('live preview sends only the canonical link and optional pages, preserving detected kind and exact integer gains', async (t) => {
   const bodies: unknown[] = [];
   t.mock.method(

@@ -53,6 +53,12 @@ export function AdminQueue({
   const [loading, setLoading] = useState(!initial?.queue),
     [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  // Paging/filtering keeps the prepared catalog; explicit refresh and writes reload it.
+  const catalogCache = useRef(
+    initial?.catalog
+      ? { client, refresh: 0, catalog: initial.catalog }
+      : undefined,
+  );
   useEffect(() => {
     if (preparedRead.current) {
       preparedRead.current = false;
@@ -64,14 +70,20 @@ export function AdminQueue({
     setLoading(true);
     setError(undefined);
     void Promise.all([
-      client.catalog(controller.signal),
+      catalogCache.current?.client === client &&
+      catalogCache.current.refresh === refresh
+        ? Promise.resolve(catalogCache.current.catalog)
+        : client.catalog(controller.signal),
       client.queue(view, cursor, controller.signal),
     ])
       .then(([catalog, queue]) => {
         // Historical claims may reference an item removed from the active catalog.
         if (queue.nextCursor !== null && queue.nextCursor === cursor)
           throw new Error('Inconsistent review snapshot.');
-        if (active) setSnapshot({ catalog, queue, view, cursor });
+        if (active) {
+          catalogCache.current = { client, refresh, catalog };
+          setSnapshot({ catalog, queue, view, cursor });
+        }
       })
       .catch((failure: unknown) => {
         if (!active) return;

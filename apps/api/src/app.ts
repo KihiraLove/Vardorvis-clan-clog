@@ -24,6 +24,7 @@ import { fetchWomCompetition } from './wom.js';
 import { PreviewWork } from './preview-work.js';
 import { PasswordHasher } from './passwords.js';
 import { WorkloadError } from '@clog/domain';
+import { matchesEtag } from './projection-cache.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
@@ -160,9 +161,15 @@ export function createApp(
       return reply.code(503).send({ status: 'not-ready' });
     }
   });
-  app.get('/api/v1/settings', async (_request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    return readSettings();
+  app.get('/api/v1/settings', async (request, reply) => {
+    const value = await readSettings(),
+      etag = '"' + value.revision + '"';
+    reply
+      .header('Cache-Control', 'public, max-age=0, must-revalidate')
+      .header('ETag', etag);
+    if (matchesEtag(request.headers['if-none-match'], etag))
+      return reply.code(304).send();
+    return value;
   });
   const store = options.store;
   if (options.xp) xpPublicRoutes(app, options.xp);
@@ -170,6 +177,16 @@ export function createApp(
     app.get('/api/v1/' + resource, async (request, reply) => {
       if (!store)
         throw new ApiError(503, 'The catalog service is not configured.');
+      if (store.publicSnapshot) {
+        const snapshot = await store.publicSnapshot(resource),
+          etag = '"' + snapshot.revision + '"';
+        reply
+          .header('ETag', etag)
+          .header('Cache-Control', 'public, max-age=0, must-revalidate');
+        if (matchesEtag(request.headers['if-none-match'], etag))
+          return reply.code(304).send();
+        return reply.type('application/json').send(snapshot.body);
+      }
       const data =
         resource === 'catalog'
           ? await store.catalog()

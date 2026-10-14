@@ -1,5 +1,10 @@
 /** Event sidebar and skill grid; totals and all events arrive as one validated snapshot. */
 import { useEffect, useState } from 'react';
+import {
+  publicPoller,
+  publicRead,
+  reportPublicFailure,
+} from './public-polling.ts';
 import { XpAmount } from './XpAmount.tsx';
 import { XpAdmin } from './XpAdmin.tsx';
 import { XpPodium } from './XpPodium.tsx';
@@ -35,45 +40,30 @@ export function XpPage({
   const [loading, setLoading] = useState(!initial);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    let active = true,
-      pending = false;
-    let controller: AbortController | undefined;
-
-    const load = async () => {
-      if (!active || pending) return;
-      pending = true;
-      controller = new AbortController();
-      setLoading(true);
-      const timer = setTimeout(() => controller?.abort(), 10000);
-      try {
-        const value = await client.tracker(controller.signal);
-        if (active) {
-          setData(value);
-          setError(undefined);
+    let active = true;
+    const subscription = publicPoller.subscribe(
+      async (signal) => {
+        if (active) setLoading(true);
+        try {
+          const value = await publicRead(client.tracker(signal), signal);
+          if (active && !signal.aborted) {
+            setData(value);
+            setError(undefined);
+          }
+        } catch {
+          if (active && reportPublicFailure(signal))
+            setError('XP could not be refreshed. Try again shortly.');
+        } finally {
+          if (active && reportPublicFailure(signal)) setLoading(false);
         }
-      } catch {
-        if (active) setError('XP could not be refreshed. Try again shortly.');
-      } finally {
-        clearTimeout(timer);
-        pending = false;
-        if (active) setLoading(false);
-      }
-    };
-    if (!initial || refresh > 0) void load();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') void load();
-    }, 25000);
-    const resume = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    document.addEventListener('visibilitychange', resume);
+      },
+      !initial || refresh > 0,
+    );
     return () => {
       active = false;
-      controller?.abort();
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', resume);
+      subscription.stop();
     };
-  }, [client, refresh]);
+  }, [client, refresh, initial]);
   useEffect(() => {
     setData(initial);
     setSelected(undefined);

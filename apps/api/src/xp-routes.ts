@@ -4,12 +4,23 @@ import { ApiError } from './types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { PreviewWork } from './preview-work.js';
+import { matchesEtag } from './projection-cache.js';
 export type XpAuthorize = (
   request: FastifyRequest,
   write?: boolean,
 ) => Promise<{ id: string; displayName: string }>;
 export function xpPublicRoutes(app: FastifyInstance, store: XpStore) {
   app.get('/api/v1/xp/tracker', async (request, reply) => {
+    if (store.trackerSnapshot) {
+      const snapshot = await store.trackerSnapshot(),
+        etag = '"' + snapshot.revision + '"';
+      reply
+        .header('ETag', etag)
+        .header('Cache-Control', 'public, max-age=0, must-revalidate');
+      if (matchesEtag(request.headers['if-none-match'], etag))
+        return reply.code(304).send();
+      return reply.type('application/json').send(snapshot.body);
+    }
     const snapshot = await store.tracker(),
       etag = '"' + snapshot.revision + '"';
     reply
