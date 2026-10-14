@@ -15,6 +15,8 @@ import { createApp } from './app.js';
 import { hashPassword } from './passwords.js';
 import { fetchCompetition } from './competition-wom.js';
 import type { CompetitionSnapshot } from './competition-types.js';
+import { PreviewWork } from './preview-work.js';
+import { WorkBudget } from '@clog/domain';
 test(
   'unified competitions preserve legacy data, isolate kinds, schedule atomically, reconcile results and enforce staff permissions',
   { skip: !process.env.TEST_DATABASE_URL },
@@ -69,6 +71,7 @@ test(
       ],
     });
     let fakeSource: unknown = source(500, 'vardorvis', now - day, now + day);
+    let admissionClock = now;
     const app = createApp(undefined, undefined, {
       store: backend,
       competitions: store,
@@ -76,6 +79,14 @@ test(
       xp,
       auth,
       logger: false,
+      previews: new PreviewWork(
+        new WorkBudget(
+          { concurrent: 2, perMinute: 12 },
+          [{ concurrent: 1, perMinute: 4 }],
+          512,
+          () => admissionClock,
+        ),
+      ),
       fetchCompetition: (url, at) =>
         fetchCompetition(url, at, async () => Response.json(fakeSource)),
     });
@@ -565,6 +576,8 @@ test(
         200,
       );
       fakeSource = source(500, 'attack', now - 2 * day, now - day);
+      // Begin a new rate window for the next permission scenario. Saturation has dedicated tests.
+      admissionClock += 60000;
       assert.equal(
         (
           await app.inject({

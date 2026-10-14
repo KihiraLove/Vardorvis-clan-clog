@@ -169,3 +169,4 @@ export {
   type CollectionSchedule,
   type SchedulingState,
 } from './scheduling.js';
+export { WorkBudget, WorkloadError, type WorkLimit } from './work-budget.js';

@@ -1,5 +1,6 @@
 /** Discord is an adapter; only an API 200/201 may produce a saved receipt. */
-import { validateProofUrl } from '@clog/domain';
+import { validateProofUrl, WorkloadError } from '@clog/domain';
+import { type BotWorkloads, searchRetryChoice } from './workloads.js';
 import {
   MessageFlags,
   type AutocompleteInteraction,
@@ -105,6 +106,7 @@ export async function handleAutocomplete(
   interaction: AutocompleteInteraction,
   api: BotApi,
   guildId: string,
+  workloads?: BotWorkloads,
 ): Promise<void> {
   if (
     interaction.guildId !== guildId ||
@@ -115,7 +117,12 @@ export async function handleAutocomplete(
     await interaction.respond([]);
     return;
   }
+  let release: (() => void) | undefined;
   try {
+    release = workloads?.search.acquire([
+      guildId,
+      guildId + ':' + interaction.user.id,
+    ]);
     const search = interaction.options.getFocused();
     const items = await api.search(String(search).slice(0, 200));
     await interaction.respond(
@@ -124,16 +131,30 @@ export async function handleAutocomplete(
         value: 'item:' + item.id,
       })),
     );
-  } catch {
+  } catch (error) {
     // Search failure cannot imply a successful match; free-text remains available.
     if (!interaction.responded)
-      await interaction.respond([]).catch(() => undefined);
+      await interaction
+        .respond(
+          error instanceof WorkloadError
+            ? [
+                {
+                  name: `Search busy: wait ${error.retryAfterSeconds}s or type an item name`,
+                  value: searchRetryChoice,
+                },
+              ]
+            : [],
+        )
+        .catch(() => undefined);
+  } finally {
+    release?.();
   }
 }
 export async function handleSubmission(
   interaction: ChatInputCommandInteraction,
   api: BotApi,
   guildId: string,
+  workloads?: BotWorkloads,
 ): Promise<void> {
   // Defer before doing any network I/O, including catalog lookups.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -143,8 +164,19 @@ export async function handleSubmission(
     );
     return;
   }
+  let release: (() => void) | undefined;
   try {
+    release = workloads?.intake.acquire([
+      guildId,
+      guildId + ':' + interaction.user.id,
+    ]);
     const rawItemText = interaction.options.getString('item', true);
+    if (rawItemText === searchRetryChoice) {
+      await interaction.editReply(
+        'Item search was busy. Wait a few seconds, then search again or type the item name manually. This delivery was not sent to the submission service.',
+      );
+      return;
+    }
     const proofUrl = interaction.options.getString('proof', true);
     const collectorName = collectorSnapshot(
       interaction.member,
@@ -188,22 +220,31 @@ export async function handleSubmission(
     await interaction.editReply(receiptMessage(receipt));
   } catch (error) {
     await interaction
-      .editReply(failureMessage(error, interaction.id))
+      .editReply(
+        error instanceof WorkloadError
+          ? `Submission busy. Wait ${error.retryAfterSeconds} seconds and try again. This delivery was not sent to the submission service.` +
+              interactionReference(interaction.id) +
+              '\nIf this interaction was attempted earlier or had an unconfirmed reply, ask an admin to check its receipt before starting a new command.'
+          : failureMessage(error, interaction.id),
+      )
       .catch(() => undefined);
+  } finally {
+    release?.();
   }
 }
 export async function handleInteraction(
   interaction: Interaction,
   api: BotApi,
   guildId: string,
+  workloads?: BotWorkloads,
 ): Promise<void> {
   if (interaction.isAutocomplete()) {
-    await handleAutocomplete(interaction, api, guildId);
+    await handleAutocomplete(interaction, api, guildId, workloads);
   } else if (
     interaction.isChatInputCommand() &&
     interaction.commandName === 'cc-clog' &&
     interaction.options.getSubcommand(false) === 'submit'
   ) {
-    await handleSubmission(interaction, api, guildId);
+    await handleSubmission(interaction, api, guildId, workloads);
   }
 }

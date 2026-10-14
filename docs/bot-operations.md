@@ -37,7 +37,7 @@ The registration script uses the per-command Discord POST **upsert**, not a bulk
 
 `/cc-clog submit item:<item or catalog choice> proof:<HTTPS Imgur/Gyazo> [submitter-name:<name>] [hardcore:true|false]`
 
-- Catalog autocomplete queries the current API catalog **on every interaction**, returns up to 25 ranked matches and sends `item:<canonical ID>` choice values. Admin-created items without an OSRS game ID are selectable. Free-text item entries are still accepted and may require manual matching.
+- Admitted catalog autocomplete queries the current API catalog on every interaction, returns up to 25 ranked matches and sends `item:<canonical ID>` choice values. Admin-created items without an OSRS game ID are selectable. Free-text item entries are still accepted and may require manual matching. Separate [user/guild workload budgets](workload-budgets.md) provide retry guidance on overload; selecting the search retry hint cannot create a submission.
 - If no explicit collector name is supplied, take the current guild display name/nickname, then fall back to the Discord username; save that **snapshot**.
 - The bot defers **ephemerally** before sending any API request. It locally validates the proof URL, while the API repeats authoritative validation. The bot never fetches the evidence URL itself.
 - The bot forwards immutable Discord actor, guild and interaction IDs, raw item selection, optional canonical ID and the boolean hardcore claim (default false) to the API. No date option exists; the API assigns the UTC receipt date and rejects caller-supplied dates.

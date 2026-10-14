@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError } from './types.js';
 import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
+import { PreviewWork } from './preview-work.js';
 export type XpAuthorize = (
   request: FastifyRequest,
   write?: boolean,
@@ -27,6 +28,7 @@ export function xpAdminRoutes(
   store: XpStore,
   requireAdmin: XpAuthorize,
   fetchCompetition: typeof fetchWomCompetition = fetchWomCompetition,
+  previews = new PreviewWork(),
 ) {
   const secured = {
     onRequest: async (request: FastifyRequest) => {
@@ -49,10 +51,17 @@ export function xpAdminRoutes(
         },
       },
     },
-    async (req) => {
-      const admin = await requireAdmin(req, true),
-        snapshot = await fetchCompetition(req.body.competitionUrl);
-      return store.preview(snapshot, admin.id);
+    async (req, reply) => {
+      const admin = await requireAdmin(req, true);
+      return previews.run(req, reply, admin.id, async (signal) => {
+        const snapshot = await fetchCompetition(
+          req.body.competitionUrl,
+          fetch,
+          signal,
+        );
+        signal.throwIfAborted();
+        return store.preview(snapshot, admin.id);
+      });
     },
   );
   app.post<{

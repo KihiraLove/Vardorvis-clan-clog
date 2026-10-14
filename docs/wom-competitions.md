@@ -24,6 +24,11 @@ fetch one complete per-skill batch, preserving exact integer contributions
 without adding the aggregate/weighted total again. The registry supplies display
 order, names and icon filenames to API/web, including `runecrafting` → `runecraft.png`.
 
+Previews share [account/global admission and response-byte budgets](workload-budgets.md).
+The 8 MiB streaming ceiling and 6.5-second operation deadline cover both upstream
+responses. Overload returns 429 with `Retry-After`; importing/replaying an existing
+receipt remains available independently of preview admission.
+
 ## Lifecycle and schedules
 
 PostgreSQL's clock is authoritative. A competition is future before its start,

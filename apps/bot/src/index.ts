@@ -5,6 +5,7 @@ import { HttpBotApi } from './api.js';
 import { readBotConfig } from './config.js';
 import { wireGateway } from './runtime.js';
 import { cachedReadiness } from './readiness.js';
+import { BotWorkloads, readWorkloadLimits } from './workloads.js';
 
 const config = readBotConfig();
 const client = config
@@ -12,7 +13,14 @@ const client = config
   : null;
 const api = config ? new HttpBotApi(config.apiOrigin, config.apiToken) : null;
 const runtime =
-  config && client && api ? wireGateway(client, api, config.guildId) : null;
+  config && client && api
+    ? wireGateway(
+        client,
+        api,
+        config.guildId,
+        new BotWorkloads(readWorkloadLimits()),
+      )
+    : null;
 const apiReady = api
   ? cachedReadiness(() => api.checkReady())
   : async () => false;

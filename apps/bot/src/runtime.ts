@@ -2,13 +2,19 @@
 import { Events, type Client, type Interaction } from 'discord.js';
 import { type BotApi } from './api.js';
 import { handleInteraction } from './handler.js';
+import { BotWorkloads } from './workloads.js';
 
 type Gateway = Pick<Client, 'on' | 'isReady' | 'destroy'>;
-export function wireGateway(client: Gateway, api: BotApi, guildId: string) {
+export function wireGateway(
+  client: Gateway,
+  api: BotApi,
+  guildId: string,
+  workloads = new BotWorkloads(),
+) {
   let stopping = false;
   client.on(Events.InteractionCreate, (interaction: Interaction) => {
     if (stopping) return;
-    void handleInteraction(interaction, api, guildId).catch(() => {
+    void handleInteraction(interaction, api, guildId, workloads).catch(() => {
       // Interactions may expire during a disconnect. No false receipt is sent.
     });
   });
@@ -17,6 +23,7 @@ export function wireGateway(client: Gateway, api: BotApi, guildId: string) {
     stop: () => {
       if (stopping) return;
       stopping = true;
+      workloads.close();
       client.destroy();
     },
   };

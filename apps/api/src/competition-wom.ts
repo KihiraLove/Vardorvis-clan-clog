@@ -101,10 +101,11 @@ export async function fetchCompetition(
   input: string,
   now: number,
   request: typeof fetch = fetch,
+  cancellation: AbortSignal = AbortSignal.timeout(6500),
 ): Promise<CompetitionSnapshot> {
   const { id, url } = parseCompetitionUrl(input);
   const base = 'https://api.wiseoldman.net/v2/competitions/' + id;
-  const source = await getWom(base, request);
+  const source = await getWom(base, request, cancellation);
   if (
     !obj(source) ||
     source.id !== id ||
@@ -171,7 +172,7 @@ export async function fetchCompetition(
       for (const skill of skills) query.append('metrics', skill);
     const breakdown =
       skills.length > 1
-        ? await getWom(base + '?' + query.toString(), request)
+        ? await getWom(base + '?' + query.toString(), request, cancellation)
         : undefined;
     const xp = parseWomSnapshot(source, breakdown, id);
     return {

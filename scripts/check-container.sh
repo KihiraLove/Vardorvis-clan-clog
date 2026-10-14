@@ -22,6 +22,7 @@ if grep -Eq 'ℹ (skipped|todo) [1-9]' .data/local-checks/validate.log; then
   echo 'Full validation must not skip database tests or leave TODO tests.' >&2
   exit 1
 fi
+run_gate workloads node scripts/benchmark-workloads.mjs
 run_gate browser npm run test:e2e -w @clog/web
 run_gate smoke bash scripts/compose-smoke.sh
 printf 'All local gates passed.\n'

@@ -21,9 +21,14 @@ import { authRoutes } from './auth.js';
 import { xpPublicRoutes } from './xp-routes.js';
 import type { ReviewStore } from './review-types.js';
 import { fetchWomCompetition } from './wom.js';
+import { PreviewWork } from './preview-work.js';
+import { PasswordHasher } from './passwords.js';
+import { WorkloadError } from '@clog/domain';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type BackendStore, type Settings } from './types.js';
 interface Options {
+  passwords?: PasswordHasher;
+  previews?: PreviewWork;
   lifecycle?:
     import('@clog/database/dist/lifecycle.js').PgLifecycleStore | undefined;
   competitions?:
@@ -60,6 +65,8 @@ export function createApp(
   }),
   options: Options = {},
 ) {
+  const previews = options.previews ?? new PreviewWork();
+  const passwords = options.passwords ?? new PasswordHasher();
   const app = Fastify({
     bodyLimit: 16 * 1024,
     requestTimeout: 15000,
@@ -85,6 +92,10 @@ export function createApp(
             },
           },
   });
+  app.addHook('onClose', async () => {
+    previews.budget.close();
+    await passwords.close();
+  });
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -98,27 +109,37 @@ export function createApp(
   });
   app.setErrorHandler((error, request, reply) => {
     const status =
-      error instanceof ApiError
-        ? error.status
-        : error instanceof Error && 'validation' in error
-          ? 400
-          : error instanceof Error &&
-              'statusCode' in error &&
-              typeof error.statusCode === 'number' &&
-              error.statusCode >= 400 &&
-              error.statusCode < 500
-            ? error.statusCode
-            : 503;
+      error instanceof WorkloadError
+        ? 429
+        : error instanceof ApiError
+          ? error.status
+          : error instanceof Error && 'validation' in error
+            ? 400
+            : error instanceof Error &&
+                'statusCode' in error &&
+                typeof error.statusCode === 'number' &&
+                error.statusCode >= 400 &&
+                error.statusCode < 500
+              ? error.statusCode
+              : 503;
     // Do not log driver/provider errors: they may contain SQL parameters or OAuth secrets.
     if (status >= 500)
       request.log.error(
         { status, path: request.url.split('?')[0] },
         'API operation failed',
       );
-    if (status === 429) reply.header('Retry-After', '60');
+    if (status === 429)
+      reply.header(
+        'Retry-After',
+        String(
+          error instanceof WorkloadError || error instanceof ApiError
+            ? (error.retryAfterSeconds ?? 60)
+            : 60,
+        ),
+      );
     return reply.code(status).send({
       error:
-        error instanceof ApiError
+        error instanceof ApiError || error instanceof WorkloadError
           ? error.message
           : status === 400
             ? 'Invalid request fields.'
@@ -197,6 +218,8 @@ export function createApp(
           options.review,
           options.fetchWom ?? fetchWomCompetition,
           options.clanKeys,
+          previews,
+          passwords,
         )
       : undefined;
   if (!requireAdmin) {
@@ -214,6 +237,7 @@ export function createApp(
     options.competitions,
     requireAdmin,
     options.fetchCompetition,
+    previews,
   );
   // Review and catalog editing share one private catalog projection and auth boundary.
   if (options.catalog || options.review)

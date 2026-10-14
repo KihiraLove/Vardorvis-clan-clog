@@ -3,6 +3,7 @@ import type { CompetitionPreviewInput } from '@clog/domain';
 import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
 import type { PgCompetitionStore } from './competition-store.js';
 import { fetchCompetition } from './competition-wom.js';
+import { PreviewWork } from './preview-work.js';
 type Authorize = (
   request: FastifyRequest,
   write?: boolean,
@@ -12,6 +13,7 @@ export function competitionRoutes(
   store?: PgCompetitionStore,
   authorize?: Authorize,
   fetchSource = fetchCompetition,
+  previews = new PreviewWork(),
 ) {
   const available = () => {
     if (!store) throw new ApiError(503, 'Competition service unavailable.');
@@ -51,33 +53,38 @@ export function competitionRoutes(
         },
       },
     },
-    async (r) => {
+    async (r, reply) => {
       const actor = await staff(r, true),
         service = available();
-      const snapshot = await fetchSource(
-        r.body.competitionUrl,
-        await service.clock(),
-      );
-      if (
-        snapshot.competition.kind === 'SKILL' &&
-        snapshot.lifecycle === 'finished' &&
-        actor.role !== 'admin'
-      )
-        throw new ApiError(
-          403,
-          'Only the administrator can import XP results.',
+      return previews.run(r, reply, actor.id, async (signal) => {
+        const snapshot = await fetchSource(
+          r.body.competitionUrl,
+          await service.clock(),
+          fetch,
+          signal,
         );
-      if (
-        r.body.kind !== undefined &&
-        r.body.kind !== snapshot.competition.kind
-      )
-        throw new ApiError(
-          422,
-          'The legacy kind hint does not match WOM metadata. Detected kind: ' +
-            snapshot.competition.kind +
-            '.',
-        );
-      return service.preview(snapshot, actor.id, r.body.pageIds);
+        signal.throwIfAborted();
+        if (
+          snapshot.competition.kind === 'SKILL' &&
+          snapshot.lifecycle === 'finished' &&
+          actor.role !== 'admin'
+        )
+          throw new ApiError(
+            403,
+            'Only the administrator can import XP results.',
+          );
+        if (
+          r.body.kind !== undefined &&
+          r.body.kind !== snapshot.competition.kind
+        )
+          throw new ApiError(
+            422,
+            'The legacy kind hint does not match WOM metadata. Detected kind: ' +
+              snapshot.competition.kind +
+              '.',
+          );
+        return service.preview(snapshot, actor.id, r.body.pageIds);
+      });
     },
   );
   app.post<{

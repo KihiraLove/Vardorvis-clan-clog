@@ -14,7 +14,8 @@ import type { XpStore } from './xp-types.js';
 import { fetchWomCompetition } from './wom.js';
 import { ApiError, type BackendStore } from './types.js';
 import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
-import { hashPassword, verifyPassword } from './passwords.js';
+import { PasswordHasher } from './passwords.js';
+import { PreviewWork } from './preview-work.js';
 import {
   defaultSiteCopy,
   type SiteCopy,
@@ -42,7 +43,12 @@ export function authRoutes(
   review?: ReviewStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
   clanKeys?: ClanKeyStore,
+  previews = new PreviewWork(),
+  passwords = new PasswordHasher(),
 ) {
+  const hashPassword = (password: string) => passwords.hash(password);
+  const verifyPassword = (password: string, encoded: string) =>
+    passwords.verify(password, encoded);
   let dummyHash: string;
   app.addHook('onReady', async () => {
     // Unknown-account timing uses an unrelated verifier, never a usable default.
@@ -145,7 +151,7 @@ export function authRoutes(
     );
     return token;
   }
-  if (xp) xpAdminRoutes(app, xp, requireOwner, fetchWom);
+  if (xp) xpAdminRoutes(app, xp, requireOwner, fetchWom, previews);
   if (review) reviewRoutes(app, review, requireAdmin);
   app.post<{ Body: { username: string; password: string } }>(
     '/api/v1/auth/login',

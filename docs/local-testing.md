@@ -29,8 +29,10 @@ run it only for repository code you trust, on your development machine.
    This includes large-ledger [review](review-pagination.md) and
    [XP history](xp-history-pagination.md) traversal, concurrency and query-plan checks,
    plus [lifecycle archival](lifecycle-archive.md) capacity and preservation checks.
-3. All Chromium tests, with CI's focused-test protection and retry policy.
-4. A production image and a second disposable database: migrations, runtime
+3. Reproducible [workload measurements](workload-budgets.md) for WOM parsing,
+   native password hashing and Discord admission, plus real PostgreSQL query-volume coverage.
+4. All Chromium tests, with CI's focused-test protection and retry policy.
+5. A production image and a second disposable database: migrations, runtime
    permissions, Nginx routing, auth/review, competitions, large branding uploads,
    preview maintenance, owner archival/restore, catalog/icon persistence, coordinated backup and recovery
    after database restart. The Traefik configuration is validated as well.

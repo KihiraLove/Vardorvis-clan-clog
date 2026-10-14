@@ -126,11 +126,10 @@ test(
           assert.equal((await store.accounts()).length, 1);
           const account = (await store.accountByUsername('ADMIN'))!;
           assert.equal(account.mustChangePassword, true);
-          const valid = await Promise.all(
-            candidates.map((password) =>
-              verifyPassword(password, account.passwordHash),
-            ),
-          );
+          // Initializers above still race. Inspect their winner within the hash budget.
+          const valid: boolean[] = [];
+          for (const password of candidates)
+            valid.push(await verifyPassword(password, account.passwordHash));
           assert.equal(valid.filter(Boolean).length, 1);
           bootstrapPassword = candidates[valid.indexOf(true)]!;
           assert.equal(
