@@ -1,7 +1,7 @@
 /** Coherent public tracker and authenticated, CSRF-bound import endpoints. */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError } from './types.js';
-import type { XpStore } from './xp-types.js';
+import type { XpAdminStore, XpPublicStore } from './route-services.js';
 import { fetchWomCompetition } from './wom.js';
 import { PreviewWork } from './preview-work.js';
 import { matchesEtag } from './projection-cache.js';
@@ -9,7 +9,7 @@ export type XpAuthorize = (
   request: FastifyRequest,
   write?: boolean,
 ) => Promise<{ id: string; displayName: string }>;
-export function xpPublicRoutes(app: FastifyInstance, store: XpStore) {
+export function xpPublicRoutes(app: FastifyInstance, store: XpPublicStore) {
   app.get('/api/v1/xp/tracker', async (request, reply) => {
     if (store.trackerSnapshot) {
       const snapshot = await store.trackerSnapshot(),
@@ -36,7 +36,7 @@ export function xpPublicRoutes(app: FastifyInstance, store: XpStore) {
 }
 export function xpAdminRoutes(
   app: FastifyInstance,
-  store: XpStore,
+  store: XpAdminStore,
   requireAdmin: XpAuthorize,
   fetchCompetition: typeof fetchWomCompetition = fetchWomCompetition,
   previews = new PreviewWork(),

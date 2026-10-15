@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { CompetitionPreviewInput } from '@clog/domain';
 import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
-import type { PgCompetitionStore } from './competition-store.js';
+import type { CompetitionService } from './route-services.js';
 import { fetchCompetition } from './competition-wom.js';
 import { PreviewWork } from './preview-work.js';
 import { matchesEtag } from './projection-cache.js';
@@ -11,7 +11,7 @@ type Authorize = (
 ) => Promise<AdminIdentity & Pick<StaffAccount, 'role'>>;
 export function competitionRoutes(
   app: FastifyInstance,
-  store?: PgCompetitionStore,
+  store?: CompetitionService,
   authorize?: Authorize,
   fetchSource = fetchCompetition,
   previews = new PreviewWork(),

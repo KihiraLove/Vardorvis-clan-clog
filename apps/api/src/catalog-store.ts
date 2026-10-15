@@ -1,6 +1,7 @@
 /** Catalog writes share the import lock; each receipt, audit and membership change commits together. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import { ApiError } from './types.js';
 import { iconPath, type IconRecord } from './icon-storage.js';
 export interface AdminItem {
@@ -55,22 +56,16 @@ export class PgCatalogStore {
     write: boolean,
     action: (client: pg.PoolClient) => Promise<T>,
   ) {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        write ? 'BEGIN' : 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY',
-      );
-      if (write) await client.query('SELECT pg_advisory_xact_lock(74261005)');
-      const result = await action(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    return transaction(
+      this.pool,
+      write ? 'write' : 'snapshot',
+      async (client) => {
+        if (write) await client.query('SELECT pg_advisory_xact_lock(74261005)');
+        return action(client);
+      },
+    );
   }
+
   private async revision(client: pg.PoolClient) {
     return (
       await client.query<{ revision: string }>(

@@ -5,16 +5,21 @@ import { schedulingRoutes } from './scheduling-routes.js';
 import { competitionRoutes } from './competition-routes.js';
 import { lifecycleRoutes } from './lifecycle-routes.js';
 import { brandingRoutes } from './branding-routes.js';
-import type { BrandingStorage } from './branding-storage.js';
 import type { BrandingStore } from './branding-store.js';
-import type { ProofStorage } from './proof-storage.js';
 import type { ProofStore } from './proof-store.js';
 import { checkReadiness } from './readiness.js';
 import { createHash, randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import { catalogRoutes } from './catalog-routes.js';
-import type { PgCatalogStore } from './catalog-store.js';
-import type { IconStorage } from './icon-storage.js';
+import type {
+  ApplicationStore,
+  CatalogService,
+  CompetitionService,
+  LifecycleReader,
+  IconFiles,
+  ProofFiles,
+  BrandingFiles,
+} from './route-services.js';
 import type { AuthConfig, BotConfig } from './config.js';
 import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
@@ -32,30 +37,28 @@ import {
 import { trackHttpWork } from './runtime-work.js';
 import { matchesEtag } from './projection-cache.js';
 import type { XpStore } from './xp-types.js';
-import { ApiError, type BackendStore, type Settings } from './types.js';
+import { ApiError, type Settings } from './types.js';
 interface Options {
   work?: WorkDrain;
   diagnostics?: OperationalDiagnostics;
   poolMetrics?: () => { total: number; idle: number; waiting: number };
   passwords?: PasswordHasher;
   previews?: PreviewWork;
-  lifecycle?:
-    import('@clog/database/dist/lifecycle.js').PgLifecycleStore | undefined;
-  competitions?:
-    import('./competition-store.js').PgCompetitionStore | undefined;
+  lifecycle?: LifecycleReader | undefined;
+  competitions?: CompetitionService | undefined;
   fetchCompetition?: typeof import('./competition-wom.js').fetchCompetition;
   scheduling?: import('./scheduling-store.js').SchedulingStore | undefined;
   runeLiteSettings?:
     import('./runelite-settings.js').RuneLiteSettingsStore | undefined;
   branding?: BrandingStore | undefined;
-  logos?: BrandingStorage | undefined;
+  logos?: BrandingFiles | undefined;
   clanKeys?: import('./clan-api-key.js').ClanKeyStore | undefined;
-  proofs?: ProofStorage | undefined;
+  proofs?: ProofFiles | undefined;
   proofStore?: ProofStore | undefined;
   checkBotReady?: (() => Promise<void>) | undefined;
-  catalog?: PgCatalogStore | undefined;
-  icons?: IconStorage | undefined;
-  store?: BackendStore | undefined;
+  catalog?: CatalogService | undefined;
+  icons?: IconFiles | undefined;
+  store?: ApplicationStore | undefined;
   auth?: AuthConfig | undefined;
   bot?: BotConfig | undefined;
   xp?: XpStore | undefined;

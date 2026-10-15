@@ -8,6 +8,9 @@ registry and metric classification remain authoritative in `@clog/domain`.
 `PgCompetitionStore` is its compatibility export; `PgXpStore` keeps XP read
 projections and adapts the legacy preview/receipt shape to the same service.
 
+The [store and route inventory](store-and-route-contracts.md) records shared
+transaction plumbing, explicit lock/uncertainty rules and narrow HTTP services.
+
 ## Compatibility and callers
 
 The browser's shared import form uses the competition endpoints through

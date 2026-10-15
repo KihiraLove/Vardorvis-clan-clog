@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import {
   parseCollectionScheduleInput,
   scheduleIdPattern,
@@ -94,18 +95,11 @@ export async function readState(
 export class PgSchedulingStore implements SchedulingStore {
   constructor(private readonly pool: pg.Pool) {}
   async state() {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return transaction(this.pool, 'snapshot', async (client) => {
       const state = await readState(client);
-      await client.query('COMMIT');
+
       return state;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
   private async mutate(
     revision: string,
@@ -114,9 +108,7 @@ export class PgSchedulingStore implements SchedulingStore {
     action: string,
     change: (client: pg.PoolClient, before: SchedulingState) => Promise<void>,
   ) {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
+    return transaction(this.pool, 'write', async (client) => {
       await client.query(
         'SELECT singleton FROM collection_scheduling WHERE singleton=true FOR UPDATE',
       );
@@ -144,14 +136,9 @@ export class PgSchedulingStore implements SchedulingStore {
           JSON.stringify(after),
         ],
       );
-      await client.query('COMMIT');
+
       return after;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
   setEnabled(
     enabled: boolean,

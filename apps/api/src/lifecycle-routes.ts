@@ -2,14 +2,14 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   LifecycleError,
-  type PgLifecycleStore,
   type LifecycleResource,
   type LifecycleView,
 } from '@clog/database/dist/lifecycle.js';
 import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
+import type { LifecycleReader } from './route-services.js';
 export function lifecycleRoutes(
   app: FastifyInstance,
-  store: PgLifecycleStore | undefined,
+  store: LifecycleReader | undefined,
   authorize:
     | ((
         request: FastifyRequest,
@@ -24,7 +24,7 @@ export function lifecycleRoutes(
         'Only the administrator can read lifecycle history.',
       );
   };
-  const call = async <T>(run: (service: PgLifecycleStore) => Promise<T>) => {
+  const call = async <T>(run: (service: LifecycleReader) => Promise<T>) => {
     if (!store) throw new ApiError(503, 'Lifecycle history unavailable.');
     try {
       return await run(store);

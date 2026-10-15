@@ -2,8 +2,9 @@
 import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError, type AdminIdentity } from './types.js';
-import { assetIdPattern, IconStorage, MAX_ICON_BYTES } from './icon-storage.js';
-import { PgCatalogStore, type NewItem, type NewPage } from './catalog-store.js';
+import { assetIdPattern, MAX_ICON_BYTES } from './icon-storage.js';
+import type { NewItem, NewPage } from './catalog-store.js';
+import type { CatalogRouteStore, IconFiles } from './route-services.js';
 export type RequireAdmin = (
   request: FastifyRequest,
   write?: boolean,
@@ -26,8 +27,8 @@ const category = {
 };
 export function catalogRoutes(
   app: FastifyInstance,
-  store: PgCatalogStore,
-  icons: IconStorage,
+  store: CatalogRouteStore,
+  icons: IconFiles,
   authorize?: RequireAdmin,
 ) {
   const admin = async (request: FastifyRequest, write = false) => {

@@ -1,6 +1,7 @@
 /** Transactional review: one current approved credit per item/world, private audits. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import type { IconRecord } from './icon-storage.js';
 import { insertImage, screenshotPath } from './proof-store.js';
 import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
@@ -199,93 +200,95 @@ export class PgReviewStore implements ReviewStore {
         ...(image ? [image.sha256] : []),
       ]),
     );
-    const client = await this.pool.connect();
     try {
-      await client.query('BEGIN');
-      // Serialize this actor/key across API processes before checking receipts.
-      const schedulingEnabled = await lockScheduling(client);
-      await client.query(
-        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-        [JSON.stringify(['manual', actorId, key])],
-      );
-      const replay = (
-        await client.query<{
-          payload_hash: string;
-          response: ReviewSubmission;
-        }>(
-          'SELECT payload_hash,response FROM manual_submission_requests WHERE actor_id=$1 AND request_key=$2',
-          [actorId, key],
-        )
-      ).rows[0];
-      if (replay) {
-        if (replay.payload_hash !== payloadHash)
+      return await transaction(this.pool, 'write', async (client) => {
+        // Serialize this actor/key across API processes before checking receipts.
+        const schedulingEnabled = await lockScheduling(client);
+        await client.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+          [JSON.stringify(['manual', actorId, key])],
+        );
+        const replay = (
+          await client.query<{
+            payload_hash: string;
+            response: ReviewSubmission;
+          }>(
+            'SELECT payload_hash,response FROM manual_submission_requests WHERE actor_id=$1 AND request_key=$2',
+            [actorId, key],
+          )
+        ).rows[0];
+        if (replay) {
+          if (replay.payload_hash !== payloadHash)
+            throw new ApiError(
+              409,
+              'Submission key already used for a different request.',
+            );
+
+          return replay.response;
+        }
+        const validItem = await client.query<{ name: string }>(
+          'SELECT name FROM items WHERE id=$1 AND active FOR SHARE',
+          [fields.itemId],
+        );
+        if (validItem.rowCount !== 1)
+          throw new ApiError(422, 'Select an active catalog item.');
+        await requireScheduledItem(client, schedulingEnabled, fields.itemId);
+        const now = (
+          await client.query<{ today: string }>(
+            "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",
+          )
+        ).rows[0]!.today;
+        if (!validCollectionDate(fields.collectedOn, now))
           throw new ApiError(
-            409,
-            'Submission key already used for a different request.',
+            422,
+            'Collection date is invalid or in the future.',
           );
-        await client.query('COMMIT');
-        return replay.response;
-      }
-      const validItem = await client.query<{ name: string }>(
-        'SELECT name FROM items WHERE id=$1 AND active FOR SHARE',
-        [fields.itemId],
-      );
-      if (validItem.rowCount !== 1)
-        throw new ApiError(422, 'Select an active catalog item.');
-      await requireScheduledItem(client, schedulingEnabled, fields.itemId);
-      const now = (
-        await client.query<{ today: string }>(
-          "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",
-        )
-      ).rows[0]!.today;
-      if (!validCollectionDate(fields.collectedOn, now))
-        throw new ApiError(422, 'Collection date is invalid or in the future.');
-      if (image) await insertImage(client, image);
-      const id = randomUUID();
-      const row = (
-        await client.query<Row>(
-          'INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,' +
-            'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
-            "reviewed_by,review_reason,proof_image_id) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
-            "$6,$7,$8,CASE WHEN $8='approved' THEN now() ELSE NULL END," +
-            "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11) RETURNING " +
-            selection,
+        if (image) await insertImage(client, image);
+        const id = randomUUID();
+        const row = (
+          await client.query<Row>(
+            'INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,' +
+              'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
+              "reviewed_by,review_reason,proof_image_id) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
+              "$6,$7,$8,CASE WHEN $8='approved' THEN now() ELSE NULL END," +
+              "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11) RETURNING " +
+              selection,
+            [
+              id,
+              validItem.rows[0]!.name,
+              fields.itemId,
+              fields.collectorName.trim(),
+              fields.collectedOn,
+              fields.proofUrl?.trim() ?? '',
+              fields.hardcore,
+              fields.approve ? 'approved' : 'pending',
+              actorId,
+              fields.reason?.trim() || null,
+              image?.id ?? null,
+            ],
+          )
+        ).rows[0]!;
+        const created = view(row);
+        await client.query(
+          'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,' +
+            "reason,old_values,new_values) VALUES($1,$2,$3,'create',$4,$5,$6)",
           [
             id,
-            validItem.rows[0]!.name,
-            fields.itemId,
-            fields.collectorName.trim(),
-            fields.collectedOn,
-            fields.proofUrl?.trim() ?? '',
-            fields.hardcore,
-            fields.approve ? 'approved' : 'pending',
             actorId,
+            actorName,
             fields.reason?.trim() || null,
-            image?.id ?? null,
+            JSON.stringify(created),
+            JSON.stringify(created),
           ],
-        )
-      ).rows[0]!;
-      const created = view(row);
-      await client.query(
-        'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,' +
-          "reason,old_values,new_values) VALUES($1,$2,$3,'create',$4,$5,$6)",
-        [
-          id,
-          actorId,
-          actorName,
-          fields.reason?.trim() || null,
-          JSON.stringify(created),
-          JSON.stringify(created),
-        ],
-      );
-      await client.query(
-        'INSERT INTO manual_submission_requests(actor_id,request_key,payload_hash,submission_id,response) VALUES($1,$2,$3,$4,$5)',
-        [actorId, key, payloadHash, id, JSON.stringify(created)],
-      );
-      await client.query('COMMIT');
-      return created;
+        );
+        await client.query(
+          'INSERT INTO manual_submission_requests(actor_id,request_key,payload_hash,submission_id,response) VALUES($1,$2,$3,$4,$5)',
+          [actorId, key, payloadHash, id, JSON.stringify(created)],
+        );
+
+        return created;
+      });
     } catch (e) {
-      await client.query('ROLLBACK');
       if (
         e &&
         typeof e === 'object' &&
@@ -301,8 +304,6 @@ export class PgReviewStore implements ReviewStore {
             ' collection log entry. Revoke or edit it instead.',
         );
       throw e;
-    } finally {
-      client.release();
     }
   }
   async queue(
@@ -311,9 +312,7 @@ export class PgReviewStore implements ReviewStore {
     limit: number,
     cursor?: string,
   ) {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return transaction(this.pool, 'snapshot', async (client) => {
       const where =
         status === 'pending'
           ? unmatched
@@ -349,7 +348,7 @@ export class PgReviewStore implements ReviewStore {
       const hasNext = rows.length > limit;
       const page = rows.slice(0, limit);
       const last = page.at(-1);
-      await client.query('COMMIT');
+
       return {
         revision,
         submissions: page.map(view),
@@ -359,19 +358,12 @@ export class PgReviewStore implements ReviewStore {
             ? encodeCursor(revision, [last.pageTime, last.id])
             : null,
       };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
+    });
   }
   async detail(id: string, cursor?: string, limit = 20) {
     pageLimit(limit);
     requireId(id);
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return transaction(this.pool, 'snapshot', async (client) => {
       await client.query("SET LOCAL statement_timeout = '5s'");
       const submission = (
         await client.query<Row>(
@@ -380,7 +372,6 @@ export class PgReviewStore implements ReviewStore {
         )
       ).rows[0];
       if (!submission) {
-        await client.query('COMMIT');
         return null;
       }
       const state = (
@@ -413,7 +404,6 @@ export class PgReviewStore implements ReviewStore {
         )
       ).rows;
 
-      await client.query('COMMIT');
       return {
         submission: view(submission),
         auditRevision,
@@ -434,12 +424,7 @@ export class PgReviewStore implements ReviewStore {
           after: a.after,
         })),
       };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
+    });
   }
   async mutate(
     id: string,
@@ -449,172 +434,177 @@ export class PgReviewStore implements ReviewStore {
     actorName: string,
   ) {
     requireId(id);
-    const client = await this.pool.connect();
     try {
-      await client.query('BEGIN');
-      const row = (
-        await client.query<Row>(
-          'SELECT ' + selection + ' FROM submissions WHERE id=$1 FOR UPDATE',
-          [id],
-        )
-      ).rows[0];
-      if (!row) throw new ApiError(404, 'Submission not found.');
-      if (row.version !== expectedVersion) throw conflict();
-      const before = view(row);
-      let result: Row,
-        action: 'edit' | 'approve' | 'reject' | 'revoke',
-        reason: string;
-      if ('action' in fields) {
-        action = fields.action;
-        reason = action === 'approve' ? '' : reasonOf(fields.reason, true);
-        if (action === 'approve') {
+      return await transaction(this.pool, 'write', async (client) => {
+        const row = (
+          await client.query<Row>(
+            'SELECT ' + selection + ' FROM submissions WHERE id=$1 FOR UPDATE',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new ApiError(404, 'Submission not found.');
+        if (row.version !== expectedVersion) throw conflict();
+        const before = view(row);
+        let result: Row,
+          action: 'edit' | 'approve' | 'reject' | 'revoke',
+          reason: string;
+        if ('action' in fields) {
+          action = fields.action;
+          reason = action === 'approve' ? '' : reasonOf(fields.reason, true);
+          if (action === 'approve') {
+            if (
+              row.status !== 'pending' ||
+              row.itemId === null ||
+              !row.collectorName.trim() ||
+              (row.source !== 'manual' &&
+                !row.proofImageId &&
+                !validProofUrl(row.proofUrl))
+            )
+              throw new ApiError(
+                422,
+                'Resolve a canonical item and validate proof before approval.',
+              );
+            const active = await client.query(
+              'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+              [row.itemId],
+            );
+            if (active.rowCount !== 1)
+              throw new ApiError(422, 'Selected item is inactive.');
+            const now = (
+              await client.query<{ today: string }>(
+                "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",
+              )
+            ).rows[0]!.today;
+            if (!validCollectionDate(row.collectedOn, now))
+              throw new ApiError(
+                422,
+                'Collection date is invalid or in the future.',
+              );
+          } else if (
+            action === 'reject'
+              ? row.status !== 'pending'
+              : row.status !== 'approved'
+          )
+            throw conflict();
+          const status =
+            action === 'approve'
+              ? 'approved'
+              : action === 'reject'
+                ? 'rejected'
+                : 'revoked';
+          result = (
+            await client.query<Row>(
+              'UPDATE submissions SET status=$2,reviewed_by=$3,reviewed_at=now(),' +
+                'review_reason=$4,version=version+1 WHERE id=$1 RETURNING ' +
+                selection,
+              [id, status, actorId, reason || null],
+            )
+          ).rows[0]!;
+        } else if ('note' in fields) {
+          // This branch never touches claim fields, review decision metadata, or
+          // the unique approved credit. It also handles unmatched pending claims.
+          action = 'edit';
+          if (row.status !== 'pending' && row.status !== 'approved')
+            throw conflict();
           if (
-            row.status !== 'pending' ||
-            row.itemId === null ||
-            !row.collectorName.trim() ||
-            (row.source !== 'manual' &&
-              !row.proofImageId &&
-              !validProofUrl(row.proofUrl))
+            typeof fields.note !== 'string' ||
+            fields.note.trim().length > 1000
           )
             throw new ApiError(
               422,
-              'Resolve a canonical item and validate proof before approval.',
+              'Keep the review note to 1,000 characters.',
             );
-          const active = await client.query(
-            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
-            [row.itemId],
-          );
-          if (active.rowCount !== 1)
-            throw new ApiError(422, 'Selected item is inactive.');
+          const note = fields.note.trim();
+          if (note === row.reviewNote)
+            throw new ApiError(422, 'There are no changes to save.');
+          reason = '';
+          result = (
+            await client.query<Row>(
+              'UPDATE submissions SET review_note=$2,version=version+1 ' +
+                'WHERE id=$1 RETURNING ' +
+                selection,
+              [id, note],
+            )
+          ).rows[0]!;
+        } else {
+          action = 'edit';
+          if (row.status !== 'pending' && row.status !== 'approved')
+            throw conflict();
+          reason = reasonOf(fields.reason, row.status === 'approved');
+          if (
+            !Number.isSafeInteger(fields.itemId) ||
+            fields.itemId <= 0 ||
+            typeof fields.hardcore !== 'boolean' ||
+            typeof fields.collectorName !== 'string' ||
+            !fields.collectorName.trim() ||
+            fields.collectorName.trim().length > 80
+          )
+            throw new ApiError(
+              422,
+              'Select a valid canonical item, collector and mode.',
+            );
           const now = (
             await client.query<{ today: string }>(
               "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",
             )
           ).rows[0]!.today;
-          if (!validCollectionDate(row.collectedOn, now))
+          if (!validCollectionDate(fields.collectedOn, now))
             throw new ApiError(
               422,
               'Collection date is invalid or in the future.',
             );
-        } else if (
-          action === 'reject'
-            ? row.status !== 'pending'
-            : row.status !== 'approved'
-        )
-          throw conflict();
-        const status =
-          action === 'approve'
-            ? 'approved'
-            : action === 'reject'
-              ? 'rejected'
-              : 'revoked';
-        result = (
-          await client.query<Row>(
-            'UPDATE submissions SET status=$2,reviewed_by=$3,reviewed_at=now(),' +
-              'review_reason=$4,version=version+1 WHERE id=$1 RETURNING ' +
-              selection,
-            [id, status, actorId, reason || null],
-          )
-        ).rows[0]!;
-      } else if ('note' in fields) {
-        // This branch never touches claim fields, review decision metadata, or
-        // the unique approved credit. It also handles unmatched pending claims.
-        action = 'edit';
-        if (row.status !== 'pending' && row.status !== 'approved')
-          throw conflict();
-        if (typeof fields.note !== 'string' || fields.note.trim().length > 1000)
-          throw new ApiError(422, 'Keep the review note to 1,000 characters.');
-        const note = fields.note.trim();
-        if (note === row.reviewNote)
-          throw new ApiError(422, 'There are no changes to save.');
-        reason = '';
-        result = (
-          await client.query<Row>(
-            'UPDATE submissions SET review_note=$2,version=version+1 ' +
-              'WHERE id=$1 RETURNING ' +
-              selection,
-            [id, note],
-          )
-        ).rows[0]!;
-      } else {
-        action = 'edit';
-        if (row.status !== 'pending' && row.status !== 'approved')
-          throw conflict();
-        reason = reasonOf(fields.reason, row.status === 'approved');
-        if (
-          !Number.isSafeInteger(fields.itemId) ||
-          fields.itemId <= 0 ||
-          typeof fields.hardcore !== 'boolean' ||
-          typeof fields.collectorName !== 'string' ||
-          !fields.collectorName.trim() ||
-          fields.collectorName.trim().length > 80
-        )
-          throw new ApiError(
-            422,
-            'Select a valid canonical item, collector and mode.',
+          const active = await client.query(
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+            [fields.itemId],
           );
-        const now = (
-          await client.query<{ today: string }>(
-            "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",
+          if (active.rowCount !== 1)
+            throw new ApiError(422, 'Selected catalog item is unavailable.');
+          if (
+            row.itemId === fields.itemId &&
+            row.hardcore === fields.hardcore &&
+            row.collectorName === fields.collectorName.trim() &&
+            row.collectedOn === fields.collectedOn
           )
-        ).rows[0]!.today;
-        if (!validCollectionDate(fields.collectedOn, now))
-          throw new ApiError(
-            422,
-            'Collection date is invalid or in the future.',
-          );
-        const active = await client.query(
-          'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
-          [fields.itemId],
+            throw new ApiError(422, 'There are no changes to save.');
+          result = (
+            await client.query<Row>(
+              'UPDATE submissions SET item_id=$2,collector_name=$3,collected_on=$4,' +
+                "hardcore=$5,date_source=CASE WHEN collected_on<>$4::date THEN 'admin' ELSE date_source END," +
+                "version=version+1,reviewed_at=CASE WHEN status='approved' THEN now() ELSE reviewed_at END," +
+                "reviewed_by=CASE WHEN status='approved' THEN $6 ELSE reviewed_by END," +
+                "review_reason=CASE WHEN status='approved' THEN $7 ELSE review_reason END " +
+                'WHERE id=$1 RETURNING ' +
+                selection,
+              [
+                id,
+                fields.itemId,
+                fields.collectorName.trim(),
+                fields.collectedOn,
+                fields.hardcore,
+                actorId,
+                reason || null,
+              ],
+            )
+          ).rows[0]!;
+        }
+        const after = view(result);
+        await client.query(
+          'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,' +
+            'reason,old_values,new_values) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          [
+            id,
+            actorId,
+            actorName,
+            action,
+            reason || null,
+            JSON.stringify(before),
+            JSON.stringify(after),
+          ],
         );
-        if (active.rowCount !== 1)
-          throw new ApiError(422, 'Selected catalog item is unavailable.');
-        if (
-          row.itemId === fields.itemId &&
-          row.hardcore === fields.hardcore &&
-          row.collectorName === fields.collectorName.trim() &&
-          row.collectedOn === fields.collectedOn
-        )
-          throw new ApiError(422, 'There are no changes to save.');
-        result = (
-          await client.query<Row>(
-            'UPDATE submissions SET item_id=$2,collector_name=$3,collected_on=$4,' +
-              "hardcore=$5,date_source=CASE WHEN collected_on<>$4::date THEN 'admin' ELSE date_source END," +
-              "version=version+1,reviewed_at=CASE WHEN status='approved' THEN now() ELSE reviewed_at END," +
-              "reviewed_by=CASE WHEN status='approved' THEN $6 ELSE reviewed_by END," +
-              "review_reason=CASE WHEN status='approved' THEN $7 ELSE review_reason END " +
-              'WHERE id=$1 RETURNING ' +
-              selection,
-            [
-              id,
-              fields.itemId,
-              fields.collectorName.trim(),
-              fields.collectedOn,
-              fields.hardcore,
-              actorId,
-              reason || null,
-            ],
-          )
-        ).rows[0]!;
-      }
-      const after = view(result);
-      await client.query(
-        'INSERT INTO audit_events(submission_id,actor_discord_id,actor_name,action,' +
-          'reason,old_values,new_values) VALUES($1,$2,$3,$4,$5,$6,$7)',
-        [
-          id,
-          actorId,
-          actorName,
-          action,
-          reason || null,
-          JSON.stringify(before),
-          JSON.stringify(after),
-        ],
-      );
-      await client.query('COMMIT');
-      return after;
+
+        return after;
+      });
     } catch (e) {
-      await client.query('ROLLBACK');
       if (e && typeof e === 'object' && 'code' in e && e.code === '23505') {
         if (
           'constraint' in e &&
@@ -624,8 +614,6 @@ export class PgReviewStore implements ReviewStore {
         throw conflict();
       }
       throw e;
-    } finally {
-      client.release();
     }
   }
 }

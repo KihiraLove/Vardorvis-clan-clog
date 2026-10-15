@@ -1,13 +1,10 @@
 /** Dedicated service-token boundary for Discord bot intake; no admin authority. */
 import { validateProofUrl } from '@clog/domain';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import type { BotStore } from './route-services.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BotConfig } from './config.js';
-import {
-  ApiError,
-  type BackendStore,
-  type BotSubmissionInput,
-} from './types.js';
+import { ApiError, type BotSubmissionInput } from './types.js';
 
 const snowflake = '^\\d{17,20}$';
 export function validProofUrl(value: string): boolean {
@@ -59,7 +56,7 @@ function requireBot(request: FastifyRequest, config: BotConfig) {
 }
 export function botRoutes(
   app: FastifyInstance,
-  store: BackendStore,
+  store: BotStore,
   config: BotConfig,
 ) {
   app.get<{ Querystring: { q?: string; limit?: string } }>(

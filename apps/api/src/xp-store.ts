@@ -1,5 +1,6 @@
 /** Transactional snapshots; retries survive process restarts and preview expiry. */
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import {
   ImportReconciliation,
   legacyCompetition,
@@ -254,9 +255,7 @@ export class PgXpStore implements XpStore {
   async history(cursor?: string, limit = 20) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 20)
       throw new ApiError(400, 'Page size must be between 1 and 20.');
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return transaction(this.pool, 'snapshot', async (client) => {
       await client.query("SET LOCAL statement_timeout = '5s'");
       const state = (
         await client.query<{ version: string }>(
@@ -289,7 +288,7 @@ export class PgXpStore implements XpStore {
       ).rows;
       const page = rows.slice(0, limit),
         last = page.at(-1);
-      await client.query('COMMIT');
+
       return {
         revision,
         pageCursor: historyCursor(revision, limit, key),
@@ -307,12 +306,7 @@ export class PgXpStore implements XpStore {
           changes: row.changes,
         })),
       };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 }
 

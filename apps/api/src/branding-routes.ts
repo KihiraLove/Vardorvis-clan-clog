@@ -1,6 +1,7 @@
 import multipart from '@fastify/multipart';
+import type { BrandingFiles } from './route-services.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { BrandingStorage, MAX_LOGO_BYTES } from './branding-storage.js';
+import { MAX_LOGO_BYTES } from './branding-storage.js';
 import { defaultBranding, type BrandingStore } from './branding-store.js';
 import { assetIdPattern } from './icon-storage.js';
 import { ApiError } from './types.js';
@@ -8,7 +9,7 @@ import { matchesEtag } from './projection-cache.js';
 export function brandingRoutes(
   app: FastifyInstance,
   store?: BrandingStore,
-  storage?: BrandingStorage,
+  storage?: BrandingFiles,
   authorize?: (
     request: FastifyRequest,
     write?: boolean,

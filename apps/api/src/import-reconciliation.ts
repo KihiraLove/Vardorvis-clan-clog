@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import { ProjectionCache, projection } from './projection-cache.js';
 import {
   competitionImportAction,
@@ -201,10 +202,8 @@ export class ImportReconciliation {
     pageIds?: string[],
     legacy = false,
   ): Promise<CompetitionPreview> {
-    const client = await this.pool.connect();
     const token = randomBytes(32).toString('base64url');
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+    return transaction(this.pool, 'preview', async (client) => {
       requireSnapshot(snapshot);
       const now = (
         await client.query<{ now: Date }>('SELECT clock_timestamp() AS now')
@@ -328,7 +327,7 @@ export class ImportReconciliation {
             expiresAt,
           ],
         );
-      await client.query('COMMIT');
+
       const warnings: string[] = [];
       if (
         previousPlayers &&
@@ -413,12 +412,7 @@ export class ImportReconciliation {
         changes,
         warnings,
       };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
   async apply(
     token: string,
@@ -431,15 +425,13 @@ export class ImportReconciliation {
     acknowledgeCorrections: boolean,
     legacy = false,
   ): Promise<CompetitionReceipt> {
-    const client = await this.pool.connect();
     const requestHash = competitionHash({
       token,
       revision,
       scheduleRevision,
       acknowledgeCorrections,
     });
-    try {
-      await client.query('BEGIN');
+    return transaction(this.pool, 'write', async (client) => {
       // Scheduling settings always precede XP state, competition and page locks.
       await client.query(
         'SELECT singleton FROM collection_scheduling WHERE singleton=true FOR UPDATE',
@@ -473,7 +465,7 @@ export class ImportReconciliation {
               409,
               'Import key already used for a different request.',
             );
-          await client.query('COMMIT');
+
           return {
             outcome: replay.outcome,
             revision: replay.resulting_revision,
@@ -512,7 +504,7 @@ export class ImportReconciliation {
             403,
             'Only the administrator can import XP results.',
           );
-        await client.query('COMMIT');
+
         return replay.receipt;
       }
       // Old XP-only receipts also reserve their actor/key across protocols.
@@ -787,13 +779,8 @@ export class ImportReconciliation {
           JSON.stringify(receipt),
         ],
       );
-      await client.query('COMMIT');
+
       return receipt;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 }

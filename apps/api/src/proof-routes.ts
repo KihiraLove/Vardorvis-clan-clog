@@ -5,8 +5,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { RequireAdmin } from './catalog-routes.js';
 import { assetIdPattern } from './icon-storage.js';
 import { runeLiteWorld, uuidPattern, type ProofStore } from './proof-store.js';
-import { MAX_SCREENSHOT_BYTES, type ProofStorage } from './proof-storage.js';
-import type { ManualSubmissionInput, ReviewStore } from './review-types.js';
+import { MAX_SCREENSHOT_BYTES } from './proof-storage.js';
+import type { ManualSubmissionInput } from './review-types.js';
+import type { ManualReviewStore, ProofFiles } from './route-services.js';
 import { ApiError } from './types.js';
 import { suppliedClanKey } from './clan-api-key.js';
 
@@ -89,8 +90,8 @@ function manualFields(json: string): ManualSubmissionInput {
 export function proofRoutes(
   app: FastifyInstance,
   store: ProofStore,
-  storage: ProofStorage,
-  review?: ReviewStore,
+  storage: ProofFiles,
+  review?: ManualReviewStore,
   authorize?: RequireAdmin,
 ) {
   const staff = async (request: FastifyRequest, write = false) => {

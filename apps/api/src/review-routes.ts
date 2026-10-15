@@ -1,11 +1,11 @@
 /** Allowlisted, CSRF-protected review API with versioned queue and private audit. */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError } from './types.js';
+import type { ReviewRouteStore } from './route-services.js';
 import type {
   ReviewAction,
   ManualSubmissionInput,
   ReviewCorrection,
-  ReviewStore,
 } from './review-types.js';
 type Authorize = (
   request: FastifyRequest,
@@ -15,7 +15,7 @@ const version = { type: 'integer', minimum: 1, maximum: 2147483647 } as const;
 const reason = { type: 'string', maxLength: 1000 } as const;
 export function reviewRoutes(
   app: FastifyInstance,
-  store: ReviewStore,
+  store: ReviewRouteStore,
   authorize: Authorize,
 ) {
   const guard =

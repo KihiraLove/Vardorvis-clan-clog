@@ -1,5 +1,6 @@
 /** One immutable result and one in-flight load per resource, never a revision map. */
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import { ApiError } from './types.js';
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -39,9 +40,7 @@ export async function projection<T>(
   resource: string,
   load: (client: pg.PoolClient) => Promise<T>,
 ) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  return transaction(pool, 'snapshot', async (client) => {
     await client.query("SET LOCAL statement_timeout='5s'");
     const row = (
       await client.query<{ version: string; now: Date }>(
@@ -55,14 +54,9 @@ export async function projection<T>(
       resource + '-projection-' + row.version,
       () => load(client),
     );
-    await client.query('COMMIT');
+
     return { ...value, serverNow: row.now.toISOString() };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 export function matchesEtag(header: string | undefined, etag: string) {
   const normalized = etag.replace(/^W\//u, '');

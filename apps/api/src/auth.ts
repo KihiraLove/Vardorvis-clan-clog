@@ -9,10 +9,13 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthConfig } from './config.js';
 import { xpAdminRoutes } from './xp-routes.js';
 import { reviewRoutes } from './review-routes.js';
-import type { ReviewStore } from './review-types.js';
-import type { XpStore } from './xp-types.js';
+import type {
+  AuthStore,
+  ReviewRouteStore,
+  XpAdminStore,
+} from './route-services.js';
 import { fetchWomCompetition } from './wom.js';
-import { ApiError, type BackendStore } from './types.js';
+import { ApiError } from './types.js';
 import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
 import { PasswordHasher } from './passwords.js';
 import { PreviewWork } from './preview-work.js';
@@ -37,10 +40,10 @@ function cookieValue(request: FastifyRequest, name: string) {
 }
 export function authRoutes(
   app: FastifyInstance,
-  store: BackendStore,
+  store: AuthStore,
   config: AuthConfig,
-  xp?: XpStore,
-  review?: ReviewStore,
+  xp?: XpAdminStore,
+  review?: ReviewRouteStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
   clanKeys?: ClanKeyStore,
   previews = new PreviewWork(),
