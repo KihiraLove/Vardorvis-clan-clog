@@ -3,6 +3,8 @@ import type { AdminClient } from './admin-model.ts';
 import type { AdminSession, XpClient } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { withAbort } from './with-abort.ts';
+import type { PreparedAdminEntry } from './app-runtime.ts';
+import { RouteCodeError } from './route-code.ts';
 import {
   isAdminPath,
   loadAdminRoute,
@@ -13,6 +15,8 @@ import {
 export interface AdminNavigationRequest {
   href: string;
   stay?: boolean;
+  /** Begin code/runtime preparation together with the destination reads. */
+  prepare?: (signal: AbortSignal) => Promise<void>;
   /** Apply prepared data in the same update as visible route and history. */
   commit: (apply: () => void, signal: AbortSignal) => Promise<void>;
   restore: () => Promise<void>;
@@ -26,6 +30,7 @@ export function useAdminRoutes({
   xp,
   onAccessLost,
   register,
+  initial,
 }: {
   path: string;
   preview: boolean;
@@ -34,16 +39,22 @@ export function useAdminRoutes({
   xp: XpClient;
   onAccessLost: () => void;
   register: (navigator: AdminNavigator | null) => void;
+  initial?: PreparedAdminEntry | undefined;
 }) {
-  const [ready, setReady] = useState<{
-    path: string;
-    data: PreparedAdminData;
-    session: AdminSession;
-  }>();
+  const [ready, setReady] = useState<
+    | {
+        path: string;
+        data: PreparedAdminData;
+        session: AdminSession;
+      }
+    | undefined
+  >();
+  const prepared = useRef(initial?.preparation);
   const [pending, setPending] = useState<{
     request: AdminNavigationRequest;
     label: string;
     error?: string;
+    codeFailure?: boolean;
   }>();
   const drafts = useRef(new Map<string, AdminDraft>());
   const generation = useRef(0),
@@ -88,12 +99,27 @@ export function useAdminRoutes({
         () => next.abort(new Error('Navigation timed out.')),
         10000,
       );
+      const entry = prepared.current;
+      prepared.current = undefined;
+      const useEntry = entry?.path === target;
+      const cancelEntry = () => entry?.cancel();
+      if (useEntry)
+        next.signal.addEventListener('abort', cancelEntry, { once: true });
+      else entry?.cancel();
       void withAbort(
-        isAdminPath(target) &&
+        Promise.all([
+          isAdminPath(target) &&
           session &&
           (url.searchParams.get('preview') === '1') === preview
-          ? loadAdminRoute(target, session, client, xp, next.signal)
-          : Promise.resolve(undefined),
+            ? useEntry
+              ? entry.result.then((result) => {
+                  if ('error' in result) throw result.error;
+                  return result.data;
+                })
+              : loadAdminRoute(target, session, client, xp, next.signal)
+            : Promise.resolve(undefined),
+          request.prepare?.(next.signal),
+        ]).then(([data]) => data),
         next.signal,
       )
         .then(async (data) => {
@@ -116,6 +142,8 @@ export function useAdminRoutes({
         })
         .catch((failure: unknown) => {
           if (current !== generation.current) return;
+          const timedOut = next.signal.aborted;
+          next.abort();
           if (classifyAccessFailure(failure) === 'expired') {
             stop();
             setReady(undefined);
@@ -126,20 +154,27 @@ export function useAdminRoutes({
             setPending({
               request,
               label,
-              error: next.signal.aborted
+              codeFailure: failure instanceof RouteCodeError,
+              error: timedOut
                 ? 'Loading timed out. Retry or cancel navigation.'
                 : classifyAccessFailure(failure) === 'denied'
                   ? target === '/admin/xp'
                     ? 'Your account is not allowed to view XP import history.'
                     : 'Your account is not allowed to view this page.'
-                  : failure instanceof Error &&
-                      failure.message === 'A staff operation is still running.'
-                    ? 'Wait for the current staff operation to finish, then retry or cancel navigation.'
-                    : 'This page could not be loaded. Retry or cancel navigation.',
+                  : failure instanceof RouteCodeError
+                    ? failure.message
+                    : failure instanceof Error &&
+                        failure.message ===
+                          'A staff operation is still running.'
+                      ? 'Wait for the current staff operation to finish, then retry or cancel navigation.'
+                      : 'This page could not be loaded. Retry or cancel navigation.',
             });
           }
         })
-        .finally(() => clearTimeout(timer));
+        .finally(() => {
+          clearTimeout(timer);
+          next.signal.removeEventListener('abort', cancelEntry);
+        });
     },
     [cancel, client, onAccessLost, preview, session, stop, xp],
   );

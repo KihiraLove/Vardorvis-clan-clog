@@ -1,8 +1,8 @@
+import { PreviewCompetitionClient } from './preview/competition.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   LiveCompetitionClient,
-  PreviewCompetitionClient,
   parseWomCompetition,
 } from './competition-api.ts';
 import { PreviewAdminClient } from './preview/admin.ts';

@@ -106,7 +106,9 @@ npm installation, production `.env` or hosted runner. The maintained gate includ
   grants, populated upgrades, concurrency, rollback and exact receipt replay.
 - Chromium browser scenarios for public/staff UI, desktop/320px navigation,
   keyboard/touch, access loss, drafts and failures; many API responses are fixtures.
-- Workload and public-projection measurements with real SQL and large ledgers.
+- Production-build loading/byte-budget checks, cold code/data overlap, chunk failure
+  recovery and isolated demo loading, plus workload/public-projection measurements
+  with real SQL and large ledgers.
 - Built-image inspection before test injection, then actual production proxy/API/
   database smoke, durable assets, maintenance, restarts, shutdown/readiness and
   complete isolated backup/restore and deployment failure scenarios.
@@ -121,17 +123,18 @@ skip database tests without `TEST_DATABASE_URL`; that is not full acceptance.
 
 ## Remaining launch acceptance
 
-The remaining split tasks are tracked by #101–#104. Public/admin/demo bundle
-splitting and its measurement are pending (#101); production proxy/browser CSP
-and framing acceptance remain pending (#102). Browser checks currently target
+The remaining split tasks are tracked by #102–#104. [Public/admin/demo entry
+splitting](frontend-loading.md) keeps staff screens and sample fixtures out of the
+initial public graph, coordinates code/data preparation and measures readiness.
+Production proxy/browser CSP and framing acceptance remain pending (#102). Browser checks currently target
 Chromium and often fixture API responses; a complete browser → production proxy
 → API → PostgreSQL workflow and explicit browser support/capture policy remain
 pending (#103). The production container smoke is real HTTP/SQL, not a claim that
 all browser journeys already use the production stack.
 
-Preview mode is an explicit `?preview=1` sample ledger, currently bundled with the
-frontend. It is isolated from persisted clan data and grants no server access;
-its release/bundle policy is part of #101. Existing local gateway fixtures do not
+Preview mode intentionally remains an explicit `?preview=1` sample ledger, loaded
+only on demand in a separate chunk. It is isolated from persisted clan data and
+grants no server access; [the loading guide](frontend-loading.md) records that policy. Existing local gateway fixtures do not
 replace a real test-guild command/receipt exercise. Actual host DNS/TLS, hardware
 load/capacity, supported release/dependency sign-off, off-host recovery, a real
 published prior-release rehearsal and final cutover remain release gates (#104).

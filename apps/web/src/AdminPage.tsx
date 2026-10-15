@@ -1,5 +1,6 @@
 /** Resolve the admin session before mounting private queue/catalog views; share navigation. */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { PreparedAdminEntry } from './app-runtime.ts';
 import { AdminRequestError } from './admin-api.ts';
 import {
   classifyAccessFailure,
@@ -79,6 +80,7 @@ export function AdminPage({
   competitionClient,
   xpClient,
   registerNavigation,
+  initial,
 }: AdminRouteProps & {
   client: AdminClient;
   competitionClient: CompetitionClient;
@@ -92,11 +94,15 @@ export function AdminPage({
     session: AdminSession,
     onAccessLost: () => void,
   ) => React.ReactNode;
+  initial?: PreparedAdminEntry | undefined;
 }) {
-  const [access, setAccess] = useState<AdminAccess>({ phase: 'checking' }),
-    [error, setError] = useState<string>();
+  const [access, setAccess] = useState<AdminAccess>(
+      () => initial?.access ?? { phase: 'checking' },
+    ),
+    [error, setError] = useState<string | undefined>(initial?.error);
   const session = access.phase === 'authenticated' ? access.session : null;
   const [refresh, setRefresh] = useState(0);
+  const preparedAccess = useRef(Boolean(initial));
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const accessLost = useCallback(() => {
@@ -115,6 +121,7 @@ export function AdminPage({
     xp: xpClient,
     onAccessLost: accessLost,
     register: registerNavigation,
+    initial,
   });
   const action = useAdminAction(accessLost);
   const loginAction = useAdminAction(accessLost);
@@ -146,6 +153,10 @@ export function AdminPage({
     });
   };
   useEffect(() => {
+    if (preparedAccess.current) {
+      preparedAccess.current = false;
+      return;
+    }
     let active = true;
     const controller = new AbortController(),
       timer = window.setTimeout(() => controller.abort(), 10000);
@@ -241,10 +252,19 @@ export function AdminPage({
                 `Loading ${adminRouteLabels[routes.pending.label] ?? routes.pending.label}…`}
             </p>
             <div className="admin-actions">
-              {routes.pending.error && (
-                <button className="site-button" onClick={routes.retry}>
-                  Retry navigation
+              {routes.pending.codeFailure ? (
+                <button
+                  className="site-button"
+                  onClick={() => window.location.reload()}
+                >
+                  Reload page
                 </button>
+              ) : (
+                routes.pending.error && (
+                  <button className="site-button" onClick={routes.retry}>
+                    Retry navigation
+                  </button>
+                )
               )}
               <button className="site-button" onClick={routes.cancel}>
                 Cancel navigation

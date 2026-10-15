@@ -1,5 +1,10 @@
 # Admin route preparation
 
+[Frontend loading acceptance](frontend-loading.md) adds a production-build browser
+gate after the ordinary Chromium suite. It verifies entry-byte/module budgets,
+parallel code/data preparation and chunk-failure/cancellation recovery. Reports
+include `web-bundle.json`, `loading.log` and per-test loading measurements.
+
 Staff navigation prepares the authorized destination before changing the visible
 page. Queue/catalog, XP tracker/history, schedules/catalog, site settings/logo,
 RuneLite settings/key and moderator accounts each have a route loader. The shell

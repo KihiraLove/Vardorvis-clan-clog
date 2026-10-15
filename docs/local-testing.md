@@ -1,5 +1,10 @@
 # Local acceptance and release-only CI
 
+[Frontend loading acceptance](frontend-loading.md) adds a production-build browser
+gate after the ordinary Chromium suite. It verifies entry-byte/module budgets,
+parallel code/data preparation and chunk-failure/cancellation recovery. Reports
+include `web-bundle.json`, `loading.log` and per-test loading measurements.
+
 See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
 
 Run the complete automated suite before pushing or requesting review:

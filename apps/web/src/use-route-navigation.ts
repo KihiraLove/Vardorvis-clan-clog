@@ -7,6 +7,15 @@ import {
   useState,
 } from 'react';
 import type { AdminNavigator } from './use-admin-routes.ts';
+import { withAbort } from './with-abort.ts';
+import { RouteCodeError } from './route-code.ts';
+
+export interface SiteNavigation {
+  route: { path: string; preview: boolean };
+  navigate: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+  mode: (preview: boolean) => void;
+  register: (navigator: AdminNavigator | null) => void;
+}
 
 function location() {
   return {
@@ -19,8 +28,21 @@ function position() {
     ? Number(window.history.state.clogPosition)
     : 0;
 }
-export function useRouteNavigation() {
-  const [route, setRoute] = useState(location);
+export function useRouteNavigation<T>(
+  prepare: (route: SiteNavigation['route'], signal: AbortSignal) => Promise<T>,
+) {
+  const [route, setRoute] = useState(() => ({
+    ...location(),
+    resources: undefined as T | undefined,
+  }));
+  const [pending, setPending] = useState<{
+    error?: string;
+    codeFailure?: boolean;
+    retry: () => void;
+    cancel: () => void;
+  }>();
+  const loading = useRef<AbortController | undefined>(undefined);
+  const generation = useRef(0);
   const visible = useRef({ href: window.location.href, position: position() });
   const browserPosition = useRef(position());
   const navigator = useRef<AdminNavigator | null>(null);
@@ -68,6 +90,17 @@ export function useRouteNavigation() {
         if (originFocus?.isConnected)
           originFocus.focus({ preventScroll: true });
       };
+      let resources: T | undefined;
+      const prepareRequest = async (signal: AbortSignal) => {
+        const target = new URL(href);
+        resources = await prepare(
+          {
+            path: target.pathname,
+            preview: target.searchParams.get('preview') === '1',
+          },
+          signal,
+        );
+      };
       const commit = async (apply: () => void, signal: AbortSignal) => {
         if (kind !== 'pop') await restore();
         if (signal.aborted) return;
@@ -104,14 +137,54 @@ export function useRouteNavigation() {
           position: targetPosition ?? browserPosition.current,
         };
         focusRequest.current = scroll ?? [0, 0];
-        setRoute(location());
+        setRoute({ ...location(), resources });
         apply();
       };
       if (navigator.current)
-        navigator.current({ href, stay, commit, restore: restoreRequest });
-      else void commit(() => {}, new AbortController().signal);
+        navigator.current({
+          href,
+          stay,
+          prepare: prepareRequest,
+          commit,
+          restore: restoreRequest,
+        });
+      else {
+        loading.current?.abort();
+        const controller = new AbortController(),
+          current = ++generation.current;
+        loading.current = controller;
+        const cancel = () => {
+          generation.current++;
+          controller.abort();
+          setPending(undefined);
+          void restoreRequest();
+        };
+        const retry = () => request(href, kind, targetPosition, scroll);
+        setPending({ retry, cancel });
+        const timer = setTimeout(() => controller.abort(), 10000);
+        void withAbort(prepareRequest(controller.signal), controller.signal)
+          .then(() => commit(() => setPending(undefined), controller.signal))
+          .catch((failure: unknown) => {
+            if (current !== generation.current) return;
+            const timedOut = controller.signal.aborted;
+            controller.abort();
+            setPending({
+              retry,
+              cancel,
+              codeFailure: failure instanceof RouteCodeError,
+              error:
+                failure instanceof RouteCodeError
+                  ? failure.message
+                  : timedOut
+                    ? 'Loading timed out. Retry or cancel navigation.'
+                    : 'This page could not be loaded. Retry or cancel navigation.',
+            });
+            void restoreRequest();
+          })
+          .finally(() => clearTimeout(timer));
+      }
     },
-    [restore],
+    [prepare, restore],
   );
   useLayoutEffect(() => {
     const scroll = focusRequest.current;
@@ -176,6 +249,13 @@ export function useRouteNavigation() {
       }
     };
   }, [request]);
+  useEffect(() => {
+    request(window.location.href, 'replace');
+    return () => {
+      generation.current++;
+      loading.current?.abort();
+    };
+  }, [request]);
   const navigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (
       event.button !== 0 ||
@@ -197,5 +277,5 @@ export function useRouteNavigation() {
     else url.searchParams.delete('preview');
     request(url.href, 'replace');
   };
-  return { route, navigate, mode, register };
+  return { route, navigate, mode, register, pending };
 }

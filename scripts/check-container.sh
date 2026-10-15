@@ -26,5 +26,6 @@ fi
 run_gate workloads node scripts/benchmark-workloads.mjs
 run_gate projections env PROJECTION_BENCH_DISPOSABLE=true node scripts/benchmark-projections.mjs
 run_gate browser npm run test:e2e -w @clog/web
+run_gate loading npm run test:loading -w @clog/web
 run_gate smoke bash scripts/compose-smoke.sh
 printf 'All local gates passed.\n'

@@ -1,5 +1,10 @@
 # Validation and acceptance
 
+[Frontend loading acceptance](frontend-loading.md) adds a production-build browser
+gate after the ordinary Chromium suite. It verifies entry-byte/module budgets,
+parallel code/data preparation and chunk-failure/cancellation recovery. Reports
+include `web-bundle.json`, `loading.log` and per-test loading measurements.
+
 The maintained [current inventory](current-state.md#automated-inventory-and-evidence)
 explains test coverage and its limits. Run `node scripts/check-local.mjs` for
 complete local acceptance; [local testing](local-testing.md) describes prerequisites,

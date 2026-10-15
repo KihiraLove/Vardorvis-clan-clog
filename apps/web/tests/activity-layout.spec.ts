@@ -68,6 +68,8 @@ async function publicLayout(page: Page, count: number) {
 }
 
 async function geometry(page: Page) {
+  // Preview is a deferred entry; measure only after its actual layout exists.
+  await expect(page.locator('.activity-competitions ol')).toBeAttached();
   return page.evaluate(() => {
     const box = (selector: string) => {
       const r = document.querySelector(selector)!.getBoundingClientRect();

@@ -6,6 +6,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : 4,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: Boolean(process.env.CI),
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:5187',

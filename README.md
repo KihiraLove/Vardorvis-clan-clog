@@ -66,8 +66,9 @@ uses the separate `npm run build:runtime` packaging path.
 
 `http://127.0.0.1:5173/?preview=1` is an explicitly labelled, resettable sample
 ledger; staff preview routes share it. It grants no server permissions or
-persistent clan writes. Its bundle/release policy and remaining browser/security
-acceptance are tracked in #101–#104.
+persistent clan writes. Its [explicit loading policy](docs/frontend-loading.md) keeps fixtures out of the
+initial public bundle. Remaining browser/security/release acceptance is tracked
+in #102–#104.
 
 ## Documentation
 

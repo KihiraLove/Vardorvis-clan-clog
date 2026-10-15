@@ -6,31 +6,26 @@ import {
   reportPublicFailure,
 } from './public-polling.ts';
 import { XpAmount } from './XpAmount.tsx';
-import { XpAdmin } from './XpAdmin.tsx';
 import { XpPodium } from './XpPodium.tsx';
-import type { CompetitionClient } from './competition-api.ts';
-import { skills, type AdminSession, type XpClient } from './xp-model.ts';
+import { skills, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
-import { PreviewXpClient } from './preview/xp.ts';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 import { usePreparedAdminData } from './admin-route-data.ts';
 export function XpPage({
   client,
-  competitionClient,
   admin,
   preview,
   onMode,
-  session,
-  onAccessLost,
+  adminControls,
+  sample,
   copy = defaultSiteCopy,
 }: {
   client: XpClient;
-  competitionClient: CompetitionClient;
   admin: boolean;
   preview: boolean;
   onMode: (next: boolean) => void;
-  session?: AdminSession;
-  onAccessLost?: () => void;
+  adminControls?: ((onApplied: () => void) => React.ReactNode) | undefined;
+  sample?: { samples: () => Promise<void>; advance: () => void } | undefined;
   copy?: SiteCopy;
 }) {
   const initial = usePreparedAdminData()?.tracker;
@@ -72,7 +67,6 @@ export function XpPage({
   const missing = selected !== undefined && !event;
   const totals =
     data && !missing ? (event ? eventTotals(event) : data.totals) : undefined;
-  const sample = client instanceof PreviewXpClient ? client : undefined;
   return (
     <section
       className="event-tracker"
@@ -80,16 +74,7 @@ export function XpPage({
       aria-label={admin ? 'XP imports' : copy.xpTitle}
     >
       {!admin && <h1>{copy.xpTitle}</h1>}
-      {admin && session && onAccessLost && (
-        <XpAdmin
-          client={client}
-          competitionClient={competitionClient}
-          session={session}
-          onAccessLost={onAccessLost}
-          onApplied={() => setRefresh((n) => n + 1)}
-          previewMode={preview}
-        />
-      )}
+      {admin && adminControls?.(() => setRefresh((n) => n + 1))}
       {sample && (
         <details className="preview-options">
           <summary>XP preview controls</summary>
