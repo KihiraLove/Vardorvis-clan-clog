@@ -36,6 +36,7 @@ see [packaging and OAuth retirement](runtime-packaging-and-auth-retirement.md).
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Public log          | Canonical items share credit across pages; one active credit per item per mode. ETag projections, visible-page polling and exact activity boundary timers: [public performance](public-performance.md).                                                                                                                      |
 | Staff access        | Individual password accounts, mandatory first change, server sessions, secure cookies, CSRF/origin checks and role restrictions. Central client session state clears private caches/drafts and cancels work on access loss: [backend/auth](backend-phase-one.md), [navigation](admin-navigation.md).                         |
+| Browser policy      | Enforced same-origin scripts/styles/API, narrowly scoped local image previews and denied framing, with production-proxy header/browser checks: [CSP and framing](browser-security.md).                                                                                                                                       |
 | Review              | Pending/reviewed queues, corrections, resolve, approve/reject/revoke, independently saved/discarded review notes and complete paged audits. Draft notes do not silently change claims: [review](integration-01-review.md), [pagination](review-pagination.md).                                                               |
 | Intake              | Discord receipts and authenticated RuneLite uploads; world policy, duplicate mode credit and scheduling checks remain transactional: [bot](bot-intake.md), [RuneLite](runelite-submissions.md).                                                                                                                              |
 | Catalog             | Imported and manual identities, durable validated icons, page/item management, revision-checked ordering and explicit source/manual reconciliation: [catalog](admin-catalog-backend.md), [reconciliation](import-reconciliation.md).                                                                                         |
@@ -123,10 +124,10 @@ skip database tests without `TEST_DATABASE_URL`; that is not full acceptance.
 
 ## Remaining launch acceptance
 
-The remaining split tasks are tracked by #102–#104. [Public/admin/demo entry
+The remaining split tasks are tracked by #103–#104. [Public/admin/demo entry
 splitting](frontend-loading.md) keeps staff screens and sample fixtures out of the
 initial public graph, coordinates code/data preparation and measures readiness.
-Production proxy/browser CSP and framing acceptance remain pending (#102). Browser checks currently target
+Production proxy/browser [CSP and framing acceptance](browser-security.md) is implemented (#102). Browser checks currently target
 Chromium and often fixture API responses; a complete browser → production proxy
 → API → PostgreSQL workflow and explicit browser support/capture policy remain
 pending (#103). The production container smoke is real HTTP/SQL, not a claim that

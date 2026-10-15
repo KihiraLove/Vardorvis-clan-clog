@@ -7,6 +7,10 @@ include `web-bundle.json`, `loading.log` and per-test loading measurements.
 
 See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
 
+[CSP/framing acceptance](browser-security.md) runs against the actual production
+proxy during `smoke.log`, with per-test artifacts under `browser/security/`.
+It checks enforced headers, compatible resources, blocked injections and embedding.
+
 Run the complete automated suite before pushing or requesting review:
 
 ```bash

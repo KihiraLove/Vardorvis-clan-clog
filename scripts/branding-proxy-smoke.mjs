@@ -1,6 +1,6 @@
 /** Real Nginx→API multipart boundary regression for disposable CI only. */
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 
 if (process.env.BRANDING_PROXY_SMOKE_TEST !== '1')
@@ -13,8 +13,28 @@ const origin = process.env.PUBLIC_ORIGIN;
 const fileLimit = 10 * 1024 * 1024;
 const proxyLimit = 11 * 1024 * 1024;
 
-const request = (path, options = {}) =>
-  fetch(base + path, { signal: AbortSignal.timeout(30000), ...options });
+const request = async (path, options = {}) => {
+  const response = await fetch(base + path, {
+    signal: AbortSignal.timeout(30000),
+    ...options,
+  });
+  // Covers actual successful writes, authenticated image reads, auth/CSRF failures,
+  // decoder errors and both API/proxy 413s, not only the SPA's 200 response.
+  assert.equal(response.headers.get('x-frame-options'), 'DENY', path);
+  assert.match(
+    response.headers.get('content-security-policy') ?? '',
+    /frame-ancestors 'none'/u,
+    path,
+  );
+  assert.match(
+    response.headers.get('content-security-policy') ?? '',
+    /script-src 'self'/u,
+    path,
+  );
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff', path);
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer', path);
+  return response;
+};
 function form(bytes, filename = 'logo.png') {
   const payload = new FormData();
   payload.set('logo', new Blob([bytes], { type: 'image/png' }), filename);
@@ -36,6 +56,12 @@ const login = await request('/api/v1/auth/login', {
   }),
 });
 assert.equal(login.status, 200, 'the disposable staff fixture must exist');
+assert.equal(login.headers.get('cache-control'), 'no-store');
+const cookie = login.headers.get('set-cookie');
+assert.match(cookie, /^__Host-clog-session=/u);
+for (const flag of ['Path=/', 'HttpOnly', 'SameSite=Lax', 'Secure'])
+  assert.ok(cookie.split('; ').includes(flag), 'session protection: ' + flag);
+assert.doesNotMatch(cookie, /(?:^|;)\s*Domain=/iu);
 const session = await login.json();
 assert.equal(session.mustChangePassword, false);
 const authorized = {
@@ -77,6 +103,41 @@ try {
       route + ': decoder validation',
     );
   }
+
+  // Exercise actual private PNG delivery through this policy as well as public
+  // branding. CSP image permission must not bypass authentication or no-store.
+  const catalog = await (await request('/api/v1/catalog')).json();
+  const proof = new FormData();
+  proof.set(
+    'submission',
+    JSON.stringify({
+      itemId: catalog.items[0].id,
+      collectorName: 'CSP private proof fixture',
+      collectedOn: new Date().toISOString().slice(0, 10),
+      hardcore: false,
+      approve: false,
+    }),
+  );
+  proof.set('screenshot', new Blob([tiny], { type: 'image/png' }), 'proof.png');
+  const uploadedProof = await request('/api/v1/admin/submissions/upload', {
+    method: 'POST',
+    headers: { Origin: origin, ...authorized, 'Idempotency-Key': randomUUID() },
+    body: proof,
+  });
+  assert.equal(uploadedProof.status, 201);
+  const proofPath = (await uploadedProof.json()).screenshotPath;
+  assert.match(
+    proofPath,
+    /^\/api\/v1\/admin\/submission-images\/[a-f0-9-]+\.png$/u,
+  );
+  const deniedProof = await request(proofPath);
+  assert.equal(deniedProof.status, 401);
+  assert.equal(deniedProof.headers.get('cache-control'), 'no-store');
+  const privateProof = await request(proofPath, { headers: authorized });
+  assert.equal(privateProof.status, 200);
+  assert.equal(privateProof.headers.get('content-type'), 'image/png');
+  assert.equal(privateProof.headers.get('cache-control'), 'private, no-store');
+  assert.ok((await privateProof.arrayBuffer()).byteLength > 0);
 
   // The real PNG is >4 MiB (greater than the regular 3 MiB Nginx limit), not
   // a random multipart body pretending to be an image. This reaches Sharp.
@@ -148,7 +209,7 @@ try {
     assert.match(response.headers.get('content-type') ?? '', /text\/html/u);
   }
   console.log(
-    'Both exact Nginx branding routes accept valid >4 MiB images and reject excessive files/bodies; default cap and auth/CSRF remain enforced.',
+    'Both exact Nginx branding routes accept valid >4 MiB images and reject excessive files/bodies; private proof, CSP/framing, default cap and auth/CSRF/session protections pass.',
   );
 } finally {
   const logout = await request('/api/v1/auth/logout', {

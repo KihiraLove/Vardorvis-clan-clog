@@ -29,6 +29,10 @@ Two long-lived containers plus a short-lived bootstrap job. Running Postgres
 inside the app container would make recovery, permissions and process lifetime
 unnecessarily fragile and is not supported.
 
+Nginx enforces the [browser resource and framing policy](browser-security.md).
+Preserve those headers through the TLS edge and verify them on public HTTPS
+documents, assets and errors during release acceptance. The site denies embedding.
+
 ## Image build and release
 
 Development runs the complete automated suite with `npm run test:all`; see

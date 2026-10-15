@@ -9,7 +9,8 @@
     "dev": "vite --host 127.0.0.1",
     "test": "node --test src/*.test.ts",
     "test:e2e": "playwright test",
-    "test:loading": "playwright test --config playwright.loading.config.ts"
+    "test:loading": "playwright test --config playwright.loading.config.ts",
+    "test:security": "playwright test --config playwright.security.config.ts"
   },
   "dependencies": {
     "@clog/domain": "0.1.0",

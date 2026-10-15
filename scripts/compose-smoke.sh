@@ -88,6 +88,9 @@ docker compose exec -T -e PROJECTION_SMOKE_DISPOSABLE=true app node --input-type
 printf "\nProxy branding logos accept valid large images and enforce both upload limits\n"
 docker compose exec -T -e BRANDING_PROXY_SMOKE_TEST=1 app node --input-type=module < scripts/branding-proxy-smoke.mjs
 
+printf "\nEnforced production proxy CSP and framing browser acceptance\n"
+SECURITY_PROXY_TEST=1 npm run test:security -w @clog/web
+
 printf "\nBounded import preview maintenance respects runtime role and receipts\n"
 docker compose exec -T db psql -v ON_ERROR_STOP=1 -U clog -d clog -c "
   INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at)

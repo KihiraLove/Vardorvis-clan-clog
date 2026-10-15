@@ -5,6 +5,9 @@ gate after the ordinary Chromium suite. It verifies entry-byte/module budgets,
 parallel code/data preparation and chunk-failure/cancellation recovery. Reports
 include `web-bundle.json`, `loading.log` and per-test loading measurements.
 
+[CSP/framing acceptance](browser-security.md) also uses the production image's
+Nginx and built assets, checking ordinary flows and actual blocked behavior.
+
 The maintained [current inventory](current-state.md#automated-inventory-and-evidence)
 explains test coverage and its limits. Run `node scripts/check-local.mjs` for
 complete local acceptance; [local testing](local-testing.md) describes prerequisites,
@@ -39,6 +42,6 @@ credential rotation and compatible controlled-image rollback.
 
 Current browser coverage is Chromium; many frontend tests use fixture responses.
 Production smoke uses real proxy/API/PostgreSQL. Full browser-to-production-stack
-acceptance, browser support policy, CSP/framing verification, actual Discord guild,
+acceptance, browser support policy, actual Discord guild,
 production host TLS/load and published prior-release recovery are tracked in
-#102–#104. Preview screenshots and green local tests do not approve those gates.
+#103–#104. Preview screenshots and green local tests do not approve those gates.
