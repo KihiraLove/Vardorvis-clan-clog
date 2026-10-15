@@ -8,7 +8,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/*.test.js",
     "dev": "node --env-file=../../.env --watch dist/server.js",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "build:runtime": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.runtime.json"
   },
   "dependencies": {
     "@clog/database": "0.1.0",

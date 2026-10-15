@@ -1,5 +1,7 @@
 # Release deployment and operations
 
+See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
+
 Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migrations `007_site_customization.sql` and `008_default_clan_name.sql` preserve histories and administrator-chosen names. Generated clan keys use 32 hexadecimal characters; custom keys accept any characters with a minimum length of 8 and persist across restarts. Only historical shorter keys rotate once, with an audit and preserved enforcement. Migration `009_runelite_world_types.sql` adds original world flags without changing existing credit modes. New RuneLite clients must send the required worldType field; see the [intake contract](runelite-submissions.md) for excluded modes, HC routing and arbitrary-key header encoding.
 
 > Release preparation (10 October 2026): the former three application images
@@ -146,7 +148,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: contiguous 001_baseline.sql through 020_public_projections.sql
+# Expected: contiguous 001_baseline.sql through 021_retire_oauth_states.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose

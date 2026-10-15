@@ -364,7 +364,11 @@ try {
       extra = 'RUN rm /app/' + file + '\n';
     }
     if (kind === 'failed-migration') {
-      const name = '021_recovery_failure.sql',
+      const name =
+          String(Number(value.migrations.at(-1).name.slice(0, 3)) + 1).padStart(
+            3,
+            '0',
+          ) + '_recovery_failure.sql',
         file = 'packages/database/migrations/' + name,
         sql =
           'CREATE TABLE recovery_rollback_marker(id integer); SELECT 1/0;\n';
@@ -465,7 +469,7 @@ try {
         '-d',
         'clog',
         '-Atc',
-        "SELECT to_regclass('public.recovery_rollback_marker') IS NULL AND (SELECT count(*) FROM schema_migrations)=20",
+        `SELECT to_regclass('public.recovery_rollback_marker') IS NULL AND (SELECT count(*) FROM schema_migrations)=${manifest.migrations.length}`,
       ],
       { env: cloneEnv },
     ),

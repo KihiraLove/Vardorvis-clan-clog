@@ -1,3 +1,5 @@
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 # Backend, API, Discord bot, database and operations audit
 
 Tracking issue: [#62](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/62).

@@ -28,7 +28,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT DELETE',
-    'admin_sessions collection_log_schedule_pages oauth_states page_items',
+    'admin_sessions collection_log_schedule_pages page_items',
   ],
   ['SELECT INSERT UPDATE DELETE', 'auth_rate_limits collection_log_schedules'],
 ])

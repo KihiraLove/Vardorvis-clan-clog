@@ -1,3 +1,5 @@
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 > **10 October 2026 release update:** The development migration series has been squashed to a fresh-install [001_baseline.sql](../packages/database/migrations/001_baseline.sql), and web/API/bot now ship in one application image. The detailed sections below are historical snapshots; use [deployment](deployment.md) for release procedures.
 
 # Project code, data model, architecture and CI guide

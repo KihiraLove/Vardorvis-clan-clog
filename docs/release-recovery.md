@@ -1,5 +1,7 @@
 # Versioned releases and isolated recovery
 
+See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
+
 Implements [#92](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/92)
 (REVIEW-02 B10/B05) and [#93](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/93)
 (REVIEW-02 B03/B10). These commands operate on a dedicated PostgreSQL 17 database.

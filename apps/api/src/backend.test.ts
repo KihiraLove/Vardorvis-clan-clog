@@ -116,7 +116,6 @@ export class MemoryStore implements BackendStore {
       if (session.id === id) this.sessions.delete(key);
     return next;
   }
-  state = new Map<string, Date>();
   sessions = new Map<string, StoredSession>();
   attempts = 0;
   setting: Settings = {
@@ -158,15 +157,6 @@ export class MemoryStore implements BackendStore {
     };
     this.audits.push({ actor, enabled });
     return this.settings();
-  }
-  async createState(hash: string, date: Date) {
-    this.state.set(hash, date);
-  }
-  async consumeState(hash: string) {
-    const d = this.state.get(hash);
-    if (!d || d.getTime() <= Date.now()) return false;
-    this.state.delete(hash);
-    return true;
   }
   async createSession(
     hash: string,

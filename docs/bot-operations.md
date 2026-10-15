@@ -1,6 +1,6 @@
 # Discord gateway and command registration (BOT-01)
 
-Implementation of [BOT-01 #6](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/6) builds on authenticated, durable [INTAKE-01](bot-intake.md). The Discord adapter is not an approval system: every confirmed receipt is **pending**. Admin approval and single-credit enforcement remain in #7.
+Implementation of [BOT-01 #6](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/6) builds on authenticated, durable [INTAKE-01](bot-intake.md). The Discord adapter is not an approval system: every confirmed receipt is **pending**. Staff review and single-credit enforcement are implemented by the API; see [current contracts](contracts.md).
 
 ## Runtime
 
@@ -23,7 +23,7 @@ registered explicitly, not during startup.
 
 The only gateway intent is Guilds; the command is rejected in DMs or other
 guilds. The adapter cannot approve submissions. Admin site login remains a
-shared password, not Discord OAuth.
+individual staff passwords; Discord OAuth is retired.
 
 ## Explicit registration
 

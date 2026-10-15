@@ -1,3 +1,5 @@
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 # Frontend and repository audit — 12 October 2026
 
 Tracking issue: [GitHub #60](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/60).

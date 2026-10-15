@@ -42,8 +42,9 @@ for supported image formats, limits and the API contract.
 ## XP gained tracker below the collection log
 
 [WOM competition imports](wom-competitions.md) share one persisted identity with
-an explicit staff-selected SKILL/ACTIVITY kind. Future/running imports store
-metadata and an opening schedule only. Finished imports discard zero-gain
+a server-detected SKILL/ACTIVITY kind from authoritative WOM metrics. Future/running
+SKILL imports store page-free metadata only; ACTIVITY can create a bounded opening
+schedule. Neither path credits live results. Finished imports discard zero-gain
 participants and reconcile final results. Only SKILL competitions contribute XP;
 the selected competition and Total each show a top-three podium. The public
 ACTIVITY list sits to the left of the collection log, sorted by end descending,
@@ -67,11 +68,18 @@ with local start/end times, status labels and red/green/yellow date colors.
 - Save order independently per page. Reordering must preserve item identity, other page orders, collector/date history and hardcore state. Stale or conflicting edits return a visible conflict rather than overwriting another admin's changes.
 - New items become available on public pages, in Discord autocomplete and in manual submission matching after the catalog refresh, without rebuilding the website.
 - Preserve manual items, icons, memberships and saved order through catalog source updates. If a source later contains an admin-created item, explicitly reconcile it to the existing canonical identity; never merge automatically by name or discard existing credits.
-- Authenticate and audit creation/order writes. Backup/restore must include the uploaded icons as well as the database. Creating new pages is outside this addition.
+- Authenticate and audit creation/order writes. Backup/restore must include the uploaded icons as well as the database. Staff can also create, reorder and explicitly delete pages with preserved shared-item identities and history; see [page management](site-customization.md).
 
-These features are planned in #26, #27, #28, #30 and #31; detailed data rules and arithmetic examples are in [planned features](planned-features.md).
+These features are implemented; current contracts are in [WOM imports](wom-competitions.md), [XP imports](xp-import.md) and [catalog maintenance](admin-catalog-backend.md). [Planned features](planned-features.md) preserves the historical design.
 
 ## Submission and review
+
+Review notes have explicit independent Save/Discard controls and version-checked
+note-only persistence, even for unresolved submissions. Claim edits and decisions
+do not implicitly save drafts. Access loss clears private state and cancels
+outstanding work. Queues, audits and XP history support complete bounded traversal
+with revision-bound cursors and explicit stale-page recovery; see
+[contracts](contracts.md).
 
 Every submission records raw item input, resolved canonical item when known, collector display name, collection date, hardcore claim, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
 
@@ -79,7 +87,7 @@ The admin page uses individual staff accounts and server-side session/CSRF check
 
 The page lists pending submissions with item/match state, collector, date, external proof link and submission time. Staff can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited with permanent account identities; a public anonymous request cannot perform them.
 
-Proof links must use HTTPS on the allowed Imgur/Gyazo hosts. Link validity is separate from evidence validity: an admin still inspects the evidence. V1 stores links, without server-side image downloading or permanent archival. A missing external image must be visible as a review limitation; it does not grant automatic approval.
+Proof links must use HTTPS on the allowed Imgur/Gyazo hosts. Link validity is separate from evidence validity: an admin still inspects the evidence. Discord evidence remains an external link without server-side downloading. RuneLite and supported manual uploads instead retain private validated screenshots in durable proof storage; authenticated review is required to read them. A missing external image must be visible as a review limitation; it does not grant automatic approval.
 
 ## Discord
 
@@ -89,7 +97,7 @@ The implemented command is `/cc-clog submit item:<item/name> proof:<imgur-or-gya
 - Item autocomplete searches the complete canonical catalog and returns up to 25 ranked candidates. Selection submits a canonical ID. Free text is accepted; an unambiguous normalized exact name/alias resolves, while fuzzy/ambiguous matches remain suggestions for manual review.
 - Restrict submissions to the configured clan guild; do not accept DMs or other guilds. No privileged message-content intent is needed for slash commands.
 - Acknowledge/defer promptly and send an ephemeral receipt only after durable persistence. Retry the same Discord interaction ID without creating duplicate submissions. Report API failures accurately.
-- Do not overwrite all application commands on every container restart. Provide a separate, explicit guild-command registration script when the bot feature is implemented.
+- Do not overwrite all application commands on every container restart. Use the separate, explicit guild-command registration script; the gateway and durable API intake are implemented.
 
 The owner confirmed **exactly one command**, `/cc-clog submit`. The earlier second-command reference was residual ideation; no additional command should be registered.
 
@@ -101,4 +109,4 @@ The command defines `item`, `proof`, optional `submitter-name` and optional `har
 
 ## Deployment scope
 
-Self-host one web, API and bot container with PostgreSQL. CI produces separate private GHCR images for `linux/amd64` and `linux/arm64`. PRs validate without publish/deployment credentials. Home deployment is opt-in and chooses an already validated main commit. Bot, admin credentials, complete catalog and feature implementation remain required before a public V1 launch.
+Self-host one unified web/API/optional-bot image with a separate PostgreSQL container and owner bootstrap job. Run complete acceptance locally for development; pushes/PRs consume no hosted CI. Published GitHub Releases run acceptance and publish the unified multi-architecture GHCR image. Deployment is explicit and selects a validated release. See [current inventory](current-state.md) for startup credentials, schema/rollback policy, maintenance, readiness, recovery and remaining external launch gates.

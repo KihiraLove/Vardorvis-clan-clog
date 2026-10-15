@@ -110,8 +110,6 @@ export interface BackendStore {
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
   ): Promise<Settings | null>;
-  createState(hash: string, expiresAt: Date): Promise<void>;
-  consumeState(hash: string): Promise<boolean>;
   createSession(
     hash: string,
     identity: AccountSessionIdentity,

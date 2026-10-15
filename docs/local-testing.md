@@ -1,5 +1,7 @@
 # Local acceptance and release-only CI
 
+See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
+
 Run the complete automated suite before pushing or requesting review:
 
 ```bash

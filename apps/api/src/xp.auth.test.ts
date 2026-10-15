@@ -43,8 +43,7 @@ const source = {
   ],
 };
 test('XP preview/apply/history require allowlisted browser session and CSRF; public tracker is isolated', async () => {
-  const states = new Map<string, Date>(),
-    sessions = new Map<string, StoredSession>();
+  const sessions = new Map<string, StoredSession>();
   let fetched = 0,
     previewed = 0,
     applied = 0,
@@ -57,14 +56,6 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     },
     async accountById(id: string) {
       return id === account.id ? account : null;
-    },
-    async createState(k: string, d: Date) {
-      states.set(k, d);
-    },
-    async consumeState(k: string) {
-      const d = states.get(k);
-      states.delete(k);
-      return !!d && d.getTime() > Date.now();
     },
     async createSession(k: string, u: AccountSessionIdentity, d: Date) {
       sessions.set(k, { ...u, expiresAt: d });

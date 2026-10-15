@@ -98,7 +98,7 @@ export function createApp(
               'req.headers.cookie',
               'res.headers.set-cookie',
             ],
-            // OAuth code/state are in the query string; never use Fastify's default URL serializer.
+            // Query strings may contain private data; log operation/correlation only.
             serializers: {
               req: () => ({ operation: 'http' }),
               err: (error: unknown) => ({
@@ -148,7 +148,7 @@ export function createApp(
                 error.statusCode < 500
               ? error.statusCode
               : 503;
-    // Do not log driver/provider errors: they may contain SQL parameters or OAuth secrets.
+    // Driver/provider errors may contain SQL parameters or credentials.
     const fault = safeFailure(
       error,
       error instanceof ApiError ||

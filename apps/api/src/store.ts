@@ -612,23 +612,6 @@ export class PgStore implements BackendStore {
       client.release();
     }
   }
-  async createState(hash: string, expiresAt: Date) {
-    await this.pool.query('DELETE FROM oauth_states WHERE expires_at <= now()');
-    await this.pool.query(
-      'INSERT INTO oauth_states(state_hash,expires_at) VALUES($1,$2)',
-      [hash, expiresAt],
-    );
-  }
-  async consumeState(hash: string) {
-    return (
-      (
-        await this.pool.query(
-          'DELETE FROM oauth_states WHERE state_hash=$1 AND expires_at>now() RETURNING state_hash',
-          [hash],
-        )
-      ).rowCount === 1
-    );
-  }
   async createSession(
     hash: string,
     identity: AccountSessionIdentity,

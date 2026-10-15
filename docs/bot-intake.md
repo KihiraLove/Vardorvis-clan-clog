@@ -4,7 +4,7 @@ Issue [#5](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/5) implement
 
 ## Enable the service
 
-On the **API** service configure both `BOT_API_TOKEN` (at least 32 random bytes as hex: `openssl rand -hex 32`) and `DISCORD_GUILD_ID` (a 17–20 digit Discord guild snowflake). Both must be set together; an incomplete/weak configuration fails startup. `DATABASE_URL` is required for intake even if OAuth administration is disabled. The Compose bot receives the same token and guild ID independently, and the bot uses it through the Discord gateway when configured.
+On the **API** service configure both `BOT_API_TOKEN` (at least 32 random bytes as hex: `openssl rand -hex 32`) and `DISCORD_GUILD_ID` (a 17–20 digit Discord guild snowflake). Both must be set together; an incomplete/weak configuration fails startup. `DATABASE_URL` is required for intake even if staff authentication is disabled. The Compose bot receives the same token and guild ID independently, and the bot uses it through the Discord gateway when configured.
 
 The bot credential uses `Authorization: Bearer <BOT_API_TOKEN>`. It is checked on **only** `/api/v1/bot/items` and `/api/v1/bot/submissions`, never as an admin session, and is not included in the web bundle. Do not expose the token to browser clients. Both routes return `Cache-Control: no-store`. Search and intake are unavailable (404) until the API has a store and both config values.
 
@@ -22,4 +22,4 @@ An inserted pending claim responds **201**, an exact interaction retry responds 
 
 ## Verification
 
-`npm run validate` runs matching, proof/date validation, route/authorization/idempotency tests and, when `TEST_DATABASE_URL` is present, disposable PostgreSQL tests for concurrent same/changed retries, single credit per mode, rollback/recovery and immutable receipts across store instances. CI supplies the test database. The existing database migrations are forward-only; migration 004 adds alias and intake receipt storage without changing historical submission rows.
+`npm run validate` runs matching, proof/date validation, route/authorization/idempotency tests and, when `TEST_DATABASE_URL` is present, disposable PostgreSQL tests for concurrent same/changed retries, single credit per mode, rollback/recovery and immutable receipts across store instances. The full local runner supplies a disposable test database. The existing database migrations are forward-only; migration 004 adds alias and intake receipt storage without changing historical submission rows.

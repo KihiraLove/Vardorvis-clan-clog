@@ -45,7 +45,6 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   lifecycle_state: update,
   projection_state: update,
   manual_submission_requests: append,
-  oauth_states: replace,
   page_items: replace,
   pages: edit,
   runelite_settings: update,

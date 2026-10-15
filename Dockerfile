@@ -34,27 +34,21 @@ FROM dependencies AS build
 COPY . .
 ARG RELEASE_REVISION=working-tree
 ARG RELEASE_EVIDENCE=local-acceptance
-RUN npm run build && npm run catalog:check
+RUN npm run build:runtime && npm run catalog:check
+RUN node scripts/package-runtime.mjs /opt/clog-runtime
 RUN RELEASE_REVISION="$RELEASE_REVISION" RELEASE_EVIDENCE="$RELEASE_EVIDENCE" node scripts/release-bundle.mjs /opt/clog-release
 
 # Preserve workspace links while stripping build/test dependencies from Node service images.
 FROM build AS production-dependencies
-RUN npm prune --omit=dev --no-audit --no-fund
+RUN npm prune --omit=dev --no-audit --no-fund \
+  && node scripts/prune-runtime-tests.mjs node_modules > /opt/clog-runtime/runtime-dependency-cleanup.json
 
 # Shared compiled packages and SQL allow the API target to run the migration job too.
 FROM node:24-bookworm-slim AS service-base
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/package.json ./package.json
-COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/package.json
-COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
-COPY --from=build --chown=node:node /app/apps/bot/package.json ./apps/bot/package.json
-COPY --from=build --chown=node:node /app/apps/bot/dist ./apps/bot/dist
-COPY --from=build --chown=node:node /app/packages/domain/package.json ./packages/domain/package.json
-COPY --from=build --chown=node:node /app/packages/domain/dist ./packages/domain/dist
-COPY --from=build --chown=node:node /app/packages/database/package.json ./packages/database/package.json
-COPY --from=build --chown=node:node /app/packages/database/dist ./packages/database/dist
+COPY --from=production-dependencies --chown=node:node /opt/clog-runtime/ ./
 COPY --from=build --chown=node:node /app/packages/database/migrations ./packages/database/migrations
 COPY --from=build --chown=node:node /app/catalog/snapshot.json /app/catalog/snapshot.sha256 /app/catalog/clue-taxonomy.json ./catalog/
 LABEL org.opencontainers.image.source="https://github.com/KihiraLove/Vardorvis-clan-clog"
