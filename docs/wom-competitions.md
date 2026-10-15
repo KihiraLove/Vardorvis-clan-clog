@@ -111,6 +111,10 @@ Distinct overlapping competitions still count their reported XP independently.
 
 ## API and transactions
 
+Both import protocols use one reconciliation service. See
+[import reconciliation](import-reconciliation.md) for caller compatibility,
+locking, durable replay and private activity before/after evidence retention.
+
 `GET /api/v1/competitions/activities` returns `{serverNow,competitions}` with
 ACTIVITY metadata only. `GET /api/v1/xp/tracker` retains its single repeatable-read
 snapshot, revision and ETag, adding a Total `podium` and an event `podium`.
