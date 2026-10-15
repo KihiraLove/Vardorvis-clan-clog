@@ -6,6 +6,7 @@ import type { IconRecord } from './icon-storage.js';
 import { insertImage, screenshotPath } from './proof-store.js';
 import { validCollectionDate, validProofUrl } from './intake.js';
 import { ApiError, type BackendStore } from './types.js';
+import { readSubmissionFilters } from './submission-filters.js';
 import type {
   ReviewAction,
   ManualSubmissionInput,
@@ -304,6 +305,46 @@ export class PgReviewStore implements ReviewStore {
       throw e;
     }
   }
+  submissionFilters() {
+    return readSubmissionFilters(this.pool);
+  }
+  async saveSubmissionFilters(
+    filterCollected: boolean,
+    revision: string,
+    actorId: string,
+  ) {
+    return transaction(this.pool, 'write', async (client) => {
+      const old = (
+        await client.query<{ version: number; filter_collected: boolean }>(
+          'SELECT version,filter_collected FROM submission_filter_settings WHERE singleton FOR UPDATE',
+        )
+      ).rows[0];
+      if (!old) throw new ApiError(503, 'Submission filters are unavailable.');
+      if (revision !== 'submission-filters-' + old.version)
+        throw new ApiError(
+          409,
+          'Submission filters changed. Reload before saving again.',
+        );
+      await client.query(
+        'UPDATE submission_filter_settings SET filter_collected=$1,version=version+1 WHERE singleton',
+        [filterCollected],
+      );
+      await client.query(
+        'INSERT INTO submission_filter_audit(id,actor_id,version,old_filter_collected,new_filter_collected) VALUES($1,$2,$3,$4,$5)',
+        [
+          randomUUID(),
+          actorId,
+          old.version + 1,
+          old.filter_collected,
+          filterCollected,
+        ],
+      );
+      return {
+        revision: 'submission-filters-' + (old.version + 1),
+        filterCollected,
+      };
+    });
+  }
   async queue(
     status: 'pending' | 'reviewed',
     unmatched: boolean,
@@ -349,6 +390,7 @@ export class PgReviewStore implements ReviewStore {
 
       return {
         revision,
+        filters: await readSubmissionFilters(client),
         submissions: page.map(view),
         pageCursor: encodeCursor(revision, decoded.key),
         nextCursor:

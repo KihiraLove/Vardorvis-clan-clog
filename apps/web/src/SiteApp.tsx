@@ -334,6 +334,15 @@ export function SiteApp({
               target="_blank"
               rel="noopener noreferrer"
             >
+              <svg
+                className="project-support__logo"
+                aria-hidden="true"
+                viewBox="54 45 130 110"
+                width="26"
+                height="24"
+              >
+                <image href="/brand/ko-fi-blue.png" width="980" height="198" />
+              </svg>
               Support this project
             </a>
           </div>

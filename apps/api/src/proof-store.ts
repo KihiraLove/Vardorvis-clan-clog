@@ -6,11 +6,16 @@ import {
   hardcoreRuneLiteWorldTypes,
   parseRuneLiteWorldTypes,
   runeLiteDecision,
+  normalizePlayerName,
   type RuneLiteRules,
 } from '@clog/domain';
 import { readRuneLiteSettings } from './runelite-settings.js';
 import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
 import { requireClanKey } from './clan-api-key.js';
+import {
+  readSubmissionFilters,
+  requireUncollected,
+} from './submission-filters.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
 export const screenshotPath = (id: string) =>
@@ -73,6 +78,7 @@ export interface RuneLiteReceipt {
   submittedAt: string;
   collectedOn: string;
   hardcore?: boolean;
+  duplicate?: true;
 }
 export interface ProofStore {
   allowIntake(ip: string): Promise<boolean>;
@@ -177,7 +183,7 @@ export class PgProofStore implements ProofStore {
       }
       const item = (
         await client.query<{ id: number; name: string }>(
-          'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active FOR SHARE OF i',
+          'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active FOR UPDATE OF i',
           [fields.itemId],
         )
       ).rows[0];
@@ -187,6 +193,34 @@ export class PgProofStore implements ProofStore {
           'Item ID is not in the active collection-log catalog.',
         );
       await requireScheduledItem(client, schedulingEnabled, item.id);
+      const filters = await readSubmissionFilters(client, true);
+      const playerKey = normalizePlayerName(fields.username);
+      const receivedAt = (
+        await client.query<{ at: Date }>('SELECT clock_timestamp() AS at')
+      ).rows[0]!.at;
+      // The item lock serializes independent observers, including game-ID aliases.
+      // Immutable event time/identity keep staff edits and duplicate deliveries from extending the window.
+      const duplicate = (
+        await client.query<{ receipt: RuneLiteReceipt; imageId: string }>(
+          'SELECT e.receipt,s.proof_image_id::text AS "imageId" FROM runelite_drop_events e JOIN submissions s ON s.id=e.submission_id WHERE e.player_key=$1 AND e.item_id=$2 AND e.hardcore=$3 AND e.first_received_at > $4::timestamptz - interval \'1 minute\' ORDER BY e.first_received_at LIMIT 1',
+          [playerKey, item.id, world.hardcore, receivedAt],
+        )
+      ).rows[0];
+      if (duplicate) {
+        const receipt = { ...duplicate.receipt, duplicate: true as const };
+        await client.query(
+          'INSERT INTO runelite_submission_requests(request_key,payload_hash,submission_id,response) VALUES($1,$2,$3,$4)',
+          [key, hash, receipt.submissionId, JSON.stringify(receipt)],
+        );
+        await client.query('COMMIT');
+        return { receipt, imageId: duplicate.imageId };
+      }
+      await requireUncollected(
+        client,
+        filters.filterCollected,
+        item.id,
+        world.hardcore,
+      );
       await insertImage(client, image);
       const id = randomUUID();
       const row = (
@@ -273,6 +307,17 @@ export class PgProofStore implements ProofStore {
       await client.query(
         'INSERT INTO runelite_submission_requests(request_key,payload_hash,submission_id,response) VALUES($1,$2,$3,$4)',
         [key, hash, id, JSON.stringify(receipt)],
+      );
+      await client.query(
+        'INSERT INTO runelite_drop_events(submission_id,player_key,item_id,hardcore,first_received_at,receipt) VALUES($1,$2,$3,$4,$5,$6)',
+        [
+          id,
+          playerKey,
+          item.id,
+          world.hardcore,
+          receivedAt,
+          JSON.stringify(receipt),
+        ],
       );
       await client.query('COMMIT');
       return { receipt, imageId: image.id };

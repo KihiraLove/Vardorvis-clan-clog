@@ -394,6 +394,7 @@ export function SubmissionEditor({
               <label htmlFor="canonical-item">Canonical item</label>
               <select
                 id="canonical-item"
+                className="catalog-choice-list"
                 required
                 size={5}
                 value={draft.itemId || ''}

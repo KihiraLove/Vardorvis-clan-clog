@@ -297,7 +297,7 @@ test(
       assert.equal(
         (
           await submit(
-            '["MEMBERS","HC_WORLDS_PLACEHOLDER"]',
+            '["MEMBERS","HARDCORE_MAIN"]',
             3,
             'Collector',
             'Game Clan',
@@ -341,16 +341,12 @@ test(
         'pending',
       );
       assert.equal(
-        (await submit('PVP', 6, 'Collector', 'Game Clan')).json().status,
+        (await submit('PVP', 6, 'Another Collector', 'Game Clan')).json()
+          .status,
         'approved',
       );
-      for (const flag of ['HC_WORLD_PLACEHOLDER', 'HC_WORLDS_PLACEHOLDER']) {
-        const result = await submit(
-          flag,
-          flag === 'HC_WORLD_PLACEHOLDER' ? 7 : 8,
-          'Collector',
-          'Game Clan',
-        );
+      for (const flag of ['HARDCORE_MAIN']) {
+        const result = await submit(flag, 7, 'Collector', 'Game Clan');
         assert.equal(result.json().status, 'approved', result.body);
         assert.equal(result.json().hardcore, true);
       }
@@ -359,7 +355,12 @@ test(
         'pending',
       );
       await save({ matchClanName: false });
-      const keyOnly = await submit('MEMBERS', 9, 'Collector', 'Different Clan');
+      const keyOnly = await submit(
+        'MEMBERS',
+        9,
+        'Key Collector',
+        'Different Clan',
+      );
       assert.equal(keyOnly.json().status, 'approved', keyOnly.body);
       const keySettings = await clanKeys.settings();
       await clanKeys.update(
@@ -385,8 +386,8 @@ test(
       );
       await save({ matchClanName: true });
       const concurrent = await Promise.all(
-        Array.from({ length: 3 }, () =>
-          submit('MEMBERS', 11, 'Collector', 'Game Clan'),
+        Array.from({ length: 3 }, (_, index) =>
+          submit('MEMBERS', 11, 'Collector ' + index, 'Game Clan'),
         ),
       );
       assert.deepEqual(concurrent.map((r) => r.json().status).sort(), [

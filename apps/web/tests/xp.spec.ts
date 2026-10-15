@@ -54,6 +54,11 @@ test('Total and event sidebar display exact event gains and links with four-digi
   await expect(
     page.getByRole('link', { name: /View event on Wise Old Man/ }),
   ).toHaveAttribute('href', tracker.events[0]!.sourceUrl);
+  await expect(
+    page
+      .locator('.xp-podium')
+      .getByRole('link', { name: /View event on Wise Old Man/ }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'All-skill weekend', exact: true })
     .click();
@@ -134,6 +139,15 @@ test('preview samples add once; switching event changes totals without showing m
     .click();
   await expect(page.getByLabel('Attack: 0 XP', { exact: true })).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const podium = await page.locator('.xp-podium').boundingBox();
+  expect(podium!.width).toBeCloseTo(480, 0);
+  await page
+    .locator('.event-tracker')
+    .screenshot({ path: test.info().outputPath('wide-podium.png') });
+  await page
+    .locator('.footer-support')
+    .screenshot({ path: test.info().outputPath('support-buttons.png') });
 });
 test('failed or malformed refresh retains the last exact snapshot', async ({
   page,

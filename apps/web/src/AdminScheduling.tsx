@@ -278,45 +278,47 @@ export function AdminScheduling({
                 onChange={(event) => setPageSearch(event.target.value)}
               />
             </label>
-            <fieldset className="schedule-page-list">
+            <fieldset className="schedule-page-list catalog-picker">
               <legend>Collection log pages</legend>
-              {!catalog && <p>Loading pages…</p>}
-              {catalog?.pages
-                .filter((p) =>
-                  (p.name + ' ' + p.category)
-                    .toLowerCase()
-                    .includes(pageSearch.toLowerCase()),
-                )
-                .map((page) => (
-                  <label className="admin-checkbox" key={page.id}>
-                    <input
-                      type="checkbox"
-                      checked={pageIds.includes(page.id)}
-                      onChange={(event) =>
-                        setPageIds(
-                          event.target.checked
-                            ? [...pageIds, page.id]
-                            : pageIds.filter((id) => id !== page.id),
-                        )
-                      }
-                    />
-                    {page.name} ({page.category})
-                  </label>
-                ))}
-              {pageIds
-                .filter((id) => !catalog?.pages.some((p) => p.id === id))
-                .map((id) => (
-                  <label className="admin-checkbox" key={id}>
-                    <input
-                      type="checkbox"
-                      checked
-                      onChange={() =>
-                        setPageIds(pageIds.filter((value) => value !== id))
-                      }
-                    />
-                    Unavailable page: {id} (remove before saving)
-                  </label>
-                ))}
+              <div className="catalog-choice-list">
+                {!catalog && <p>Loading pages…</p>}
+                {catalog?.pages
+                  .filter((p) =>
+                    (p.name + ' ' + p.category)
+                      .toLowerCase()
+                      .includes(pageSearch.toLowerCase()),
+                  )
+                  .map((page) => (
+                    <label className="admin-checkbox" key={page.id}>
+                      <input
+                        type="checkbox"
+                        checked={pageIds.includes(page.id)}
+                        onChange={(event) =>
+                          setPageIds(
+                            event.target.checked
+                              ? [...pageIds, page.id]
+                              : pageIds.filter((id) => id !== page.id),
+                          )
+                        }
+                      />
+                      {page.name} ({page.category})
+                    </label>
+                  ))}
+                {pageIds
+                  .filter((id) => !catalog?.pages.some((p) => p.id === id))
+                  .map((id) => (
+                    <label className="admin-checkbox" key={id}>
+                      <input
+                        type="checkbox"
+                        checked
+                        onChange={() =>
+                          setPageIds(pageIds.filter((value) => value !== id))
+                        }
+                      />
+                      Unavailable page: {id} (remove before saving)
+                    </label>
+                  ))}
+              </div>
             </fieldset>
             <p className="admin-note">
               {pageIds.length} pages selected. All selected pages share this

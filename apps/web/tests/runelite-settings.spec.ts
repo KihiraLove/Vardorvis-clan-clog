@@ -20,7 +20,7 @@ test('RuneLite policies, independent clan matching and whitelist save on desktop
     ]);
     await select.selectOption(label === 'F2P worlds' ? 'reject' : 'allow');
   }
-  for (const label of ['MEMBERS worlds', 'HC_WORLDS_PLACEHOLDER worlds']) {
+  for (const label of ['MEMBERS worlds', 'HARDCORE_MAIN worlds']) {
     const select = page.getByLabel(label, { exact: true });
     await expect(select.locator('option')).toHaveText([
       'Send to review',

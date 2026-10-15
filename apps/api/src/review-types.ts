@@ -52,6 +52,12 @@ export interface ReviewAudit {
   after: ReviewSubmission;
 }
 export interface ReviewStore {
+  submissionFilters?(): Promise<import('@clog/domain').SubmissionFilters>;
+  saveSubmissionFilters?(
+    filterCollected: boolean,
+    revision: string,
+    actorId: string,
+  ): Promise<import('@clog/domain').SubmissionFilters>;
   adminCatalog(): Promise<unknown>;
   createManual(
     fields: ManualSubmissionInput,
@@ -70,6 +76,7 @@ export interface ReviewStore {
     submissions: ReviewSubmission[];
     nextCursor: string | null;
     pageCursor: string;
+    filters?: import('@clog/domain').SubmissionFilters;
   }>;
   detail(
     id: string,

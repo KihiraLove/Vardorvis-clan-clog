@@ -23,6 +23,46 @@ export function reviewRoutes(
     async (req: FastifyRequest) => {
       await authorize(req, write);
     };
+  app.get(
+    '/api/v1/admin/submission-filters',
+    { onRequest: guard() },
+    async () => {
+      if (!store.submissionFilters)
+        throw new ApiError(503, 'Submission filters are unavailable.');
+      return store.submissionFilters();
+    },
+  );
+  app.put<{ Body: { filterCollected: boolean; expectedRevision: string } }>(
+    '/api/v1/admin/submission-filters',
+    {
+      onRequest: guard(true),
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['filterCollected', 'expectedRevision'],
+          properties: {
+            filterCollected: { type: 'boolean' },
+            expectedRevision: {
+              type: 'string',
+              pattern: '^submission-filters-[1-9][0-9]*$',
+              maxLength: 40,
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const actor = await authorize(req, true);
+      if (!store.saveSubmissionFilters)
+        throw new ApiError(503, 'Submission filters are unavailable.');
+      return store.saveSubmissionFilters(
+        req.body.filterCollected,
+        req.body.expectedRevision,
+        actor.id,
+      );
+    },
+  );
   app.post<{ Body: ManualSubmissionInput }>(
     '/api/v1/admin/submissions',
     {

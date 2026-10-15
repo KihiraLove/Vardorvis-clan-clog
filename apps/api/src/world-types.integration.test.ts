@@ -129,7 +129,7 @@ test(
       for (const blocked of blockedRuneLiteWorldTypes) {
         for (const world of [
           blocked,
-          JSON.stringify(['MEMBERS', 'HC_WORLD_PLACEHOLDER', blocked]),
+          JSON.stringify(['MEMBERS', 'HARDCORE_MAIN', blocked]),
         ]) {
           const rejected = await run(world);
           assert.equal(rejected.statusCode, 403, rejected.body);
@@ -186,23 +186,21 @@ test(
         assert.equal(result.json().status, 'pending');
         ordinaryId ||= result.json().submissionId as string;
       }
-      const singleHC = await run('HC_WORLD_PLACEHOLDER');
+      const singleHC = await run('HARDCORE_MAIN');
       assert.equal(singleHC.statusCode, 201, singleHC.body);
       assert.equal(singleHC.json().hardcore, true);
-      const key = randomUUID();
-      const hc = await run(
-        '["MEMBERS","HC_WORLD_PLACEHOLDER","SKILL_TOTAL"]',
-        key,
+      // A later independent drop can retain a different original flag set.
+      await pool.query(
+        "UPDATE runelite_drop_events SET first_received_at=clock_timestamp()-interval '2 minutes'",
       );
+      const key = randomUUID();
+      const hc = await run('["MEMBERS","HARDCORE_MAIN","SKILL_TOTAL"]', key);
       assert.equal(hc.statusCode, 201, hc.body);
       const receipt = hc.json();
       assert.equal(receipt.hardcore, true);
       assert.deepEqual(
         (
-          await run(
-            '["SKILL_TOTAL","MEMBERS","HC_WORLD_PLACEHOLDER","MEMBERS"]',
-            key,
-          )
+          await run('["SKILL_TOTAL","MEMBERS","HARDCORE_MAIN","MEMBERS"]', key)
         ).json(),
         receipt,
       );
@@ -211,7 +209,7 @@ test(
         409,
       );
       assert.equal(
-        (await run('["HC_WORLD_PLACEHOLDER","DEADMAN"]', key)).statusCode,
+        (await run('["HARDCORE_MAIN","DEADMAN"]', key)).statusCode,
         403,
       );
       const saved = (
@@ -222,11 +220,7 @@ test(
       ).rows[0];
       assert.deepEqual(saved, {
         hardcore: true,
-        submitted_world_types: [
-          'HC_WORLD_PLACEHOLDER',
-          'MEMBERS',
-          'SKILL_TOTAL',
-        ],
+        submitted_world_types: ['HARDCORE_MAIN', 'MEMBERS', 'SKILL_TOTAL'],
       });
       assert.equal((await backend.settings()).hardcoreEnabled, false);
       for (const id of [ordinaryId, receipt.submissionId]) {
@@ -246,9 +240,7 @@ test(
       ]);
       assert.ok(credits.every((credit) => credit.itemId === 42));
       assert.deepEqual(
-        (
-          await run('["HC_WORLD_PLACEHOLDER","MEMBERS","SKILL_TOTAL"]', key)
-        ).json(),
+        (await run('["HARDCORE_MAIN","MEMBERS","SKILL_TOTAL"]', key)).json(),
         receipt,
       );
 
@@ -278,10 +270,7 @@ test(
       const original = { ...legacy.json() };
       delete original.hardcore;
       assert.deepEqual((await run('MEMBERS', legacyKey)).json(), original);
-      assert.equal(
-        (await run('HC_WORLD_PLACEHOLDER', legacyKey)).statusCode,
-        409,
-      );
+      assert.equal((await run('HARDCORE_MAIN', legacyKey)).statusCode, 409);
 
       // Headers encode keys that cannot be represented literally in HTTP.
       for (const custom of [

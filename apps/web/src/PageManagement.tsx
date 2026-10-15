@@ -159,7 +159,7 @@ export function PageManagement({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <fieldset className="page-item-picker">
+        <fieldset className="page-item-picker catalog-picker">
           <legend>Existing items (optional)</legend>
           <input
             type="search"
@@ -173,7 +173,7 @@ export function PageManagement({
             {itemIds.length} items selected. An empty page can receive new items
             from Add item.
           </p>
-          <div className="page-item-choices">
+          <div className="page-item-choices catalog-choice-list">
             {choices.slice(0, 100).map((item) => (
               <label className="admin-checkbox" key={item.id}>
                 <input

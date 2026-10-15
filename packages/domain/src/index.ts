@@ -171,6 +171,10 @@ export {
 } from './scheduling.js';
 export { WorkBudget, WorkloadError, type WorkLimit } from './work-budget.js';
 export {
+  parseSubmissionFilters,
+  type SubmissionFilters,
+} from './submission-filters.js';
+export {
   OperationalDiagnostics,
   WorkDrain,
   withinDeadline,

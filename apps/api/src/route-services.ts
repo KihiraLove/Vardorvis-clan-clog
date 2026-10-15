@@ -55,7 +55,12 @@ export type CatalogService = CatalogRouteStore &
 export type LifecycleReader = Pick<PgLifecycleStore, 'list' | 'detail'>;
 export type ReviewRouteStore = Pick<
   ReviewStore,
-  'createManual' | 'queue' | 'detail' | 'mutate'
+  | 'createManual'
+  | 'queue'
+  | 'detail'
+  | 'mutate'
+  | 'submissionFilters'
+  | 'saveSubmissionFilters'
 >;
 export type ManualReviewStore = Pick<ReviewStore, 'createManual'>;
 export type XpPublicStore = Pick<XpStore, 'tracker' | 'trackerSnapshot'>;
@@ -81,7 +86,8 @@ export type ApplicationStore = AuthStore &
   BotStore &
   Pick<BackendStore, 'catalog' | 'collections' | 'publicSnapshot'>;
 export type IconFiles = Pick<IconStorage, 'read' | 'save'>;
-export type ProofFiles = Pick<ProofStorage, 'read' | 'save'>;
+export type ProofFiles = Pick<ProofStorage, 'read' | 'save'> &
+  Partial<Pick<ProofStorage, 'remove'>>;
 export type BrandingFiles = Pick<BrandingStorage, 'read' | 'saveLogo'> & {
   favicons: Pick<BrandingStorage['favicons'], 'read'>;
 };

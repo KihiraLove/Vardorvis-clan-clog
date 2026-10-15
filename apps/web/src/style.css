@@ -1306,6 +1306,7 @@ main {
 .admin-panel input:not([type='checkbox']),
 .admin-panel select,
 .admin-panel textarea,
+.admin-panel .catalog-choice-list,
 .admin-input {
   display: block;
   width: 100%;
@@ -1320,6 +1321,26 @@ main {
 }
 .admin-input {
   min-height: 44px;
+}
+.admin-panel .catalog-choice-list {
+  height: 160px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.admin-panel .catalog-picker {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+}
+.catalog-choice-list .admin-checkbox {
+  margin: 0;
+  min-height: 30px;
+  align-items: center;
+}
+.catalog-picker legend {
+  padding: 0;
+  margin-bottom: 7px;
 }
 .admin-panel textarea {
   resize: vertical;
@@ -2070,6 +2091,9 @@ main {
   margin: 0 0 0.6rem;
   font-size: 1rem;
 }
+.schedule-card {
+  background: #453b2c;
+}
 .schedule-delete-confirm {
   max-width: min(32rem, calc(100vw - 2rem));
   color: #e3d5b8;
@@ -2140,6 +2164,12 @@ main {
 .github-support:hover,
 .project-support:hover {
   filter: brightness(1.1);
+}
+.project-support {
+  background: #73a4f1;
+}
+.project-support__logo {
+  flex-shrink: 0;
 }
 .admin-delete-confirm {
   border: 1px solid #9e714c;
@@ -2256,11 +2286,8 @@ main {
   color: #f3dc83;
 }
 .event-tracker__layout {
-  grid-template-columns: minmax(160px, 260px) minmax(0, 470px) minmax(
-      160px,
-      240px
-    );
-  max-width: 970px;
+  grid-template-columns: minmax(160px, 260px) 470px minmax(320px, 480px);
+  max-width: 1210px;
   gap: 0;
 }
 .xp-podium {
@@ -2355,6 +2382,15 @@ main {
   color: #b8aa83;
 }
 @media (max-width: 1050px) {
+  .event-tracker__layout {
+    grid-template-columns: minmax(160px, 260px) minmax(0, 470px);
+  }
+  .xp-podium {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 660px;
+    justify-self: center;
+  }
   .public-log-layout {
     margin-left: 0;
     grid-template-columns: minmax(0, 1fr);
@@ -2384,12 +2420,6 @@ main {
 @media (max-width: 740px) {
   .event-tracker__layout {
     grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
-  }
-  .xp-podium {
-    grid-column: 1 / -1;
-    width: 100%;
-    max-width: 330px;
-    justify-self: center;
   }
 }
 @media (max-width: 380px) {

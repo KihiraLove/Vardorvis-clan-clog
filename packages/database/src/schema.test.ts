@@ -44,6 +44,7 @@ test(
           '019_lifecycle_archive.sql',
           '020_public_projections.sql',
           '021_retire_oauth_states.sql',
+          '022_submission_duplicate_filters.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

@@ -1,5 +1,9 @@
 /** Private API contracts and form validation; server authorization remains mandatory. */
-import { validateCollectionDate, validateProofUrl } from '@clog/domain';
+import {
+  validateCollectionDate,
+  validateProofUrl,
+  parseSubmissionFilters,
+} from '@clog/domain';
 import {
   categories,
   parseCatalog,
@@ -78,6 +82,7 @@ export interface SubmissionDetail {
   nextAuditCursor: string | null;
 }
 export interface QueueResult {
+  filters?: import('@clog/domain').SubmissionFilters;
   revision: string;
   submissions: Submission[];
   nextCursor: string | null;
@@ -148,6 +153,12 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  saveSubmissionFilters(
+    filterCollected: boolean,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').SubmissionFilters>;
   scheduling(
     signal: AbortSignal,
   ): Promise<import('@clog/domain').SchedulingState>;
@@ -399,6 +410,9 @@ export function parseQueue(value: unknown, view: QueueView): QueueResult {
   )
     throw new Error('Unexpected submission view.');
   return {
+    ...(data.filters === undefined
+      ? {}
+      : { filters: parseSubmissionFilters(data.filters) }),
     revision: text(data.revision),
     submissions,
     nextCursor: data.nextCursor === null ? null : text(data.nextCursor),

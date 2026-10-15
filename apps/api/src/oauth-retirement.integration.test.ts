@@ -27,6 +27,7 @@ test(
       secret = 'a'.repeat(64),
       token = 'A'.repeat(43);
     const oldManifest: { name: string; checksum: string }[] = [];
+    let businessTables: string[] | undefined;
     const cookie = '__Host-clog-session=' + token;
     async function snapshot() {
       const tables = (
@@ -34,8 +35,11 @@ test(
           "SELECT tablename FROM pg_tables WHERE schemaname=current_schema() AND tablename NOT IN ('schema_migrations','oauth_states') ORDER BY tablename",
         )
       ).rows;
+      // Later migrations may add tables; retain the complete pre-upgrade set
+      // when verifying that retirement preserves every existing business row.
+      businessTables ??= tables.map(({ tablename }) => tablename);
       const values: Record<string, unknown[]> = {};
-      for (const { tablename } of tables) {
+      for (const tablename of businessTables) {
         // Names come from this disposable schema's catalog, never HTTP input.
         const quoted = '"' + tablename.replaceAll('"', '""') + '"';
         values[tablename] = (
@@ -150,9 +154,17 @@ test(
                 'SELECT count(*)::int AS n FROM schema_migrations',
               )
             ).rows[0].n,
-            21,
+            22,
           );
           assert.deepEqual(await snapshot(), before);
+          assert.deepEqual(
+            (
+              await pool.query(
+                'SELECT version,filter_collected FROM submission_filter_settings',
+              )
+            ).rows,
+            [{ version: 1, filter_collected: false }],
+          );
           assert.equal(
             (
               await store.session(

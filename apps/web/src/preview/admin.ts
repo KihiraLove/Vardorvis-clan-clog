@@ -57,6 +57,26 @@ import {
 } from './scenarios.ts';
 
 export class PreviewAdminClient implements AdminClient {
+  private submissionFilterState = {
+    revision: 'submission-filters-1',
+    filterCollected: false,
+  };
+  async saveSubmissionFilters(
+    filterCollected: boolean,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.submissionFilterState.revision)
+      throw new AdminRequestError(409);
+    this.submissionFilterState = {
+      revision:
+        'submission-filters-' + (Number(revision.split('-').at(-1)) + 1),
+      filterCollected,
+    };
+    return { ...this.submissionFilterState };
+  }
   private schedulingState: SchedulingState = {
     revision: 'schedules-1',
     enabled: false,
@@ -819,6 +839,7 @@ export class PreviewAdminClient implements AdminClient {
     );
     return structuredClone({
       revision: 'preview-queue-' + this.queueRevision,
+      filters: this.submissionFilterState,
       pageCursor: start + ':' + this.queueRevision + ':' + view,
       submissions: rows.slice(start, start + 2),
       nextCursor:

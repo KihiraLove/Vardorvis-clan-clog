@@ -288,6 +288,76 @@ test(
       const session = (
         await app.inject({ url: '/api/v1/auth/session', headers: { cookie } })
       ).json();
+      const filterUrl = '/api/v1/admin/submission-filters';
+      assert.equal((await app.inject(filterUrl)).statusCode, 401);
+      const filterHeaders = {
+        cookie,
+        origin: auth.origin,
+        'x-csrf-token': session.csrfToken,
+      };
+      const filterState = (
+        await app.inject({ url: filterUrl, headers: { cookie } })
+      ).json();
+      assert.equal(filterState.filterCollected, false);
+      const filterPayload = {
+        filterCollected: true,
+        expectedRevision: filterState.revision,
+      };
+      assert.equal(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: filterUrl,
+            headers: { cookie },
+            payload: filterPayload,
+          })
+        ).statusCode,
+        403,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: filterUrl,
+            headers: filterHeaders,
+            payload: { ...filterPayload, filterCollected: 'true' },
+          })
+        ).statusCode,
+        400,
+      );
+      const savedFilter = await app.inject({
+        method: 'PUT',
+        url: filterUrl,
+        headers: filterHeaders,
+        payload: filterPayload,
+      });
+      assert.equal(savedFilter.statusCode, 200, savedFilter.body);
+      assert.equal(savedFilter.json().filterCollected, true);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: filterUrl,
+            headers: filterHeaders,
+            payload: filterPayload,
+          })
+        ).statusCode,
+        409,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: filterUrl,
+            headers: filterHeaders,
+            payload: {
+              filterCollected: false,
+              expectedRevision: savedFilter.json().revision,
+            },
+          })
+        ).statusCode,
+        200,
+      );
       assert.equal(
         (
           await app.inject({

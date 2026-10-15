@@ -10,6 +10,7 @@ import type { ManualSubmissionInput } from './review-types.js';
 import type { ManualReviewStore, ProofFiles } from './route-services.js';
 import { ApiError } from './types.js';
 import { suppliedClanKey } from './clan-api-key.js';
+import { runeLiteCors } from './runelite-cors.js';
 
 async function parts(request: FastifyRequest, allowed: string[]) {
   if (!request.isMultipart())
@@ -121,6 +122,7 @@ export function proofRoutes(
     },
   );
   void app.register(async (scope) => {
+    runeLiteCors(scope);
     await scope.register(multipart, {
       limits: {
         fileSize: MAX_SCREENSHOT_BYTES,
@@ -178,7 +180,10 @@ export function proofRoutes(
           key,
           suppliedClanKey(req.headers),
         );
-        // A replay may leave an orphan; maintenance will check it later.
+        // A committed duplicate receipt confirms this new file is unreferenced.
+        // Uncertain commits still retain evidence for reference-checked maintenance.
+        if (result.receipt.duplicate && result.imageId !== image.id)
+          await storage.remove?.(image.id).catch(() => {});
         return reply.code(201).send(result.receipt);
       },
     );

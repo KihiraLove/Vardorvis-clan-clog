@@ -186,6 +186,7 @@ export function ManualSubmissionForm({
                 Canonical item
                 <select
                   aria-label="Canonical item"
+                  className="catalog-choice-list"
                   required
                   size={5}
                   value={itemId}

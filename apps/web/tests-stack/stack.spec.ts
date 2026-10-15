@@ -104,6 +104,50 @@ test.afterEach(async ({ page }) => {
     ).toEqual({ violations: [], errors: [] });
 });
 
+test('GitHub Pages tester can preflight and read authenticated intake errors across origins', async ({
+  page,
+  context,
+  browserName,
+}) => {
+  // Only the tester document is local test HTML; OPTIONS/POST reach production Nginx/API.
+  // This disposable target is loopback; grant that permission without bypassing CORS.
+  if (browserName === 'chromium')
+    await context.grantPermissions(['local-network-access'], {
+      origin: 'https://kihiralove.github.io',
+    });
+  await page.route('https://kihiralove.github.io/clog-test', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><title>RuneLite browser tester</title>',
+    }),
+  );
+  await page.goto('https://kihiralove.github.io/clog-test');
+  const response = await page.evaluate(async () => {
+    const body = new FormData();
+    body.set('username', 'Browser tester');
+    const result = await fetch(
+      'https://clog.example.com/api/v1/runelite/submissions',
+      {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': crypto.randomUUID(),
+          'X-Clan-API-Key': 'deliberately-invalid-key',
+        },
+        body,
+        credentials: 'omit',
+      },
+    );
+    return {
+      status: result.status,
+      body: await result.json(),
+      category: result.headers.get('X-Error-Category'),
+    };
+  });
+  expect(response.status).toBe(401);
+  expect(response.body.error).toBeTruthy();
+  expect(response.category).toBeTruthy();
+});
+
 test('real login, PNG claim, independent note/correction, canonical public credit and audited revoke', async ({
   page,
   context,

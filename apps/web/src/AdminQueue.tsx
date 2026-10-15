@@ -15,6 +15,8 @@ import { SubmissionEditor } from './SubmissionEditor.tsx';
 import { ManualSubmissionForm } from './ManualSubmissionForm.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
 import { usePreparedAdminData } from './admin-route-data.ts';
+import { useAdminAction } from './use-admin-action.ts';
+import type { SubmissionFilters } from '@clog/domain';
 export function AdminQueue({
   client,
   session,
@@ -53,6 +55,10 @@ export function AdminQueue({
   const [loading, setLoading] = useState(!initial?.queue),
     [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [filters, setFilters] = useState<SubmissionFilters | undefined>(
+    initial?.queue?.filters,
+  );
+  const filterAction = useAdminAction(onAccessLost);
   // Paging/filtering keeps the prepared catalog; explicit refresh and writes reload it.
   const catalogCache = useRef(
     initial?.catalog
@@ -83,6 +89,14 @@ export function AdminQueue({
         if (active) {
           catalogCache.current = { client, refresh, catalog };
           setSnapshot({ catalog, queue, view, cursor });
+          if (queue.filters)
+            setFilters((saved) =>
+              !saved ||
+              Number(queue.filters!.revision.split('-').at(-1)) >
+                Number(saved.revision.split('-').at(-1))
+                ? queue.filters
+                : saved,
+            );
         }
       })
       .catch((failure: unknown) => {
@@ -144,6 +158,37 @@ export function AdminQueue({
           }}
         />
       )}
+      <section className="admin-panel submission-filter-panel">
+        <label className="admin-checkbox">
+          <input
+            type="checkbox"
+            checked={filters?.filterCollected ?? false}
+            disabled={!filters || filterAction.busy}
+            onChange={(event) => {
+              if (!filters) return;
+              const checked = event.target.checked;
+              void filterAction.execute(
+                async (signal) => {
+                  const saved = await client.saveSubmissionFilters(
+                    checked,
+                    filters.revision,
+                    session.csrfToken,
+                    signal,
+                  );
+                  if (!signal.aborted) setFilters(saved);
+                },
+                async (signal) => {
+                  const current = await client.queue(view, cursor, signal);
+                  if (!signal.aborted && current.filters)
+                    setFilters(current.filters);
+                },
+              );
+            }}
+          />
+          Filter out duplicates
+        </label>
+        {filterAction.error && <p role="alert">{filterAction.error}</p>}
+      </section>
       <section className="admin-panel">
         <div className="admin-section-heading">
           <div>

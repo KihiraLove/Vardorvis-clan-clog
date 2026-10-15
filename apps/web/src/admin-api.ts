@@ -9,6 +9,7 @@ import {
 import {
   parseRuneLiteSettings,
   parseRuneLiteRules,
+  parseSubmissionFilters,
   type RuneLiteSettingsUpdate,
 } from '@clog/domain';
 import { parseSettings } from './site-settings.ts';
@@ -83,6 +84,30 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async saveSubmissionFilters(
+    filterCollected: boolean,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const value = parseSubmissionFilters(
+      await this.json(
+        '/api/v1/admin/submission-filters',
+        signal,
+        this.write(
+          csrf,
+          { filterCollected, expectedRevision: revision },
+          'PUT',
+        ),
+      ),
+    );
+    if (
+      value.filterCollected !== filterCollected ||
+      value.revision === revision
+    )
+      throw new Error('Unexpected submission filter receipt.');
+    return value;
+  }
   async scheduling(signal: AbortSignal) {
     return parseSchedulingState(
       await this.json('/api/v1/admin/schedules', signal),

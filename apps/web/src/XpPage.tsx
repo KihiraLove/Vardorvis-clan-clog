@@ -148,24 +148,12 @@ export function XpPage({
               <XpAmount xp={totals ? sumXp(totals) : null} label="All skills" />
             </div>
           </div>
-          {(event || missing) && (
+          {missing && (
             <div className="event-source">
-              {event ? (
-                <>
-                  <a
-                    href={event.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    View event on Wise Old Man ↗
-                  </a>
-                </>
-              ) : missing ? (
-                <p role="status">
-                  This event is no longer available. Choose Total or another
-                  event.
-                </p>
-              ) : null}
+              <p role="status">
+                This event is no longer available. Choose Total or another
+                event.
+              </p>
             </div>
           )}
         </div>
@@ -174,6 +162,7 @@ export function XpPage({
             missing ? [] : event ? (event.podium ?? []) : (data?.podium ?? [])
           }
           title={event?.title ?? (missing ? 'Unavailable event' : 'Total')}
+          sourceUrl={event?.sourceUrl}
         />
       </div>
     </section>

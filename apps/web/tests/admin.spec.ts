@@ -12,6 +12,34 @@ const review = (page: Page, collector: string) =>
   page.getByRole('button', { name: new RegExp('^Review ' + collector + ' ·') });
 const itemIcon = resolve('public/skills/sailing.png');
 
+test('collected-item filtering sits between manual entry and the queue and survives navigation', async ({
+  page,
+}) => {
+  await page.goto('/admin/submissions?preview=1');
+  const filter = page.getByRole('checkbox', {
+    name: 'Filter out duplicates',
+    exact: true,
+  });
+  await expect(filter).toBeEnabled();
+  await expect(filter).not.toBeChecked();
+  const manual = await page
+    .getByRole('heading', { name: 'Manual submission', exact: true })
+    .boundingBox();
+  const toggle = await filter.boundingBox();
+  const submissions = await page
+    .getByRole('heading', { name: 'Submissions', exact: true })
+    .boundingBox();
+  expect(toggle!.y).toBeGreaterThan(manual!.y);
+  expect(toggle!.y).toBeLessThan(submissions!.y);
+  await filter.check();
+  await expect(filter).toBeChecked();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
+  await expect(filter).toBeChecked();
+  await filter.uncheck();
+  await expect(filter).not.toBeChecked();
+});
+
 async function approve(page: Page, collector: string) {
   await review(page, collector).click();
   await proofCheck(page).check();

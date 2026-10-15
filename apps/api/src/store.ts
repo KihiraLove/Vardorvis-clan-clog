@@ -11,6 +11,10 @@ import type pg from 'pg';
 import { ProjectionCache, projection } from './projection-cache.js';
 import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
 import {
+  readSubmissionFilters,
+  requireUncollected,
+} from './submission-filters.js';
+import {
   ApiError,
   type AccountSessionIdentity,
   type BackendStore,
@@ -314,13 +318,28 @@ export class PgStore implements BackendStore {
         itemId !== null &&
         (
           await client.query(
-            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR UPDATE',
             [itemId],
           )
         ).rowCount !== 1
       )
         throw new ApiError(422, 'Selected canonical item is unavailable.');
+      // A same-interaction writer may have committed while this request waited
+      // for the item lock. Recover its receipt before applying current filters.
+      const committed = await readReceipt();
+      if (committed) {
+        const result = replay(committed);
+        await client.query('COMMIT');
+        return result;
+      }
       await requireScheduledItem(client, schedulingEnabled, itemId);
+      const filters = await readSubmissionFilters(client, true);
+      await requireUncollected(
+        client,
+        filters.filterCollected,
+        itemId,
+        input.hardcore,
+      );
       const creditOccupied =
         itemId !== null &&
         (

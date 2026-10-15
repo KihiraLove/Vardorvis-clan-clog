@@ -89,7 +89,7 @@ for (const file of [
 const migrations = (await readdir('packages/database/migrations'))
   .filter((name) => name.endsWith('.sql'))
   .sort();
-assert.equal(migrations.at(-1), '021_retire_oauth_states.sql');
+assert.equal(migrations.at(-1), '022_submission_duplicate_filters.sql');
 const cleanup = JSON.parse(
   await readFile('runtime-dependency-cleanup.json', 'utf8'),
 );

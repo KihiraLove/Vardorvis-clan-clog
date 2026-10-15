@@ -21,7 +21,7 @@ const worldOptions = [
   ['f2p', 'F2P worlds', true],
   ['pvp', 'PVP worlds', true],
   ['members', 'MEMBERS worlds', false],
-  ['hardcore', 'HC_WORLDS_PLACEHOLDER worlds', false],
+  ['hardcore', 'HARDCORE_MAIN worlds', false],
 ] as const;
 export function RuneLiteReviewSettings({
   client,

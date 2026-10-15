@@ -45,7 +45,7 @@ not change the submission's identity.
 Any occurrence of `BETA_WORLD`, `DEADMAN`, `NOSAVE_MODE`, `PVP_ARENA`,
 `QUEST_SPEEDRUNNING`, `SEASONAL`, `TOURNAMENT` or `TOURNAMENT_WORLD` returns **403** without
 storing a claim or screenshot. This also applies to mixed flags containing the
-HC placeholder. `HC_WORLD_PLACEHOLDER` and `HC_WORLDS_PLACEHOLDER` set `hardcore: true`; every other
+`HARDCORE_MAIN`. This official RuneLite flag sets `hardcore: true`; every other
 accepted type, including future identifiers, uses the regular log. Pending
 claims do not grant credit until approved. The HC visibility setting does not
 block intake or discard HC credit. Staff can correct date and world mode during
@@ -67,7 +67,8 @@ Success returns **201**, for example:
 The optional UUID `Idempotency-Key` should be generated once per drop and reused
 on retries. Identical fields and decoded PNG pixels return the original receipt,
 including after review/restart. Changing the payload with that key returns
-**409**. Without a key, each request creates a new claim. Replays must
+**409**. Without a key, the server assigns a fresh request key; the cross-client
+duplicate filter below still applies. Replays must
 use the same normalized world-type set; changing modes or any flag returns
 **409**. Historical receipts created before world-type support can replay as
 ordinary-world requests with the original payload; requesting HC with their
@@ -77,6 +78,36 @@ in-game clan when matching is enabled and, when required, use the current
 API key. Credentials are not part of the immutable submission payload, so a
 retry using a newly rotated key can recover its original receipt. A future plugin should retain the
 key, payload and PNG until it receives the receipt.
+
+Independent clients observing the same player and canonical item in the same
+world mode within one minute share the first submission. This applies even when
+their request keys, game-item variants or screenshots differ. Player matching
+normalizes case, underscores, nonbreaking spaces and repeated whitespace.
+The window starts at the first accepted request and duplicates do not extend it.
+The API returns **201** with the original receipt plus `duplicate: true`, stores
+the new request key for durable retries and discards the duplicate screenshot.
+It creates no extra claim, credit or review entry. Regular and hardcore events
+are separate. A new key after the minute can create a new claim; retrying an
+existing key always retains its original receipt. Staff corrections do not
+change the recorded event identity.
+
+The **Filter out duplicates** checkbox on **Submissions**, between manual
+submission and the queue, additionally rejects RuneLite and Discord claims for
+items already credited in that world mode with **403**. It defaults to off and
+can be changed by admins or moderators. Manual staff entry remains available
+for backfilling achievements. Replays and recognized one-minute duplicates
+retain their successful receipt. CSRF-protected
+`PUT /api/v1/admin/submission-filters` accepts `{ filterCollected,
+expectedRevision }` using the `submission-filters-N` revision supplied by the
+queue or `GET` on that route. Changes are versioned and audited; stale writes
+return **409**.
+
+Browser uploads are allowed from **https://kihiralove.github.io** only on the
+public RuneLite submission endpoint. Its unauthenticated `OPTIONS` preflight
+allows `POST` with `Content-Type`, `Idempotency-Key`, `X-Clan-API-Key` and
+`X-Clan-API-Key-Base64`. Actual uploads still require the configured clan/key
+checks. Successful and error responses expose CORS headers, including access to
+`Retry-After` and `X-Error-Category`. Staff routes and cookies are not exposed.
 
 Malformed multipart or invalid PNG returns **400**, oversize uploads **413**,
 rate limits **429** with `Retry-After: 60`, and unavailable database/storage
@@ -120,10 +151,10 @@ clan name as provenance; **Both** requires both to match. Matching ignores case
 and surrounding spaces. **Save review settings** updates the selected name/key
 requirements together in one transaction with both revisions and audits.
 
-| World flags                               | Available policy                   |
-| ----------------------------------------- | ---------------------------------- |
-| `F2P` (plugin-provided), `PVP`            | Reject, Send to review, Auto allow |
-| `MEMBERS`, either HC placeholder spelling | Send to review, Auto allow         |
+| World flags                    | Available policy                   |
+| ------------------------------ | ---------------------------------- |
+| `F2P` (plugin-provided), `PVP` | Reject, Send to review, Auto allow |
+| `MEMBERS`, `HARDCORE_MAIN`     | Send to review, Auto allow         |
 
 For combined flags, any rejection wins; otherwise review wins over auto allow.
 Flags without a configured category (including `[]`) go to review. A whitelist
@@ -136,6 +167,8 @@ audit attributed to **RuneLite auto review**. If an approved credit already
 exists for the canonical item and world mode, the new claim remains pending
 with an audit explaining why approval was deferred. Replays retain their
 original pending/approved receipt after policy or whitelist changes.
+With **Filter out duplicates** enabled, already-credited items are rejected
+instead of creating another pending claim.
 
 Admin-only `GET /api/v1/admin/runelite-settings` returns private rules with a
 `runelite-N` revision. CSRF-protected `PUT` replaces the complete rules and
@@ -242,6 +275,13 @@ migration and runtime-role bootstrap before starting the updated API. No new
 volume or secret is needed. Take a coordinated backup before upgrading: earlier
 API images do not enforce these configurable rules and still match the visual
 clan name, so reverting requires the matching pre-upgrade image and backup.
+
+[`022_submission_duplicate_filters.sql`](../packages/database/migrations/022_submission_duplicate_filters.sql)
+adds the versioned intake filter, append-only setting audit and immutable
+RuneLite event identities. It backfills the recent one-minute window from
+existing receipts. Apply migration and runtime grants before starting this
+API; an older image requires its matching pre-upgrade backup. No new volume or
+secret is needed.
 
 Compose supplies `PROOF_STORAGE_PATH=/data/submission-images` and a separate
 durable `submission-images` volume. For standalone API development set an
