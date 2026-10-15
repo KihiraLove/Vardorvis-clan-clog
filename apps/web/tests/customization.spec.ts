@@ -105,7 +105,7 @@ test('site settings lives on its own page and edited labels appear across the pu
       .evaluate((node) => getComputedStyle(node).backgroundColor),
   ).toBe('rgb(255, 255, 255)');
   await expect(
-    page.getByRole('link', { name: 'Support me on Ko-fi' }),
+    page.getByRole('link', { name: 'Support this project' }),
   ).toHaveAttribute('href', 'https://ko-fi.com/kihiralove');
   const search = await page.locator('.game-search').boundingBox(),
     window = await page.locator('.game-window').boundingBox();
@@ -128,7 +128,7 @@ test('hardcore appearance can be configured while disabled and switches independ
     .getByRole('heading', { name: 'Clan logo', exact: true })
     .boundingBox();
   const name = await page
-    .getByLabel('Clan name', { exact: true })
+    .getByLabel('Clan display name', { exact: true })
     .boundingBox();
   expect(logo!.y).toBeLessThan(name!.y);
   await expect(
@@ -244,7 +244,7 @@ test('hardcore appearance can be configured while disabled and switches independ
   await page.getByRole('link', { name: 'XP imports', exact: true }).click();
   await expect(page.locator('.event-tracker > h1')).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Import competition', exact: true }),
+    page.getByRole('heading', { name: 'Preview XP imports', exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath('admin-xp-mobile.png'),

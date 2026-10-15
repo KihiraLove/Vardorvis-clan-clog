@@ -38,12 +38,16 @@ test('Total and event sidebar display exact event gains and links with four-digi
   const attack = group.getByLabel('Attack: 1,234,567,890 XP', { exact: true });
   await expect(attack).toContainText('1234.56m');
   await attack.hover();
-  await expect(page.getByRole('tooltip')).toContainText('1,234,567,890 XP');
+  await expect(page.getByRole('tooltip')).toHaveText('1,234,567,890 XP');
   const fits = await attack
     .locator('.xp-amount__number')
     .evaluate((el) => el.scrollWidth <= el.getBoundingClientRect().width + 1);
   expect(fits).toBe(true);
   await page.getByRole('button', { name: 'Attack week', exact: true }).click();
+  await expect(page.locator('.event-source strong')).toHaveCount(0);
+  await expect(
+    page.locator('.xp-podium > p').filter({ hasText: 'Attack week' }),
+  ).toHaveCount(0);
   await expect(
     group.getByLabel('Fishing: 0 XP', { exact: true }),
   ).toBeVisible();

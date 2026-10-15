@@ -78,9 +78,7 @@ function IconPicker({
           onChange={(event) => setFile(event.target.files?.[0])}
         />
       </label>
-      <p className="admin-note">
-        PNG or WebP · up to 2 MiB · 1–512 pixels in each dimension.
-      </p>
+      <p className="admin-note">PNG or WebP</p>
       {checking && <p role="status">Checking icon…</p>}
       {error && (
         <p role="alert" className="admin-error">
@@ -216,7 +214,6 @@ export function ItemCreator({
       aria-labelledby="add-item-title"
     >
       <h2 id="add-item-title">Add item</h2>
-      <p>Create one canonical item on one or more existing pages.</p>
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}
@@ -253,7 +250,6 @@ export function ItemCreator({
         }}
       >
         <fieldset className="admin-fieldset" disabled={locked}>
-          <legend>Required item details</legend>
           <IconPicker key={reset} disabled={locked} onValid={iconChanged} />
           <label>
             Item name
@@ -299,10 +295,7 @@ export function ItemCreator({
               )}
             </div>
           </fieldset>
-          <p className="admin-note">
-            {pageIds.length} pages selected. New items append to each selected
-            page. No game item ID is required.
-          </p>
+          <p className="admin-note">{pageIds.length} pages selected.</p>
         </fieldset>
         {pending && !action.busy && (
           <p className="admin-note">

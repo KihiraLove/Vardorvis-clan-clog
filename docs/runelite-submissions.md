@@ -88,7 +88,7 @@ re-encoded, discarding metadata and original filenames.
 
 ## Website settings and manual submissions
 
-The admin's **Site settings → Clan name** defaults to `Clan name`. Saving updates
+The admin's **Site settings → Clan display name** defaults to `Clan name`. Saving updates
 the public header, admin heading and document title independently of intake
 validation. Public tabs refresh settings every 25 seconds or
 when returning to the tab. `GET /api/v1/settings` returns `revision`,
@@ -99,25 +99,26 @@ recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
 
 On **RuneLite submissions** (`/admin/runelite`), admins can view the
-**Current shared API key**, toggle **Require clan API key**,
+**Current shared API key**,
 click **Generate new key**, or enter their own key of at least 8 characters.
-**Save API key settings** saves the field and requirement checkbox together;
+**Save API key settings** saves the key;
 generating only fills the draft until it is saved.
 All key controls remain visible and usable with the requirement disabled.
-Disabling preserves the saved key and accepts matching-clan submissions without
-checking their key header when clan matching is enabled. **API key only** mode
-always requires the current key, including when this checkbox is off. Normal payload/PNG checks still
-apply. Generating or supplying a key while disabled changes the visible saved
-key, without enabling enforcement. Re-enabling immediately requires that key.
+Selecting **Clan name** preserves the saved key and accepts matching-clan
+submissions without checking their key header. **API key** and **Both** require
+the current key. Normal payload/PNG checks still apply. Rotating the key preserves
+the selected matching mode.
 Rotations invalidate the previous key immediately, including uploads that
 started before rotation but have not committed.
 
 **Automatic review** on this page provides **Clan matching**, a separate
 **In-game clan name for matching**, world-policy dropdowns and a player whitelist.
 The migration seeds the matching name from the existing visual clan name once;
-subsequent changes to either name do not affect the other. Choose clan matching
-with the existing optional key requirement, or API key only, which ignores the
-submitted clan name for matching while retaining it as provenance.
+subsequent changes to either name do not affect the other. **Clan name** checks
+only this in-game name; **API key** checks only the key and retains the submitted
+clan name as provenance; **Both** requires both to match. Matching ignores case
+and surrounding spaces. **Save review settings** updates the selected name/key
+requirements together in one transaction with both revisions and audits.
 
 | World flags                               | Available policy                   |
 | ----------------------------------------- | ---------------------------------- |
@@ -157,6 +158,10 @@ requires `expectedRevision`; stale writes return **409**. For example:
 
 Rules and whitelist names are absent from public settings. Writes append an
 administrator audit and lock the rules used by in-flight intake transactions.
+The UI also supplies `clanKeyRequirement: { enabled, expectedRevision }` to the
+rules PUT. Its key revision is `clan-key-N`; a stale key revision rolls back the
+entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
+Older clients can omit this field to preserve the existing key requirement.
 
 When [collection log scheduling](collection-log-scheduling.md) is enabled, a new
 RuneLite claim must also belong to at least one currently open active page.

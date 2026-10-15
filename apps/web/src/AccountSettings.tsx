@@ -33,11 +33,12 @@ export function AccountSettings({
           ? 'Change your password to continue'
           : 'Your account'}
       </h2>
-      <p>
-        {session.mustChangePassword
-          ? 'Choose a new password before using the staff tools. You can also change your username here.'
-          : 'Update your username or password. Enter your current password to save changes.'}
-      </p>
+      {session.mustChangePassword && (
+        <p>
+          Choose a new password before using the staff tools. You can also
+          change your username here.
+        </p>
+      )}
       <form
         className="admin-credential-form"
         onSubmit={(event) => {

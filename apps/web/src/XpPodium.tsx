@@ -10,7 +10,6 @@ export function XpPodium({
   return (
     <aside className="xp-podium" aria-label={'XP podium for ' + title}>
       <h2>Top players</h2>
-      <p>{title}</p>
       {!players.length ? (
         <p>No finished results yet.</p>
       ) : (

@@ -68,11 +68,6 @@ export function PageOrderEditor({
       aria-labelledby="page-order-title"
     >
       <h2 id="page-order-title">Item management</h2>
-      <p>
-        Drag an item, use its move buttons, or focus a row and press Alt + ↑ /
-        ↓. Save to publish the full arrangement. Delete removes an item from
-        this page; deleting its last page removes it from the catalog.
-      </p>
       <div className="order-page-picker">
         <label htmlFor="order-page">Collection-log page</label>
         <select
@@ -93,15 +88,6 @@ export function PageOrderEditor({
           ))}
         </select>
       </div>
-      {saved && (
-        <p className="admin-note">
-          {saved.itemIds.length} items ·{' '}
-          {saved.orderOrigin === 'manual'
-            ? 'Manual order override'
-            : 'Source order'}{' '}
-          · {saved.version}
-        </p>
-      )}
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}

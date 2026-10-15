@@ -745,6 +745,25 @@ test('admin preview can add a manual credit without a Discord claim', async ({
   await expect(
     page.getByText('Manual tester', { exact: true }).first(),
   ).toBeVisible();
+  const form = page.locator('section.admin-panel').filter({
+    has: page.getByRole('heading', {
+      name: 'Manual submission',
+      exact: true,
+    }),
+  });
+  await expect(form.getByRole('status')).toHaveText(
+    'Manual submission created successfully.',
+  );
+  await expect(form.getByLabel('Canonical item', { exact: true })).toHaveValue(
+    '',
+  );
+  await expect(form.getByLabel('Search catalog items')).toHaveValue('');
+  await expect(form.getByLabel('Collector name', { exact: true })).toHaveValue(
+    '',
+  );
+  await expect(form.getByLabel('Collection date', { exact: true })).toHaveValue(
+    '',
+  );
 });
 
 test('live admin shows a password form and submits a password without Discord OAuth', async ({
@@ -826,7 +845,10 @@ test('manual entry reports duplicate item and world rather than a stale-version 
   await expect(
     page.getByText('Manual submission created: approved.'),
   ).toBeVisible();
-  await add.click();
+  await page
+    .getByLabel('Canonical item', { exact: true })
+    .selectOption(String(item.id));
+  await page.getByLabel('Collection date', { exact: true }).fill('2026-10-06');
   await page
     .locator('section.admin-panel')
     .filter({ has: page.getByRole('heading', { name: 'Manual submission' }) })

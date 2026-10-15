@@ -369,6 +369,9 @@ main {
 .complete {
   color: #00ff00 !important;
 }
+.page-list button.uncollected {
+  color: #ff2020;
+}
 .item-area {
   overflow-y: scroll;
   flex: 1;
@@ -530,12 +533,17 @@ main {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   font-size: 10px;
   color: #797363;
 }
 .site-footer p {
   margin: 0;
+}
+.site-footer .footer-catalog {
+  margin-left: auto;
+  text-align: right;
 }
 .sr-only {
   position: absolute;
@@ -2106,14 +2114,14 @@ main {
   align-items: center;
   justify-content: center;
   gap: 24px;
-  margin-bottom: 20px;
 }
 .footer-support img {
   display: block;
   max-width: 100%;
   height: auto;
 }
-.github-support {
+.github-support,
+.project-support {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2129,7 +2137,8 @@ main {
     700 12px/1.2 Arial,
     sans-serif;
 }
-.github-support:hover {
+.github-support:hover,
+.project-support:hover {
   filter: brightness(1.1);
 }
 .admin-delete-confirm {
@@ -2157,12 +2166,19 @@ main {
 }
 .public-log-layout {
   --log-frame-height: calc(314px * var(--log-scale));
+  /* Expand into the left gutter, up to 30%, without moving the log frame. */
+  --activity-expansion: clamp(0px, calc((100vw - 1336px) / 2), 72px);
+  margin-left: calc(-1 * var(--activity-expansion));
   display: grid;
-  grid-template-columns: 240px minmax(0, 1008px);
+  grid-template-columns: calc(240px + var(--activity-expansion)) minmax(
+      0,
+      1008px
+    );
   column-gap: 16px;
 }
 .public-log-layout > .log-help {
   grid-column: 1 / -1;
+  margin-left: var(--activity-expansion);
 }
 .public-log-layout > .log-viewport {
   grid-column: 2;
@@ -2340,6 +2356,7 @@ main {
 }
 @media (max-width: 1050px) {
   .public-log-layout {
+    margin-left: 0;
     grid-template-columns: minmax(0, 1fr);
     row-gap: 16px;
   }

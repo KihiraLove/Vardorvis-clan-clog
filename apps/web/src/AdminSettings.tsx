@@ -102,11 +102,6 @@ export function AdminSettings({
         onSaved={onBrandingSaved}
         hardcore={hardcore}
       />
-      <p>
-        {hardcore
-          ? 'Configure the hardcore appearance while worlds are hidden. Enabling the switch shows the skull; disabling it preserves your settings and recorded collections.'
-          : 'Configure the regular site appearance. The clan name and API key are shared by all RuneLite submissions.'}
-      </p>
       {readError && (
         <p role="alert">
           {readError}{' '}
@@ -155,7 +150,7 @@ export function AdminSettings({
         }}
       >
         <label>
-          {hardcore ? 'Displayed clan name' : 'Clan name'}
+          {hardcore ? 'Displayed clan name' : 'Clan display name'}
           <input
             required
             maxLength={80}
@@ -164,11 +159,6 @@ export function AdminSettings({
             onChange={(event) => setClanName(event.target.value)}
           />
         </label>
-        <p className="admin-note">
-          {hardcore
-            ? 'Shown when viewing hardcore worlds. Submissions still use the clan name in Site settings.'
-            : 'Shown on the regular website and required for all RuneLite submissions.'}
-        </p>
         <fieldset className="site-copy-fields">
           <legend>Website text</legend>
           {(

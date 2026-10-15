@@ -21,7 +21,6 @@ import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
 import { AccountSettings } from './AccountSettings.tsx';
 import { AdminAccounts } from './AdminAccounts.tsx';
-import { ClanApiKeySettings } from './ClanApiKeySettings.tsx';
 import { RuneLiteReviewSettings } from './RuneLiteReviewSettings.tsx';
 import { AdminScheduling } from './AdminScheduling.tsx';
 import type { CompetitionClient } from './competition-api.ts';
@@ -395,11 +394,6 @@ export function AdminPage({
           session.role === 'admin' ? (
             <section className="admin-panel">
               <h2>RuneLite submissions</h2>
-              <ClanApiKeySettings
-                client={client}
-                session={session}
-                onAccessLost={accessLost}
-              />
               <RuneLiteReviewSettings
                 client={client}
                 session={session}

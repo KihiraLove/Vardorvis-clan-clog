@@ -89,10 +89,8 @@ export function ClanLogoSettings({
     <div className="clan-logo-settings">
       <h3>Clan logo</h3>
       <p>
-        Upload a JPEG, PNG, GIF, WebP, SVG, AVIF or TIFF image up to 10 MiB. GIF
-        and animated WebP logos animate; the website icon uses the first frame.
-        Large images are resized to fit. Source images must be at most 8192
-        pixels per side, 300 frames and 64 megapixels across all frames.
+        JPEG, PNG, GIF, WebP, SVG, AVIF or TIFF up to 10MiB, maximum 8192x8193
+        pixels
       </p>
       {readError && (
         <p role="alert">

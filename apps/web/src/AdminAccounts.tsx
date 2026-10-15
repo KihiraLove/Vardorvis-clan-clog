@@ -83,11 +83,6 @@ export function AdminAccounts({
   return (
     <section className="admin-panel">
       <h2>Moderator accounts</h2>
-      <p>
-        Moderators can review submissions and use the submission, catalog and XP
-        tools. Each moderator must change their temporary password on first
-        login.
-      </p>
       <form
         className="admin-credential-form"
         onSubmit={(event) => {

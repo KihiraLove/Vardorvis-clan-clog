@@ -6,7 +6,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed in 
   page,
 }) => {
   await page.goto('/admin/settings?preview=1');
-  await page.getByLabel('Clan name', { exact: true }).fill('New Clan');
+  await page.getByLabel('Clan display name', { exact: true }).fill('New Clan');
   await page.getByRole('button', { name: 'Save site settings' }).click();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.clan-name')).toHaveText('New Clan');
@@ -26,6 +26,19 @@ test('saving the clan name updates branding and a manual PNG can be reviewed in 
     .getByLabel('Approve immediately and show in the collection log')
     .uncheck();
   await form.getByRole('button', { name: 'Create manual submission' }).click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Manual submission created successfully.' }),
+  ).toBeVisible();
+  expect(
+    await form
+      .getByLabel('PNG screenshot (optional)')
+      .evaluate((input: HTMLInputElement) => input.files?.length),
+  ).toBe(0);
+  await expect(
+    form.getByLabel('Approve immediately and show in the collection log'),
+  ).toBeChecked();
   await expect(
     page.getByText('PNG screenshot (preview)').first(),
   ).toBeVisible();
@@ -90,7 +103,9 @@ test('moderators can review stored RuneLite screenshots without access to clan s
   });
   await page.goto('/admin');
   await expect(page.locator('.clan-name')).toHaveText('New Clan');
-  await expect(page.getByLabel('Clan name', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByLabel('Clan display name', { exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByText('RuneLite', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /^Review / }).click();
   const editor = page.locator('.submission-editor');

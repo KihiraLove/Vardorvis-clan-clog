@@ -330,25 +330,14 @@ export function SiteApp({
             </a>
             <a
               href="https://ko-fi.com/kihiralove"
+              className="project-support"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <img
-                src="/brand/ko-fi-blue.png"
-                alt="Support me on Ko-fi"
-                width="180"
-              />
+              Support this project
             </a>
           </div>
-          <p>
-            Created using intellectual property belonging to Jagex Limited under
-            the terms of Jagex's{' '}
-            <a href="https://legal.jagex.com/docs/policies/fan-content-policy">
-              Fan Content Policy
-            </a>
-            . This content is not endorsed by or affiliated with Jagex.
-          </p>
-          <p>
+          <p className="footer-catalog">
             Catalog data:{' '}
             <a href="https://templeosrs.com/api_doc.php">TempleOSRS</a> and{' '}
             <a href="https://oldschool.runescape.wiki/w/Module:Collection_log/data.json?oldid=15347607">

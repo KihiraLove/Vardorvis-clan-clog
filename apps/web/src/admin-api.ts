@@ -164,19 +164,31 @@ export class LiveAdminClient implements AdminClient {
     csrf: string,
     signal: AbortSignal,
   ) {
-    const { expectedRevision, ...input } = fields;
+    const { expectedRevision, clanKeyRequirement, ...input } = fields;
     const rules = parseRuneLiteRules(input);
     const result = parseRuneLiteSettings(
       await this.json(
         '/api/v1/admin/runelite-settings',
         signal,
-        this.write(csrf, { expectedRevision, ...rules }, 'PUT'),
+        this.write(
+          csrf,
+          {
+            expectedRevision,
+            ...rules,
+            ...(clanKeyRequirement ? { clanKeyRequirement } : {}),
+          },
+          'PUT',
+        ),
       ),
     );
-    const { revision, ...saved } = result;
+    const { revision, clanKeyRequirement: requirement, ...saved } = result;
     if (
       revision === expectedRevision ||
-      JSON.stringify(saved) !== JSON.stringify(rules)
+      JSON.stringify(saved) !== JSON.stringify(rules) ||
+      (clanKeyRequirement &&
+        (!requirement ||
+          requirement.enabled !== clanKeyRequirement.enabled ||
+          requirement.revision === clanKeyRequirement.expectedRevision))
     )
       throw new Error('Unexpected RuneLite settings receipt.');
     return result;

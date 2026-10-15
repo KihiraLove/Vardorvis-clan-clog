@@ -17,9 +17,11 @@ export interface RuneLiteRules {
 }
 export interface RuneLiteSettings extends RuneLiteRules {
   revision: string;
+  clanKeyRequirement?: { enabled: boolean; revision: string };
 }
 export interface RuneLiteSettingsUpdate extends RuneLiteRules {
   expectedRevision: string;
+  clanKeyRequirement?: { enabled: boolean; expectedRevision: string };
 }
 export function defaultRuneLiteRules(clanName: string): RuneLiteRules {
   return {
@@ -106,10 +108,28 @@ export function parseRuneLiteRules(value: unknown): RuneLiteRules {
   };
 }
 export function parseRuneLiteSettings(value: unknown): RuneLiteSettings {
-  const { revision, ...rules } = record(value);
+  const { revision, clanKeyRequirement, ...rules } = record(value);
   if (typeof revision !== 'string' || !/^runelite-[1-9][0-9]*$/u.test(revision))
     throw new Error('Invalid RuneLite settings revision.');
-  return { revision, ...parseRuneLiteRules(rules) };
+  let requirement: RuneLiteSettings['clanKeyRequirement'];
+  if (clanKeyRequirement !== undefined) {
+    const key = record(clanKeyRequirement);
+    if (
+      Object.keys(key).some(
+        (name) => !['enabled', 'revision'].includes(name),
+      ) ||
+      typeof key.enabled !== 'boolean' ||
+      typeof key.revision !== 'string' ||
+      !/^clan-key-[1-9][0-9]*$/u.test(key.revision)
+    )
+      throw new Error('Invalid clan API key requirement.');
+    requirement = { enabled: key.enabled, revision: key.revision };
+  }
+  return {
+    revision,
+    ...parseRuneLiteRules(rules),
+    ...(requirement ? { clanKeyRequirement: requirement } : {}),
+  };
 }
 /** Rejections always win. Review wins over allow; a whitelist can then grant approval. */
 export function runeLiteDecision(

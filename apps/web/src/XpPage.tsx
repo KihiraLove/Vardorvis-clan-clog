@@ -152,7 +152,6 @@ export function XpPage({
             <div className="event-source">
               {event ? (
                 <>
-                  <strong>{event.title}</strong>
                   <a
                     href={event.sourceUrl}
                     target="_blank"

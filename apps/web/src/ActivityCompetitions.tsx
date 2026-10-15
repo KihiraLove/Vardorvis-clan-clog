@@ -30,14 +30,6 @@ const ActivityRow = memo(function ActivityRow({
         {c.title} ↗
       </a>
       <small>
-        <span className="activity-status">
-          {status === 'finished'
-            ? 'Finished'
-            : status === 'running'
-              ? 'Running'
-              : 'Future'}
-        </span>
-        <br />
         Start:{' '}
         <time dateTime={c.startsAt} title={row.startUtc}>
           {row.start}

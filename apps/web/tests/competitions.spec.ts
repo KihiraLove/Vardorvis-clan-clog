@@ -225,15 +225,17 @@ test('activity list orders by source end, shows local start/end status colors an
     'Running activity ↗',
     'Past activity ↗',
   ]);
-  for (const [title, status, color] of [
-    ['Past activity', 'Finished', 'rgb(255, 152, 152)'],
-    ['Running activity', 'Running', 'rgb(164, 229, 164)'],
-    ['Future activity', 'Future', 'rgb(243, 220, 131)'],
+  for (const [title, color] of [
+    ['Past activity', 'rgb(255, 152, 152)'],
+    ['Running activity', 'rgb(164, 229, 164)'],
+    ['Future activity', 'rgb(243, 220, 131)'],
   ]) {
     const item = viewer.locator('li').filter({ hasText: title! });
-    await expect(item.locator('.activity-status')).toHaveText(status!);
+    await expect(item.locator('.activity-status')).toHaveCount(0);
     await expect(item.locator('small')).toHaveCSS('color', color!);
     await expect(item.locator('time')).toHaveCount(2);
+    for (const time of await item.locator('time').all())
+      await expect(time).toHaveText(/^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2} \S+$/);
     await expect(item.locator('a')).toHaveAttribute('target', '_blank');
     await expect(item.locator('a')).toHaveAttribute(
       'rel',
@@ -248,14 +250,14 @@ test('activity list orders by source end, shows local start/end status colors an
     viewer
       .locator('li')
       .filter({ hasText: 'Running activity' })
-      .locator('.activity-status'),
-  ).toHaveText('Finished');
+      .locator('small'),
+  ).toHaveCSS('color', 'rgb(255, 152, 152)');
   await expect(
     viewer
       .locator('li')
       .filter({ hasText: 'Future activity' })
-      .locator('.activity-status'),
-  ).toHaveText('Running');
+      .locator('small'),
+  ).toHaveCSS('color', 'rgb(164, 229, 164)');
 });
 test('XP podium follows Total and selected SKILL events, preserves 2–1–3 geometry and supports empty/one/two players', async ({
   page,

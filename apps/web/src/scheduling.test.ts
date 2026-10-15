@@ -86,7 +86,7 @@ test('schedule adapters send UTC, revisions and CSRF; closed submissions do not 
       error.message === closedCollectionPageMessage,
   );
 });
-test('preview preserves overlapping schedules, stale writes and disabled normal intake', async () => {
+test('preview preserves schedules and stale-write checks while manual staff intake bypasses closed windows', async () => {
   const client = new PreviewAdminClient();
   let state = await client.scheduling(signal());
   const catalog = await client.catalog(signal()),
@@ -116,21 +116,19 @@ test('preview preserves overlapping schedules, stale writes and disabled normal 
     'csrf',
     signal(),
   );
-  await assert.rejects(
-    client.addManual(
-      {
-        itemId: page.itemIds[0]!,
-        collectorName: 'Player',
-        collectedOn: '2026-10-12',
-        hardcore: false,
-        approve: false,
-      },
-      'closed',
-      'csrf',
-      signal(),
-    ),
-    /Submissions are closed/u,
+  const closedClaim = await client.addManual(
+    {
+      itemId: page.itemIds[0]!,
+      collectorName: 'Player',
+      collectedOn: '2026-10-12',
+      hardcore: false,
+      approve: false,
+    },
+    'closed',
+    'csrf',
+    signal(),
   );
+  assert.equal(closedClaim.status, 'pending');
   state = await client.setSchedulingEnabled(
     false,
     state.revision,

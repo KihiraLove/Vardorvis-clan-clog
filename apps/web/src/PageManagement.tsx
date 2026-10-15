@@ -124,11 +124,6 @@ export function PageManagement({
       aria-labelledby="page-management-title"
     >
       <h2 id="page-management-title">Page management</h2>
-      <p>
-        Pages are shared by regular and hardcore logs. Create a page with
-        existing items, move pages within their category, or delete a page.
-        Items on other pages and submission history are preserved.
-      </p>
       <label>
         Page category
         <select

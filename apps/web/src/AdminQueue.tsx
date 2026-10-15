@@ -137,7 +137,7 @@ export function AdminQueue({
           onAccessLost={onAccessLost}
           onCreated={(row) => {
             setNotice('Manual submission created: ' + row.status + '.');
-            setSelected(row.id);
+            setSelected(undefined);
             setView(row.status === 'pending' ? 'pending' : 'reviewed');
             setCursors([undefined]);
             setRefresh((v) => v + 1);
@@ -148,10 +148,6 @@ export function AdminQueue({
         <div className="admin-section-heading">
           <div>
             <h2>Submissions</h2>
-            <p>
-              Review the item, collector, date, proof and hardcore claim before
-              making a decision.
-            </p>
           </div>
           <button
             className="site-button"
@@ -350,19 +346,13 @@ export function AdminQueue({
           </button>
         </div>
         {previousReason && (
-          <p
-            id={pagingHintId + '-previous'}
-            className="admin-note admin-action-explanation"
-          >
-            Previous page: {previousReason}
+          <p id={pagingHintId + '-previous'} className="sr-only">
+            {previousReason}
           </p>
         )}
         {nextReason && (
-          <p
-            id={pagingHintId + '-next'}
-            className="admin-note admin-action-explanation"
-          >
-            Next page: {nextReason}
+          <p id={pagingHintId + '-next'} className="sr-only">
+            {nextReason}
           </p>
         )}
       </section>

@@ -1,6 +1,63 @@
 import { expect, test } from '@playwright/test';
 import catalog from '../src/preview/catalog.json' with { type: 'json' };
 
+test('page names distinguish zero, partial and complete collections in the current world mode', async ({
+  page,
+}) => {
+  const items = catalog.items.slice(0, 2);
+  const pages = [
+    {
+      id: 'empty',
+      name: 'No collections',
+      category: 'bosses',
+      itemIds: [items[1]!.id],
+    },
+    {
+      id: 'partial',
+      name: 'Partial collections',
+      category: 'bosses',
+      itemIds: items.map((item) => item.id),
+    },
+    {
+      id: 'complete',
+      name: 'Full collections',
+      category: 'bosses',
+      itemIds: [items[0]!.id],
+    },
+  ];
+  await page.route('**/api/v1/catalog', (route) =>
+    route.fulfill({ json: { revision: 'color-catalog', items, pages } }),
+  );
+  await page.route('**/api/v1/collections', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'color-collections',
+        credits: [
+          {
+            submissionId: 'credit',
+            itemId: items[0]!.id,
+            collectorName: 'Collector',
+            collectedOn: '2026-10-01',
+            hardcore: false,
+            status: 'approved',
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto('/');
+  const list = page.locator('.page-list');
+  await expect(
+    list.getByRole('button', { name: 'No collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(255, 32, 32)');
+  await expect(
+    list.getByRole('button', { name: 'Partial collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(255, 152, 31)');
+  await expect(
+    list.getByRole('button', { name: 'Full collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(0, 255, 0)');
+});
+
 test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({
   page,
 }) => {

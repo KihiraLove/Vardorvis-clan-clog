@@ -1,9 +1,10 @@
 # Collection log scheduling
 
 [WOM imports](wom-competitions.md) are available in Scheduling and XP imports.
-Staff explicitly choose SKILL or ACTIVITY. A future competition opens selected
-pages for its source period; a running competition opens them from database
-apply time until its WOM end. Finished imports create no opening window.
+WOM metrics determine SKILL or ACTIVITY. Future/running SKILL imports save
+metadata without opening pages or adding XP. Future ACTIVITY imports open selected
+pages for the source period; running ACTIVITY imports open them from database
+apply time until the WOM end. Finished imports create no opening window.
 Review or correct the proposed pages and refresh the preview before applying.
 The import never enables scheduling. Re-imports preserve linked staff edits and
 deleted schedules; recreate a deleted window manually if wanted.
@@ -12,6 +13,7 @@ deleted schedules; recreate a deleted window manually if wanted.
 Only the administrator can enable or disable enforcement. Scheduling is disabled
 by default and disabled mode preserves the existing intake rules. Saved windows
 remain available, and both staff roles can prepare or edit them while disabled.
+The enable switch has its own section above **Schedule management**.
 
 Each named schedule selects one or more active collection log pages with a start
 and end date/time. Multiple schedules can overlap. An active window opens all
@@ -33,15 +35,20 @@ see the same window expressed in their own local time.
 shows the page picker and local/UTC time review at a narrow screen width.
 
 The API uses the PostgreSQL clock when admitting a new submission. No scheduled
-job is needed to open or close pages. The gate applies to **RuneLite, Discord and
-manual submissions**, using the resolved canonical item and its current active
+job is needed to open or close pages. The gate applies to **RuneLite and Discord
+submissions**, using the resolved canonical item and its current active
 page memberships. While enabled, unresolved Discord claims and unpaged items
-are rejected because they cannot match an open page. A backdated manual
-collection date cannot bypass the current window. Closed submissions return
+are rejected because they cannot match an open page. Closed public submissions return
 **403** and do not persist a claim or screenshot; staff see the rejection while
 remaining signed in. Whitelists and auto allow world policies cannot bypass
 closed pages. World, clan/API-key, catalog, proof and credit uniqueness checks
 continue to apply.
+
+Administrators and moderators can add manual submissions to closed pages to
+record achievements after a window ends. Manual claims still require an active
+catalog item and a valid collection date, retain replay receipts and audits, and
+enforce one approved credit per item/world. After success the manual form stays
+open, clears its fields and shows a confirmation.
 
 Previously saved submission retries retain their original immutable receipt,
 even if their page is now closed. Staff may continue reviewing accepted claims

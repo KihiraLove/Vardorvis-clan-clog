@@ -4,7 +4,6 @@ import type pg from 'pg';
 import { transaction } from './transaction.js';
 import type { IconRecord } from './icon-storage.js';
 import { insertImage, screenshotPath } from './proof-store.js';
-import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
 import { validCollectionDate, validProofUrl } from './intake.js';
 import { ApiError, type BackendStore } from './types.js';
 import type {
@@ -203,7 +202,6 @@ export class PgReviewStore implements ReviewStore {
     try {
       return await transaction(this.pool, 'write', async (client) => {
         // Serialize this actor/key across API processes before checking receipts.
-        const schedulingEnabled = await lockScheduling(client);
         await client.query(
           'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
           [JSON.stringify(['manual', actorId, key])],
@@ -232,7 +230,7 @@ export class PgReviewStore implements ReviewStore {
         );
         if (validItem.rowCount !== 1)
           throw new ApiError(422, 'Select an active catalog item.');
-        await requireScheduledItem(client, schedulingEnabled, fields.itemId);
+        // Trusted staff can record achievements after a page's opening window.
         const now = (
           await client.query<{ today: string }>(
             "SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today",

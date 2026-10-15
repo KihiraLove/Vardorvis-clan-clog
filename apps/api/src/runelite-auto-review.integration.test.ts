@@ -181,7 +181,7 @@ test(
         username = 'Collector',
         clanName = 'Clan name',
         key = randomUUID(),
-        credential: string | undefined = apiKey,
+        credential: string | null = apiKey,
       ) => {
         const boundary = 'auto-review-boundary';
         return app.inject({
@@ -191,9 +191,7 @@ test(
           headers: {
             'content-type': 'multipart/form-data; boundary=' + boundary,
             'idempotency-key': key,
-            ...(credential === undefined
-              ? {}
-              : { 'x-clan-api-key': credential }),
+            ...(credential === null ? {} : { 'x-clan-api-key': credential }),
           },
           payload: Buffer.concat([
             ...Object.entries({
@@ -485,14 +483,118 @@ test(
           )
         ).rows[0].n > 0,
       );
+      const matching = async (matchClanName: boolean, enabled: boolean) => {
+        const key = await clanKeys.settings();
+        const response = await update({
+          ...fields(),
+          matchClanName,
+          clanKeyRequirement: { enabled, expectedRevision: key.revision },
+        });
+        assert.equal(response.statusCode, 200, response.body);
+        const savedKey = await clanKeys.settings();
+        assert.equal(savedKey.enabled, enabled);
+        assert.equal(savedKey.key, key.key);
+        assert.deepEqual(response.json().clanKeyRequirement, {
+          enabled,
+          revision: savedKey.revision,
+        });
+        rules = await settings.settings();
+      };
+      await matching(true, false);
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            15,
+            'Collector',
+            'Game Clan',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        201,
+      );
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            16,
+            'Collector',
+            'Clan name',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        403,
+      );
+      await matching(true, true);
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            16,
+            'Collector',
+            'Game Clan',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (await submit('MEMBERS', 16, 'Collector', 'Clan name')).statusCode,
+        403,
+      );
+      assert.equal(
+        (await submit('MEMBERS', 16, 'Collector', 'Game Clan')).statusCode,
+        201,
+      );
+      await matching(false, true);
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            17,
+            'Collector',
+            'Any clan',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (await submit('MEMBERS', 17, 'Collector', 'Any clan')).statusCode,
+        201,
+      );
+      const keyBeforeConflict = await clanKeys.settings();
+      const staleKey = await update({
+        ...fields(),
+        matchClanName: true,
+        clanKeyRequirement: { enabled: false, expectedRevision: 'clan-key-1' },
+      });
+      assert.equal(staleKey.statusCode, 409);
+      assert.deepEqual(await settings.settings(), rules);
+      assert.deepEqual(await clanKeys.settings(), keyBeforeConflict);
       await pool.query(
         "CREATE FUNCTION fail_settings_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$; CREATE TRIGGER fail_settings_audit BEFORE INSERT ON runelite_settings_audit FOR EACH ROW EXECUTE FUNCTION fail_settings_audit()",
       );
       assert.equal(
-        (await update({ ...fields(), clanName: 'Unsaved' })).statusCode,
+        (
+          await update({
+            ...fields(),
+            clanName: 'Unsaved',
+            matchClanName: true,
+            clanKeyRequirement: {
+              enabled: false,
+              expectedRevision: keyBeforeConflict.revision,
+            },
+          })
+        ).statusCode,
         503,
       );
       assert.deepEqual(await settings.settings(), rules);
+      assert.deepEqual(await clanKeys.settings(), keyBeforeConflict);
     } finally {
       await app.close();
       await pool.end();

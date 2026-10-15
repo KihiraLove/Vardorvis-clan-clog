@@ -35,6 +35,7 @@ export function ManualSubmissionForm({
   const [hardcore, setHardcore] = useState(false);
   const [proofUrl, setProofUrl] = useState('');
   const [screenshot, setScreenshot] = useState<File>();
+  const [formVersion, setFormVersion] = useState(0);
   const [approve, setApprove] = useState(true);
   const [reason, setReason] = useState('');
   const action = useAdminAction(onAccessLost);
@@ -131,11 +132,17 @@ export function ManualSubmissionForm({
       }
       if (signal.aborted) return;
       setPending(undefined);
-      setOpen(false);
+      setSearch('');
+      setItemId('');
       setCollectorName('');
+      setCollectedOn('');
+      setHardcore(false);
       setProofUrl('');
       setScreenshot(undefined);
+      setFormVersion((value) => value + 1);
+      setApprove(true);
       setReason('');
+      action.setMessage('Manual submission created successfully.');
       onCreated(result);
     });
   };
@@ -145,10 +152,6 @@ export function ManualSubmissionForm({
       <div className="admin-section-heading">
         <div>
           <h2>Manual submission</h2>
-          <p>
-            Add a drop directly from the admin panel, without a Discord bot
-            claim.
-          </p>
         </div>
         <button
           className="site-button"
@@ -159,8 +162,13 @@ export function ManualSubmissionForm({
           {open ? 'Cancel manual entry' : 'Add manual submission'}
         </button>
       </div>
+      {action.message && (
+        <p role="status" className="admin-success">
+          {action.message}
+        </p>
+      )}
       {open && (
-        <form onSubmit={(event) => void submit(event)}>
+        <form key={formVersion} onSubmit={(event) => void submit(event)}>
           <fieldset
             className="admin-fieldset"
             disabled={busy || Boolean(pending)}
@@ -217,9 +225,7 @@ export function ManualSubmissionForm({
                   accept="image/png,.png"
                   onChange={(event) => setScreenshot(event.target.files?.[0])}
                 />
-                <span className="admin-note">
-                  Up to 10 MiB. Stored privately for staff review.
-                </span>
+                <span className="admin-note">Up to 10 MiB.</span>
               </label>
               <label>
                 Proof URL (optional)
@@ -256,10 +262,6 @@ export function ManualSubmissionForm({
               />
               Approve immediately and show in the collection log
             </label>
-            <p className="admin-note">
-              Uncheck immediate approval to add to the pending review queue.
-              Each item can only have one approved credit per world.
-            </p>
           </fieldset>
           {pending && (
             <p className="admin-note">

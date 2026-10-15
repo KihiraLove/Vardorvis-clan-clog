@@ -50,6 +50,19 @@ export function runeLiteSettingsRoutes(
               maxLength: 30,
             },
             matchClanName: { type: 'boolean' },
+            clanKeyRequirement: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['enabled', 'expectedRevision'],
+              properties: {
+                enabled: { type: 'boolean' },
+                expectedRevision: {
+                  type: 'string',
+                  pattern: '^clan-key-[1-9][0-9]*$',
+                  maxLength: 30,
+                },
+              },
+            },
             clanName: { type: 'string', minLength: 1, maxLength: 80 },
             worldPolicies: {
               type: 'object',

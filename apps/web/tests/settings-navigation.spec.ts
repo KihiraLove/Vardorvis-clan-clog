@@ -82,7 +82,7 @@ test('settings-navigation: current forms, focus, scroll, panel and footer stay s
   for (const width of [1100, 320]) {
     await page.setViewportSize({ width, height: 850 });
     for (const [name, field, calls] of [
-      ['Site settings', 'Clan name', 2],
+      ['Site settings', 'Clan display name', 2],
       ['Hardcore worlds', 'Displayed clan name', 2],
       ['RuneLite submissions', 'Current shared API key', 2],
     ] as const) {
@@ -135,7 +135,7 @@ test('settings-navigation: admin background stays fixed across delayed page chan
   const original = await background();
   for (const [name, ready] of [
     ['Items catalog', 'Add item'],
-    ['XP imports', 'Import competition'],
+    ['XP imports', 'XP competition imports'],
     ['Submissions', 'Submissions'],
     ['Moderator accounts', 'Existing accounts'],
     ['RuneLite submissions', 'RuneLite submissions'],

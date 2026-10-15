@@ -106,7 +106,7 @@ async function aligned(page: Page) {
   return r;
 }
 
-for (const width of [1440, 1100]) {
+for (const width of [1920, 1440, 1100]) {
   for (const count of [0, 2, 24]) {
     test(`activity panel aligns with the frame at ${width}px with ${count} competitions in both world modes`, async ({
       page,
@@ -120,6 +120,14 @@ for (const width of [1440, 1100]) {
       await expect(panel.locator('li')).toHaveCount(count);
       await expect(page.locator('.log-help')).toHaveText(caption);
       await page.evaluate(() => document.fonts.ready);
+      if (width === 1920) {
+        const panelBox = await panel.boundingBox();
+        const shellBox = await page.locator('.site-shell').boundingBox();
+        const viewportBox = await page.locator('.log-viewport').boundingBox();
+        expect(panelBox!.width).toBe(312);
+        expect(panelBox!.x).toBe(shellBox!.x + 24 - 72);
+        expect(viewportBox!.x).toBe(shellBox!.x + 24 + 240 + 16);
+      }
       for (const mode of ['normal', 'hardcore']) {
         if (mode === 'hardcore') {
           await page

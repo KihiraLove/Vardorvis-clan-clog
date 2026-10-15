@@ -413,15 +413,15 @@ test('audit: a pagination boundary does not use a loading cursor', async ({
   await expect(previous).not.toHaveCSS('cursor', 'wait');
   await expect(previous).toHaveAttribute('aria-describedby', /.+/);
   await expect(
-    page.getByText('Previous page: Already on the first page.'),
-  ).toBeVisible();
+    page.locator('[id]').filter({ hasText: /^Already on the first page\.$/ }),
+  ).toHaveClass('sr-only');
   await expect(next).not.toHaveAttribute('aria-busy', 'true');
   await next.click();
   await expect(next).toBeDisabled();
   await expect(next).not.toHaveCSS('cursor', 'wait');
   await expect(
-    page.getByText('Next page: Already on the last page.'),
-  ).toBeVisible();
+    page.locator('[id]').filter({ hasText: /^Already on the last page\.$/ }),
+  ).toHaveClass('sr-only');
   await expect(previous).toBeEnabled();
 });
 

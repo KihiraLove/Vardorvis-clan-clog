@@ -37,6 +37,16 @@ test('2,000 activities retain stable dates while idle and suspend public work in
           return text;
         },
       });
+      const formatToParts = value.formatToParts.bind(value);
+      Object.defineProperty(value, 'formatToParts', {
+        value: (date: Date | number) => {
+          const start = performance.now();
+          const parts = formatToParts(date);
+          state.formats++;
+          state.formatMs += performance.now() - start;
+          return parts;
+        },
+      });
       return value;
     };
     Intl.DateTimeFormat = new Proxy(Original, {
@@ -113,6 +123,7 @@ test('2,000 activities retain stable dates while idle and suspend public work in
         .projectionPerf,
     }));
   const initial = await read();
+  expect(initial.formats).toBeGreaterThanOrEqual(4000);
   await page.clock.runFor(3000);
   const idle = await read();
   if (!baseline) {
@@ -238,12 +249,12 @@ test('activity status changes at exact boundaries, catches up on return, and unm
     return route.fulfill({ json: responses[path] ?? {} });
   });
   await page.goto('/');
-  const status = page.locator('.activity-status');
-  await expect(status).toHaveText('Future');
+  const status = page.locator('.activity-competition');
+  await expect(status).toHaveClass(/activity-competition--future/);
   await page.clock.runFor(999);
-  await expect(status).toHaveText('Future');
+  await expect(status).toHaveClass(/activity-competition--future/);
   await page.clock.runFor(1);
-  await expect(status).toHaveText('Running');
+  await expect(status).toHaveClass(/activity-competition--running/);
   await page.evaluate(() => {
     (
       window as unknown as { projectionPerf: { hidden: boolean } }
@@ -252,7 +263,7 @@ test('activity status changes at exact boundaries, catches up on return, and unm
   });
   const reads = activityReads;
   await page.clock.runFor(1000);
-  await expect(status).toHaveText('Running');
+  await expect(status).toHaveClass(/activity-competition--running/);
   expect(activityReads).toBe(reads);
   await page.evaluate(() => {
     (
@@ -260,7 +271,7 @@ test('activity status changes at exact boundaries, catches up on return, and unm
     ).projectionPerf.hidden = false;
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect(status).toHaveText('Finished');
+  await expect(status).toHaveClass(/activity-competition--finished/);
   await expect.poll(() => activityReads).toBe(reads + 1);
   // The preview transition unmounts the live client while retaining the app.
   await page.evaluate(() => {

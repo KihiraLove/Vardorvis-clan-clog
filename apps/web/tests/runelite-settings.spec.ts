@@ -5,6 +5,9 @@ test('RuneLite policies, independent clan matching and whitelist save on desktop
 }) => {
   await page.goto('/admin/runelite?preview=1');
   await expect(page.getByLabel('Clan matching', { exact: true })).toBeEnabled();
+  await expect(
+    page.getByLabel('Clan matching', { exact: true }).locator('option'),
+  ).toHaveText(['Clan name', 'API key', 'Both']);
   await expect(page.getByLabel('In-game clan name for matching')).toHaveValue(
     'Clan name',
   );
@@ -26,6 +29,7 @@ test('RuneLite policies, independent clan matching and whitelist save on desktop
     await select.selectOption('allow');
   }
   await page.getByLabel('In-game clan name for matching').fill('Game Clan');
+  await page.getByLabel('Clan matching', { exact: true }).selectOption('name');
   await page
     .getByLabel('Player whitelist', { exact: true })
     .fill('Trusted_Player\ntrusted player\nSecond Player');
@@ -45,9 +49,9 @@ test('RuneLite policies, independent clan matching and whitelist save on desktop
     page.getByRole('button', { name: 'Save review settings' }),
   ).toBeDisabled();
   await page.getByRole('link', { name: 'Site settings', exact: true }).click();
-  await expect(page.getByLabel('Clan name', { exact: true })).toHaveValue(
-    'Clan name',
-  );
+  await expect(
+    page.getByLabel('Clan display name', { exact: true }),
+  ).toHaveValue('Clan name');
   await page
     .getByRole('link', { name: 'RuneLite submissions', exact: true })
     .click();

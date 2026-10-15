@@ -122,13 +122,6 @@ export function CompetitionImport({
   const correction = preview?.changes.some((c) => BigInt(c.change) < 0n);
   return (
     <section className="competition-import">
-      <h3>Import competition</h3>
-      <p>
-        WOM metrics determine whether this is a SKILL or ACTIVITY competition.
-        Future and running SKILL imports save metadata without opening pages or
-        adding XP. ACTIVITY imports can create opening windows. Finished imports
-        save final results.
-      </p>
       {session.role === 'moderator' && (
         <p>
           Finished SKILL results require the administrator. You can prepare
@@ -187,11 +180,11 @@ export function CompetitionImport({
             View competition on WOM
           </a>
           <p>
-            Source start: {localScheduleLabel(preview.competition.startsAt)}
+            Start: {localScheduleLabel(preview.competition.startsAt)}
             <br />
             <small>{utcScheduleLabel(preview.competition.startsAt)}</small>
             <br />
-            Source end: {localScheduleLabel(preview.competition.endsAt)}
+            End: {localScheduleLabel(preview.competition.endsAt)}
             <br />
             <small>{utcScheduleLabel(preview.competition.endsAt)}</small>
           </p>

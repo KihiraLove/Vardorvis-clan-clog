@@ -27,15 +27,21 @@ export const utcScheduleLabel = (utc: string) =>
     .toISOString()
     .replace('T', ' ')
     .replace(/\.\d{3}Z$/u, ' UTC');
-const localFormatter = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
+const localFormatter = new Intl.DateTimeFormat('en-GB', {
+  year: '2-digit',
+  month: '2-digit',
+  day: '2-digit',
   hour: '2-digit',
   minute: '2-digit',
-  second: '2-digit',
+  hourCycle: 'h23',
   timeZoneName: 'short',
 });
 export const scheduleTimezone = localFormatter.resolvedOptions().timeZone;
-export const localScheduleLabel = (utc: string) =>
-  localFormatter.format(new Date(utc));
+export const localScheduleLabel = (utc: string) => {
+  const parts = new Map(
+    localFormatter
+      .formatToParts(new Date(utc))
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.get('day')}/${parts.get('month')}/${parts.get('year')} ${parts.get('hour')}:${parts.get('minute')} ${parts.get('timeZoneName')}`;
+};

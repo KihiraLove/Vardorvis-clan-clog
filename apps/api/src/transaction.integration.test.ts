@@ -170,7 +170,7 @@ test(
       );
 
       await t.test(
-        'manual intake and competition apply wait on scheduling before acquiring later locks',
+        'manual intake bypasses scheduling while competition apply waits before acquiring later locks',
         async () => {
           const competitors = new PgCompetitionStore(pool),
             now = await competitors.clock();
@@ -224,7 +224,7 @@ test(
               'SELECT singleton FROM collection_scheduling WHERE singleton FOR UPDATE',
             );
             jobs = [
-              new PgReviewStore(observed, new PgStore(pool)).createManual(
+              new PgReviewStore(pool, new PgStore(pool)).createManual(
                 fields(900004),
                 'actor',
                 'Staff',
@@ -241,6 +241,15 @@ test(
                 false,
               ),
             ];
+            await jobs[0];
+            assert.equal(
+              (
+                await pool.query(
+                  "SELECT count(*)::int AS n FROM submissions WHERE item_id=900004 AND status='approved'",
+                )
+              ).rows[0].n,
+              1,
+            );
             // Observe real PostgreSQL waiters rather than assuming a timer means contention.
             const deadline = Date.now() + 3000;
             let waiting = false;
@@ -253,13 +262,13 @@ test(
                 ),
               ];
               if (
-                pids.length === 2 &&
+                pids.length === 1 &&
                 (
                   await pool.query(
                     'SELECT count(*)::int AS n FROM pg_stat_activity WHERE pid=ANY($1::int[]) AND cardinality(pg_blocking_pids(pid))>0',
                     [pids],
                   )
-                ).rows[0].n === 2
+                ).rows[0].n === 1
               ) {
                 waiting = true;
                 break;
@@ -269,7 +278,7 @@ test(
             assert.equal(
               waiting,
               true,
-              'both domain operations must wait on the scheduling gate',
+              'competition apply must wait on the scheduling gate',
             );
             assert.ok(
               !queries.some((q) =>

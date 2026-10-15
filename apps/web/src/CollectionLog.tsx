@@ -203,7 +203,7 @@ export function CollectionLog({
     >
       <h1 className="log-help">
         {copy.collectionCaption}
-        {hardcore && ' · Hardcore worlds'}
+        {hardcore && ' Hardcore worlds'}
       </h1>
       {activity}
       <div className="log-viewport">
@@ -304,7 +304,9 @@ export function CollectionLog({
                         className={
                           count.total > 0 && count.collected === count.total
                             ? 'complete'
-                            : ''
+                            : count.collected === 0
+                              ? 'uncollected'
+                              : ''
                         }
                         onClick={() => {
                           close();

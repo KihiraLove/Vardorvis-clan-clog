@@ -13,6 +13,16 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
     exact: true,
   });
   await expect(enabled).toBeEnabled();
+  const management = page.locator('section.admin-panel').filter({
+    has: page.getByRole('heading', {
+      name: 'Schedule management',
+      exact: true,
+    }),
+  });
+  await expect(management).toBeVisible();
+  await expect(
+    management.getByLabel('Enable collection log scheduling', { exact: true }),
+  ).toHaveCount(0);
   await expect(enabled).not.toBeChecked();
   await expect(
     page.getByText('Europe/Copenhagen', { exact: true }),
