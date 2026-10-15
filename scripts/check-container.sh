@@ -17,6 +17,7 @@ run_gate() {
 run_gate workflows actionlint -config-file .github/actionlint.yaml .github/workflows/*.yml
 run_gate supervisor shellcheck -x infra/*.sh
 run_gate tools npm run test:tools
+run_gate dependencies node scripts/check-dependencies.mjs
 run_gate validate npm run validate
 # A missing TEST_DATABASE_URL must never silently turn the full gate green.
 if grep -Eq 'ℹ (skipped|todo) [1-9]' .data/local-checks/validate.log; then
@@ -29,4 +30,5 @@ run_gate browser npm run test:e2e -w @clog/web
 run_gate loading npm run test:loading -w @clog/web
 run_gate smoke bash scripts/compose-smoke.sh
 run_gate browser-results node scripts/check-browser-results.mjs
+run_gate release-results node scripts/check-release-results.mjs
 printf 'All local gates passed.\n'

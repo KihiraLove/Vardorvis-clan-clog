@@ -73,6 +73,10 @@ need not expose private Discord IDs; this is an operator investigation query.
 
 ## Verification
 
+The [manual release checklist](release-acceptance.md) specifies the isolated live
+guild, durable receipt/retry uncertainty and shutdown exercise. The operator runs
+this check separately from local fixtures and records sanitized release evidence.
+
 `npm run validate` covers command serialization, token/guild config, collector fallback, autocomplete refresh, explicit canonical selections, raw/ambiguous submissions, proof validation, request timeouts and idempotent retries, occupied-credit warnings, registration route, and gateway teardown/reconnect state. No live Discord token is needed for CI.
 
 Local production smoke covers both disabled mode and an enabled local gateway-health

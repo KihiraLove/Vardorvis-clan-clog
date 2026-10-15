@@ -127,7 +127,12 @@ skip database tests without `TEST_DATABASE_URL`; that is not full acceptance.
 
 ## Remaining launch acceptance
 
-The remaining split task is tracked by #104. [Public/admin/demo entry
+The remaining manual release acceptance is tracked by #104. Its
+[automated gates and manual launch checklist](release-acceptance.md) require
+fresh dependency evidence, named database/retry regressions, all browser reports
+and complete recovery evidence. The consolidated report explicitly keeps live
+guild/host/device checks pending; the operator will perform them manually.
+[Public/admin/demo entry
 splitting](frontend-loading.md) keeps staff screens and sample fixtures out of the
 initial public graph, coordinates code/data preparation and measures readiness.
 Production proxy/browser [CSP and framing acceptance](browser-security.md) is implemented (#102).

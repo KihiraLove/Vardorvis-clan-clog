@@ -239,10 +239,10 @@ export async function main(args = process.argv.slice(2)) {
     }
     if (!healthy)
       throw new Error('Disposable PostgreSQL did not become healthy');
-    const containerEnv = Object.entries(config.env).flatMap(([key, value]) => [
-      '--env',
-      `${key}=${value}`,
-    ]);
+    const containerEnv = Object.entries({
+      ...config.env,
+      CHECK_REVISION: revision,
+    }).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
     // Source is copied by Dockerfile; no checkout, .env or host database is mounted.
     await docker([
       'create',

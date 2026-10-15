@@ -282,6 +282,10 @@ manual receipt repair: inspect the next dry run and retry the normal job.
 
 ## Backups, Discord and release acceptance
 
+Use the [release gate evidence and manual launch checklist](release-acceptance.md)
+for #104. An automated pass does not attest to a live guild, deployed TLS/version,
+physical-device review or operator release approval.
+
 Migration `006_clan_logos.sql` adds administrator-configurable logos and matching
 website icons. Files under `catalog-icons/branding` are already included in
 `icons.tar.gz`; restore that archive together with its database backup. See the
