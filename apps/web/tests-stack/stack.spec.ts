@@ -459,6 +459,39 @@ test('real moderator setup, role denial and server-side access revocation clear 
       (await (await staff.request.get('/api/v1/auth/session')).json())
         .authenticated,
     ).toBe(true);
+    await staff.getByRole('link', { name: 'Submissions', exact: true }).click();
+    await expect(
+      staff.getByRole('checkbox', {
+        name: 'Filter out duplicates',
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await staff
+      .getByRole('link', { name: 'RuneLite submissions', exact: true })
+      .click();
+    const key = staff.getByLabel('Current shared API key', { exact: true });
+    await expect(key).toHaveAttribute('readonly', '');
+    await expect(
+      staff.getByRole('button', { name: 'Generate new key', exact: true }),
+    ).toHaveCount(0);
+    const keyBefore = await key.inputValue();
+    const policy = staff.getByLabel('F2P worlds', { exact: true });
+    const before = await policy.inputValue();
+    await policy.selectOption(before === 'review' ? 'allow' : 'review');
+    await staff
+      .getByRole('button', { name: 'Save review settings', exact: true })
+      .click();
+    await expect(staff.getByRole('status')).toHaveText(
+      'RuneLite review settings saved.',
+    );
+    await expect(key).toHaveValue(keyBefore);
+    await policy.selectOption(before);
+    await staff
+      .getByRole('button', { name: 'Save review settings', exact: true })
+      .click();
+    await expect(
+      staff.getByRole('button', { name: 'Save review settings', exact: true }),
+    ).toBeDisabled();
     await staff
       .getByRole('link', { name: 'Items catalog', exact: true })
       .click();

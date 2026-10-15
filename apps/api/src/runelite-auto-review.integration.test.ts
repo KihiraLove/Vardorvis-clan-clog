@@ -114,7 +114,7 @@ test(
       assert.equal((await app.inject(path)).statusCode, 401);
       assert.equal(
         (await app.inject({ url: path, headers: moderator })).statusCode,
-        403,
+        200,
       );
       const update = (payload: unknown, headers = owner) =>
         app.inject({
@@ -127,7 +127,9 @@ test(
         const { revision, ...rest } = rules;
         return { expectedRevision: revision, ...rest };
       };
-      assert.equal((await update(fields(), moderator)).statusCode, 403);
+      const moderatorSave = await update(fields(), moderator);
+      assert.equal(moderatorSave.statusCode, 200, moderatorSave.body);
+      rules = moderatorSave.json();
       assert.equal(
         (await update(fields(), { ...owner, 'x-csrf-token': 'bad' }))
           .statusCode,

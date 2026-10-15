@@ -112,10 +112,12 @@ on their other pages; items losing their last page are deactivated. Review
 history, approved credits and immutable creation receipts remain in storage.
 Startup preserves page deletions and custom ordering.
 
-Administrator navigation is ordered **Submissions, Items catalog, XP imports,
+Administrator navigation is ordered **Submissions, Items catalog, XP imports, Scheduling,
 RuneLite submissions, Site settings, Hardcore worlds, Moderator accounts, Your
-account**. Moderators see Submissions, Items catalog, XP imports and Your account.
-Owner settings and API keys remain inaccessible to moderators.
+account**. Moderators see Submissions, Items catalog, XP imports, Scheduling,
+RuneLite submissions and Your account. Owner settings remain inaccessible to
+moderators. The RuneLite page exposes the shared key for viewing and copying,
+with key replacement restricted to the administrator.
 
 ## Moderator accounts
 

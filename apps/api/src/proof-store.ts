@@ -147,7 +147,7 @@ export class PgProofStore implements ProofStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const schedulingEnabled = await lockScheduling(client);
+      const schedulingEnabled = await lockScheduling(client, world.hardcore);
       // Settings and key rotation cannot race validation, approval or a replay.
       const rules = await readRuneLiteSettings(client, true);
       const decision = validateSubmission(fields, rules);

@@ -122,12 +122,6 @@ export function CompetitionImport({
   const correction = preview?.changes.some((c) => BigInt(c.change) < 0n);
   return (
     <section className="competition-import">
-      {session.role === 'moderator' && (
-        <p>
-          Finished SKILL results require the administrator. You can prepare
-          skill event metadata and import ACTIVITY competitions.
-        </p>
-      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();

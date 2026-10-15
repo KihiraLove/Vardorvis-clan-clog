@@ -289,8 +289,7 @@ export class PreviewXpClient implements XpClient {
     if (this.getSession) {
       const session = await this.getSession(signal);
       if (!session) throw new XpRequestError(401);
-      if (session.role !== 'admin' || session.mustChangePassword)
-        throw new XpRequestError(403);
+      if (session.mustChangePassword) throw new XpRequestError(403);
     }
     signal.throwIfAborted();
     // Each append counts, including unchanged imports whose tracker revision stays put.

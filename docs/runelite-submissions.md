@@ -94,7 +94,8 @@ change the recorded event identity.
 The **Filter out duplicates** checkbox on **Submissions**, between manual
 submission and the queue, additionally rejects RuneLite and Discord claims for
 items already credited in that world mode with **403**. It defaults to off and
-can be changed by admins or moderators. Manual staff entry remains available
+can be changed only by the administrator; moderators can view its current state.
+Manual staff entry remains available
 for backfilling achievements. Replays and recognized one-minute duplicates
 retain their successful receipt. CSRF-protected
 `PUT /api/v1/admin/submission-filters` accepts `{ filterCollected,
@@ -129,12 +130,13 @@ Concurrent settings writes return **409**; both previous/new clan names are
 recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
 
-On **RuneLite submissions** (`/admin/runelite`), admins can view the
-**Current shared API key**,
-click **Generate new key**, or enter their own key of at least 8 characters.
+On **RuneLite submissions** (`/admin/runelite`), administrators and moderators
+can view and copy the **Current shared API key**. Only the administrator can
+click **Generate new key** or enter a replacement key of at least 8 characters.
 **Save API key settings** saves the key;
 generating only fills the draft until it is saved.
-All key controls remain visible and usable with the requirement disabled.
+The key remains visible with the requirement disabled; replacement controls are
+shown only to the administrator. Both staff roles can edit automatic review settings.
 Selecting **Clan name** preserves the saved key and accepts matching-clan
 submissions without checking their key header. **API key** and **Both** require
 the current key. Normal payload/PNG checks still apply. Rotating the key preserves
@@ -170,7 +172,7 @@ original pending/approved receipt after policy or whitelist changes.
 With **Filter out duplicates** enabled, already-credited items are rejected
 instead of creating another pending claim.
 
-Admin-only `GET /api/v1/admin/runelite-settings` returns private rules with a
+Staff-only `GET /api/v1/admin/runelite-settings` returns private rules with a
 `runelite-N` revision. CSRF-protected `PUT` replaces the complete rules and
 requires `expectedRevision`; stale writes return **409**. For example:
 
@@ -190,26 +192,27 @@ requires `expectedRevision`; stale writes return **409**. For example:
 ```
 
 Rules and whitelist names are absent from public settings. Writes append an
-administrator audit and lock the rules used by in-flight intake transactions.
+staff audit and lock the rules used by in-flight intake transactions.
 The UI also supplies `clanKeyRequirement: { enabled, expectedRevision }` to the
 rules PUT. Its key revision is `clan-key-N`; a stale key revision rolls back the
 entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
 Older clients can omit this field to preserve the existing key requirement.
 
 When [collection log scheduling](collection-log-scheduling.md) is enabled, a new
-RuneLite claim must also belong to at least one currently open active page.
+regular-world RuneLite claim must also belong to at least one currently open active page.
 Whitelist and world auto allow settings cannot bypass closed pages. Previously
 saved retries still return their original receipt after a page closes.
+Hardcore claims bypass scheduling; all active hardcore pages remain open.
 
-Admin-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
-CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
+Staff-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
+Administrator-only, CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
 `enabled`, `key`, or `generate: true`. `key` and `generate` are mutually exclusive.
 Generated keys contain exactly 32 hexadecimal characters. Custom keys accept
 any valid Unicode characters, at least 8 code points, including symbols,
 whitespace and line breaks. Values are preserved exactly, without trimming.
 Keys shorter than 8 characters return **422**.
-Stale updates return **409**. Moderators and public settings endpoints
-cannot read or rotate keys; the shared key authorizes only RuneLite intake,
+Stale updates return **409**. Moderators can read but cannot replace keys.
+Public settings endpoints never expose keys; the shared key authorizes only RuneLite intake,
 not staff tools or Discord bot operations. The key header is redacted from API
 logging, and audits record actor, enabled changes and whether rotation occurred
 without storing the key value. Both supported key headers are redacted.

@@ -421,7 +421,7 @@ export class ImportReconciliation {
     key: string,
     actor: string,
     actorName: string,
-    role: 'admin' | 'moderator',
+    _role: 'admin' | 'moderator',
     acknowledgeCorrections: boolean,
     legacy = false,
   ): Promise<CompetitionReceipt> {
@@ -494,15 +494,6 @@ export class ImportReconciliation {
           throw new ApiError(
             409,
             'Import key already used for a different request.',
-          );
-        if (
-          role !== 'admin' &&
-          replay.kind === 'SKILL' &&
-          replay.new_values.lifecycle === 'finished'
-        )
-          throw new ApiError(
-            403,
-            'Only the administrator can import XP results.',
           );
 
         return replay.receipt;
@@ -588,11 +579,6 @@ export class ImportReconciliation {
         throw new ApiError(
           409,
           'Competition changed time state. Preview again to fetch final results.',
-        );
-      if (role !== 'admin' && c.kind === 'SKILL' && lifecycle === 'finished')
-        throw new ApiError(
-          403,
-          'Only the administrator can import XP results.',
         );
       const prior = await stored(client, c.id);
       requireScope(prior, { ...snapshot, lifecycle });

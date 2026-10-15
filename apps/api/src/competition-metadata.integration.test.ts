@@ -220,13 +220,12 @@ test(
         },
       );
       await t.test(
-        'finished XP is admin-only, exact, credited once and correction-acknowledged; activity is isolated',
+        'finished XP is staff-accessible, exact, credited once and correction-acknowledged; activity is isolated',
         async () => {
           const finished = await snapshot(804, now - day, now - 1),
             p = await preview(finished),
             key = randomUUID();
-          await assert.rejects(apply(p, key), { status: 403 });
-          const receipt = await apply(p, key, 'admin');
+          const receipt = await apply(p, key, 'moderator');
           assert.equal(receipt.scheduleId, null);
           assert.equal((await xp.tracker()).totals.attack, '9007199254740993');
           await pool.query(
@@ -234,7 +233,7 @@ test(
             [p.previewToken],
           );
           assert.deepEqual(await apply(p, key, 'admin'), receipt);
-          await assert.rejects(apply(p, key, 'moderator'), { status: 403 });
+          assert.deepEqual(await apply(p, key, 'moderator'), receipt);
           assert.equal(
             (await apply(await preview(finished), randomUUID(), 'admin'))
               .outcome,

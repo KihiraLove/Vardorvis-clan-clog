@@ -10,6 +10,9 @@ The import never enables scheduling. Re-imports preserve linked staff edits and
 deleted schedules; recreate a deleted window manually if wanted.
 
 **Scheduling** (`/admin/schedules`) is available to administrators and moderators.
+Schedules apply only to the regular collection log. Hardcore collection pages
+remain fully open, including when regular scheduling is enabled or no window is
+active. Hardcore WOM scheduling is not supported yet.
 Only the administrator can enable or disable enforcement. Scheduling is disabled
 by default and disabled mode preserves the existing intake rules. Saved windows
 remain available, and both staff roles can prepare or edit them while disabled.
@@ -35,14 +38,16 @@ see the same window expressed in their own local time.
 shows the page picker and local/UTC time review at a narrow screen width.
 
 The API uses the PostgreSQL clock when admitting a new submission. No scheduled
-job is needed to open or close pages. The gate applies to **RuneLite and Discord
+job is needed to open or close pages. The gate applies to **regular-world RuneLite and Discord
 submissions**, using the resolved canonical item and its current active
-page memberships. While enabled, unresolved Discord claims and unpaged items
+page memberships. While enabled, unresolved regular Discord claims and unpaged regular items
 are rejected because they cannot match an open page. Closed public submissions return
 **403** and do not persist a claim or screenshot; staff see the rejection while
 remaining signed in. Whitelists and auto allow world policies cannot bypass
 closed pages. World, clan/API-key, catalog, proof and credit uniqueness checks
 continue to apply.
+Hardcore intake skips this scheduling gate, so active unpaged items and unresolved
+Discord claims follow the ordinary intake rules regardless of saved windows.
 
 Administrators and moderators can add manual submissions to closed pages to
 record achievements after a window ends. Manual claims still require an active
@@ -85,7 +90,7 @@ Page IDs must identify current active catalog pages. Each window supports up to
 its start. Every change advances the global `schedules-N` revision and appends
 an audit with the staff identity and previous/new state. Concurrent edits with
 an outdated revision return **409** and require explicit review of the latest
-state. Schedule changes and the audit commit in one transaction. Intake locks
+state. Schedule changes and the audit commit in one transaction. Regular intake locks
 the scheduling settings before item/page locks, so toggles or schedule edits
 cannot race admission. Public settings omit this private schedule data.
 

@@ -165,7 +165,7 @@ test('moderators can create windows but cannot see or write the administrator en
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'RuneLite submissions', exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await page
     .getByLabel('Schedule name', { exact: true })
     .fill('Moderator window');

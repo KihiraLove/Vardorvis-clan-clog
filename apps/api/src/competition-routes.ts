@@ -78,15 +78,6 @@ export function competitionRoutes(
         );
         signal.throwIfAborted();
         if (
-          snapshot.competition.kind === 'SKILL' &&
-          snapshot.lifecycle === 'finished' &&
-          actor.role !== 'admin'
-        )
-          throw new ApiError(
-            403,
-            'Only the administrator can import XP results.',
-          );
-        if (
           r.body.kind !== undefined &&
           r.body.kind !== snapshot.competition.kind
         )

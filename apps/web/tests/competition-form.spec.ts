@@ -9,7 +9,7 @@ const paths = ['/admin/schedules', '/admin/xp'];
 const now = '2026-10-13T12:00:00Z';
 const pageName = 'Opening page with ' + 'LongCollectionName'.repeat(5);
 
-async function formFixture(page: Page) {
+async function formFixture(page: Page, role: 'admin' | 'moderator' = 'admin') {
   const f = await adminFixtures();
   let attempts = 0,
     applies = 0;
@@ -73,7 +73,7 @@ async function formFixture(page: Page) {
       return route.fulfill({ json: { outcome: 'applied' } });
     }
     const responses: Record<string, unknown> = {
-      '/api/v1/auth/session': f.session,
+      '/api/v1/auth/session': { ...f.session, role },
       '/api/v1/settings': {
         revision: 'settings-style',
         clanName: 'Vardorvis',
@@ -170,6 +170,35 @@ async function boundedControls(page: Page) {
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(viewportWidth);
+}
+
+for (const path of paths) {
+  test(`moderators import finished SKILL results in ${path}`, async ({
+    page,
+  }) => {
+    const state = await formFixture(page, 'moderator');
+    await open(page, path);
+    const form = page.locator('.competition-import');
+    await form
+      .getByLabel('Wise Old Man competition link')
+      .fill('https://wiseoldman.net/competitions/124');
+    await form
+      .getByRole('button', { name: 'Preview competition', exact: true })
+      .click();
+    await expect(
+      page.getByText('Finished SKILL results require the administrator.', {
+        exact: false,
+      }),
+    ).toHaveCount(0);
+    await form
+      .getByRole('checkbox', {
+        name: 'I reviewed the corrections that reduce recorded XP.',
+      })
+      .check();
+    await form.getByRole('button', { name: 'Apply import' }).click();
+    await expect(form.getByRole('status')).toHaveText('Competition imported.');
+    expect(state.applies()).toBe(1);
+  });
 }
 
 for (const width of [1100, 320]) {

@@ -131,15 +131,6 @@ export class PreviewCompetitionClient implements CompetitionClient {
       const session = await this.scheduleClient.session(signal);
       if (!session)
         throw new CompetitionRequestError(401, 'Sign in to continue.');
-      if (
-        session.role !== 'admin' &&
-        kind === 'SKILL' &&
-        lifecycle === 'finished'
-      )
-        throw new CompetitionRequestError(
-          403,
-          'Only the administrator can import XP results.',
-        );
     }
     const catalog =
       kind === 'ACTIVITY' && this.scheduleClient
@@ -244,11 +235,6 @@ export class PreviewCompetitionClient implements CompetitionClient {
       const session = await this.scheduleClient.session(signal);
       if (!session)
         throw new CompetitionRequestError(401, 'Sign in to continue.');
-      if (session.role !== 'admin' && finishedSkill)
-        throw new CompetitionRequestError(
-          403,
-          'Only the administrator can import XP results.',
-        );
     }
     if (replay) {
       if (replay.token !== p.previewToken || replay.acknowledged !== ack)

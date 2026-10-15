@@ -10,7 +10,7 @@ import type {
 type Authorize = (
   request: FastifyRequest,
   write?: boolean,
-) => Promise<{ id: string; displayName: string }>;
+) => Promise<{ id: string; displayName: string; role?: 'admin' | 'moderator' }>;
 const version = { type: 'integer', minimum: 1, maximum: 2147483647 } as const;
 const reason = { type: 'string', maxLength: 1000 } as const;
 export function reviewRoutes(
@@ -23,6 +23,15 @@ export function reviewRoutes(
     async (req: FastifyRequest) => {
       await authorize(req, write);
     };
+  const filterOwner = async (request: FastifyRequest) => {
+    const actor = await authorize(request, true);
+    if (actor.role !== 'admin')
+      throw new ApiError(
+        403,
+        'Only the administrator can change submission filters.',
+      );
+    return actor;
+  };
   app.get(
     '/api/v1/admin/submission-filters',
     { onRequest: guard() },
@@ -35,7 +44,9 @@ export function reviewRoutes(
   app.put<{ Body: { filterCollected: boolean; expectedRevision: string } }>(
     '/api/v1/admin/submission-filters',
     {
-      onRequest: guard(true),
+      onRequest: async (request) => {
+        await filterOwner(request);
+      },
       schema: {
         body: {
           type: 'object',
@@ -53,7 +64,7 @@ export function reviewRoutes(
       },
     },
     async (req) => {
-      const actor = await authorize(req, true);
+      const actor = await filterOwner(req);
       if (!store.saveSubmissionFilters)
         throw new ApiError(503, 'Submission filters are unavailable.');
       return store.saveSubmissionFilters(

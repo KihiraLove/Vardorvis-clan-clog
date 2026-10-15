@@ -269,7 +269,7 @@ export class PgStore implements BackendStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const schedulingEnabled = await lockScheduling(client);
+      const schedulingEnabled = await lockScheduling(client, input.hardcore);
       const readReceipt = async (): Promise<{
         hash: string | null;
         receipt: BotReceipt | null;

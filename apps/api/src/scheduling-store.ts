@@ -32,7 +32,11 @@ export interface SchedulingStore {
   ): Promise<SchedulingState>;
 }
 /** Acquire before item/page locks so schedule edits and submissions share one lock order. */
-export async function lockScheduling(client: pg.PoolClient): Promise<boolean> {
+export async function lockScheduling(
+  client: pg.PoolClient,
+  hardcore = false,
+): Promise<boolean> {
+  if (hardcore) return false;
   const row = (
     await client.query<{ enabled: boolean }>(
       'SELECT enabled FROM collection_scheduling WHERE singleton=true FOR SHARE',

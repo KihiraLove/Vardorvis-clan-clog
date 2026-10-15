@@ -37,7 +37,9 @@ and [availability](runtime-operations.md).
   restore them. Destination data is prepared before committing staff navigation.
 - Each write repeats authorization, strict schema validation, Origin and CSRF
   checks. Bot/RuneLite credentials authorize only their intake scope, not staff UI.
-  Moderators cannot perform administrator-only account/settings/final XP actions.
+  Moderators can use RuneLite review settings and all supported WOM imports,
+  including finished SKILL results. Shared-key replacement, duplicate-filter
+  changes, site settings and account management remain administrator-only.
 
 See [staff auth and configuration](backend-phase-one.md),
 [prepared navigation](admin-navigation.md), [settings/accounts](site-customization.md)

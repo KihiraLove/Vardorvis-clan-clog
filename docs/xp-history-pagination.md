@@ -8,8 +8,8 @@ Deploy through the normal migrator/runtime-role provisioning path.
 
 ## Private contract and navigation
 
-`GET /api/v1/admin/xp/imports` requires the existing administrator session;
-moderators and anonymous clients cannot read history. Responses remain private
+`GET /api/v1/admin/xp/imports` requires an administrator or moderator session;
+anonymous clients cannot read history. Responses remain private
 and `no-store`. Optional query parameters are `limit=1..20` (default 20) and an
 opaque `cursor` of at most 1,024 characters. The response is:
 

@@ -293,7 +293,7 @@ test('narrow route dependencies inject authorization, business/read failures and
       },
     );
     await t.test(
-      'moderator/owner authorization and inferred finished SKILL role checks remain enforced',
+      'moderator imports reach domain validation while lifecycle tools remain owner-only',
       async () => {
         role = 'moderator';
         const before = catalogWrites;
@@ -332,9 +332,9 @@ test('narrow route dependencies inject authorization, business/read failures and
               headers,
             })
           ).statusCode,
-          403,
+          422,
         );
-        assert.equal(previewCalls, 1);
+        assert.equal(previewCalls, 2);
         role = 'admin';
       },
     );

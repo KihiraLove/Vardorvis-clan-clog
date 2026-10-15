@@ -235,6 +235,7 @@ test(
         itemId = 1,
         key = randomUUID(),
         username = 'Collector',
+        hardcore = false,
       ) => {
         const boundary = 'schedule-boundary';
         return app.inject({
@@ -251,7 +252,7 @@ test(
               username,
               clanName: 'Clan name',
               itemId: String(900000 + itemId),
-              worldType: 'MEMBERS',
+              worldType: hardcore ? 'HARDCORE_MAIN' : 'MEMBERS',
             }).map(([name, value]) =>
               Buffer.from(
                 `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
@@ -287,6 +288,7 @@ test(
       const discord = (
         itemId: number | undefined = 1,
         id = String(interaction++),
+        hardcore = false,
       ) =>
         app.inject({
           method: 'POST',
@@ -300,7 +302,7 @@ test(
             ...(itemId ? { itemId } : {}),
             collectorName: 'Bot Player',
             proofUrl: 'https://imgur.com/proof',
-            hardcore: false,
+            hardcore,
           },
         });
       const runeKey = randomUUID(),
@@ -342,6 +344,27 @@ test(
           .length,
         filesBefore + 2, // Rejected RuneLite files are retained, without DB references.
       );
+      // Closed regular pages and unpaged items stay open for hardcore intake.
+      for (const id of [1, 4]) {
+        const hcRune = await runelite(
+          id,
+          randomUUID(),
+          'HC Collector ' + id,
+          true,
+        );
+        assert.equal(hcRune.statusCode, 201, hcRune.body);
+        assert.equal(hcRune.json().hardcore, true);
+        const hcDiscord = await discord(id, String(interaction++), true);
+        assert.equal(hcDiscord.statusCode, 201, hcDiscord.body);
+        assert.equal(hcDiscord.json().hardcore, true);
+      }
+      assert.equal(
+        (await runelite(999, randomUUID(), 'HC Unknown', true)).statusCode,
+        422,
+      );
+      const unmatchedHC = await discord(0, String(interaction++), true);
+      assert.equal(unmatchedHC.statusCode, 201, unmatchedHC.body);
+      assert.equal(unmatchedHC.json().resolution, 'needs_match');
       // Staff can backfill both current and historical achievements on closed pages.
       const closedManual = await manual(1, randomUUID(), '2000-01-01');
       assert.equal(closedManual.statusCode, 201, closedManual.body);

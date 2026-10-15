@@ -41,9 +41,7 @@ export function XpAdmin({
   const revision = useRef(prepared?.history?.revision);
   const [refresh, setRefresh] = useState(0);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
-  const [loading, setLoading] = useState(
-    !preparedRead.current && session.role === 'admin',
-  );
+  const [loading, setLoading] = useState(!preparedRead.current);
   const cursor = cursors.at(-1);
   useEffect(() => {
     if (preparedRead.current) {
@@ -56,45 +54,37 @@ export function XpAdmin({
     // Every read failure clears private rows; a 401 also revokes the shell session.
     setHistory(undefined);
     setError(undefined);
-    if (session.role === 'admin') {
-      setLoading(true);
-      void withAbort(
-        client.history(controller.signal, cursor),
-        controller.signal,
-      )
-        .then((page) => {
-          if (!active) return;
-          if (
-            cursor &&
-            (page.revision !== revision.current || page.pageCursor !== cursor)
-          )
-            throw new XpRequestError(409);
-          if (page.nextCursor && page.nextCursor === page.pageCursor)
-            throw new Error('Inconsistent history page.');
-          revision.current = page.revision;
-          setHistory(page);
-        })
-        .catch((failure: unknown) => {
-          if (!active) return;
-          setHistory(undefined);
-          if (classifyAccessFailure(failure) === 'expired') onAccessLost();
-          else
-            setError(
-              classifyAccessFailure(failure) === 'denied'
-                ? 'Your account is not allowed to view XP import history.'
-                : failure instanceof XpRequestError && failure.status === 409
-                  ? 'XP import history changed. Retry to reload the latest first page.'
-                  : 'XP import history could not be loaded. Retry to refresh.',
-            );
-        })
-        .finally(() => {
-          clearTimeout(timer);
-          if (active) setLoading(false);
-        });
-    } else {
-      clearTimeout(timer);
-      setLoading(false);
-    }
+    setLoading(true);
+    void withAbort(client.history(controller.signal, cursor), controller.signal)
+      .then((page) => {
+        if (!active) return;
+        if (
+          cursor &&
+          (page.revision !== revision.current || page.pageCursor !== cursor)
+        )
+          throw new XpRequestError(409);
+        if (page.nextCursor && page.nextCursor === page.pageCursor)
+          throw new Error('Inconsistent history page.');
+        revision.current = page.revision;
+        setHistory(page);
+      })
+      .catch((failure: unknown) => {
+        if (!active) return;
+        setHistory(undefined);
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
+        else
+          setError(
+            classifyAccessFailure(failure) === 'denied'
+              ? 'Your account is not allowed to view XP import history.'
+              : failure instanceof XpRequestError && failure.status === 409
+                ? 'XP import history changed. Retry to reload the latest first page.'
+                : 'XP import history could not be loaded. Retry to refresh.',
+          );
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
       controller.abort();
@@ -127,77 +117,75 @@ export function XpAdmin({
           onApplied();
         }}
       />
-      {session.role === 'admin' && (
-        <details className="xp-history">
-          <summary>Import history ({rows.length} on this page)</summary>
-          {loading && <p role="status">Loading XP import history…</p>}
-          {error ? (
-            <p>Import history unavailable.</p>
-          ) : (
-            !loading && !rows.length && <p>No imports recorded yet.</p>
-          )}
-          <div className="admin-pagination">
-            <button
-              type="button"
-              className="site-button"
-              disabled={loading || !!error || !history || cursors.length === 1}
-              aria-busy={loading}
-              onClick={() => {
-                setHistory(undefined);
-                setCursors((values) => values.slice(0, -1));
-              }}
-            >
-              Newer imports
-            </button>
-            <span>History page {cursors.length}</span>
-            <button
-              type="button"
-              className="site-button"
-              disabled={loading || !!error || !history?.nextCursor}
-              aria-busy={loading}
-              onClick={() => {
-                const page = history!;
-                setHistory(undefined);
-                setCursors((values) => [
-                  ...values.slice(0, -1),
-                  page.pageCursor,
-                  page.nextCursor!,
-                ]);
-              }}
-            >
-              Older imports
-            </button>
-          </div>
-          <ol>
-            {rows.map((h) => (
-              <li key={h.id}>
-                <strong>{h.title}</strong>
-                <p>
-                  {xpTime(h.importedAt)} · {h.actorName} · {h.outcome}
-                </p>
-                <p>
-                  Receipt {h.id} · WOM #{h.competitionId}
-                </p>
-                <p>
-                  {h.changes
-                    .map(
-                      (c) =>
-                        skillName(c.skill) +
-                        ' ' +
-                        exactXp(c.before) +
-                        ' → ' +
-                        exactXp(c.after) +
-                        ' (' +
-                        signedXp(c.change) +
-                        ' XP)',
-                    )
-                    .join(' · ')}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
+      <details className="xp-history">
+        <summary>Import history ({rows.length} on this page)</summary>
+        {loading && <p role="status">Loading XP import history…</p>}
+        {error ? (
+          <p>Import history unavailable.</p>
+        ) : (
+          !loading && !rows.length && <p>No imports recorded yet.</p>
+        )}
+        <div className="admin-pagination">
+          <button
+            type="button"
+            className="site-button"
+            disabled={loading || !!error || !history || cursors.length === 1}
+            aria-busy={loading}
+            onClick={() => {
+              setHistory(undefined);
+              setCursors((values) => values.slice(0, -1));
+            }}
+          >
+            Newer imports
+          </button>
+          <span>History page {cursors.length}</span>
+          <button
+            type="button"
+            className="site-button"
+            disabled={loading || !!error || !history?.nextCursor}
+            aria-busy={loading}
+            onClick={() => {
+              const page = history!;
+              setHistory(undefined);
+              setCursors((values) => [
+                ...values.slice(0, -1),
+                page.pageCursor,
+                page.nextCursor!,
+              ]);
+            }}
+          >
+            Older imports
+          </button>
+        </div>
+        <ol>
+          {rows.map((h) => (
+            <li key={h.id}>
+              <strong>{h.title}</strong>
+              <p>
+                {xpTime(h.importedAt)} · {h.actorName} · {h.outcome}
+              </p>
+              <p>
+                Receipt {h.id} · WOM #{h.competitionId}
+              </p>
+              <p>
+                {h.changes
+                  .map(
+                    (c) =>
+                      skillName(c.skill) +
+                      ' ' +
+                      exactXp(c.before) +
+                      ' → ' +
+                      exactXp(c.after) +
+                      ' (' +
+                      signedXp(c.change) +
+                      ' XP)',
+                  )
+                  .join(' · ')}
+              </p>
+            </li>
+          ))}
+        </ol>
+      </details>
     </section>
   );
 }

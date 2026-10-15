@@ -136,7 +136,7 @@ test(
       assert.equal(
         (await app.inject({ url: '/api/v1/admin/clan-api-key', headers }))
           .statusCode,
-        403,
+        503, // Moderators may read it, but this fixture has no key storage.
       );
       const concurrent = await Promise.all([create(fields), create(fields)]);
       assert.ok(

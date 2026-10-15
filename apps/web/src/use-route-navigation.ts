@@ -137,7 +137,12 @@ export function useRouteNavigation<T>(
           position: targetPosition ?? browserPosition.current,
         };
         focusRequest.current = scroll ?? [0, 0];
-        setRoute({ ...location(), resources });
+        const target = new URL(href);
+        setRoute({
+          path: target.pathname,
+          preview: target.searchParams.get('preview') === '1',
+          resources,
+        });
         apply();
       };
       if (navigator.current)
@@ -227,14 +232,18 @@ export function useRouteNavigation<T>(
       );
     };
     const scrolled = () => {
-      if (browserPosition.current === visible.current.position)
+      // Native history can change the URL before its popstate notification.
+      // Scroll bookkeeping must never restore the old address over that target.
+      if (
+        browserPosition.current === visible.current.position &&
+        window.location.href === visible.current.href
+      )
         window.history.replaceState(
           {
             ...window.history.state,
             clogScroll: [window.scrollX, window.scrollY],
           },
           '',
-          visible.current.href,
         );
     };
     window.addEventListener('popstate', changed);

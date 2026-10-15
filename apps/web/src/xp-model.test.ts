@@ -93,15 +93,17 @@ test('preview XP history pages include unchanged receipts, bind appends and pres
     new PreviewXpClient(async () => null).history(signal()),
     { status: 401 },
   );
-  await assert.rejects(
-    new PreviewXpClient(async () => ({
-      csrfToken: 'test',
-      displayName: 'Staff',
-      username: 'staff',
-      role: 'moderator',
-      mustChangePassword: false,
-    })).history(signal()),
-    { status: 403 },
+  assert.deepEqual(
+    (
+      await new PreviewXpClient(async () => ({
+        csrfToken: 'test',
+        displayName: 'Staff',
+        username: 'staff',
+        role: 'moderator',
+        mustChangePassword: false,
+      })).history(signal())
+    ).imports,
+    [],
   );
 });
 

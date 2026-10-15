@@ -898,17 +898,17 @@ test('explicit admin bootstrap, moderator permissions and self-service credentia
       origin: config.origin,
       'x-csrf-token': modSaved.json().csrfToken as string,
     };
-    for (const url of ['/api/v1/admin/submissions', '/api/v1/admin/catalog'])
+    for (const url of [
+      '/api/v1/admin/submissions',
+      '/api/v1/admin/catalog',
+      '/api/v1/admin/xp/imports',
+    ])
       assert.equal(
         (await app.inject({ url, headers: moderator })).statusCode,
         200,
         url,
       );
-    for (const url of [
-      '/api/v1/admin/settings',
-      '/api/v1/admin/accounts',
-      '/api/v1/admin/xp/imports',
-    ])
+    for (const url of ['/api/v1/admin/settings', '/api/v1/admin/accounts'])
       assert.equal(
         (await app.inject({ url, headers: moderator })).statusCode,
         403,

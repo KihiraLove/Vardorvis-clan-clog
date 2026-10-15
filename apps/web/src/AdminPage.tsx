@@ -44,9 +44,9 @@ export function AdminNavigation({
         ['/admin/catalog', 'Items catalog'],
         ['/admin/xp', 'XP imports'],
         ['/admin/schedules', 'Scheduling'],
+        ['/admin/runelite', 'RuneLite submissions'],
         ...(session?.role === 'admin'
           ? [
-              ['/admin/runelite', 'RuneLite submissions'],
               ['/admin/settings', 'Site settings'],
               ['/admin/settings/hardcore', 'Hardcore worlds'],
               ['/admin/accounts', 'Moderator accounts'],
@@ -391,20 +391,14 @@ export function AdminPage({
             competitionClient={competitionClient}
           />
         ) : path === '/admin/runelite' ? (
-          session.role === 'admin' ? (
-            <section className="admin-panel">
-              <h2>RuneLite submissions</h2>
-              <RuneLiteReviewSettings
-                client={client}
-                session={session}
-                onAccessLost={accessLost}
-              />
-            </section>
-          ) : (
-            <p role="alert">
-              Only the administrator can change RuneLite settings.
-            </p>
-          )
+          <section className="admin-panel">
+            <h2>RuneLite submissions</h2>
+            <RuneLiteReviewSettings
+              client={client}
+              session={session}
+              onAccessLost={accessLost}
+            />
+          </section>
         ) : path === '/admin/accounts' ? (
           session.role === 'admin' ? (
             <AdminAccounts

@@ -6,8 +6,8 @@ metric metadata and returns the detected kind in the preview. Both forms need
 only the competition link; neither has a kind selector. Each WOM ID has one persisted identity, and its kind and
 supported metric scope cannot be changed by importing a duplicate. A mismatched
 kind or changed scope requires staff reconciliation instead of silently changing
-the ledger. Both roles can import ACTIVITY competitions and save future/running
-SKILL metadata. Only administrators can import finished SKILL results.
+the ledger. Administrators and moderators have the same import permissions:
+ACTIVITY competitions, future/running SKILL metadata and finished SKILL results.
 
 The [official competition API](https://docs.wiseoldman.net/api/competitions/competition-endpoints)
 returns all participants in the details response. Its bulk metrics override
@@ -60,6 +60,7 @@ Staff can correct them; changing pages requires an updated preview. Ambiguous
 ACTIVITY metrics such as collections logged require explicit page selections.
 No import silently opens all pages. Existing overlapping windows and the
 **any associated active page open** rule remain in force.
+These windows affect only the regular log; hardcore pages remain fully open.
 
 Re-importing a linked competition preserves the existing window and any staff
 edits. Deleting it leaves a persistent marker: importing again preserves the
@@ -92,7 +93,7 @@ contribution. Negative XP corrections require acknowledgement.
 The homepage keeps its five collection-log tabs. The ACTIVITY viewer on the
 left lists stored metadata in descending source end order, with source ID
 descending as a stable tie-break. Smaller local start/end labels are red for
-finished, green for running and yellow for future, with a text status. UTC times
+finished, green for running and yellow for future. UTC times
 are available on each time label. Links open the canonical WOM page. The viewer
 advances status locally using the server clock offset and polls for new metadata.
 On narrow screens it sits above the log with a horizontally scrollable list.
@@ -121,8 +122,7 @@ snapshot, revision and ETag, adding a Total `podium` and an event `podium`.
 
 `POST /api/v1/admin/competitions/preview` takes `{competitionUrl,pageIds?}`.
 An optional legacy `kind` is checked against WOM metadata and a mismatch is
-rejected; it never authorizes XP writes. Finished SKILL previews and applies
-require an administrator even if the caller supplies `kind: "ACTIVITY"`.
+rejected. Finished SKILL previews and applies are available to both staff roles.
 It returns a ten-minute actor-bound token, XP and schedule revisions, original
 dates, lifecycle, proposed/selected pages, effective start, exact action and
 filtered finished results when applicable.
@@ -134,7 +134,7 @@ and CSRF token. Apply checks the current role, clock, preview expiry and both
 revisions. Receipt retries survive expiry/restarts; changing a request under the
 same key returns 409. Every import is audited, including unchanged imports.
 
-The established legacy XP routes remain administrator-only, accept an optional
+The established legacy XP routes are also available to both staff roles, accept an optional
 checked `kind: "SKILL"` preview hint, accept finished results only and write the same
 registry identity. The shared form uses the new routes. Schedule enforcement
 and audit lock ordering are unchanged: scheduling settings precede XP state,

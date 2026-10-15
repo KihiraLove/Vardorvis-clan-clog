@@ -74,21 +74,16 @@ async function readAdminRoute(
     return { kind: 'account' };
   if (
     session.role !== 'admin' &&
-    [
-      '/admin/settings',
-      '/admin/settings/hardcore',
-      '/admin/runelite',
-      '/admin/accounts',
-    ].includes(path)
+    ['/admin/settings', '/admin/settings/hardcore', '/admin/accounts'].includes(
+      path,
+    )
   )
     return {
       kind: 'denied',
       denial:
         path === '/admin/accounts'
           ? 'Only the administrator can create moderator accounts.'
-          : path === '/admin/runelite'
-            ? 'Only the administrator can change RuneLite settings.'
-            : 'Only the administrator can change site settings.',
+          : 'Only the administrator can change site settings.',
     };
   switch (path) {
     case '/admin/catalog':
@@ -96,19 +91,17 @@ async function readAdminRoute(
     case '/admin/xp': {
       const [tracker, historyData] = await Promise.all([
         xp.tracker(signal),
-        session.role === 'admin'
-          ? xp
-              .history(signal)
-              .then((history) => ({ history }))
-              .catch((failure: unknown) => {
-                if (classifyAccessFailure(failure) === 'denied')
-                  return {
-                    historyError:
-                      'Your account is not allowed to view XP import history.',
-                  };
-                throw failure;
-              })
-          : Promise.resolve({}),
+        xp
+          .history(signal)
+          .then((history) => ({ history }))
+          .catch((failure: unknown) => {
+            if (classifyAccessFailure(failure) === 'denied')
+              return {
+                historyError:
+                  'Your account is not allowed to view XP import history.',
+              };
+            throw failure;
+          }),
       ]);
       return { kind: 'xp', tracker, ...historyData };
     }

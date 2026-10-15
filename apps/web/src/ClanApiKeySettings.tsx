@@ -25,7 +25,8 @@ export function ClanApiKeySettings({
   const [key, setKey] = useState(saved?.key ?? '');
   const action = useAdminAction(onAccessLost);
   const locked = busy || action.busy;
-  useAdminDraft(!!saved && key !== saved.key, action.busy);
+  const editable = session.role === 'admin';
+  useAdminDraft(editable && !!saved && key !== saved.key, action.busy);
   const accept = (value: ClanKeySettings) => {
     onSaved(value);
     setKey(value.key);
@@ -34,7 +35,7 @@ export function ClanApiKeySettings({
     setKey(saved?.key ?? '');
   }, [saved?.key]);
   const save = () => {
-    if (!saved) return;
+    if (!saved || !editable) return;
     void action.execute(
       async (signal) => {
         const value = await client.saveClanApiKey(
@@ -68,6 +69,7 @@ export function ClanApiKeySettings({
           id="clan-api-key-value"
           className="clan-api-key-value"
           value={key}
+          readOnly={!editable}
           required
           minLength={clanKeyMinLength}
           rows={2}
@@ -80,34 +82,36 @@ export function ClanApiKeySettings({
             action.setMessage(undefined);
           }}
         />
-        <div className="admin-actions">
-          <button
-            type="button"
-            className="site-button"
-            disabled={locked || !saved}
-            onClick={() => {
-              const bytes = crypto.getRandomValues(
-                new Uint8Array(clanKeyBytes),
-              );
-              setKey(
-                Array.from(bytes, (byte) =>
-                  byte.toString(16).padStart(2, '0'),
-                ).join(''),
-              );
-              action.setMessage('New key generated. Save to apply it.');
-            }}
-          >
-            Generate new key
-          </button>
-          <button
-            className="site-button"
-            disabled={
-              locked || !saved || !validClanKey(key) || key === saved.key
-            }
-          >
-            Save API key settings
-          </button>
-        </div>
+        {editable && (
+          <div className="admin-actions">
+            <button
+              type="button"
+              className="site-button"
+              disabled={locked || !saved}
+              onClick={() => {
+                const bytes = crypto.getRandomValues(
+                  new Uint8Array(clanKeyBytes),
+                );
+                setKey(
+                  Array.from(bytes, (byte) =>
+                    byte.toString(16).padStart(2, '0'),
+                  ).join(''),
+                );
+                action.setMessage('New key generated. Save to apply it.');
+              }}
+            >
+              Generate new key
+            </button>
+            <button
+              className="site-button"
+              disabled={
+                locked || !saved || !validClanKey(key) || key === saved.key
+              }
+            >
+              Save API key settings
+            </button>
+          </div>
+        )}
       </form>
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}

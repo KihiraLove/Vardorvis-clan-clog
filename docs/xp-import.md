@@ -23,13 +23,13 @@ without a schedule, and appear publicly with unavailable gains and an empty
 podium. Moderators can apply these imports. Crossing the source end requires a
 fresh finished-results preview; future-to-running apply stays metadata-only.
 Existing linked staff windows are preserved for reviewed management in Scheduling.
-Only administrators import finished XP results. Legacy
+Administrators and moderators can import finished XP results and view history. Legacy
 `/api/v1/admin/xp/imports/preview` and `/api/v1/admin/xp/imports` remain available
 for finished SKILL imports, with the existing session, Origin, CSRF, optimistic
 revision, correction acknowledgement and UUID request-key contracts. Legacy
 preview payloads need only `competitionUrl`; an optional `kind: "SKILL"` hint
 remains compatible with older clients, while WOM scope validation and the
-administrator boundary stay authoritative. Private history is available at
+staff authorization stay authoritative. Private history is available at
 `GET /api/v1/admin/xp/imports`.
 
 Migration 014 backfills all existing XP identities as SKILL and preserves the

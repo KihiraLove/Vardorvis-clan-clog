@@ -154,7 +154,7 @@ export function authRoutes(
     );
     return token;
   }
-  if (xp) xpAdminRoutes(app, xp, requireOwner, fetchWom, previews);
+  if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom, previews);
   if (review) reviewRoutes(app, review, requireAdmin);
   app.post<{ Body: { username: string; password: string } }>(
     '/api/v1/auth/login',
@@ -453,7 +453,7 @@ export function authRoutes(
     },
   );
   app.get('/api/v1/admin/clan-api-key', async (request) => {
-    await requireOwner(request);
+    await requireAdmin(request);
     if (!clanKeys)
       throw new ApiError(503, 'Clan API key storage is unavailable.');
     return clanKeys.settings();

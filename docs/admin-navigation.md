@@ -36,6 +36,10 @@ content stays visible until preparation completes. Cancelling restores the
 original entry without rewriting or deleting the traversed entry. New link
 navigation during an unfinished traversal restores the original position before
 pushing a new entry. Ordinary modified clicks retain browser behavior.
+Scroll bookkeeping updates only history metadata, never the URL, and skips
+entries whose native location has already moved. Route commits use the prepared
+destination explicitly. This prevents a scroll before a native history event
+from replacing its destination and leaving the current page visible.
 
 Mounted forms register dirty drafts and active writes. Leaving a dirty page asks
 whether to discard its changes only after the destination is ready, including
@@ -47,7 +51,8 @@ read keeps the authenticated import screen available, exposes no old history and
 offers an explicit history retry.
 
 Coverage includes delayed success/failure, timeout, rapid destinations, history
-cancellation, dirty forms, logout/access loss, refresh and deep links. Desktop and
+cancellation, scrolling during native history changes, repeated page switching,
+dirty forms, logout/access loss, refresh and deep links. Desktop and
 320px checks compare the current panel, navigation, footer, focus and scroll
 through delayed settings transitions. Browser evidence uses controlled API
 fixtures; it does not substitute for a deployed production-data test.

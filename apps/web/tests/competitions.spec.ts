@@ -25,6 +25,16 @@ for (const path of ['/admin/xp', '/admin/schedules']) {
       await page.route('**/api/v1/auth/session', (r) =>
         r.fulfill({ json: { ...fixtures.session, role: 'moderator' } }),
       );
+      await page.route('**/api/v1/admin/xp/imports', (r) =>
+        r.fulfill({
+          json: {
+            imports: [],
+            revision: 'history-1',
+            pageCursor: 'first',
+            nextCursor: null,
+          },
+        }),
+      );
       let scheduleWrites = 0;
       await page.route('**/api/v1/admin/schedules', (r) => {
         if (r.request().method() !== 'GET') scheduleWrites++;

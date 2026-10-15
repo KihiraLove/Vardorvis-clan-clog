@@ -187,7 +187,7 @@ test(
             headers: moderator,
           })
         ).statusCode,
-        403,
+        200,
       );
       const initialKey = await app.inject({
         url: '/api/v1/admin/clan-api-key',
@@ -200,6 +200,26 @@ test(
         key: generated,
       });
       assert.equal(initialKey.headers['cache-control'], 'no-store');
+      const filtersUrl = '/api/v1/admin/submission-filters';
+      const modFilters = await app.inject({
+        url: filtersUrl,
+        headers: moderator,
+      });
+      assert.equal(modFilters.statusCode, 200, modFilters.body);
+      const modToggle = await app.inject({
+        method: 'PUT',
+        url: filtersUrl,
+        headers: moderator,
+        payload: {
+          filterCollected: true,
+          expectedRevision: modFilters.json().revision,
+        },
+      });
+      assert.equal(modToggle.statusCode, 403, modToggle.body);
+      assert.deepEqual(
+        (await app.inject({ url: filtersUrl, headers: owner })).json(),
+        modFilters.json(),
+      );
       const publicSettings = (await app.inject('/api/v1/settings')).body;
       assert.ok(
         !publicSettings.includes(generated) &&

@@ -51,23 +51,13 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
     ...(await client.session(signal()))!,
     role: 'moderator',
   };
-  for (const method of [
-    'settings',
-    'branding',
-    'clanApiKey',
-    'runeLiteSettings',
-    'accounts',
-  ] as const)
+  for (const method of ['settings', 'branding', 'accounts'] as const)
     t.mock.method(client, method, async () => {
       throw new Error('unauthorized read');
     });
-  t.mock.method(xp, 'history', async () => {
-    throw new Error('private XP history');
-  });
   for (const path of [
     '/admin/settings',
     '/admin/settings/hardcore',
-    '/admin/runelite',
     '/admin/accounts',
   ])
     assert.equal(
@@ -75,8 +65,14 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
       'denied',
     );
   assert.deepEqual(
-    (await loadAdminRoute('/admin/xp', session, client, xp, signal())).history,
-    undefined,
+    (await loadAdminRoute('/admin/xp', session, client, xp, signal())).history
+      ?.imports,
+    [],
+  );
+  assert.equal(
+    (await loadAdminRoute('/admin/runelite', session, client, xp, signal()))
+      .kind,
+    'runelite',
   );
   assert.equal(
     (

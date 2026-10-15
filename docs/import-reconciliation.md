@@ -20,7 +20,7 @@ route tests, database acceptance, production smoke and workload fixtures still
 reference them. There is no evidence that every external caller has migrated.
 Do not remove these routes or their `xp_previews`/`xp_import_history` storage.
 
-Legacy requests remain administrator-only and finished-SKILL-only, return
+Legacy requests are available to both staff roles and remain finished-SKILL-only, return
 `{outcome,revision}`, and require only the XP revision. Unified requests also
 bind the schedule revision and return `scheduleId`. Both use ten-minute,
 actor-bound previews. Their existing token tables and durable receipt formats

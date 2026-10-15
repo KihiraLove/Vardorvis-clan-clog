@@ -162,7 +162,7 @@ test('preview mode detects stable skill and activity fixture metadata without a 
   assert.equal(activity.competition.kind, 'ACTIVITY');
   assert.deepEqual(activity.changes, []);
 });
-test('preview mode enforces staff access and the administrator-only finished XP boundary', async (t) => {
+test('preview mode permits moderator finished XP imports and still requires staff access', async (t) => {
   const admin = new PreviewAdminClient();
   const session = (await admin.session(signal()))!;
   const mocked = t.mock.method(admin, 'session', async () => ({
@@ -170,9 +170,10 @@ test('preview mode enforces staff access and the administrator-only finished XP 
     role: 'moderator' as const,
   }));
   const client = new PreviewCompetitionClient(admin, new PreviewXpClient());
-  await assert.rejects(client.preview(url(1001), 'csrf', signal()), {
-    status: 403,
-  });
+  assert.equal(
+    (await client.preview(url(1001), 'csrf', signal())).competition.kind,
+    'SKILL',
+  );
   assert.equal(
     (await client.preview(url(1000), 'csrf', signal())).competition.kind,
     'SKILL',
@@ -293,7 +294,7 @@ test('preview metadata imports preserve schedules and publish unavailable SKILL 
   }
 });
 
-test('preview receipt replay enforces current authentication and the original finished XP role', async (t) => {
+test('preview finished XP receipts remain replayable for moderators and require current authentication', async (t) => {
   const admin = new PreviewAdminClient();
   const session = (await admin.session(signal()))!;
   const mocked = t.mock.method(
@@ -309,9 +310,10 @@ test('preview receipt replay enforces current authentication and the original fi
     ...session,
     role: 'moderator' as const,
   }));
-  await assert.rejects(client.apply(p, 'csrf', key, false, signal()), {
-    status: 403,
-  });
+  assert.equal(
+    (await client.apply(p, 'csrf', key, false, signal())).outcome,
+    'applied',
+  );
   mocked.mock.mockImplementation(async () => null);
   await assert.rejects(client.apply(p, 'csrf', key, false, signal()), {
     status: 401,

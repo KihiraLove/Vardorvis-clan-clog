@@ -14,6 +14,7 @@ import { PgStore } from './store.js';
 import { createApp } from './app.js';
 import { hashPassword } from './passwords.js';
 import { fetchCompetition } from './competition-wom.js';
+import { parseWomSnapshot } from './wom.js';
 import type { CompetitionSnapshot } from './competition-types.js';
 import { PreviewWork } from './preview-work.js';
 import { WorkBudget } from '@clog/domain';
@@ -89,6 +90,12 @@ test(
       ),
       fetchCompetition: (url, at) =>
         fetchCompetition(url, at, async () => Response.json(fakeSource)),
+      fetchWom: async () =>
+        parseWomSnapshot(
+          source(500, 'attack', now - 2 * day, now - day),
+          undefined,
+          500,
+        ),
     });
     const snapshot = async (
       id: number,
@@ -354,10 +361,7 @@ test(
       assert.equal(p.action, 'import-results');
       assert.equal(p.participants.length, 1);
       const count = (await scheduling.state()).schedules.length;
-      await assert.rejects(apply(p, randomUUID(), 'moderator'), {
-        status: 403,
-      });
-      await apply(p);
+      await apply(p, randomUUID(), 'moderator');
       assert.equal((await scheduling.state()).schedules.length, count);
       assert.equal((await xp.tracker()).totals.attack, '9007199254741116');
       assert.equal(
@@ -578,17 +582,13 @@ test(
       fakeSource = source(500, 'attack', now - 2 * day, now - day);
       // Begin a new rate window for the next permission scenario. Saturation has dedicated tests.
       admissionClock += 60000;
-      assert.equal(
-        (
-          await app.inject({
-            method: 'POST',
-            url,
-            headers: moderator,
-            payload,
-          })
-        ).statusCode,
-        403,
-      );
+      const moderatorFinished = await app.inject({
+        method: 'POST',
+        url,
+        headers: moderator,
+        payload,
+      });
+      assert.equal(moderatorFinished.statusCode, 200, moderatorFinished.body);
       assert.equal(
         (
           await app.inject({
@@ -609,7 +609,7 @@ test(
             payload: { ...payload, kind: 'ACTIVITY' },
           })
         ).statusCode,
-        403,
+        422,
       );
       assert.equal(
         (
@@ -630,6 +630,21 @@ test(
       });
       assert.equal(detectedSkill.statusCode, 200, detectedSkill.body);
       assert.equal(detectedSkill.json().competition.kind, 'SKILL');
+      const finishedApply = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/competitions/imports',
+        headers: { ...moderator, 'idempotency-key': randomUUID() },
+        payload: {
+          previewToken: moderatorFinished.json().previewToken,
+          expectedRevision: moderatorFinished.json().expectedRevision,
+          scheduleRevision: moderatorFinished.json().scheduleRevision,
+        },
+      });
+      assert.equal(finishedApply.statusCode, 200, finishedApply.body);
+      assert.equal(
+        (await xp.tracker()).events.some((event) => event.id === 500),
+        true,
+      );
       fakeSource = source(501, 'attack', now + day, now + 2 * day);
       const futureSkill = await app.inject({
         method: 'POST',
@@ -664,7 +679,7 @@ test(
             payload: { ...payload, kind: 'SKILL' },
           })
         ).statusCode,
-        403,
+        200,
       );
       assert.equal(
         (await app.inject('/api/v1/competitions/activities')).statusCode,

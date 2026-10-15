@@ -265,15 +265,14 @@ test(
               'actor',
             ),
             key = randomUUID();
-          await assert.rejects(
+          const receipts = await Promise.all([
             apply(p, key, false, competitions, 'moderator'),
-            { status: 403 },
-          );
-          const receipts = await Promise.all([apply(p, key), apply(p, key)]);
+            apply(p, key),
+          ]);
           assert.deepEqual(receipts[0], receipts[1]);
-          await assert.rejects(
-            apply(p, key, false, competitions, 'moderator'),
-            { status: 403 },
+          assert.deepEqual(
+            await apply(p, key, false, competitions, 'moderator'),
+            receipts[0],
           );
         },
       );

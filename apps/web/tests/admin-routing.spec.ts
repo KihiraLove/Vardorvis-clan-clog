@@ -80,6 +80,64 @@ const catalogLink = (page: Page) =>
 const calls = (requests: string[], path: string) =>
   requests.filter((request) => request === path).length;
 
+test('scrolling before a native history event cannot overwrite its destination', async ({
+  page,
+}) => {
+  await routedAdmin(page);
+  await page.goto('/admin/account');
+  await expect(account(page)).toBeVisible();
+  // Native history can change the address before its popstate notification.
+  // Reproduce a scroll notification in that interval deterministically.
+  await page.evaluate(() => {
+    history.pushState(
+      { clogPosition: history.state.clogPosition + 1, clogScroll: [0, 0] },
+      '',
+      '/admin/catalog',
+    );
+    window.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(
+      new PopStateEvent('popstate', { state: history.state }),
+    );
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Add item', exact: true }),
+  ).toBeVisible();
+  await expect(catalogLink(page)).toHaveAttribute('aria-current', 'page');
+  expect(new URL(page.url()).pathname).toBe('/admin/catalog');
+  await page.getByRole('link', { name: 'Your account', exact: true }).click();
+  await expect(account(page)).toBeVisible();
+  await catalogLink(page).click();
+  await expect(
+    page.getByRole('heading', { name: 'Add item', exact: true }),
+  ).toBeVisible();
+});
+
+test('scrolling between repeated admin navigations keeps the URL, current link and visible page together', async ({
+  page,
+}) => {
+  await routedAdmin(page);
+  await page.goto('/admin');
+  const destinations = [
+    ['Items catalog', '/admin/catalog', 'Add item'],
+    ['RuneLite submissions', '/admin/runelite', 'RuneLite submissions'],
+    ['Your account', '/admin/account', 'Your account'],
+    ['Scheduling', '/admin/schedules', 'Schedule management'],
+    ['Submissions', '/admin', 'Submissions'],
+  ];
+  for (let cycle = 0; cycle < 6; cycle++) {
+    for (const [label, path, heading] of destinations) {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      const link = page.getByRole('link', { name: label, exact: true });
+      await link.click();
+      await expect(
+        page.getByRole('heading', { name: heading, exact: true }),
+      ).toBeVisible();
+      await expect(link).toHaveAttribute('aria-current', 'page');
+      expect(new URL(page.url()).pathname).toBe(path);
+    }
+  }
+});
+
 test('route failure retains current content and URL; Retry prepares once and commits history and focus', async ({
   page,
 }) => {

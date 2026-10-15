@@ -163,9 +163,9 @@ export function AdminQueue({
           <input
             type="checkbox"
             checked={filters?.filterCollected ?? false}
-            disabled={!filters || filterAction.busy}
+            disabled={session.role !== 'admin' || !filters || filterAction.busy}
             onChange={(event) => {
-              if (!filters) return;
+              if (!filters || session.role !== 'admin') return;
               const checked = event.target.checked;
               void filterAction.execute(
                 async (signal) => {
