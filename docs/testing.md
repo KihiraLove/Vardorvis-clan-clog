@@ -40,8 +40,10 @@ session, rejects unexpected dependencies and verifies old-manifest rejection.
 restored logins/assets/private proof/encryption, incompatible-image rejection,
 credential rotation and compatible controlled-image rollback.
 
-Current browser coverage is Chromium; many frontend tests use fixture responses.
-Production smoke uses real proxy/API/PostgreSQL. Full browser-to-production-stack
-acceptance, browser support policy, actual Discord guild,
-production host TLS/load and published prior-release recovery are tracked in
-#103–#104. Preview screenshots and green local tests do not approve those gates.
+The [browser support and acceptance policy](browser-acceptance.md) adds real HTTPS
+login, private proof, note/correction/approve/public-credit/revoke, role/access
+loss, delayed reads, geometry and uploads in Chromium/Firefox/WebKit. Fixture
+suites retain targeted failure/layout coverage. JSON report validation rejects
+skips, expected failures and retries, and requires all ten original audit cases.
+Real Discord guild, deployed host TLS/load, physical devices and published
+prior-release verification remain #104 release gates.

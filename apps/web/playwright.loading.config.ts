@@ -6,7 +6,10 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   outputDir: './test-results/loading',
-  reporter: 'list',
+  reporter: [
+    ['list'],
+    ['json', { outputFile: '../../.data/local-checks/loading-report.json' }],
+  ],
   use: {
     baseURL: 'http://127.0.0.1:5189',
     browserName: 'chromium',

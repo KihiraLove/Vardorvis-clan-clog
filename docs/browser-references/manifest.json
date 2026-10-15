@@ -1,0 +1,61 @@
+{
+  "issue": 103,
+  "reviewed": "2026-10-15",
+  "sourceBase": "f32cc17fc7ee78a8969795234407491186ae9bad",
+  "sourceScope": "The #103 implementation committed alongside these references; focused run stack103-focused6 (Chromium/Firefox) and focused7 (WebKit).",
+  "fixture": "Disposable real API/PG; synthetic approved ordinary mask, empty activities/XP. Full acceptance also has competition fixtures. No live clan data.",
+  "environment": {
+    "engine": "chromium",
+    "version": "151.0.7922.34",
+    "platform": "linux",
+    "origin": "https://clog.example.com",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    }
+  },
+  "geometry": {
+    "creator": {
+      "top": 326.59375,
+      "bottom": 1246.453125,
+      "height": 919.859375
+    },
+    "manager": {
+      "top": 326.59375,
+      "bottom": 1246.453125,
+      "height": 919.859375
+    },
+    "choices": {
+      "top": 798.265625,
+      "bottom": 1114.859375,
+      "height": 316.59375
+    },
+    "submit": {
+      "top": 1187.453125,
+      "bottom": 1224.453125,
+      "height": 37
+    }
+  },
+  "captures": [
+    {
+      "file": "real-public-desktop.png",
+      "sha256": "2020235f74f227ee79329ff0d5b3025b5bd63d57393c2790d2cf086ff9b366ee",
+      "expectation": "1440px public: aligned activity/frame; one canonical approved mask"
+    },
+    {
+      "file": "real-public-320.png",
+      "sha256": "5121fe1703567f907a4e4f2c1cd2201b05c3e80f7ef7fb6c5e1793181886e66b",
+      "expectation": "320px public: contained internal horizontal scrolling and stacked activity"
+    },
+    {
+      "file": "real-catalog-desktop.png",
+      "sha256": "d61ebddecaebd92889c439e77818919048fcbdae01d502b3ac45be30208e8093",
+      "expectation": "1440px catalog: equal panel edges; expanded picker above submit"
+    },
+    {
+      "file": "real-catalog-320.png",
+      "sha256": "850a58a4cd29198c215054939acdfec83f7b28f2b0bd48b20f497d739a9c82a0",
+      "expectation": "320px catalog: naturally stacked panels, contained controls, native focus"
+    }
+  ]
+}

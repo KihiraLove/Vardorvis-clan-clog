@@ -107,6 +107,9 @@ npm installation, production `.env` or hosted runner. The maintained gate includ
   grants, populated upgrades, concurrency, rollback and exact receipt replay.
 - Chromium browser scenarios for public/staff UI, desktop/320px navigation,
   keyboard/touch, access loss, drafts and failures; many API responses are fixtures.
+- Chromium/Firefox/WebKit workflows through disposable HTTPS, production Nginx/API
+  and PostgreSQL, with real staff sessions, private proof and canonical credit/revoke.
+  JSON report checks require normal single-attempt passes and all original audit cases.
 - Production-build loading/byte-budget checks, cold code/data overlap, chunk failure
   recovery and isolated demo loading, plus workload/public-projection measurements
   with real SQL and large ledgers.
@@ -124,14 +127,16 @@ skip database tests without `TEST_DATABASE_URL`; that is not full acceptance.
 
 ## Remaining launch acceptance
 
-The remaining split tasks are tracked by #103–#104. [Public/admin/demo entry
+The remaining split task is tracked by #104. [Public/admin/demo entry
 splitting](frontend-loading.md) keeps staff screens and sample fixtures out of the
 initial public graph, coordinates code/data preparation and measures readiness.
-Production proxy/browser [CSP and framing acceptance](browser-security.md) is implemented (#102). Browser checks currently target
-Chromium and often fixture API responses; a complete browser → production proxy
-→ API → PostgreSQL workflow and explicit browser support/capture policy remain
-pending (#103). The production container smoke is real HTTP/SQL, not a claim that
-all browser journeys already use the production stack.
+Production proxy/browser [CSP and framing acceptance](browser-security.md) is implemented (#102).
+[Real HTTPS browser acceptance](browser-acceptance.md) adds Chromium, Firefox and
+WebKit workflows through the production proxy/API/PostgreSQL, genuine secure
+sessions, private PNGs, canonical public credit/revoke, role/access loss, delayed
+reads and logo uploads (#103). Fixture suites retain targeted failure/layout
+coverage. The full gate rejects skips, expected failures and retries in all four
+browser reports and requires all ten original audit scenarios.
 
 Preview mode intentionally remains an explicit `?preview=1` sample ledger, loaded
 only on demand in a separate chunk. It is isolated from persisted clan data and

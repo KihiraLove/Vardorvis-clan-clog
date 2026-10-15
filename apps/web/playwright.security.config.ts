@@ -13,7 +13,10 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   outputDir: './test-results/security',
-  reporter: 'list',
+  reporter: [
+    ['list'],
+    ['json', { outputFile: '../../.data/local-checks/security-report.json' }],
+  ],
   use: {
     // Loopback supplies the browser's native secure-context APIs for demo writes.
     // This edge forwards production Nginx bytes/headers and does not fake TLS/auth.

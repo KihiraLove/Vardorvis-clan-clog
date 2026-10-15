@@ -90,10 +90,10 @@ writes/image reads, CSRF/session failures, invalid images and both API/proxy
 upload limits. The HTTP smoke retains secure host-only, HttpOnly, SameSite
 session cookies and private/auth no-store responses, including an actual private
 PNG upload and authorized/anonymous reads. Browser fixtures verify CSP
-compatibility, not real browser authentication. The complete secure-cookie
-browser → proxy → API → PostgreSQL
-journey is tracked separately by #103. Chromium coverage here does not claim a
-cross-browser or deployed TLS acceptance result.
+compatibility, not real browser authentication. The separate [real-stack suite](browser-acceptance.md)
+now covers secure-cookie browser → proxy → API → PostgreSQL workflows across
+Chromium, Firefox and WebKit (#103). This CSP suite remains Chromium coverage;
+neither suite claims deployed public TLS or physical-device acceptance.
 
 Evidence lives under `.data/local-checks/<run-id>/`: `smoke.log` contains the
 security test results; `browser/security/` contains per-test captures and failure

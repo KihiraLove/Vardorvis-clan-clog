@@ -255,6 +255,9 @@ export async function main(args = process.argv.slice(2)) {
       config.network,
       '--shm-size',
       '1g',
+      // Browser TLS stays inside this runner; PUBLIC_ORIGIN matches real cookies/CSRF.
+      '--add-host',
+      'clog.example.com:127.0.0.1',
       '--mount',
       `type=bind,source=${process.env.LOCAL_DOCKER_SOCKET || '/var/run/docker.sock'},target=/var/run/docker.sock`,
       ...containerEnv,

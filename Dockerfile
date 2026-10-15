@@ -19,7 +19,7 @@ COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
 COPY --from=dependencies /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
   && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-  && apt-get update && apt-get install -y --no-install-recommends bash curl jq util-linux shellcheck \
+  && apt-get update && apt-get install -y --no-install-recommends bash curl jq util-linux shellcheck openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=dependencies /app /app
 COPY --from=docker-tools /usr/local/bin/docker /usr/local/bin/docker

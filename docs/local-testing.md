@@ -11,6 +11,12 @@ See the maintained [current inventory](current-state.md) and [runtime packaging 
 proxy during `smoke.log`, with per-test artifacts under `browser/security/`.
 It checks enforced headers, compatible resources, blocked injections and embedding.
 
+[Real-stack browser acceptance](browser-acceptance.md) runs Chromium, Firefox and
+WebKit against disposable HTTPS/production proxy/API/PostgreSQL with real staff
+sessions. No host port or public DNS is used. `stack-report.json`, per-test
+`browser/stack/` captures and `browser-results.log` record acceptance; the report
+guard rejects skipped/expected/flaky cases and missing audit scenarios/engines.
+
 Run the complete automated suite before pushing or requesting review:
 
 ```bash

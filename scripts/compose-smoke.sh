@@ -91,6 +91,9 @@ docker compose exec -T -e BRANDING_PROXY_SMOKE_TEST=1 app node --input-type=modu
 printf "\nEnforced production proxy CSP and framing browser acceptance\n"
 SECURITY_PROXY_TEST=1 npm run test:security -w @clog/web
 
+printf "\nReal HTTPS browser/proxy/API/PostgreSQL acceptance across browser engines\n"
+STACK_BROWSER_TEST=1 npm run test:stack -w @clog/web
+
 printf "\nBounded import preview maintenance respects runtime role and receipts\n"
 docker compose exec -T db psql -v ON_ERROR_STOP=1 -U clog -d clog -c "
   INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at)

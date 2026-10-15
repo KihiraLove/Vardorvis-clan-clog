@@ -87,9 +87,14 @@ test('proxy sends the enforced policy on HTML, assets, API, conditional and erro
   expect(malformed.status()).toBe(400);
   headers(malformed.headers());
   expect(malformed.headers()['cache-control']).toBe('no-store');
-  const oversized = await request.post('/api/v1/admin/catalog/icons', {
-    data: Buffer.alloc(3 * 1024 * 1024 + 1),
-  });
+  // Exercise the actual Nginx body rejection, without an extra test relay that
+  // can close its client connection while an early 413 is still being uploaded.
+  const oversized = await request.post(
+    'http://app:8080/api/v1/admin/catalog/icons',
+    {
+      data: Buffer.alloc(3 * 1024 * 1024 + 1),
+    },
+  );
   expect(oversized.status()).toBe(413);
   expect(oversized.headers()['content-type']).toContain('text/html');
   headers(oversized.headers());
