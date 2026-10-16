@@ -1,5 +1,6 @@
-/** Preview/mocked browser review flows; these do not verify real backend authorization. */
-import { expect, test, type Page } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+/** Mocked HTTP browser review flows; these do not verify real backend authorization. */
+import { expect, test, pngFile, type Page } from './test.ts';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
@@ -15,7 +16,8 @@ const itemIcon = resolve('public/skills/sailing.png');
 test('collected-item filtering sits between manual entry and the queue and survives navigation', async ({
   page,
 }) => {
-  await page.goto('/admin/submissions?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/submissions');
   const filter = page.getByRole('checkbox', {
     name: 'Filter out duplicates',
     exact: true,
@@ -31,12 +33,12 @@ test('collected-item filtering sits between manual entry and the queue and survi
     .boundingBox();
   expect(toggle!.y).toBeGreaterThan(manual!.y);
   expect(toggle!.y).toBeLessThan(submissions!.y);
-  await filter.check();
+  await filter.click();
   await expect(filter).toBeChecked();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(filter).toBeChecked();
-  await filter.uncheck();
+  await filter.click();
   await expect(filter).not.toBeChecked();
 });
 
@@ -166,7 +168,8 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   page.on('pageerror', (error) => pageErrors.push(error.message));
   const f = await adminFixtures(),
     maskId = f.detail.submission.itemId!;
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
@@ -220,7 +223,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
     .getByText(/^Audit history/)
     .click();
   await expect(
-    editor(page).getByText('approve · Preview admin', { exact: true }),
+    editor(page).getByText('approve · Test admin', { exact: true }),
   ).toBeVisible();
   await page.locator('header a.clan-brand').click();
   await page
@@ -274,7 +277,8 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
 test('approved corrections require a reason and move the single credit into a free normal slot', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await approve(page, 'KihiraVD');
   await review(page, 'KihiraVD').click();
   await editor(page)
@@ -322,12 +326,13 @@ test('approved corrections require a reason and move the single credit into a fr
 test('manual item creation shares one identity, keyboard and drag order affect one page, and later review credits every occurrence', async ({
   page,
 }) => {
-  await page.goto('/admin/catalog?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/catalog');
   await page.getByRole('button', { name: '+ Add item', exact: true }).click();
   await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles(itemIcon);
+    .setInputFiles(await pngFile(itemIcon));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByLabel('Item name', { exact: true }).fill('New clan drop');
   await page
@@ -437,7 +442,8 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
     hasTouch: true,
   });
   const page = await context.newPage();
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await review(page, 'KihiraVD').tap();
   await editor(page)
     .getByLabel('Collector name', { exact: true })
@@ -711,7 +717,7 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   expect(creates).toBe(0);
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles(itemIcon);
+    .setInputFiles(await pngFile(itemIcon));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(
@@ -745,10 +751,11 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   expect(orders).toBe(1);
 });
 
-test('preview logout clears reviews and also denies the XP import form in the same SPA session', async ({
+test('logout clears reviews and also denies the XP import form in the same SPA session', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
@@ -756,10 +763,10 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await expect(
     page.getByRole('navigation', { name: 'Admin navigation' }),
   ).toHaveCount(0);
-  // Change routes in the same SPA instance: reloading preview would create a
+  // Change routes in the same SPA instance: reinstalling fixtures would create a
   // new fixture session and fail to test the original logout.
   await page.evaluate(() => {
-    window.history.pushState(null, '', '/admin/xp?preview=1');
+    window.history.pushState(null, '', '/admin/xp');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(
@@ -768,10 +775,11 @@ test('preview logout clears reviews and also denies the XP import form in the sa
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
 });
 
-test('admin preview can add a manual credit without a Discord claim', async ({
+test('staff can add a manual credit without a Discord claim', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await page.getByRole('button', { name: 'Add manual submission' }).click();
   await page.getByLabel('Search catalog items').fill('Virtus mask');
   const catalog = await adminFixtures();
@@ -873,7 +881,8 @@ test('live admin shows a password form and submits a password without Discord OA
 test('manual entry reports duplicate item and world rather than a stale-version error', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   const add = page.getByRole('button', { name: 'Add manual submission' });
   await add.click();
   await page.getByLabel('Search catalog items').fill('Virtus mask');

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadAdminRoute } from './admin-route-data.ts';
-import { PreviewAdminClient } from './preview/admin.ts';
-import { PreviewXpClient } from './preview/xp.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
+import { MemoryXpClient } from '../tests/support/xp.ts';
 import type { AdminSession } from './xp-model.ts';
 
 const signal = () => new AbortController().signal;
 test('route loaders prepare every destination with one shared catalog read and no session or write waterfall', async (t) => {
-  const client = new PreviewAdminClient(),
-    xp = new PreviewXpClient();
+  const client = new MemoryAdminClient(),
+    xp = new MemoryXpClient();
   const session = (await client.session(signal()))!;
   t.mock.method(client, 'session', async () => {
     throw new Error('session already verified');
@@ -45,8 +45,8 @@ test('route loaders prepare every destination with one shared catalog read and n
   assert.equal(catalog.mock.callCount(), 3);
 });
 test('moderator and mandatory-password routes never issue unauthorized reads', async (t) => {
-  const client = new PreviewAdminClient(),
-    xp = new PreviewXpClient();
+  const client = new MemoryAdminClient(),
+    xp = new MemoryXpClient();
   const session: AdminSession = {
     ...(await client.session(signal()))!,
     role: 'moderator',
@@ -88,8 +88,8 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
   );
 });
 test('a canceled loader settles even when a source ignores its signal; late results cannot revive it', async (t) => {
-  const client = new PreviewAdminClient(),
-    xp = new PreviewXpClient();
+  const client = new MemoryAdminClient(),
+    xp = new MemoryXpClient();
   const session = (await client.session(signal()))!;
   const catalog = await client.catalog(signal());
   let release!: (value: typeof catalog) => void;
@@ -115,8 +115,8 @@ test('a canceled loader settles even when a source ignores its signal; late resu
   await assert.rejects(loading, { name: 'AbortError' });
 });
 test('multi-read destinations reject incomplete preparations instead of exposing a partial form', async (t) => {
-  const client = new PreviewAdminClient(),
-    xp = new PreviewXpClient();
+  const client = new MemoryAdminClient(),
+    xp = new MemoryXpClient();
   const session = (await client.session(signal()))!;
   t.mock.method(client, 'branding', async () => {
     throw new Error('branding unavailable');

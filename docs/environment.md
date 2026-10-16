@@ -135,8 +135,8 @@ npm run dev:api
 
 Vite proxies `/api` to local Fastify port 3000. Database integration tests
 require an explicitly disposable `TEST_DATABASE_URL`; they intentionally
-skip without it. CI provisions PostgreSQL for those tests. Frontend-only
-mock review remains at `http://127.0.0.1:5173/?preview=1`.
+skip without it. Local acceptance provisions PostgreSQL for those tests.
+The frontend requires the API; its former demo mode has been removed.
 
 For Discord commands and registration, see [bot operations](bot-operations.md).
 For operational backup/recovery and Traefik setup, see

@@ -8,23 +8,14 @@ export function ProofLink({
   url,
   source,
   screenshot,
-  previewScreenshot,
   chatMessage,
 }: {
   url: string;
   source: Submission['source'];
   screenshot?: string | null | undefined;
-  previewScreenshot?: string | undefined;
   chatMessage?: string | undefined;
 }) {
   const safe = safeProof(url);
-  if (previewScreenshot?.startsWith('data:image/png;base64,'))
-    return (
-      <div className="submission-proof">
-        <img src={previewScreenshot} alt="Submission screenshot" />
-        <span>PNG screenshot (preview)</span>
-      </div>
-    );
   if (safeScreenshotPath(screenshot))
     return (
       <div className="submission-proof">

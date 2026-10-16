@@ -17,4 +17,3 @@ function entry<T>(load: () => Promise<T>) {
   };
 }
 export const loadAdminCode = entry(() => import('./admin-entry.tsx'));
-export const loadPreviewCode = entry(() => import('./preview/runtime.tsx'));

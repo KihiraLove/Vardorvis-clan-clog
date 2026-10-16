@@ -1,5 +1,6 @@
+import { mockApi } from '../tests/mock-api.ts';
 /** Actual production Nginx/assets; staff API fixtures isolate CSP from auth (#103). */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../tests/test.ts';
 import { createServer } from 'node:http';
 import sharp from 'sharp';
 import { loadingFixtures } from '../tests-loading/fixtures.ts';
@@ -130,13 +131,14 @@ test('live public resources, fonts and CSSOM scaling work under the enforced pol
 });
 
 for (const width of [1100, 320]) {
-  test(`preview ordinary/hardcore, WOM navigation and animated blob logos at ${width}px`, async ({
+  test(`ordinary/hardcore, WOM navigation and stored animated logos at ${width}px`, async ({
     page,
     context,
   }) => {
     const audit = await watch(page);
     await page.setViewportSize({ width, height: 850 });
-    await page.goto('/admin/settings/hardcore?preview=1');
+    await mockApi(page, { scenario: 'hardcore' });
+    await page.goto('/admin/settings/hardcore');
     await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
     await page
       .getByRole('button', { name: 'Save hardcore settings', exact: true })
@@ -146,10 +148,7 @@ for (const width of [1100, 320]) {
     ).toBeVisible();
     await page.locator('.clan-brand').click();
     await expect(page.getByRole('tab')).toHaveCount(5);
-    await page
-      .getByText('Frontend preview · sample data', { exact: true })
-      .click();
-    await page.getByLabel('Review scenario').selectOption('hardcore');
+
     await page
       .getByRole('button', { name: 'Hardcore worlds', exact: true })
       .click();
@@ -180,7 +179,8 @@ for (const width of [1100, 320]) {
     await expect(destination).toHaveTitle('WOM destination');
     expect(await destination.evaluate(() => window.opener === null)).toBe(true);
     await destination.close();
-    await page.goto('/admin/settings?preview=1');
+    await mockApi(page);
+    await page.goto('/admin/settings');
     const buffer = await sharp(Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]), {
       raw: { width: 1, height: 2, pageHeight: 1, channels: 4 },
     })
@@ -196,7 +196,7 @@ for (const width of [1100, 320]) {
       page.getByText('Clan logo and website icon saved.'),
     ).toBeVisible();
     const logo = page.locator('.clan-logo').first();
-    await expect(logo).toHaveAttribute('src', /^blob:/u);
+    await expect(logo).toHaveAttribute('src', /\/api\/v1\/branding\//u);
     await expect
       .poll(() =>
         logo.evaluate(
@@ -206,7 +206,7 @@ for (const width of [1100, 320]) {
       .toBe(true);
     await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
       'href',
-      /^blob:/u,
+      /\/api\/v1\/branding\//u,
     );
     expect(
       await page.evaluate(
@@ -215,7 +215,7 @@ for (const width of [1100, 320]) {
     ).toBe(true);
     await page.getByRole('heading', { name: 'Clan logo', exact: true }).click();
     await page.screenshot({
-      path: test.info().outputPath(`csp-preview-${width}.png`),
+      path: test.info().outputPath(`csp-proof-${width}.png`),
       fullPage: true,
     });
     audit.clean();
@@ -251,7 +251,6 @@ test('staff chunks, local icon previews and same-origin private image rendering 
   const detail = (await adminFixtures()).detail;
   detail.submission.screenshotPath =
     '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
-  delete detail.submission.previewScreenshot;
   f.responses['/api/v1/admin/submissions/sample-hardcore'] = detail;
   f.responses['/api/v1/admin/submissions'] = {
     ...(f.responses['/api/v1/admin/submissions'] as object),
@@ -305,11 +304,10 @@ test('a failed public read can show its error and recover without CSP violations
   audit.clean();
 });
 
-test('preview PNG evidence renders as a data image under enforcement', async ({
-  page,
-}) => {
+test('stored PNG evidence renders under enforcement', async ({ page }) => {
   const audit = await watch(page);
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await page.getByRole('button', { name: 'Add manual submission' }).click();
   const form = page
     .locator('form')
@@ -317,7 +315,7 @@ test('preview PNG evidence renders as a data image under enforcement', async ({
   await form.getByLabel('Canonical item').selectOption({ index: 1 });
   await form
     .getByLabel('Collector name', { exact: true })
-    .fill('CSP PNG preview');
+    .fill('CSP PNG evidence');
   const png = await sharp({
     create: { width: 16, height: 16, channels: 4, background: 'blue' },
   })
@@ -330,11 +328,14 @@ test('preview PNG evidence renders as a data image under enforcement', async ({
     .getByLabel('Approve immediately and show in the collection log')
     .uncheck();
   await form.getByRole('button', { name: 'Create manual submission' }).click();
-  await page.getByRole('button', { name: /^Review CSP PNG preview/u }).click();
+  await page.getByRole('button', { name: /^Review CSP PNG evidence/u }).click();
   const proof = page
     .locator('.submission-editor')
     .getByAltText('Submission screenshot');
-  await expect(proof).toHaveAttribute('src', /^data:image\/png;base64,/u);
+  await expect(proof).toHaveAttribute(
+    'src',
+    /^\/api\/v1\/admin\/submission-images\//u,
+  );
   await expect
     .poll(() =>
       proof.evaluate(

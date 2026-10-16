@@ -1,9 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
 
 test('key rotation preserves the selected clan matching mode, including name-only intake', async ({
   page,
 }) => {
-  await page.goto('/admin/runelite?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/runelite');
   const matching = page.getByLabel('Clan matching', { exact: true });
   const saveReview = page.getByRole('button', {
     name: 'Save review settings',

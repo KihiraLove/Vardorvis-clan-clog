@@ -1,4 +1,4 @@
-/** Public entry keeps staff screens and fixtures behind explicit route preparation. */
+/** Public entry keeps staff screens behind explicit route preparation. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SiteApp } from './SiteApp.tsx';
 import { useRouteNavigation } from './use-route-navigation.ts';
@@ -17,7 +17,7 @@ export function App() {
   }));
   const visible = useRef({ runtime: live, admin: false });
   const prepare = useCallback(
-    (route: { path: string; preview: boolean }, signal: AbortSignal) =>
+    (route: { path: string }, signal: AbortSignal) =>
       prepareAppRoute(route, visible.current, live, signal),
     [live],
   );
@@ -25,19 +25,11 @@ export function App() {
   const resources = navigation.route.resources;
   useEffect(() => {
     if (!resources) return;
-    const prior = visible.current.runtime;
     visible.current = {
       runtime: resources.runtime,
       admin: isAdminPath(navigation.route.path),
     };
-    if (prior !== resources.runtime && prior !== live) prior.dispose?.();
   }, [resources, navigation.route.path, live]);
-  useEffect(
-    () => () => {
-      visible.current.runtime.dispose?.();
-    },
-    [],
-  );
   const pending = navigation.pending;
   return (
     <>

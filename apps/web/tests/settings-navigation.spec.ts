@@ -1,15 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
-import { PreviewAdminClient } from '../src/preview/admin.ts';
-import { PreviewXpClient } from '../src/preview/xp.ts';
+import { MemoryAdminClient } from './support/admin.ts';
+import { MemoryXpClient } from './support/xp.ts';
 import { defaultRuneLiteRules } from '@clog/domain';
 
 async function delayedSettings(page: Page) {
   const fixture = await adminFixtures(),
     signal = new AbortController().signal;
-  const settings = await new PreviewAdminClient().settings(signal);
-  const tracker = await new PreviewXpClient().tracker(signal);
+  const settings = await new MemoryAdminClient().settings(signal);
+  const tracker = await new MemoryXpClient().tracker(signal);
   const pending: (() => void)[] = [];
   let hold = false;
   await page.route('**/api/v1/**', async (route) => {

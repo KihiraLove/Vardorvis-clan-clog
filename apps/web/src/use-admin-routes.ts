@@ -24,7 +24,6 @@ export interface AdminNavigationRequest {
 export type AdminNavigator = (request: AdminNavigationRequest) => void;
 export function useAdminRoutes({
   path,
-  preview,
   session,
   client,
   xp,
@@ -33,7 +32,6 @@ export function useAdminRoutes({
   initial,
 }: {
   path: string;
-  preview: boolean;
   session: AdminSession | null;
   client: AdminClient;
   xp: XpClient;
@@ -108,9 +106,7 @@ export function useAdminRoutes({
       else entry?.cancel();
       void withAbort(
         Promise.all([
-          isAdminPath(target) &&
-          session &&
-          (url.searchParams.get('preview') === '1') === preview
+          isAdminPath(target) && session
             ? useEntry
               ? entry.result.then((result) => {
                   if ('error' in result) throw result.error;
@@ -176,7 +172,7 @@ export function useAdminRoutes({
           next.signal.removeEventListener('abort', cancelEntry);
         });
     },
-    [cancel, client, onAccessLost, preview, session, stop, xp],
+    [cancel, client, onAccessLost, session, stop, xp],
   );
   useEffect(() => {
     register(start);

@@ -1,6 +1,6 @@
 /** Populated real-render evidence; no API/provider credentials or fixed latency threshold. */
-import { expect, test } from '@playwright/test';
-import catalog from '../src/preview/catalog.json' with { type: 'json' };
+import { expect, test } from './test.ts';
+import catalog from './support/catalog.json' with { type: 'json' };
 import { defaultBranding } from '../src/branding.ts';
 import { zeroTotals } from '../src/xp-model.ts';
 test('2,000 activities retain stable dates while idle and suspend public work in a hidden tab', async ({
@@ -273,13 +273,13 @@ test('activity status changes at exact boundaries, catches up on return, and unm
   });
   await expect(status).toHaveClass(/activity-competition--finished/);
   await expect.poll(() => activityReads).toBe(reads + 1);
-  // The preview transition unmounts the live client while retaining the app.
+  // Entering staff pages unmounts public polling while retaining the app.
   await page.evaluate(() => {
-    history.pushState({}, '', '/?preview=1');
+    history.pushState({}, '', '/admin');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(
-    page.getByText('Frontend preview · sample data', { exact: true }),
+    page.getByRole('heading', { name: 'Admin sign-in required', exact: true }),
   ).toBeVisible();
   const stopped = activityReads;
   await page.clock.runFor(60000);

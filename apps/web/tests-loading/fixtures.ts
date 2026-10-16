@@ -1,12 +1,12 @@
 import { type Page } from '@playwright/test';
 import { adminFixtures } from '../tests/admin-fixtures.ts';
-import { PreviewAdminClient } from '../src/preview/admin.ts';
-import { PreviewXpClient } from '../src/preview/xp.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
+import { MemoryXpClient } from '../tests/support/xp.ts';
 import { defaultBranding } from '../src/branding.ts';
 
 export async function loadingFixtures(page: Page) {
   const f = await adminFixtures(),
-    client = new PreviewAdminClient();
+    client = new MemoryAdminClient();
   const signal = new AbortController().signal,
     log = client.publicLog();
   const responses: Record<string, unknown> = {
@@ -21,7 +21,7 @@ export async function loadingFixtures(page: Page) {
     '/api/v1/admin/settings': client.publicSettings(),
     '/api/v1/admin/branding': defaultBranding,
     '/api/v1/admin/branding/hardcore': defaultBranding,
-    '/api/v1/xp/tracker': await new PreviewXpClient().tracker(signal),
+    '/api/v1/xp/tracker': await new MemoryXpClient().tracker(signal),
     '/api/v1/admin/xp/imports': {
       imports: [],
       revision: 'xp-history-1',

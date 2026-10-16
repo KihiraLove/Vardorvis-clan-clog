@@ -26,12 +26,10 @@ import { AdminScheduling } from './AdminScheduling.tsx';
 import type { CompetitionClient } from './competition-api.ts';
 
 export interface AdminRouteProps {
-  preview: boolean;
   path: string;
   onNavigate: (event: React.MouseEvent<HTMLAnchorElement>) => void;
 }
 export function AdminNavigation({
-  preview,
   path,
   onNavigate,
   session,
@@ -56,7 +54,7 @@ export function AdminNavigation({
       ].map(([url, label]) => (
         <a
           key={url}
-          href={url + (preview ? '?preview=1' : '')}
+          href={url}
           onClick={onNavigate}
           aria-current={path === url ? 'page' : undefined}
         >
@@ -68,9 +66,7 @@ export function AdminNavigation({
 }
 export function AdminPage({
   client,
-  preview,
   path,
-  onMode,
   onNavigate,
   children,
   clanName,
@@ -88,7 +84,6 @@ export function AdminPage({
   clanName: string;
   onSettingsSaved: (settings: SiteSettings) => void;
   onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
-  onMode: (next: boolean) => void;
   children?: (
     session: AdminSession,
     onAccessLost: () => void,
@@ -114,7 +109,6 @@ export function AdminPage({
   }, []);
   const routes = useAdminRoutes({
     path,
-    preview,
     session,
     client,
     xp: xpClient,
@@ -195,24 +189,6 @@ export function AdminPage({
       }
     >
       <div className="admin-page">
-        {preview && (
-          <div className="preview-banner">
-            <div>
-              <strong>Frontend preview</strong>
-              <p>
-                Sample submissions and catalog edits stay in this browser
-                session. No clan data is changed.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="site-button"
-              onClick={() => onMode(false)}
-            >
-              View live admin
-            </button>
-          </div>
-        )}
         <div className="admin-heading">
           <div>
             <p className="xp-eyebrow">{clanName} clan</p>
@@ -238,7 +214,6 @@ export function AdminPage({
         </div>
         {visibleAdminSession(access) && (
           <AdminNavigation
-            preview={preview}
             path={path}
             onNavigate={onNavigate}
             session={session}
@@ -305,11 +280,6 @@ export function AdminPage({
               >
                 Retry admin access
               </button>
-              {!preview && (
-                <button className="site-button" onClick={() => onMode(true)}>
-                  View admin preview
-                </button>
-              )}
             </div>
           </section>
         ) : access.phase === 'checking' ? (
@@ -355,11 +325,6 @@ export function AdminPage({
             {loginError && (
               <p role="alert" className="admin-error">
                 {loginError}
-              </p>
-            )}
-            {preview && (
-              <p className="admin-note">
-                Reload to start a new signed-in preview session.
               </p>
             )}
           </section>

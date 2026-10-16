@@ -1,5 +1,5 @@
 /** REVIEW-03/F08: shared controls keep their styling and native behavior in both hosts. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
 import { zeroTotals } from '../src/xp-model.ts';

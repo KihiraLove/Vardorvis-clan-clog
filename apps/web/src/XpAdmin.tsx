@@ -19,14 +19,12 @@ export function XpAdmin({
   client,
   competitionClient,
   onApplied,
-  previewMode,
   session,
   onAccessLost,
 }: {
   client: XpClient;
   competitionClient: CompetitionClient;
   onApplied: () => void;
-  previewMode: boolean;
   session: AdminSession;
   onAccessLost: () => void;
 }) {
@@ -99,7 +97,7 @@ export function XpAdmin({
   const rows = history?.imports ?? [];
   return (
     <section className="xp-panel">
-      <h2>{previewMode ? 'Preview XP imports' : 'XP competition imports'}</h2>
+      <h2>XP competition imports</h2>
       {error && (
         <p role="alert">
           {error}{' '}

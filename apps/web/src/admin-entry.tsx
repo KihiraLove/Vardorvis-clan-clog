@@ -3,15 +3,13 @@ import { useEffect, useState, type ComponentProps } from 'react';
 import { AdminPage } from './AdminPage.tsx';
 import { XpPage } from './XpPage.tsx';
 import { XpAdmin } from './XpAdmin.tsx';
-import type { RouteResources, PreviewRuntime } from './app-runtime.ts';
+import type { RouteResources } from './app-runtime.ts';
 
 export function AdminEntry({
   takeEntry,
-  xpControls,
   ...props
 }: Omit<ComponentProps<typeof AdminPage>, 'children' | 'initial'> & {
   takeEntry: RouteResources['takeEntry'];
-  xpControls?: PreviewRuntime['xpControls'] | undefined;
 }) {
   const [initial, setInitial] = useState(takeEntry);
   // Prepared private data is consumed once; logout/access loss can release every reference.
@@ -23,9 +21,6 @@ export function AdminEntry({
           <XpPage
             client={props.xpClient}
             admin
-            preview={props.preview}
-            onMode={props.onMode}
-            sample={xpControls}
             adminControls={(onApplied) => (
               <XpAdmin
                 client={props.xpClient}
@@ -33,7 +28,6 @@ export function AdminEntry({
                 session={session}
                 onAccessLost={onAccessLost}
                 onApplied={onApplied}
-                previewMode={props.preview}
               />
             )}
           />

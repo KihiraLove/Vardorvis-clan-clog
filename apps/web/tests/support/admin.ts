@@ -1,14 +1,14 @@
-/** In-memory admin simulator shared with the public preview; all state is lost on reload. */
+/** Test-only API state; never imported by application code. */
 import {
   validClanKey,
   type ClanKeySettings,
   type ClanKeyUpdate,
-} from '../clan-api-key.ts';
-const generatePreviewKey = () =>
+} from '../../src/clan-api-key.ts';
+const generateFixtureKey = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(clanKeyBytes)), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
-import { AdminRequestError } from '../admin-api.ts';
+import { AdminRequestError } from '../../src/admin-api.ts';
 import {
   defaultSiteCopy,
   parseSiteCopy,
@@ -24,11 +24,7 @@ import {
   type SchedulingState,
   type CollectionScheduleInput,
 } from '@clog/domain';
-import {
-  defaultBranding,
-  validateLogoFile,
-  type Branding,
-} from '../branding.ts';
+import { defaultBranding, type Branding } from '../../src/branding.ts';
 import {
   safeProof,
   validateCorrection,
@@ -48,15 +44,15 @@ import {
   type StagedIcon,
   type Submission,
   type StaffAccount,
-} from '../admin-model.ts';
-import { catalogSections, type LogData } from '../model.ts';
+} from '../../src/admin-model.ts';
+import { catalogSections, type LogData } from '../../src/model.ts';
 import {
-  previewCatalog,
-  previewCollections,
+  fixtureCatalog,
+  fixtureCollections,
   type Scenario,
 } from './scenarios.ts';
 
-export class PreviewAdminClient implements AdminClient {
+export class MemoryAdminClient implements AdminClient {
   private submissionFilterState = {
     revision: 'submission-filters-1',
     filterCollected: false,
@@ -197,7 +193,6 @@ export class PreviewAdminClient implements AdminClient {
   }
   private logoSettings: Branding = { ...defaultBranding };
   private hardcoreLogoSettings: Branding = { ...defaultBranding };
-  private logoUrls = new Set<string>();
   publicBranding(hardcore = false) {
     return { ...(hardcore ? this.hardcoreLogoSettings : this.logoSettings) };
   }
@@ -215,46 +210,8 @@ export class PreviewAdminClient implements AdminClient {
     this.access(signal);
     if (revision !== this.publicBranding(hardcore).revision)
       throw new AdminRequestError(409);
-    let paths = defaultBranding;
-    if (file) {
-      validateLogoFile(file);
-      const bitmap = await createImageBitmap(file);
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 64;
-        const scale = Math.min(64 / bitmap.width, 64 / bitmap.height);
-        const width = bitmap.width * scale,
-          height = bitmap.height * scale;
-        canvas
-          .getContext('2d')!
-          .drawImage(
-            bitmap,
-            (64 - width) / 2,
-            (64 - height) / 2,
-            width,
-            height,
-          );
-        const png = await new Promise<Blob>((resolve, reject) =>
-          canvas.toBlob(
-            (blob) =>
-              blob
-                ? resolve(blob)
-                : reject(new Error('Could not create the website icon.')),
-            'image/png',
-          ),
-        );
-        this.access(signal);
-        paths = {
-          ...defaultBranding,
-          logoPath: URL.createObjectURL(file),
-          faviconPath: URL.createObjectURL(png),
-        };
-        this.logoUrls.add(paths.logoPath);
-        this.logoUrls.add(paths.faviconPath);
-      } finally {
-        bitmap.close();
-      }
-    }
+    if (file) throw new Error('Use the HTTP asset fixture for uploads.');
+    const paths = defaultBranding;
     // Recheck after asynchronous image decoding to preserve the same concurrency contract.
     if (revision !== this.publicBranding(hardcore).revision)
       throw new AdminRequestError(409);
@@ -270,7 +227,7 @@ export class PreviewAdminClient implements AdminClient {
   private keySettings: ClanKeySettings = {
     revision: 'clan-key-1',
     enabled: true,
-    key: generatePreviewKey(),
+    key: generateFixtureKey(),
   };
   private revision = 0;
   private queueRevision = 0;
@@ -283,30 +240,29 @@ export class PreviewAdminClient implements AdminClient {
   };
   private settingsVersion = 0;
   private signedIn = true;
-  private username = 'preview-admin';
+  private username = 'test-admin';
   private staff: StaffAccount[] = [
     {
-      id: 'preview-admin',
-      username: 'preview-admin',
+      id: 'test-admin',
+      username: 'test-admin',
       role: 'admin',
       mustChangePassword: false,
     },
   ];
-  private listeners = new Set<() => void>();
   private pageVersions = new Map(
-    previewCatalog.pages.map((page) => [page.id, 1]),
+    fixtureCatalog.pages.map((page) => [page.id, 1]),
   );
   private data: AdminCatalog = {
-    ...structuredClone(previewCatalog),
-    sections: [...catalogSections(previewCatalog)],
+    ...structuredClone(fixtureCatalog),
+    sections: [...catalogSections(fixtureCatalog)],
     sourceRevision: 'wiki-15356324 (review sample)',
-    items: previewCatalog.items.map((item) => ({
+    items: fixtureCatalog.items.map((item) => ({
       ...item,
       origin: 'source',
       overrides: [],
       gameItemIds: [item.id],
     })),
-    pages: previewCatalog.pages.map((page) => ({
+    pages: fixtureCatalog.pages.map((page) => ({
       ...page,
       itemIds: [...page.itemIds],
       version: 'page-1',
@@ -315,12 +271,12 @@ export class PreviewAdminClient implements AdminClient {
   };
   private rows: Submission[];
   private nextItemId =
-    Math.max(0, ...previewCatalog.items.map((item) => item.id)) + 1;
+    Math.max(0, ...fixtureCatalog.items.map((item) => item.id)) + 1;
   private audit = new Map<string, AuditEntry[]>();
   private assets = new Map<string, StagedIcon>();
   private receipts = new Map<string, { fields: string; result: CreatedItem }>();
   constructor() {
-    const mask = previewCatalog.items.find(
+    const mask = fixtureCatalog.items.find(
       (item) => item.name === 'Virtus mask',
     )!.id;
     this.rows = [
@@ -380,22 +336,14 @@ export class PreviewAdminClient implements AdminClient {
       collectedOn: '2026-10-05',
       dateSource: 'submission',
       submittedAt: '2026-10-05T12:00:00Z',
-      proofUrl: 'https://imgur.com/a/preview-proof',
+      proofUrl: 'https://imgur.com/a/test-proof',
       reviewNote: '',
       reviewReason: null,
     }));
   }
-  subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  };
-  getRevision = () => this.revision;
   private changed(includeQueue = true) {
     this.revision++;
     if (includeQueue) this.queueRevision++;
-    for (const listener of this.listeners) listener();
   }
   private access(signal: AbortSignal) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -446,32 +394,12 @@ export class PreviewAdminClient implements AdminClient {
     if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
     if (fields.proofUrl && !safeProof(fields.proofUrl))
       throw new AdminRequestError(422);
-    let previewScreenshot: string | undefined;
-    if (screenshot) {
-      const bitmap = await createImageBitmap(screenshot);
-      try {
-        if (
-          bitmap.width > 8192 ||
-          bitmap.height > 8192 ||
-          bitmap.width * bitmap.height > 32 * 1024 * 1024
-        )
-          throw new AdminRequestError(
-            400,
-            'Screenshot dimensions are too large.',
-          );
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
-        previewScreenshot = canvas.toDataURL('image/png');
-      } finally {
-        bitmap.close();
-      }
-    }
-    this.access(signal);
+    const id = crypto.randomUUID();
     const row: Submission = {
-      ...(previewScreenshot ? { previewScreenshot } : {}),
-      id: crypto.randomUUID(),
+      id,
+      ...(screenshot
+        ? { screenshotPath: `/api/v1/admin/submission-images/${id}.png` }
+        : {}),
       version: 1,
       source: 'manual',
       itemId: item.id,
@@ -495,8 +423,8 @@ export class PreviewAdminClient implements AdminClient {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     return this.signedIn
       ? {
-          csrfToken: 'preview-admin',
-          displayName: 'Preview admin',
+          csrfToken: 'test-admin',
+          displayName: 'Test admin',
           username: this.username,
           role: 'admin' as const,
           mustChangePassword: false,
@@ -577,7 +505,7 @@ export class PreviewAdminClient implements AdminClient {
     this.data.pages.push(page);
     this.pageVersions.set(page.id, 1);
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
     this.pageRequests.set(key, { payload, page: structuredClone(page) });
     return structuredClone(page);
   }
@@ -596,11 +524,11 @@ export class PreviewAdminClient implements AdminClient {
     const retiredItemIds: number[] = [];
     this.pageVersions.delete(id);
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
     return { retiredItemIds };
   }
   async reorderPages(
-    category: import('../model.ts').Category,
+    category: import('../../src/model.ts').Category,
     ids: string[],
     revision: string,
     _csrf: string,
@@ -625,7 +553,7 @@ export class PreviewAdminClient implements AdminClient {
       return { ...page, version: 'page-' + version };
     });
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
   }
   async removePageItem(
     pageId: string,
@@ -647,7 +575,7 @@ export class PreviewAdminClient implements AdminClient {
     page.orderOrigin = 'manual';
     const retired = false;
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
     return { retired };
   }
   async createModerator(
@@ -681,7 +609,7 @@ export class PreviewAdminClient implements AdminClient {
     if (
       this.staff.some(
         (account) =>
-          account.id !== 'preview-admin' &&
+          account.id !== 'test-admin' &&
           account.username.toLowerCase() === fields.username.toLowerCase(),
       )
     )
@@ -718,7 +646,7 @@ export class PreviewAdminClient implements AdminClient {
         'clan-key-' + (Number(this.keySettings.revision.split('-').at(-1)) + 1),
       enabled: fields.enabled ?? this.keySettings.enabled,
       key: fields.generate
-        ? generatePreviewKey()
+        ? generateFixtureKey()
         : (fields.key ?? this.keySettings.key),
     };
     return { ...this.keySettings };
@@ -785,7 +713,7 @@ export class PreviewAdminClient implements AdminClient {
   }
   private catalogChanged() {
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
   }
   private sectionRequests = new Map<
     string,
@@ -965,7 +893,7 @@ export class PreviewAdminClient implements AdminClient {
       collections:
         scenario === 'reviewed'
           ? {
-              revision: 'preview-credits-' + this.revision,
+              revision: 'test-credits-' + this.revision,
               credits: this.rows
                 .filter(
                   (row) =>
@@ -981,7 +909,7 @@ export class PreviewAdminClient implements AdminClient {
                   status: 'approved',
                 })),
             }
-          : previewCollections(scenario),
+          : fixtureCollections(scenario),
     });
   }
   async queue(
@@ -1007,7 +935,7 @@ export class PreviewAdminClient implements AdminClient {
           (view !== 'unmatched' || row.itemId === null),
     );
     return structuredClone({
-      revision: 'preview-queue-' + this.queueRevision,
+      revision: 'test-queue-' + this.queueRevision,
       filters: this.submissionFilterState,
       pageCursor: start + ':' + this.queueRevision + ':' + view,
       submissions: rows.slice(start, start + 2),
@@ -1027,7 +955,7 @@ export class PreviewAdminClient implements AdminClient {
   async detail(id: string, signal: AbortSignal, cursor?: string) {
     this.access(signal);
     const row = this.row(id);
-    const revision = 'preview-audit-' + this.queueRevision + '-' + id;
+    const revision = 'test-audit-' + this.queueRevision + '-' + id;
     let start = 0;
     if (cursor) {
       const match = /^(\d+):(.*)$/u.exec(cursor);
@@ -1059,7 +987,7 @@ export class PreviewAdminClient implements AdminClient {
     const events = this.audit.get(before.id) ?? [];
     events.unshift({
       id: crypto.randomUUID(),
-      actorName: 'Preview admin',
+      actorName: 'Test admin',
       at: new Date().toISOString(),
       action,
       reason: reason || null,
@@ -1154,13 +1082,18 @@ export class PreviewAdminClient implements AdminClient {
     this.record(before, row, action, reason.trim());
     return structuredClone(row);
   }
-  async upload(file: File, _csrf: string, signal: AbortSignal) {
+  async upload(
+    file: File,
+    _csrf: string,
+    signal: AbortSignal,
+    iconPath?: string,
+  ) {
     this.access(signal);
     await validateIconFile(file);
     this.access(signal);
     const icon = {
       assetId: crypto.randomUUID(),
-      iconPath: URL.createObjectURL(file),
+      iconPath: iconPath ?? URL.createObjectURL(file),
       expiresAt: new Date(Date.now() + 900000).toISOString(),
     };
     this.assets.set(icon.assetId, icon);
@@ -1210,7 +1143,7 @@ export class PreviewAdminClient implements AdminClient {
       page.version = 'page-' + version;
     }
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
     const result = {
       item: created,
       pageIds: [...clean.pageIds],
@@ -1237,13 +1170,11 @@ export class PreviewAdminClient implements AdminClient {
     this.pageVersions.set(pageId, next);
     page.version = 'page-' + next;
     this.changed();
-    this.data.revision = 'preview-catalog-' + this.revision;
+    this.data.revision = 'test-catalog-' + this.revision;
     return structuredClone(page);
   }
-  /** Blob URLs belong to this preview client and must be released when its mode is left. */
+  /** Release test-owned blob assets after a fixture finishes. */
   dispose() {
-    for (const url of this.logoUrls) URL.revokeObjectURL(url);
-    this.logoUrls.clear();
     for (const asset of this.assets.values())
       URL.revokeObjectURL(asset.iconPath);
     this.assets.clear();

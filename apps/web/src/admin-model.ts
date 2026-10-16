@@ -37,8 +37,6 @@ export interface Submission {
   proofUrl: string;
   screenshotPath?: string | null;
   chatMessage?: string;
-  /** Locally generated PNG in the in-memory preview only; never read from API payloads. */
-  previewScreenshot?: string;
   hardcore: boolean;
   status: SubmissionStatus;
   reviewNote: string;

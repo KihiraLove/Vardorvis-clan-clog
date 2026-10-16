@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
 import { zeroTotals } from '../src/xp-model.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 const podium = [
@@ -131,7 +132,8 @@ for (const path of ['/admin/xp', '/admin/schedules']) {
   test(`preview SKILL metadata is publicly listed with unavailable gains: ${path}`, async ({
     page,
   }) => {
-    await page.goto(path + '?preview=1');
+    await mockApi(page);
+    await page.goto(path);
     await page
       .getByLabel('Wise Old Man competition link')
       .fill('https://wiseoldman.net/competitions/1005');
@@ -175,7 +177,8 @@ for (const path of ['/admin/xp', '/admin/schedules']) {
   test(`both import screens detect fixture kind without a selector: ${path}`, async ({
     page,
   }) => {
-    await page.goto(path + '?preview=1');
+    await mockApi(page);
+    await page.goto(path);
     const link = page.getByLabel('Wise Old Man competition link');
     await expect(link).toBeVisible();
     await expect(page.getByLabel('Competition kind')).toHaveCount(0);
@@ -462,11 +465,8 @@ test('scheduling importer detects kind, lets staff correct pages with a fresh pr
 test('public competition viewer and podium fit 320px and retain desktop log proportions', async ({
   page,
 }) => {
-  await page.goto('/?preview=1');
-  await page.getByText('XP preview controls', { exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Show sample XP', exact: true })
-    .click();
+  await mockApi(page, { xpSamples: true });
+  await page.goto('/');
   await expect(
     page
       .getByRole('complementary', { name: 'XP podium for Total' })

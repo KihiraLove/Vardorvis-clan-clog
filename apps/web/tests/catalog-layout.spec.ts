@@ -1,5 +1,6 @@
+import { mockApi } from './mock-api.ts';
 /** REVIEW-03/F07: verify equal panel geometry and bounded, usable catalog choices. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
 import type { AdminCatalog } from '../src/admin-model.ts';
@@ -120,7 +121,8 @@ for (const width of [1440, 1100, 320]) {
 test('new-item editor uses its selected page and requires an in-game ID', async ({
   page,
 }) => {
-  await page.goto('/admin/catalog?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/catalog');
   await page.getByRole('button', { name: '+ Add item', exact: true }).click();
   await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await expect(

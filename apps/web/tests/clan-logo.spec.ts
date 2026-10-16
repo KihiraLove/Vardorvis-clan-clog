@@ -1,11 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
 import sharp from 'sharp';
 import { adminFixtures } from './admin-fixtures.ts';
 
 test('admin uploads GIF and animated WebP logos, updates the website icon and restores the default', async ({
   page,
 }) => {
-  await page.goto('/admin/settings?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/settings');
   const logo = page.locator('.clan-logo').first();
   await expect(logo).toHaveAttribute('src', '/brand/clan-logo.png');
   const webp = await sharp(Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]), {
@@ -30,7 +32,7 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
     await expect(
       page.getByText('Clan logo and website icon saved.'),
     ).toBeVisible();
-    await expect(logo).toHaveAttribute('src', /^blob:/);
+    await expect(logo).toHaveAttribute('src', /\/api\/v1\/branding\//);
     const paths = await page.evaluate(() => ({
       logo: document.querySelector<HTMLImageElement>('.clan-logo')!.src,
       favicon:
@@ -39,7 +41,7 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
         'link[rel="alternate icon"]',
       )!.href,
     }));
-    expect(paths.favicon).toMatch(/^blob:/);
+    expect(paths.favicon).toMatch(/\/api\/v1\/branding\//);
     expect(paths.alternate).toBe(paths.favicon);
     const formats = await page.evaluate(
       async ({ logo, favicon }) => ({
@@ -48,7 +50,7 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
       }),
       paths,
     );
-    expect(formats).toEqual({ logo: mimeType, favicon: 'image/png' });
+    expect(formats).toEqual({ logo: 'image/webp', favicon: 'image/png' });
   }
   await page.setViewportSize({ width: 320, height: 850 });
   await expect(

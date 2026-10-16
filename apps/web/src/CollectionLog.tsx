@@ -91,7 +91,6 @@ export function CollectionLog({
   error,
   retry,
   hardcore = false,
-  onPreview,
   copy = defaultSiteCopy,
   activity,
 }: {
@@ -99,9 +98,7 @@ export function CollectionLog({
   loading?: boolean;
   error?: string | undefined;
   retry?: (() => void) | undefined;
-  preview?: boolean;
   hardcore?: boolean;
-  onPreview?: (() => void) | undefined;
   copy?: SiteCopy;
   activity: ReactNode;
 }) {
@@ -397,15 +394,6 @@ export function CollectionLog({
                         onClick={retry}
                       >
                         Try again
-                      </button>
-                    )}
-                    {onPreview && !loading && (
-                      <button
-                        className="game-button"
-                        type="button"
-                        onClick={onPreview}
-                      >
-                        View frontend preview
                       </button>
                     )}
                   </div>

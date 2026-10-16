@@ -1,11 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test, pngFile } from './test.ts';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
 
-test('saving the clan name updates branding and a manual PNG can be reviewed in preview', async ({
+test('saving the clan name updates branding and a manual PNG can be reviewed', async ({
   page,
 }) => {
-  await page.goto('/admin/settings?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/settings');
   await page.getByLabel('Clan display name', { exact: true }).fill('New Clan');
   await page.getByRole('button', { name: 'Save site settings' }).click();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
@@ -21,7 +23,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed in 
     .fill('PNG Collector');
   await form
     .getByLabel('PNG screenshot (optional)')
-    .setInputFiles(resolve('public/skills/sailing.png'));
+    .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
   await form
     .getByLabel('Approve immediately and show in the collection log')
     .uncheck();
@@ -39,9 +41,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed in 
   await expect(
     form.getByLabel('Approve immediately and show in the collection log'),
   ).toBeChecked();
-  await expect(
-    page.getByText('PNG screenshot (preview)').first(),
-  ).toBeVisible();
+  await expect(page.getByText('View PNG screenshot').first()).toBeVisible();
   await page.getByRole('button', { name: /^Review PNG Collector/ }).click();
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),

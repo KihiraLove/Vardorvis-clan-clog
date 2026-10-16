@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
-import { PreviewAdminClient } from '../src/preview/admin.ts';
+import { MemoryAdminClient } from './support/admin.ts';
 import { defaultBranding } from '../src/branding.ts';
 import type { SchedulingState } from '@clog/domain';
 test.use({ timezoneId: 'Europe/Copenhagen', locale: 'en-GB' });
@@ -8,7 +9,8 @@ test.use({ timezoneId: 'Europe/Copenhagen', locale: 'en-GB' });
 test('admin configures overlapping page schedules in local time, reviews UTC, edits and deletes on mobile', async ({
   page,
 }) => {
-  await page.goto('/admin/schedules?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/schedules');
   const enabled = page.getByLabel('Enable collection log scheduling', {
     exact: true,
   });
@@ -57,7 +59,7 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
     .getByRole('button', { name: 'Create schedule', exact: true })
     .click();
   await expect(page.locator('.schedule-card')).toHaveCount(2);
-  await enabled.check();
+  await enabled.click();
   await expect(enabled).toBeChecked();
   await expect(page.getByRole('status')).toHaveText('Scheduling enabled.');
   await page
@@ -99,7 +101,7 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
     .getByRole('button', { name: 'Confirm delete schedule', exact: true })
     .click();
   await expect(page.locator('.schedule-card')).toHaveCount(1);
-  await enabled.uncheck();
+  await enabled.click();
   await expect(page.getByRole('status')).toHaveText('Scheduling disabled.');
   await expect(page.locator('.schedule-card')).toHaveCount(1);
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
@@ -112,7 +114,7 @@ test('moderators can create windows but cannot see or write the administrator en
   page,
 }) => {
   const fixture = await adminFixtures();
-  const settings = await new PreviewAdminClient().settings(
+  const settings = await new MemoryAdminClient().settings(
     new AbortController().signal,
   );
   let state: SchedulingState = {

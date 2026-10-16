@@ -330,7 +330,6 @@ export function SubmissionEditor({
               url={row.proofUrl}
               source={row.source}
               screenshot={row.screenshotPath}
-              previewScreenshot={row.previewScreenshot}
               chatMessage={row.chatMessage}
             />
           </dd>

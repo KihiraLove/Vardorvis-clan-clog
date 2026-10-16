@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
 import { skills, zeroTotals } from '../src/xp-model.ts';
 import { importPreview } from './xp-fixtures.ts';
 const tracker = {
@@ -120,19 +121,13 @@ test('touch exact values and skill cells fit at 320px', async ({ browser }) => {
   });
   await context.close();
 });
-test('preview samples add once; switching event changes totals without showing member tables', async ({
+test('stored results switch by event changes totals without showing member tables', async ({
   page,
 }) => {
-  await page.goto('/?preview=1');
-  await page.getByText('XP preview controls', { exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Show sample XP', exact: true })
-    .click();
+  await mockApi(page, { xpSamples: true });
+  await page.goto('/');
   const attack = page.getByLabel('Attack: 18,345,678 XP', { exact: true });
   await expect(attack).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Show sample XP', exact: true })
-    .click();
   await expect(attack).toBeVisible();
   await page
     .getByRole('button', { name: 'Vardorvis skilling weekend', exact: true })

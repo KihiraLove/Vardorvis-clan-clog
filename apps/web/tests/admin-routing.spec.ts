@@ -1,12 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
-import { PreviewAdminClient } from '../src/preview/admin.ts';
-import { PreviewXpClient } from '../src/preview/xp.ts';
+import { MemoryAdminClient } from './support/admin.ts';
+import { MemoryXpClient } from './support/xp.ts';
 import { defaultBranding } from '../src/branding.ts';
 
 async function routedAdmin(page: Page) {
   const f = await adminFixtures(),
-    client = new PreviewAdminClient(),
+    client = new MemoryAdminClient(),
     signal = new AbortController().signal;
   const responses: Record<string, unknown> = {
     '/api/v1/auth/session': f.session,
@@ -22,7 +22,7 @@ async function routedAdmin(page: Page) {
     '/api/v1/admin/clan-api-key': await client.clanApiKey(signal),
     '/api/v1/admin/runelite-settings': await client.runeLiteSettings(signal),
     '/api/v1/admin/accounts': { accounts: await client.accounts(signal) },
-    '/api/v1/xp/tracker': await new PreviewXpClient().tracker(signal),
+    '/api/v1/xp/tracker': await new MemoryXpClient().tracker(signal),
     '/api/v1/admin/xp/imports': {
       imports: [],
       revision: 'xp-history-1',

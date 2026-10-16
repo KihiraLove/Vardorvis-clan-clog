@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseClanKey } from './clan-api-key.ts';
-import { PreviewAdminClient } from './preview/admin.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
 import { LiveAdminClient } from './admin-api.ts';
 const signal = () => new AbortController().signal;
 
 test('preview keys default on and can be viewed and rotated while the requirement is disabled', async () => {
-  const client = new PreviewAdminClient();
+  const client = new MemoryAdminClient();
   const initial = await client.clanApiKey(signal());
   assert.equal(initial.enabled, true);
   assert.match(initial.key, /^[a-f0-9]{32}$/u);

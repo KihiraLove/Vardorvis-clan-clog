@@ -5,10 +5,10 @@ staff roles from **Scheduling**. The administrator controls enforcement; both
 roles can create, edit and delete overlapping page windows. Local date/time
 entry shows UTC previews, and disabled mode retains ordinary submission behavior.
 
-Visual references from the passing Chromium preview tests: [desktop homepage](site-customization/homepage-desktop.png)
+Visual references from the Chromium fixture tests: [desktop homepage](site-customization/homepage-desktop.png)
 and [320-pixel Site settings](site-customization/settings-mobile.png), plus
 [historical mobile item management](site-customization/item-management-mobile.png). The account
-shown in the mobile capture is a disposable preview fixture.
+shown in the mobile capture is a disposable test fixture.
 The former [mobile Page management panel](site-customization/page-management-mobile.png) is superseded by the collection-log catalog editor.
 Additional references show [independent hardcore branding](site-customization/hardcore-desktop.png)
 and [hardcore settings while disabled](site-customization/hardcore-settings-mobile.png).

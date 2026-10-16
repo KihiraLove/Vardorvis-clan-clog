@@ -64,11 +64,10 @@ workspaces and use `npm run dev:web` / `npm run dev:api` with the documented
 local database configuration. `npm run build` includes tests; Docker production
 uses the separate `npm run build:runtime` packaging path.
 
-`http://127.0.0.1:5173/?preview=1` is an explicitly labelled, resettable sample
-ledger; staff preview routes share it. It grants no server permissions or
-persistent clan writes. Its [explicit loading policy](docs/frontend-loading.md) keeps fixtures out of the
-initial public bundle. Remaining browser/security/release acceptance is tracked
-in #102–#104.
+The frontend uses the API in every environment. If the backend is unavailable,
+it shows an unavailable state with retry controls. There is no frontend demo
+mode or sample-data fallback. Test fixtures live outside the production graph;
+see the [loading policy](docs/frontend-loading.md).
 
 ## Documentation
 

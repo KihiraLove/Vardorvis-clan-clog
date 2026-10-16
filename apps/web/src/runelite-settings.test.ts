@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { defaultRuneLiteRules, parseRuneLiteSettings } from '@clog/domain';
 import { LiveAdminClient } from './admin-api.ts';
-import { PreviewAdminClient } from './preview/admin.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
 const signal = () => new AbortController().signal;
 test('private RuneLite adapter sends revisions and CSRF and validates canonical receipts', async () => {
   const rules = defaultRuneLiteRules('In-game Clan');
@@ -63,7 +63,7 @@ test('private RuneLite adapter sends revisions and CSRF and validates canonical 
   );
 });
 test('preview RuneLite settings persist independently of display names, isolate returned arrays and reject stale writes', async () => {
-  const client = new PreviewAdminClient();
+  const client = new MemoryAdminClient();
   const initial = await client.runeLiteSettings(signal());
   const { revision, clanKeyRequirement, ...rules } = initial;
   assert.equal(clanKeyRequirement, undefined);

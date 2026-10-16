@@ -97,31 +97,8 @@ select:focus-visible {
   font-size: 11px;
   color: #aaa393;
 }
-.mode-label--preview {
-  color: #ddbd72;
-}
 main {
   padding: 34px 0 0;
-}
-.preview-banner {
-  border: 1px solid #685537;
-  border-left: 3px solid #ba914d;
-  background: #2a261c;
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.preview-banner strong {
-  color: #e4c681;
-  font-size: 13px;
-}
-.preview-banner p {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #aca48e;
 }
 .site-button {
   border: 1px solid #706448;
@@ -133,24 +110,6 @@ main {
 .site-button:hover {
   background: #49402d;
   color: #f3d890;
-}
-.preview-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 18px 0 26px;
-  font-size: 12px;
-}
-.preview-controls select {
-  border: 1px solid #5b5240;
-  background: #242219;
-  color: #e1cfaa;
-  padding: 7px;
-}
-.preview-controls span {
-  color: #898476;
-  font-size: 11px;
 }
 .view-controls {
   display: flex;
@@ -600,13 +559,6 @@ main {
   }
   main {
     padding-top: 22px;
-  }
-  .preview-banner {
-    flex-wrap: wrap;
-    padding: 12px;
-  }
-  .preview-controls {
-    margin-bottom: 20px;
   }
   .view-controls {
     align-items: flex-start;
@@ -1926,28 +1878,6 @@ main {
 /* Alpha dilation minus the original silhouette gives a contour, never a slot-sized box. */
 .item-slot--hardcore img {
   filter: url('#hardcore-outline');
-}
-.preview-options {
-  margin: 8px 4px 16px;
-  padding: 8px 12px;
-  border: 1px solid #54482d;
-  color: #b8aa83;
-  font-size: 12px;
-}
-.preview-options summary {
-  cursor: pointer;
-}
-.preview-options label {
-  display: block;
-  margin: 12px 0;
-}
-.preview-options button {
-  margin: 8px;
-}
-.preview-options select {
-  margin-left: 8px;
-  color: #ecd698;
-  background: #27241b;
 }
 .event-tracker {
   margin: 100px auto 0;

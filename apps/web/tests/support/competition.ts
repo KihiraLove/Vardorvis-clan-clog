@@ -8,15 +8,15 @@ import {
   competitionUrl,
   type XpClient,
   type ImportPreview,
-} from '../xp-model.ts';
-import type { AdminClient } from '../admin-model.ts';
+} from '../../src/xp-model.ts';
+import type { AdminClient } from '../../src/admin-model.ts';
 import {
   CompetitionRequestError,
   type CompetitionClient,
   type CompetitionImportPreview,
-} from '../competition-api.ts';
+} from '../../src/competition-api.ts';
 /** Controlled preview fixtures mirror the live lifecycle and never fetch WOM. */
-export class PreviewCompetitionClient implements CompetitionClient {
+export class MemoryCompetitionClient implements CompetitionClient {
   private readonly scheduleClient: AdminClient | undefined;
   private readonly xpClient: XpClient | undefined;
   private readonly onSkillMetadata:
@@ -157,7 +157,7 @@ export class PreviewCompetitionClient implements CompetitionClient {
     );
     const preview: CompetitionImportPreview = {
       previewToken: crypto.randomUUID(),
-      expectedRevision: 'preview-' + this.version,
+      expectedRevision: 'test-' + this.version,
       scheduleRevision: scheduleState?.revision ?? 'preview-1',
       expiresAt: new Date(Date.now() + 600000).toISOString(),
       competition,
@@ -204,7 +204,7 @@ export class PreviewCompetitionClient implements CompetitionClient {
             }))
           : []),
       warnings: [
-        'Preview mode only. No server data is changed.',
+        'Test fixture data.',
         ...(kind === 'ACTIVITY' &&
         scheduleState &&
         !scheduleState.enabled &&
@@ -243,7 +243,7 @@ export class PreviewCompetitionClient implements CompetitionClient {
     }
     if (
       !current ||
-      p.expectedRevision !== 'preview-' + this.version ||
+      p.expectedRevision !== 'test-' + this.version ||
       p.expectedRevision !== current.expectedRevision ||
       p.scheduleRevision !== current.scheduleRevision ||
       Date.now() >= Date.parse(current.expiresAt)

@@ -1,12 +1,12 @@
-# Public entry, staff loading and explicit preview
+# Public entry and staff loading
 
 Implements [#101](https://github.com/KihiraLove/Vardorvis-clan-clog/issues/101),
 from REVIEW-03 R10, preserving the [prepared navigation contract](admin-navigation.md).
 
-## Entry boundaries and demo decision
+## Entry boundaries
 
 The public entry loads the log, activity/XP viewer, shared validators and HTTP
-adapters. It loads no staff screen or preview fixture. `admin-entry.tsx` is one
+adapters. It loads no staff screen or test fixture. `admin-entry.tsx` is one
 separate staff chunk containing login, review, catalog, settings and XP import
 screens. Keeping these modest screens together means ordinary staff navigation
 does not introduce a new per-screen code request after authorization/data reads.
@@ -14,15 +14,13 @@ Shared adapters stay in the public graph so session and route reads can begin
 without waiting for screen code. No session/private request occurs on the public
 homepage merely because those adapters exist.
 
-Production demo mode is intentionally retained at explicit `?preview=1` URLs for
-review/support. It is labelled sample data and selected only by that parameter or
-an explicit preview button. It never activates automatically after a live read
-failure. `preview/runtime.tsx` loads its isolated clients/fixtures on demand;
-public preview does not load staff screens or contact live API endpoints. Preview
-staff screens use the same separate staff entry. The shared sample ledger survives
-internal preview navigation; leaving preview disposes its resources, and reload
-or re-entry creates fresh state. Server authorization remains independent.
-Fixtures remain available to Node/browser tests and the checks image.
+Frontend demo mode has been removed, including its entry chunk, buttons, URL
+switching, sample controls and public sample assets. Every page uses the real
+API clients. Cached frontend assets with an unavailable backend show the
+ordinary error/retry state. A legacy `?preview=1` parameter has no special
+meaning, including on staff routes: server authentication remains required.
+Reusable state and item icons are test-only fixtures under `tests/support`;
+browser tests serve them through intercepted requests, never product controls.
 
 ## Readiness and failures
 
@@ -33,7 +31,7 @@ There is no second session/catalog fetch caused by mounting the downloaded scree
 The shell owns its existing read deadline, Cancel/Retry, role gates and access-loss
 cleanup. Failed session checks retain the existing access error/retry UI.
 
-Within staff pages, destination code/runtime preparation joins authorized data
+Within staff pages, destination code preparation joins authorized data
 preparation under the same abort generation. Only successful preparation can
 commit URL/history and the visible page. Current forms, focus and drafts remain
 until then, including dirty-form confirmation and in-progress-write protection.
@@ -41,8 +39,7 @@ There is no private route-data cache beyond the mounted shell: prefetched entry
 state is consumed once and released, and access loss cancels work and clears it.
 
 An import fetch cannot always be stopped after it begins. Cancellation prevents
-its late result from changing the route or activating a sample runtime; abandoned
-preview resources are disposed. A later explicit navigation can reuse successfully
+its late result from changing the route. A later explicit navigation can reuse successfully
 loaded code. Failed chunks offer **Reload page** to fetch the current hashed assets
 in a fresh document/module map. Failed ordinary reads keep **Retry navigation**.
 Code failures during navigation preserve the current view and URL and allow Cancel;
@@ -52,7 +49,7 @@ so it is an explicit user action. Nothing automatically replays staff writes.
 ## Build guards and measurements
 
 Every Vite build walks the complete static import graph and rejects staff screen
-or preview modules in the initial entry. It also enforces **320,000 raw JS bytes /
+in the initial entry and test modules in any output chunk. It also enforces **320,000 raw JS bytes /
 100,000 gzip bytes** across that graph, including shared chunks. This is a
 regression budget, not a claim about the actual proxy's compression settings.
 The generated `.data/local-checks/web-bundle.json` lists every output chunk,
@@ -80,8 +77,8 @@ One sample per case; raw/gzip bytes decrease 30.98% / 27.56%.
 
 Timing samples are local observations, not a production latency promise. Extra
 entry/request overhead can affect cold staff entry despite the smaller public
-download. Visiting every mode still downloads the staff/preview code and some
-additional routing machinery. The deterministic performance assertion holds the
+download. Visiting staff pages still downloads their code and additional
+routing machinery. The deterministic performance assertion holds the
 actual staff chunk response and proves the session and private catalog request
 start before it is released; resolved data is consumed once. It guards against a
 code → session → route-data waterfall without depending on a noisy millisecond limit.
@@ -89,10 +86,11 @@ code → session → route-data waterfall without depending on a noisy milliseco
 ## Acceptance and limits
 
 The full local gate runs the existing Chromium scenarios plus
-`npm run test:loading -w @clog/web` against a built Vite production preview. The
+`npm run test:loading -w @clog/web` against the built production frontend. The
 loading suite covers cold/deep and warm readiness, code/data overlap, cancellable
-initial reads, failed chunks and explicit reload, late cancelled preview downloads,
-retained live content/URL, anonymous access and preview fixture/API isolation.
+initial reads, failed chunks and explicit reload, retained content/URL, anonymous
+access, offline retry states and legacy query parameters that cannot select
+fixtures or bypass a server session.
 Reports/captures use per-test output paths. The normal prepared-route/session/
 draft/history/mobile regressions continue to run without expected failures.
 Geometry checks wait for the deferred layout to mount before measuring it.

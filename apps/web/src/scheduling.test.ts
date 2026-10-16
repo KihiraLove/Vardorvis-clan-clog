@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { closedCollectionPageMessage } from '@clog/domain';
 import { localScheduleInput, localScheduleToUtc } from './schedule-time.ts';
 import { LiveAdminClient, AdminRequestError } from './admin-api.ts';
-import { PreviewAdminClient } from './preview/admin.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
 const signal = () => new AbortController().signal;
 test('local input uses the date-specific timezone offset and rejects nonexistent daylight saving times', () => {
   const previous = process.env.TZ;
@@ -86,8 +86,8 @@ test('schedule adapters send UTC, revisions and CSRF; closed submissions do not 
       error.message === closedCollectionPageMessage,
   );
 });
-test('preview preserves schedules and stale-write checks while manual staff intake bypasses closed windows', async () => {
-  const client = new PreviewAdminClient();
+test('fixture client preserves schedules and stale-write checks while manual staff intake bypasses closed windows', async () => {
+  const client = new MemoryAdminClient();
   let state = await client.scheduling(signal());
   const catalog = await client.catalog(signal()),
     page = catalog.pages[0]!;

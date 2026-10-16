@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
-import catalog from '../src/preview/catalog.json' with { type: 'json' };
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
+import catalog from './support/catalog.json' with { type: 'json' };
 
 test('additional catalog sections remain scrollable and keyboard accessible in the public log', async ({
   page,
@@ -164,7 +165,8 @@ test('page names distinguish zero, partial and complete collections in the curre
 test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({
   page,
 }) => {
-  await page.goto('/?preview=1');
+  await mockApi(page);
+  await page.goto('/');
   await expect(page.locator('.clan-logo')).toHaveAttribute(
     'src',
     '/brand/clan-logo.png',
@@ -198,7 +200,8 @@ test('homepage uses the supplied default branding, 2x log and inline XP without 
 test('uncollected items never open menus on hover focus or click; icons and page navigation work', async ({
   page,
 }) => {
-  await page.goto('/?preview=1');
+  await mockApi(page);
+  await page.goto('/');
   const item = page.getByRole('button', {
     name: 'Virtus mask: not collected',
     exact: true,
@@ -248,7 +251,8 @@ test('uncollected items never open menus on hover focus or click; icons and page
 test('admin release switch reveals skull; normal and hardcore menus and contours stay independent', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page, { scenario: 'hardcore' });
+  await page.goto('/admin');
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
@@ -256,8 +260,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await page.getByRole('button', { name: 'Save hardcore settings' }).click();
   await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
   await page.locator('header a.clan-brand').click();
-  await page.locator('.preview-options').first().locator('summary').click();
-  await page.getByLabel('Review scenario').selectOption('hardcore');
+
   await page
     .getByRole('button', { name: 'Virtus mask: collected', exact: true })
     .hover();
@@ -315,9 +318,9 @@ test('320px viewport contains log scrolling and touch menus', async ({
     hasTouch: true,
   });
   const page = await context.newPage();
-  await page.goto('/?preview=1');
-  await page.locator('.preview-options').first().locator('summary').click();
-  await page.getByLabel('Review scenario').selectOption('collected');
+  await mockApi(page, { scenario: 'collected' });
+  await page.goto('/');
+
   await page
     .getByRole('button', { name: 'Virtus mask: collected', exact: true })
     .tap();

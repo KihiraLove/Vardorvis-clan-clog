@@ -14,18 +14,12 @@ import { usePreparedAdminData } from './admin-route-data.ts';
 export function XpPage({
   client,
   admin,
-  preview,
-  onMode,
   adminControls,
-  sample,
   copy = defaultSiteCopy,
 }: {
   client: XpClient;
   admin: boolean;
-  preview: boolean;
-  onMode: (next: boolean) => void;
   adminControls?: ((onApplied: () => void) => React.ReactNode) | undefined;
-  sample?: { samples: () => Promise<void>; advance: () => void } | undefined;
   copy?: SiteCopy;
 }) {
   const initial = usePreparedAdminData()?.tracker;
@@ -75,32 +69,10 @@ export function XpPage({
     >
       {!admin && <h1>{copy.xpTitle}</h1>}
       {admin && adminControls?.(() => setRefresh((n) => n + 1))}
-      {sample && (
-        <details className="preview-options">
-          <summary>XP preview controls</summary>
-          <button
-            className="site-button"
-            onClick={() => {
-              void sample
-                .samples()
-                .then(() => setRefresh((n) => n + 1))
-                .catch(() => setError('Sample XP could not be loaded.'));
-            }}
-          >
-            Show sample XP
-          </button>
-          <button className="site-button" onClick={() => sample.advance()}>
-            Advance sample Attack results
-          </button>
-        </details>
-      )}
       {error && (
         <p role="alert">
           {error}{' '}
           <button onClick={() => setRefresh((n) => n + 1)}>Retry XP</button>
-          {!preview && (
-            <button onClick={() => onMode(true)}>View XP preview</button>
-          )}
         </p>
       )}
       {loading && !data && <p role="status">Loading clan XP…</p>}

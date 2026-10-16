@@ -2,7 +2,7 @@
 import { classifyAccessFailure } from './admin-session.ts';
 import { isAdminPath, loadAdminRoute } from './admin-route-data.ts';
 import { withAbort } from './with-abort.ts';
-import { loadAdminCode, loadPreviewCode } from './route-code.ts';
+import { loadAdminCode } from './route-code.ts';
 import type {
   AppRuntime,
   PreparedAdminEntry,
@@ -47,27 +47,20 @@ async function prepareEntry(
   }
 }
 export async function prepareAppRoute(
-  route: { path: string; preview: boolean },
+  route: { path: string },
   current: { runtime: AppRuntime; admin: boolean },
   live: AppRuntime,
   signal: AbortSignal,
 ): Promise<RouteResources> {
   const admin = isAdminPath(route.path);
-  const runtimePromise = route.preview
-    ? current.runtime.preview
-      ? Promise.resolve(current.runtime)
-      : loadPreviewCode().then((module) => module.createPreviewRuntime())
-    : Promise.resolve(live);
   let accepted = false;
   const entryPromise =
-    admin &&
-    (!current.admin || route.preview !== Boolean(current.runtime.preview))
-      ? runtimePromise.then((value) => prepareEntry(route.path, value, signal))
+    admin && !current.admin
+      ? prepareEntry(route.path, live, signal)
       : Promise.resolve(undefined);
   try {
-    const [value, code, prepared] = await withAbort(
+    const [code, prepared] = await withAbort(
       Promise.all([
-        runtimePromise,
         admin ? loadAdminCode() : Promise.resolve(undefined),
         entryPromise,
       ]),
@@ -77,7 +70,7 @@ export async function prepareAppRoute(
     let entry = prepared;
     accepted = true;
     return {
-      runtime: value,
+      runtime: live,
       ...(code ? { AdminEntry: code.AdminEntry } : {}),
       takeEntry: () => {
         const result = entry;
@@ -89,13 +82,6 @@ export async function prepareAppRoute(
     if (!accepted)
       void entryPromise.then(
         (value) => value?.preparation?.cancel(),
-        () => {},
-      );
-    if (!accepted)
-      void runtimePromise.then(
-        (value) => {
-          if (value !== current.runtime && value !== live) value.dispose?.();
-        },
         () => {},
       );
   }

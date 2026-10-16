@@ -143,9 +143,11 @@ reads and logo uploads (#103). Fixture suites retain targeted failure/layout
 coverage. The full gate rejects skips, expected failures and retries in all four
 browser reports and requires all ten original audit scenarios.
 
-Preview mode intentionally remains an explicit `?preview=1` sample ledger, loaded
-only on demand in a separate chunk. It is isolated from persisted clan data and
-grants no server access; [the loading guide](frontend-loading.md) records that policy. Existing local gateway fixtures do not
+The frontend demo mode, its controls and public sample assets have been removed.
+Legacy `?preview=1` URLs use the ordinary API clients and require a real server
+session for staff access. Unavailable services expose retry controls without
+inventing data; [the loading guide](frontend-loading.md) records the boundaries.
+Test-only fixtures never enter a production bundle. Existing local gateway fixtures do not
 replace a real test-guild command/receipt exercise. Actual host DNS/TLS, hardware
 load/capacity, supported release/dependency sign-off, off-host recovery, a real
 published prior-release rehearsal and final cutover remain release gates (#104).

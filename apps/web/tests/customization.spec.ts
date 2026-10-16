@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
-import { previewCatalog } from '../src/preview/scenarios.ts';
+import { mockApi } from './mock-api.ts';
+import { expect, test, pngFile } from './test.ts';
+import { fixtureCatalog } from './support/scenarios.ts';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
@@ -7,7 +8,8 @@ import { defaultBranding } from '../src/branding.ts';
 test('site settings lives on its own page and edited labels appear across the public site', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await expect(
     page.getByRole('heading', { name: 'Site settings', exact: true }),
   ).toHaveCount(0);
@@ -123,7 +125,8 @@ test('site settings lives on its own page and edited labels appear across the pu
 test('hardcore appearance can be configured while disabled and switches independently on the public site', async ({
   page,
 }) => {
-  await page.goto('/admin/settings?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/settings');
   const logo = await page
     .getByRole('heading', { name: 'Clan logo', exact: true })
     .boundingBox();
@@ -155,7 +158,7 @@ test('hardcore appearance can be configured while disabled and switches independ
     .fill('Hardcore training');
   await page
     .getByLabel('Logo image')
-    .setInputFiles(resolve('public/skills/sailing.png'));
+    .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
   await page
     .getByRole('button', { name: 'Save clan logo', exact: true })
     .click();
@@ -200,7 +203,7 @@ test('hardcore appearance can be configured while disabled and switches independ
   await expect(page.locator('.log-help')).toContainText('Hardcore drops');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
     'href',
-    /^blob:/,
+    /\/api\/v1\/branding\//,
   );
   await page.screenshot({
     path: test.info().outputPath('hardcore-customized-desktop.png'),
@@ -244,7 +247,7 @@ test('hardcore appearance can be configured while disabled and switches independ
   await page.getByRole('link', { name: 'XP imports', exact: true }).click();
   await expect(page.locator('.event-tracker > h1')).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Preview XP imports', exact: true }),
+    page.getByRole('heading', { name: 'XP competition imports', exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath('admin-xp-mobile.png'),
@@ -319,7 +322,8 @@ test('empty submission filters preserve panel and pagination geometry while load
 test('administrator can disable, re-enable and delete moderator accounts without administrator controls', async ({
   page,
 }) => {
-  await page.goto('/admin/accounts?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/accounts');
   await page.getByLabel('Moderator username').fill('reviewer');
   await page
     .getByLabel('Temporary password')
@@ -362,21 +366,22 @@ test('administrator can disable, re-enable and delete moderator accounts without
     page.getByRole('button', { name: 'Delete reviewer', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Delete preview-admin', exact: true }),
+    page.getByRole('button', { name: 'Delete test-admin', exact: true }),
   ).toHaveCount(0);
 });
 
 test('item settings preserve a pageless item until explicit deletion, including review history', async ({
   page,
 }) => {
-  await page.goto('/admin/catalog?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/catalog');
   await page
     .getByRole('button', { name: 'Item settings for Virtus mask', exact: true })
     .click();
-  const mask = previewCatalog.items.find(
+  const mask = fixtureCatalog.items.find(
     (item) => item.name === 'Virtus mask',
   )!;
-  for (const entry of previewCatalog.pages.filter((p) =>
+  for (const entry of fixtureCatalog.pages.filter((p) =>
     p.itemIds.includes(mask.id),
   )) {
     await page

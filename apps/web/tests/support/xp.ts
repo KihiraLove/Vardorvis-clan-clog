@@ -13,12 +13,12 @@ import {
   type SkillId,
   type XpClient,
   type XpSnapshot,
-} from '../xp-model.ts';
-import { XpRequestError } from '../xp-api.ts';
-import { podiumFromParticipants } from '../xp-tracker.ts';
+} from '../../src/xp-model.ts';
+import { XpRequestError } from '../../src/xp-api.ts';
+import { podiumFromParticipants } from '../../src/xp-tracker.ts';
 import { competitionScope, type WomCompetition } from '@clog/domain';
 
-export class PreviewXpClient implements XpClient {
+export class MemoryXpClient implements XpClient {
   private readonly getSession:
     ((signal: AbortSignal) => Promise<AdminSession | null>) | undefined;
   constructor(
@@ -105,7 +105,7 @@ export class PreviewXpClient implements XpClient {
   async tracker(signal: AbortSignal) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     return structuredClone({
-      revision: 'preview-' + this.revision,
+      revision: 'test-' + this.revision,
       totals: this.totals(),
       podium: podiumFromParticipants(
         [...this.stored.values()].flatMap((d) => d.participants),
@@ -181,7 +181,7 @@ export class PreviewXpClient implements XpClient {
       matching.find((d) => d.competition.id === competitionId) ?? matching[0];
     return structuredClone({
       overview: {
-        revision: 'preview-' + this.revision,
+        revision: 'test-' + this.revision,
         updatedAt: this.imports[0]?.importedAt ?? null,
         totals: this.totals(),
         competitions: [...this.stored.values()].map((d) => d.competition),
@@ -196,9 +196,9 @@ export class PreviewXpClient implements XpClient {
   ): Promise<AdminSession | null> {
     if (this.getSession) return this.getSession(signal);
     return {
-      csrfToken: 'preview-only',
-      displayName: 'Preview admin',
-      username: 'preview-admin',
+      csrfToken: 'test-only',
+      displayName: 'Test admin',
+      username: 'test-admin',
       role: 'admin',
       mustChangePassword: false,
     };
@@ -215,7 +215,7 @@ export class PreviewXpClient implements XpClient {
     const preview: ImportPreview = {
       ...detail,
       previewToken: crypto.randomUUID(),
-      expectedRevision: 'preview-' + this.revision,
+      expectedRevision: 'test-' + this.revision,
       expiresAt: new Date(Date.now() + 300000).toISOString(),
       changes: detail.competition.skills.map((skill) => {
         const sum = (rows: CompetitionDetail['participants']) =>
@@ -250,7 +250,7 @@ export class PreviewXpClient implements XpClient {
     const current = this.previews.get(preview.previewToken);
     if (
       !current ||
-      current.expectedRevision !== 'preview-' + this.revision ||
+      current.expectedRevision !== 'test-' + this.revision ||
       Date.parse(current.expiresAt) <= Date.now()
     )
       throw new XpRequestError(409);
@@ -268,13 +268,13 @@ export class PreviewXpClient implements XpClient {
       }),
     );
     if (outcome === 'applied') this.revision++;
-    const result = { outcome, revision: 'preview-' + this.revision } as const;
+    const result = { outcome, revision: 'test-' + this.revision } as const;
     this.receipts.set(requestKey, { token: current.previewToken, result });
     this.imports.unshift({
       id: crypto.randomUUID(),
       competitionId: current.competition.id,
       title: current.competition.title,
-      actorName: 'Preview admin',
+      actorName: 'Test admin',
       importedAt: new Date().toISOString(),
       outcome,
       changes: current.changes,
@@ -293,7 +293,7 @@ export class PreviewXpClient implements XpClient {
     }
     signal.throwIfAborted();
     // Each append counts, including unchanged imports whose tracker revision stays put.
-    const revision = 'preview-xp-history-' + this.imports.length;
+    const revision = 'test-xp-history-' + this.imports.length;
     const match = cursor ? /^(\d+):(.*)$/u.exec(cursor) : null;
     if (
       cursor &&
@@ -318,12 +318,12 @@ export class PreviewXpClient implements XpClient {
     for (const id of [1001, 1002]) {
       const preview = await this.preview(
         'https://wiseoldman.net/competitions/' + id,
-        'preview-only',
+        'test-only',
         new AbortController().signal,
       );
       await this.apply(
         preview,
-        'preview-only',
+        'test-only',
         crypto.randomUUID(),
         new AbortController().signal,
       );

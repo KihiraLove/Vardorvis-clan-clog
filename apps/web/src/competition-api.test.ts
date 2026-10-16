@@ -1,12 +1,12 @@
-import { PreviewCompetitionClient } from './preview/competition.ts';
+import { MemoryCompetitionClient } from '../tests/support/competition.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   LiveCompetitionClient,
   parseWomCompetition,
 } from './competition-api.ts';
-import { PreviewAdminClient } from './preview/admin.ts';
-import { PreviewXpClient } from './preview/xp.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
+import { MemoryXpClient } from '../tests/support/xp.ts';
 import type { AdminSession } from './xp-model.ts';
 const signal = () => new AbortController().signal;
 const url = (id: number) => 'https://wiseoldman.net/competitions/' + id;
@@ -150,8 +150,8 @@ test('client rejects a kind inconsistent with authoritative metric scope and uns
     'SKILL',
   );
 });
-test('preview mode detects stable skill and activity fixture metadata without a caller kind', async () => {
-  const client = new PreviewCompetitionClient(undefined, new PreviewXpClient());
+test('fixture client detects stable skill and activity fixture metadata without a caller kind', async () => {
+  const client = new MemoryCompetitionClient(undefined, new MemoryXpClient());
   const attack = await client.preview(url(1001), 'csrf', signal());
   const all = await client.preview(url(1002), 'csrf', signal());
   const activity = await client.preview(url(3002), 'csrf', signal());
@@ -162,14 +162,14 @@ test('preview mode detects stable skill and activity fixture metadata without a 
   assert.equal(activity.competition.kind, 'ACTIVITY');
   assert.deepEqual(activity.changes, []);
 });
-test('preview mode permits moderator finished XP imports and still requires staff access', async (t) => {
-  const admin = new PreviewAdminClient();
+test('fixture client permits moderator finished XP imports and still requires staff access', async (t) => {
+  const admin = new MemoryAdminClient();
   const session = (await admin.session(signal()))!;
   const mocked = t.mock.method(admin, 'session', async () => ({
     ...session,
     role: 'moderator' as const,
   }));
-  const client = new PreviewCompetitionClient(admin, new PreviewXpClient());
+  const client = new MemoryCompetitionClient(admin, new MemoryXpClient());
   assert.equal(
     (await client.preview(url(1001), 'csrf', signal())).competition.kind,
     'SKILL',
@@ -237,14 +237,14 @@ test('live SKILL metadata previews exclude pages, opening times, changes and liv
 });
 
 test('preview metadata imports preserve schedules and publish unavailable SKILL events without adding XP', async (t) => {
-  const admin = new PreviewAdminClient();
+  const admin = new MemoryAdminClient();
   const session = (await admin.session(signal()))!;
   t.mock.method(admin, 'session', async () => ({
     ...session,
     role: 'moderator' as const,
   }));
-  const xp = new PreviewXpClient();
-  const client = new PreviewCompetitionClient(admin, xp, (c) =>
+  const xp = new MemoryXpClient();
+  const client = new MemoryCompetitionClient(admin, xp, (c) =>
     xp.storeMetadata(c),
   );
   const before = await admin.scheduling(signal());
@@ -295,14 +295,14 @@ test('preview metadata imports preserve schedules and publish unavailable SKILL 
 });
 
 test('preview finished XP receipts remain replayable for moderators and require current authentication', async (t) => {
-  const admin = new PreviewAdminClient();
+  const admin = new MemoryAdminClient();
   const session = (await admin.session(signal()))!;
   const mocked = t.mock.method(
     admin,
     'session',
     async (): Promise<AdminSession | null> => session,
   );
-  const client = new PreviewCompetitionClient(admin, new PreviewXpClient());
+  const client = new MemoryCompetitionClient(admin, new MemoryXpClient());
   const p = await client.preview(url(1001), 'csrf', signal());
   const key = crypto.randomUUID();
   await client.apply(p, 'csrf', key, false, signal());

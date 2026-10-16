@@ -11,16 +11,14 @@ import { withAbort } from './with-abort.ts';
 import { RouteCodeError } from './route-code.ts';
 
 export interface SiteNavigation {
-  route: { path: string; preview: boolean };
+  route: { path: string };
   navigate: (event: React.MouseEvent<HTMLAnchorElement>) => void;
-  mode: (preview: boolean) => void;
   register: (navigator: AdminNavigator | null) => void;
 }
 
 function location() {
   return {
     path: window.location.pathname,
-    preview: new URLSearchParams(window.location.search).get('preview') === '1',
   };
 }
 function position() {
@@ -96,7 +94,6 @@ export function useRouteNavigation<T>(
         resources = await prepare(
           {
             path: target.pathname,
-            preview: target.searchParams.get('preview') === '1',
           },
           signal,
         );
@@ -140,7 +137,6 @@ export function useRouteNavigation<T>(
         const target = new URL(href);
         setRoute({
           path: target.pathname,
-          preview: target.searchParams.get('preview') === '1',
           resources,
         });
         apply();
@@ -280,11 +276,5 @@ export function useRouteNavigation<T>(
     event.preventDefault();
     request(url.href);
   };
-  const mode = (preview: boolean) => {
-    const url = new URL(visible.current.href);
-    if (preview) url.searchParams.set('preview', '1');
-    else url.searchParams.delete('preview');
-    request(url.href, 'replace');
-  };
-  return { route, navigate, mode, register, pending };
+  return { route, navigate, register, pending };
 }

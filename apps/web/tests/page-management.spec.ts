@@ -1,9 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test, pngFile } from './test.ts';
 
 test('sections and pages are managed in the log; deleted pages leave reusable pageless items', async ({
   page,
 }) => {
-  await page.goto('/admin/settings/hardcore?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/settings/hardcore');
   await page.getByLabel('Enable hardcore worlds').check();
   await page
     .getByRole('button', { name: 'Save hardcore settings', exact: true })
@@ -65,7 +67,7 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
     .fill('900007');
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles('public/skills/sailing.png');
+    .setInputFiles(await pngFile('public/skills/sailing.png'));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(
@@ -141,7 +143,8 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
 test('section, page and item drag handles publish scoped ordering and have keyboard alternatives', async ({
   page,
 }) => {
-  await page.goto('/admin/catalog?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/catalog');
   const tabs = page
     .getByRole('tablist', { name: 'Catalog sections' })
     .getByRole('tab');

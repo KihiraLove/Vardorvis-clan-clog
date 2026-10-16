@@ -1,6 +1,6 @@
 /** REVIEW-03/F01: compare the activity panel to the rendered frame, not a fixed height. */
-import { expect, test, type Page } from '@playwright/test';
-import catalog from '../src/preview/catalog.json' with { type: 'json' };
+import { expect, test, type Page } from './test.ts';
+import catalog from './support/catalog.json' with { type: 'json' };
 import { defaultBranding } from '../src/branding.ts';
 import { zeroTotals } from '../src/xp-model.ts';
 import { defaultSiteCopy } from '@clog/domain';
@@ -68,7 +68,7 @@ async function publicLayout(page: Page, count: number) {
 }
 
 async function geometry(page: Page) {
-  // Preview is a deferred entry; measure only after its actual layout exists.
+  // Wait for the rendered layout before measuring.
   await expect(page.locator('.activity-competitions ol')).toBeAttached();
   return page.evaluate(() => {
     const box = (selector: string) => {
@@ -275,21 +275,6 @@ test('alignment follows delayed font loading, responsive resizing and a resized 
   expect(mobile.panel.bottom).toBeLessThan(mobile.frame.top);
   await page.setViewportSize({ width: 1440, height: 1100 });
   await aligned(page);
-});
-
-test('preview controls occupy their own row above the aligned frame and panel', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.goto('/?preview=1');
-  await page.evaluate(() => document.fonts.ready);
-  const initial = await aligned(page);
-  await page
-    .getByText('Frontend preview · sample data', { exact: true })
-    .click();
-  await expect(page.getByLabel('Review scenario')).toBeVisible();
-  const expanded = await aligned(page);
-  expect(expanded.frame.top).toBeGreaterThan(initial.frame.top);
 });
 
 test('loading, failure and retry leave the activity panel aligned with the log frame', async ({

@@ -36,6 +36,18 @@ export default defineConfig({
             .map((name) => path.relative(root, name).replaceAll('\\', '/'))
             .sort(),
         }));
+        if (
+          chunks.some((chunk) =>
+            Object.keys(chunk.modules).some(
+              (name) =>
+                name.includes('/apps/web/tests/') ||
+                name.includes('/apps/web/tests-'),
+            ),
+          )
+        )
+          throw new Error(
+            'Test fixtures must never enter a production bundle.',
+          );
         const publicFiles = files.filter((file) => file.initial);
         const bytes = publicFiles.reduce((sum, file) => sum + file.bytes, 0);
         const gzipBytes = publicFiles.reduce(
@@ -43,15 +55,13 @@ export default defineConfig({
           0,
         );
         const forbidden =
-          /apps\/web\/src\/(?:preview\/|admin-entry\.|Admin[^/]*\.|AccountSettings\.|ClanApiKeySettings\.|RuneLiteReviewSettings\.|XpAdmin\.|CompetitionImport\.)/u;
+          /apps\/web\/src\/(?:admin-entry\.|Admin[^/]*\.|AccountSettings\.|ClanApiKeySettings\.|RuneLiteReviewSettings\.|XpAdmin\.|CompetitionImport\.)/u;
         if (
           publicFiles.some((file) =>
             file.modules.some((module) => forbidden.test(module)),
           )
         )
-          throw new Error(
-            'Staff screen or preview fixture entered the initial public graph.',
-          );
+          throw new Error('Staff screen entered the initial public graph.');
         if (bytes > 320000 || gzipBytes > 100000)
           throw new Error(
             'Initial public JavaScript exceeds 320,000 raw / 100,000 gzip bytes.',

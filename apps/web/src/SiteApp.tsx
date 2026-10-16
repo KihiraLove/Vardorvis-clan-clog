@@ -1,11 +1,5 @@
 /** Public log and event tracker share one page; admin routes remain directly addressable. */
-import {
-  useCallback,
-  useMemo,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import { XpPage } from './XpPage.tsx';
 import { ActivityCompetitions } from './ActivityCompetitions.tsx';
 import type { CompetitionClient } from './competition-api.ts';
@@ -24,12 +18,10 @@ import {
 } from '@clog/domain';
 
 function LiveLog({
-  preview,
   hardcore,
   copy,
   competitionClient,
 }: {
-  preview: () => void;
   hardcore: boolean;
   copy: SiteCopy;
   competitionClient: CompetitionClient;
@@ -39,7 +31,6 @@ function LiveLog({
     <CollectionLog
       {...state}
       hardcore={hardcore}
-      onPreview={preview}
       copy={copy}
       activity={<ActivityCompetitions client={competitionClient} />}
     />
@@ -76,22 +67,14 @@ export function SiteApp({
   navigation: SiteNavigation;
   resources: RouteResources;
 }) {
-  const { route, navigate, mode, register } = navigation;
+  const { route, navigate, register } = navigation;
   const { runtime, AdminEntry } = resources;
   const {
     admin: adminClient,
     xp: xpClient,
     competition: competitionClient,
-    preview: demo,
   } = runtime;
-  const demoRevision = useSyncExternalStore(
-    demo?.subscribe ?? emptySubscribe,
-    demo?.getRevision ?? zeroRevision,
-  );
   const [hardcore, setHardcore] = useState(false);
-  useEffect(() => {
-    if (demo && !demo.settings().hardcoreEnabled) setHardcore(false);
-  }, [demo, demoRevision]);
   const [liveEnabled, setLiveEnabled] = useState(false);
   const [liveClanName, setLiveClanName] = useState('');
   const [liveCopy, setLiveCopy] = useState<SiteCopy>(defaultSiteCopy);
@@ -100,7 +83,7 @@ export function SiteApp({
     useState(defaultBranding);
   const [liveHardcoreAppearance, setLiveHardcoreAppearance] =
     useState<HardcoreAppearance>();
-  const metadata = useMemo(() => new PublicMetadataClient(), [route.preview]);
+  const metadata = useMemo(() => new PublicMetadataClient(), []);
   const readSettings = useCallback(
     (signal: AbortSignal) => metadata.settings(signal),
     [metadata],
@@ -116,24 +99,15 @@ export function SiteApp({
   const settings = usePublicPolling(
     readSettings,
     'Settings could not be refreshed.',
-    { enabled: !route.preview },
   );
   const normalBrand = usePublicPolling(
     readNormal,
     'Logo could not be refreshed.',
-    { enabled: !route.preview },
   );
   const hardcoreBrand = usePublicPolling(
     readHardcore,
     'Logo could not be refreshed.',
-    { enabled: !route.preview },
   );
-  useEffect(() => {
-    setLiveBranding(defaultBranding);
-    setLiveHardcoreBranding(defaultBranding);
-    setLiveEnabled(false);
-    setHardcore(false);
-  }, [route.preview]);
   useEffect(() => {
     if (normalBrand.data)
       setLiveBranding((current) =>
@@ -168,19 +142,11 @@ export function SiteApp({
   }, [settings.data]);
   const admin = route.path === '/admin' || route.path.startsWith('/admin/');
   const hardcoreAppearance = hardcore && !admin;
-  const appearance = demo
-    ? hardcoreAppearance
-      ? demo.settings().hardcore
-      : demo.settings()
-    : hardcoreAppearance
-      ? liveHardcoreAppearance
-      : { clanName: liveClanName, copy: liveCopy };
+  const appearance = hardcoreAppearance
+    ? liveHardcoreAppearance
+    : { clanName: liveClanName, copy: liveCopy };
   const clanName = appearance?.clanName ?? liveClanName;
-  const branding = demo
-    ? demo.branding(hardcoreAppearance)
-    : hardcoreAppearance
-      ? liveHardcoreBranding
-      : liveBranding;
+  const branding = hardcoreAppearance ? liveHardcoreBranding : liveBranding;
   useEffect(() => {
     document
       .querySelectorAll<HTMLLinkElement>(
@@ -252,7 +218,7 @@ export function SiteApp({
         <header className="site-header">
           <a
             className="clan-brand"
-            href={'/' + (route.preview ? '?preview=1' : '')}
+            href="/"
             onClick={navigate}
             aria-label={
               (clanName ? clanName + ' ' : '') + 'clan collection log'
@@ -265,7 +231,7 @@ export function SiteApp({
             </div>
           </a>
           {!admin &&
-            ((demo?.settings().hardcoreEnabled ?? liveEnabled) ? (
+            (liveEnabled ? (
               <Skull
                 enabled={hardcore}
                 onChange={() => setHardcore(!hardcore)}
@@ -275,7 +241,6 @@ export function SiteApp({
         <main id={admin ? 'admin-main' : 'collection-log'}>
           {admin && AdminEntry ? (
             <AdminEntry
-              key={route.preview ? 'preview-admin' : 'live-admin'}
               competitionClient={competitionClient}
               client={adminClient}
               xpClient={xpClient}
@@ -287,33 +252,18 @@ export function SiteApp({
                   value,
                 )
               }
-              preview={route.preview}
               path={route.path}
-              onMode={mode}
               onNavigate={navigate}
               takeEntry={resources.takeEntry}
-              xpControls={demo?.xpControls}
             />
           ) : (
             <>
-              {demo ? (
-                <demo.Log hardcore={hardcore} copy={copy} />
-              ) : (
-                <LiveLog
-                  preview={() => mode(true)}
-                  hardcore={hardcore}
-                  copy={copy}
-                  competitionClient={competitionClient}
-                />
-              )}
-              <XpPage
-                client={xpClient}
-                admin={false}
-                sample={demo?.xpControls}
+              <LiveLog
+                hardcore={hardcore}
                 copy={copy}
-                preview={route.preview}
-                onMode={mode}
+                competitionClient={competitionClient}
               />
+              <XpPage client={xpClient} admin={false} copy={copy} />
             </>
           )}
         </main>
@@ -359,6 +309,3 @@ export function SiteApp({
     </>
   );
 }
-
-const emptySubscribe = () => () => {};
-const zeroRevision = () => 0;

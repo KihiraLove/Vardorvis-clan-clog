@@ -322,7 +322,6 @@ export function AdminQueue({
                         url={row.proofUrl}
                         source={row.source}
                         screenshot={row.screenshotPath}
-                        previewScreenshot={row.previewScreenshot}
                         chatMessage={row.chatMessage}
                       />
                       <button

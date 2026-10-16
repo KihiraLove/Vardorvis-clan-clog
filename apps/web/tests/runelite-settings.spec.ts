@@ -1,9 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
 
 test('RuneLite policies, independent clan matching and whitelist save on desktop and mobile', async ({
   page,
 }) => {
-  await page.goto('/admin/runelite?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/runelite');
   await expect(page.getByLabel('Clan matching', { exact: true })).toBeEnabled();
   await expect(
     page.getByLabel('Clan matching', { exact: true }).locator('option'),
