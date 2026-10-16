@@ -33,6 +33,11 @@ async function delayedSettings(page: Page) {
       },
       '/api/v1/admin/catalog': fixture.catalog,
       '/api/v1/admin/submissions': fixture.pending,
+      '/api/v1/admin/schedules': {
+        revision: 'schedules-1',
+        enabled: false,
+        schedules: [],
+      },
       '/api/v1/admin/accounts': {
         accounts: [
           {
@@ -135,7 +140,7 @@ test('settings-navigation: admin background stays fixed across delayed page chan
   const original = await background();
   for (const [name, ready] of [
     ['Items catalog', 'Items catalog'],
-    ['XP imports', 'XP competition imports'],
+    ['Scheduling and Competitions', 'Schedule management'],
     ['Submissions', 'Submissions'],
     ['Moderator accounts', 'Existing accounts'],
     ['RuneLite submissions', 'RuneLite submissions'],

@@ -11,7 +11,8 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
 }) => {
   await mockApi(page);
   await page.goto('/admin/schedules');
-  const enabled = page.getByLabel('Enable collection log scheduling', {
+  const enabled = page.getByRole('switch', {
+    name: 'Collection log scheduling',
     exact: true,
   });
   await expect(enabled).toBeEnabled();
@@ -23,7 +24,10 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
   });
   await expect(management).toBeVisible();
   await expect(
-    management.getByLabel('Enable collection log scheduling', { exact: true }),
+    management.getByRole('switch', {
+      name: 'Collection log scheduling',
+      exact: true,
+    }),
   ).toHaveCount(0);
   await expect(enabled).not.toBeChecked();
   await expect(
@@ -63,7 +67,11 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
   await expect(enabled).toBeChecked();
   await expect(page.getByRole('status')).toHaveText('Scheduling enabled.');
   await page
-    .getByRole('button', { name: 'Edit Boss week', exact: true })
+    .locator('.schedule-card')
+    .filter({
+      has: page.getByRole('heading', { name: 'Boss week', exact: true }),
+    })
+    .getByRole('button', { name: 'Edit', exact: true })
     .click();
   await expect(start).toHaveValue('2026-11-02T09:00');
   await expect(pages.nth(0)).toBeChecked();
@@ -85,7 +93,11 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
     fullPage: true,
   });
   await page
-    .getByRole('button', { name: 'Delete Overlap', exact: true })
+    .locator('.schedule-card')
+    .filter({
+      has: page.getByRole('heading', { name: 'Overlap', exact: true }),
+    })
+    .getByRole('button', { name: 'Delete', exact: true })
     .click();
   await expect(
     page.getByRole('dialog', { name: 'Delete schedule' }),
@@ -95,7 +107,11 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
     .click();
   await expect(page.locator('.schedule-card')).toHaveCount(2);
   await page
-    .getByRole('button', { name: 'Delete Overlap', exact: true })
+    .locator('.schedule-card')
+    .filter({
+      has: page.getByRole('heading', { name: 'Overlap', exact: true }),
+    })
+    .getByRole('button', { name: 'Delete', exact: true })
     .click();
   await page
     .getByRole('button', { name: 'Confirm delete schedule', exact: true })
@@ -105,7 +121,9 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
   await expect(page.getByRole('status')).toHaveText('Scheduling disabled.');
   await expect(page.locator('.schedule-card')).toHaveCount(1);
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
-  await page.getByRole('link', { name: 'Scheduling', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Scheduling and Competitions', exact: true })
+    .click();
   await expect(page.locator('.schedule-card')).toHaveCount(1);
   await expect(enabled).not.toBeChecked();
 });
@@ -160,10 +178,16 @@ test('moderators can create windows but cannot see or write the administrator en
   await page.goto('/admin/schedules');
   await expect(page.getByLabel('Schedule name', { exact: true })).toBeEnabled();
   await expect(
-    page.getByLabel('Enable collection log scheduling', { exact: true }),
+    page.getByRole('switch', {
+      name: 'Collection log scheduling',
+      exact: true,
+    }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('link', { name: 'Scheduling', exact: true }),
+    page.getByRole('link', {
+      name: 'Scheduling and Competitions',
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'RuneLite submissions', exact: true }),

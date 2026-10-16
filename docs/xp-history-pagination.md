@@ -30,12 +30,10 @@ request keys, token hashes and internal receipt fields are not added to the wire
 projection.
 
 Save `pageCursor` for every visited page, including the first, and send it back
-unchanged for previous navigation. Clients must use the same page size. The XP
-screen prepares only the first page before navigation, then browses one page at
-a time with Older/Newer imports. It labels the displayed count as a page count,
-shows receipt identity, actor/outcome and exact before/after/delta values, and
-keeps the competition import form and its draft mounted while paging. Preview
-mode follows the same page, revision and access contract.
+unchanged for previous navigation. Clients must use the same page size. The
+separate XP imports screen has been removed; competition imports are available
+under **Scheduling and Competitions**, including through the legacy `/admin/xp`
+URL. The private history API and its stored receipts remain available.
 
 ## Transactional revision policy
 
@@ -100,6 +98,8 @@ Tests traverse all rows across the 1,999/2,000/2,001 boundary, revisit first,
 middle and final pages, exercise timestamp ties and fractional precision,
 concurrent unchanged imports, in-flight commit/rollback and malformed cursors,
 and verify applied/unchanged receipts replay after preview deletion above the
-old cap. Desktop/320px Chromium tests cover exact values, traversal, import-draft
-preservation, concurrent appends, 401/403/503, timeout and late responses. Run the
-[complete local acceptance command](local-testing.md) before pushing.
+old cap. API transport tests cover opaque cursor encoding, private response
+caching and malformed receipts. Browser tests cover competition imports and the
+legacy page URL through Scheduling and Competitions. Follow the repository's
+targeted-validation rules for routine changes; the operator runs the full
+[local acceptance command](local-testing.md).

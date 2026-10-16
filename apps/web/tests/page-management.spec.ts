@@ -140,10 +140,18 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
   ).toHaveCount(0);
 });
 
-test('section, page and item drag handles publish scoped ordering and have keyboard alternatives', async ({
+test('section, page and item ordering stays local until saved and persists together', async ({
   page,
 }) => {
   await mockApi(page);
+  let writes = 0;
+  page.on('request', (request) => {
+    if (
+      request.method() !== 'GET' &&
+      new URL(request.url()).pathname.endsWith('/order')
+    )
+      writes++;
+  });
   await page.goto('/admin/catalog');
   const tabs = page
     .getByRole('tablist', { name: 'Catalog sections' })
@@ -160,6 +168,9 @@ test('section, page and item drag handles publish scoped ordering and have keybo
     .getByRole('button', { name: 'Reorder section Bosses', exact: true })
     .press('Alt+ArrowLeft');
   await expect(tabs.first()).toHaveText('Bosses');
+  await page
+    .getByRole('button', { name: 'Reorder section Bosses', exact: true })
+    .press('Alt+ArrowRight');
   const rows = page.locator('.catalog-page-row');
   const id = await rows.first().getAttribute('data-page-id');
   await rows
@@ -179,6 +190,23 @@ test('section, page and item drag handles publish scoped ordering and have keybo
     .getByRole('button', { name: /^Reorder item / })
     .press('Alt+ArrowUp');
   await expect(items.first()).toHaveAttribute('data-item-id', itemId!);
+  await items
+    .first()
+    .getByRole('button', { name: /^Reorder item / })
+    .press('Alt+ArrowDown');
+  expect(writes).toBe(0);
+  await page
+    .locator('.catalog-order-save')
+    .getByRole('button', { name: 'Save changes', exact: true })
+    .click();
+  await expect(
+    page.getByText('Item order saved.', { exact: true }),
+  ).toBeVisible();
+  expect(writes).toBe(3);
+  await page.reload();
+  await expect(tabs.first()).toHaveText('Raids');
+  await expect(rows.nth(1)).toHaveAttribute('data-page-id', id!);
+  await expect(items.nth(1)).toHaveAttribute('data-item-id', itemId!);
   await page.screenshot({
     path: test.info().outputPath('catalog-editor.png'),
     fullPage: true,

@@ -121,7 +121,7 @@ test('scrolling between repeated admin navigations keeps the URL, current link a
     ['Items catalog', '/admin/catalog', 'Items catalog'],
     ['RuneLite submissions', '/admin/runelite', 'RuneLite submissions'],
     ['Your account', '/admin/account', 'Your account'],
-    ['Scheduling', '/admin/schedules', 'Schedule management'],
+    ['Scheduling and Competitions', '/admin/schedules', 'Schedule management'],
     ['Submissions', '/admin', 'Submissions'],
   ];
   for (let cycle = 0; cycle < 6; cycle++) {

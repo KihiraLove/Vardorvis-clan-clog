@@ -24,9 +24,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await form
     .getByLabel('PNG screenshot (optional)')
     .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
-  await form
-    .getByLabel('Approve immediately and show in the collection log')
-    .uncheck();
+  await form.getByLabel('Approve immediately').uncheck();
   await form.getByRole('button', { name: 'Create manual submission' }).click();
   await expect(
     page
@@ -38,11 +36,30 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
       .getByLabel('PNG screenshot (optional)')
       .evaluate((input: HTMLInputElement) => input.files?.length),
   ).toBe(0);
+  await expect(form.getByLabel('Approve immediately')).toBeChecked();
   await expect(
-    form.getByLabel('Approve immediately and show in the collection log'),
-  ).toBeChecked();
-  await expect(page.getByText('View PNG screenshot').first()).toBeVisible();
-  await page.getByRole('button', { name: /^Review PNG Collector/ }).click();
+    form.getByLabel('Collected on hardcore worlds', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .locator('.submission-card')
+      .getByAltText('Submission screenshot')
+      .first(),
+  ).toBeVisible();
+  const review = page.getByRole('button', { name: /^Review PNG Collector/ });
+  await review.scrollIntoViewIfNeeded();
+  const scroll = await page.evaluate(() => window.scrollY);
+  await review.click();
+  const dialog = page.getByRole('dialog', { name: 'Submission review' });
+  await expect(dialog).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+  const box = await dialog.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(850);
+  await expect(dialog.getByRole('heading', { level: 2 })).toContainText(
+    'PNG Collector',
+  );
+  await expect(dialog.getByText(/Version .*saved revision/)).toBeVisible();
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),
   ).toBeVisible();
@@ -50,6 +67,8 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),
   ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
 });
 
 test('moderators can review stored RuneLite screenshots without access to clan settings', async ({
@@ -106,7 +125,9 @@ test('moderators can review stored RuneLite screenshots without access to clan s
   await expect(
     page.getByLabel('Clan display name', { exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByText('RuneLite', { exact: true })).toBeVisible();
+  await expect(page.locator('.submission-card .submission-facts')).toHaveCount(
+    0,
+  );
   await page.getByRole('button', { name: /^Review / }).click();
   const editor = page.locator('.submission-editor');
   await expect(

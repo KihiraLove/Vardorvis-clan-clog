@@ -309,9 +309,7 @@ test('real login, PNG claim, independent note/correction, canonical public credi
     mimeType: 'image/png',
     buffer: png,
   });
-  await form
-    .getByLabel('Approve immediately and show in the collection log')
-    .uncheck();
+  await form.getByLabel('Approve immediately').uncheck();
   const created = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/v1/admin/submissions/upload') &&
@@ -493,6 +491,7 @@ test('real login, PNG claim, independent note/correction, canonical public credi
   } finally {
     await anonymous.close();
   }
+  await page.getByRole('button', { name: 'Close review', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Admin sign-in required', exact: true }),
@@ -560,7 +559,7 @@ test('real moderator setup, role denial and server-side access revocation clear 
     ).toBe(true);
     await staff.getByRole('link', { name: 'Submissions', exact: true }).click();
     await expect(
-      staff.getByRole('checkbox', {
+      staff.getByRole('switch', {
         name: 'Filter out duplicates',
         exact: true,
       }),

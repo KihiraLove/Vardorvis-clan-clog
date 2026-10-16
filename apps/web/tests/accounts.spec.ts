@@ -116,6 +116,10 @@ async function mockAccounts(
       return route.fulfill({ json: fixture.catalog });
     if (path === '/api/v1/admin/submissions')
       return route.fulfill({ json: fixture.pending });
+    if (path === '/api/v1/admin/schedules')
+      return route.fulfill({
+        json: { revision: 'schedules-1', enabled: false, schedules: [] },
+      });
     if (path === '/api/v1/admin/xp/imports')
       return route.fulfill({
         json: {
@@ -224,13 +228,15 @@ test('moderators retain review tools, have no owner controls and can update thei
     page.getByRole('button', { name: 'Add manual submission' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('checkbox', { name: 'Filter out duplicates', exact: true }),
+    page.getByRole('switch', { name: 'Filter out duplicates', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('checkbox', { name: 'Filter out duplicates', exact: true }),
+    page.getByRole('switch', { name: 'Filter out duplicates', exact: true }),
   ).toBeDisabled();
   await expect(page.getByRole('link', { name: 'Items catalog' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'XP imports' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Scheduling and Competitions' }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole('navigation', { name: 'Admin navigation' })
@@ -238,8 +244,7 @@ test('moderators retain review tools, have no owner controls and can update thei
   ).toHaveText([
     'Submissions',
     'Items catalog',
-    'XP imports',
-    'Scheduling',
+    'Scheduling and Competitions',
     'RuneLite submissions',
     'Your account',
   ]);

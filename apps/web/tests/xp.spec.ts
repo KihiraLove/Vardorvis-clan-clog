@@ -2,6 +2,7 @@ import { mockApi } from './mock-api.ts';
 import { expect, test } from './test.ts';
 import { skills, zeroTotals } from '../src/xp-model.ts';
 import { importPreview } from './xp-fixtures.ts';
+import { adminFixtures } from './admin-fixtures.ts';
 const tracker = {
   revision: 'one',
   totals: { ...zeroTotals(), attack: '1234567890', fishing: '5000000' },
@@ -235,7 +236,25 @@ test('direct admin imports require access, review corrections and send CSRF plus
       },
     }),
   );
+  const fixture = await adminFixtures();
+  await page.route('**/api/v1/admin/catalog', (route) =>
+    route.fulfill({ json: fixture.catalog }),
+  );
+  await page.route('**/api/v1/admin/schedules', (route) =>
+    route.fulfill({
+      json: { revision: 'schedules-1', enabled: false, schedules: [] },
+    }),
+  );
   await page.reload();
+  await expect(
+    page.getByRole('link', { name: 'XP imports', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', {
+      name: 'Scheduling and Competitions',
+      exact: true,
+    }),
+  ).toBeVisible();
   await page
     .getByLabel('Wise Old Man competition link')
     .fill('https://wiseoldman.net/competitions/1001');

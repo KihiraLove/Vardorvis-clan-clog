@@ -13,7 +13,6 @@ import type { SiteSettings } from './site-settings.ts';
 import type { ClanKeySettings } from './clan-api-key.ts';
 import type { RuneLiteSettings, SchedulingState } from '@clog/domain';
 import { withAbort } from './with-abort.ts';
-import { classifyAccessFailure } from './admin-session.ts';
 
 export interface PreparedAdminData {
   kind:
@@ -42,8 +41,8 @@ export interface PreparedAdminData {
 export const adminRouteLabels: Record<string, string> = {
   '/admin': 'Submissions',
   '/admin/catalog': 'Items catalog',
-  '/admin/xp': 'XP imports',
-  '/admin/schedules': 'Scheduling',
+  '/admin/xp': 'Scheduling and Competitions',
+  '/admin/schedules': 'Scheduling and Competitions',
   '/admin/settings': 'Site settings',
   '/admin/settings/hardcore': 'Hardcore worlds',
   '/admin/runelite': 'RuneLite submissions',
@@ -88,23 +87,7 @@ async function readAdminRoute(
   switch (path) {
     case '/admin/catalog':
       return { kind: 'catalog', catalog: await client.catalog(signal) };
-    case '/admin/xp': {
-      const [tracker, historyData] = await Promise.all([
-        xp.tracker(signal),
-        xp
-          .history(signal)
-          .then((history) => ({ history }))
-          .catch((failure: unknown) => {
-            if (classifyAccessFailure(failure) === 'denied')
-              return {
-                historyError:
-                  'Your account is not allowed to view XP import history.',
-              };
-            throw failure;
-          }),
-      ]);
-      return { kind: 'xp', tracker, ...historyData };
-    }
+    case '/admin/xp':
     case '/admin/schedules': {
       const [schedules, catalog] = await Promise.all([
         client.scheduling(signal),

@@ -246,6 +246,7 @@ export function SiteApp({
               xpClient={xpClient}
               registerNavigation={register}
               clanName={clanName}
+              hardcoreEnabled={liveEnabled}
               onSettingsSaved={settingsSaved}
               onBrandingSaved={(value, hardcoreMode) =>
                 (hardcoreMode ? setLiveHardcoreBranding : setLiveBranding)(
@@ -263,7 +264,9 @@ export function SiteApp({
                 copy={copy}
                 competitionClient={competitionClient}
               />
-              <XpPage client={xpClient} admin={false} copy={copy} />
+              {!hardcore && (
+                <XpPage client={xpClient} admin={false} copy={copy} />
+              )}
             </>
           )}
         </main>

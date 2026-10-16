@@ -272,6 +272,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#xp-tracker')).toHaveCount(0);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   const item = page.getByRole('button', {
     name: 'Virtus mask: collected, hardcore',

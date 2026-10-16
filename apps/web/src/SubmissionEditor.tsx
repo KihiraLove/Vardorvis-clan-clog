@@ -1,5 +1,5 @@
 /** Review saved claims, stage corrections separately and display before/after audit history. */
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useAdminDraft } from './admin-route-data.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
@@ -31,6 +31,33 @@ const draftOf = (row: Submission): Correction => ({
   hardcore: row.hardcore,
   reason: '',
 });
+function ReviewWindow({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      className="submission-review-dialog"
+      aria-label="Submission review"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      {children}
+    </dialog>
+  );
+}
 export function SubmissionEditor({
   id,
   catalog,
@@ -96,34 +123,47 @@ export function SubmissionEditor({
       clearTimeout(timer);
     };
   }, [client, id, refresh, onAccessLost]);
-  useAdminDraft(
+  const dirty =
     !!detail &&
-      !!draft &&
-      (draft.itemId !== (detail.submission.itemId ?? 0) ||
-        draft.collectorName.trim() !== detail.submission.collectorName ||
-        draft.collectedOn !== detail.submission.collectedOn ||
-        draft.hardcore !== detail.submission.hardcore ||
-        reviewNote.trim() !== detail.submission.reviewNote ||
-        !!draft.reason),
-    action.busy,
-  );
+    !!draft &&
+    (draft.itemId !== (detail.submission.itemId ?? 0) ||
+      draft.collectorName.trim() !== detail.submission.collectorName ||
+      draft.collectedOn !== detail.submission.collectedOn ||
+      draft.hardcore !== detail.submission.hardcore ||
+      reviewNote.trim() !== detail.submission.reviewNote ||
+      !!draft.reason);
+  useAdminDraft(dirty, action.busy);
+  const close = () => {
+    if (action.busy) return;
+    if (dirty && !window.confirm('Discard unsaved review changes?')) return;
+    onClose();
+  };
   if (!detail || !draft)
     return (
-      <section className="admin-panel">
-        {readError ? (
-          <>
-            <p role="alert">{readError}</p>
-            <button
-              className="site-button"
-              onClick={() => setRefresh((v) => v + 1)}
-            >
-              Reload submission
-            </button>
-          </>
-        ) : (
-          <p role="status">Loading submission…</p>
-        )}
-      </section>
+      <ReviewWindow onClose={close}>
+        <section className="admin-panel">
+          <button
+            className="site-button review-close"
+            aria-label="Close review"
+            onClick={close}
+          >
+            ×
+          </button>
+          {readError ? (
+            <>
+              <p role="alert">{readError}</p>
+              <button
+                className="site-button"
+                onClick={() => setRefresh((v) => v + 1)}
+              >
+                Reload submission
+              </button>
+            </>
+          ) : (
+            <p role="status">Loading submission…</p>
+          )}
+        </section>
+      </ReviewWindow>
     );
   const row = detail.submission,
     editable = ['pending', 'approved'].includes(row.status);
@@ -285,345 +325,375 @@ export function SubmissionEditor({
       ? [selected, ...matches]
       : matches;
   return (
-    <section
-      className="admin-panel submission-editor"
-      aria-labelledby="submission-title"
-    >
-      <div className="admin-section-heading">
-        <div>
-          <h2 id="submission-title">Review {row.collectorName}</h2>
-          <p>
-            {row.status} ·{' '}
-            {row.source === 'manual'
-              ? 'Manual submission'
-              : row.source === 'runelite'
-                ? 'RuneLite submission'
-                : 'Discord submission'}{' '}
-            {row.id} · Version {row.version}
-          </p>
-        </div>
-        <button
-          className="site-button"
-          disabled={action.busy}
-          onClick={onClose}
-        >
-          Close review
-        </button>
-      </div>
-      <dl className="submission-facts">
-        <div>
-          <dt>Raw item input</dt>
-          <dd>{row.rawItemText || 'No raw text supplied'}</dd>
-        </div>
-        <div>
-          <dt>Date source</dt>
-          <dd>{dateSourceLabel(row.dateSource)}</dd>
-        </div>
-        <div>
-          <dt>Submitted</dt>
-          <dd>{xpTime(row.submittedAt)}</dd>
-        </div>
-        <div>
-          <dt>Proof</dt>
-          <dd>
-            <ProofLink
-              url={row.proofUrl}
-              source={row.source}
-              screenshot={row.screenshotPath}
-              chatMessage={row.chatMessage}
-            />
-          </dd>
-        </div>
-      </dl>
-      {row.chatMessage && (
-        <div className="submission-chat-proof">
-          <strong>Chat message</strong>
-          <p>{row.chatMessage}</p>
-        </div>
-      )}
-      {action.busy && (
-        <p role="status" className="admin-note">
-          {action.operation === 'approve'
-            ? 'Approving saved claim…'
-            : action.operation === 'reject'
-              ? 'Rejecting submission…'
-              : action.operation === 'revoke'
-                ? 'Revoking credit…'
-                : action.operation === 'note'
-                  ? 'Saving review note…'
-                  : 'Saving claim corrections…'}
-        </p>
-      )}
-      {action.error && (
-        <p role="alert" className="admin-error">
-          {action.error}
-        </p>
-      )}
-      {action.message && (
-        <p role="status" className="admin-success">
-          {action.message}
-        </p>
-      )}
-      {readError && (
-        <div role="alert" className="admin-error">
-          <p>{readError}</p>
+    <ReviewWindow onClose={close}>
+      <section
+        className="admin-panel submission-editor"
+        aria-labelledby="submission-title"
+      >
+        <div className="admin-section-heading">
+          <div>
+            <h2 id="submission-title">
+              {catalog.items.find((item) => item.id === row.itemId)?.name ??
+                row.rawItemText ??
+                'Unmatched item'}{' '}
+              · {row.collectorName}
+            </h2>
+            <p className="admin-note">
+              Version {row.version} is the saved revision of this submission. It
+              changes when a note, correction or decision is saved, preventing
+              conflicting reviews from overwriting each other.
+            </p>
+            <p>
+              {row.status} ·{' '}
+              {row.source === 'manual'
+                ? 'Manual submission'
+                : row.source === 'runelite'
+                  ? 'RuneLite submission'
+                  : 'Discord submission'}{' '}
+              {row.id}
+            </p>
+          </div>
           <button
-            className="site-button"
-            onClick={() => setRefresh((v) => v + 1)}
+            className="site-button review-close"
+            aria-label="Close review"
+            disabled={action.busy}
+            onClick={close}
           >
-            Reload submission
+            ×
           </button>
         </div>
-      )}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          perform();
-        }}
-      >
-        {row.itemId !== null && !activeItem && (
-          <p className="admin-note">
-            Item #{row.itemId} is no longer in the active catalog. Select and
-            save an active item before approving this claim. Its proof and
-            review history remain available.
-          </p>
-        )}
-        <fieldset disabled={locked || !editable} className="admin-fieldset">
-          <legend>Saved claim and corrections</legend>
-          <div className="admin-form-grid">
-            <label>
-              Search catalog items
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            <div>
-              <label htmlFor="canonical-item">Canonical item</label>
-              <select
-                id="canonical-item"
-                className="catalog-choice-list"
-                required
-                size={5}
-                value={draft.itemId || ''}
-                onChange={(event) =>
-                  change({ itemId: Number(event.target.value) })
-                }
-              >
-                <option value="">Select the exact item…</option>
-                {options.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} · #{item.id}
-                  </option>
-                ))}
-              </select>
+        <div className="submission-review-layout">
+          <div className="submission-review-evidence">
+            <h3>Submission details</h3>
+            <dl className="submission-facts">
+              <div>
+                <dt>Raw item input</dt>
+                <dd>{row.rawItemText || 'No raw text supplied'}</dd>
+              </div>
+              <div>
+                <dt>Date source</dt>
+                <dd>{dateSourceLabel(row.dateSource)}</dd>
+              </div>
+              <div>
+                <dt>Submitted</dt>
+                <dd>{xpTime(row.submittedAt)}</dd>
+              </div>
+              <div>
+                <dt>Collected on</dt>
+                <dd>{row.collectedOn}</dd>
+              </div>
+              <div>
+                <dt>Worlds</dt>
+                <dd>{row.hardcore ? 'Hardcore worlds' : 'Ordinary worlds'}</dd>
+              </div>
+              <div>
+                <dt>Proof</dt>
+                <dd>
+                  <ProofLink
+                    url={row.proofUrl}
+                    source={row.source}
+                    screenshot={row.screenshotPath}
+                    chatMessage={row.chatMessage}
+                  />
+                </dd>
+              </div>
+            </dl>
+            {row.chatMessage && (
+              <div className="submission-chat-proof">
+                <strong>Chat message</strong>
+                <p>{row.chatMessage}</p>
+              </div>
+            )}
+            {action.busy && (
+              <p role="status" className="admin-note">
+                {action.operation === 'approve'
+                  ? 'Approving saved claim…'
+                  : action.operation === 'reject'
+                    ? 'Rejecting submission…'
+                    : action.operation === 'revoke'
+                      ? 'Revoking credit…'
+                      : action.operation === 'note'
+                        ? 'Saving review note…'
+                        : 'Saving claim corrections…'}
+              </p>
+            )}
+            {action.error && (
+              <p role="alert" className="admin-error">
+                {action.error}
+              </p>
+            )}
+            {action.message && (
+              <p role="status" className="admin-success">
+                {action.message}
+              </p>
+            )}
+            {readError && (
+              <div role="alert" className="admin-error">
+                <p>{readError}</p>
+                <button
+                  className="site-button"
+                  onClick={() => setRefresh((v) => v + 1)}
+                >
+                  Reload submission
+                </button>
+              </div>
+            )}
+          </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              perform();
+            }}
+          >
+            {row.itemId !== null && !activeItem && (
+              <p className="admin-note">
+                Item #{row.itemId} is no longer in the active catalog. Select
+                and save an active item before approving this claim. Its proof
+                and review history remain available.
+              </p>
+            )}
+            <fieldset disabled={locked || !editable} className="admin-fieldset">
+              <legend>Saved claim and corrections</legend>
+              <div className="admin-form-grid">
+                <label>
+                  Search catalog items
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </label>
+                <div>
+                  <label htmlFor="canonical-item">Canonical item</label>
+                  <select
+                    id="canonical-item"
+                    className="catalog-choice-list"
+                    required
+                    size={5}
+                    value={draft.itemId || ''}
+                    onChange={(event) =>
+                      change({ itemId: Number(event.target.value) })
+                    }
+                  >
+                    <option value="">Select the exact item…</option>
+                    {options.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} · #{item.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label>
+                  Collector name
+                  <input
+                    required
+                    maxLength={80}
+                    value={draft.collectorName}
+                    onChange={(event) =>
+                      change({ collectorName: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Collection date
+                  <input
+                    type="date"
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={draft.collectedOn}
+                    onChange={(event) =>
+                      change({ collectedOn: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              {selected && (
+                <p className="admin-note">
+                  Canonical item #{selected.id} ·{' '}
+                  {selected.origin === 'manual' ? 'Manual item' : 'Source item'}{' '}
+                  ·{' '}
+                  {catalog.pages
+                    .filter((page) => page.itemIds.includes(selected.id))
+                    .map((page) => page.name)
+                    .join(', ')}
+                </p>
+              )}
+              {!matches.length && (
+                <p className="admin-note">
+                  No matching items. Add a missing item in Catalog items before
+                  resolving this submission.
+                </p>
+              )}
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.hardcore}
+                  onChange={(event) =>
+                    change({ hardcore: event.target.checked })
+                  }
+                />
+                Collected on hardcore worlds
+              </label>
+              <label>
+                Review note
+                <textarea
+                  maxLength={1000}
+                  rows={3}
+                  value={reviewNote}
+                  onChange={(event) => setReviewNote(event.target.value)}
+                />
+                <span className="admin-note">
+                  Saved staff note, separate from claim corrections and decision
+                  reasons. Clear and save to remove the note.
+                </span>
+              </label>
+              <div className="admin-actions">
+                <button
+                  className="site-button"
+                  type="button"
+                  disabled={Boolean(blockers.note)}
+                  aria-describedby={describedBy('note')}
+                  aria-busy={action.busy && action.operation === 'note'}
+                  onClick={saveNote}
+                >
+                  Save review note
+                </button>
+                <button
+                  className="site-button"
+                  type="button"
+                  disabled={Boolean(blockers.discardNote)}
+                  aria-describedby={describedBy('discardNote')}
+                  onClick={() => setReviewNote(row.reviewNote)}
+                >
+                  Discard review note
+                </button>
+              </div>
+              {explanations(['note', 'discardNote'])}
+              <label>
+                Review reason
+                <textarea
+                  maxLength={1000}
+                  rows={3}
+                  value={draft.reason}
+                  onChange={(event) =>
+                    setDraft({ ...draft, reason: event.target.value })
+                  }
+                />
+                <span className="admin-note">
+                  One-time audit reason for rejection, revocation and
+                  corrections to approved credits. Not saved as a lasting
+                  comment.
+                </span>
+              </label>
+              <div className="admin-actions">
+                <button
+                  className="site-button"
+                  type="submit"
+                  disabled={Boolean(blockers.claim)}
+                  aria-describedby={describedBy('claim')}
+                  aria-busy={action.busy && action.operation === 'claim'}
+                >
+                  Save corrections
+                </button>
+                <button
+                  className="site-button"
+                  type="button"
+                  disabled={Boolean(blockers.discardClaim)}
+                  aria-describedby={describedBy('discardClaim')}
+                  onClick={() => {
+                    setDraft(draftOf(row));
+                    setChecked(false);
+                  }}
+                >
+                  Discard corrections
+                </button>
+              </div>
+              {explanations(['claim', 'discardClaim'])}
+            </fieldset>
+            {claimDirty && (
+              <p className="admin-note">
+                Save or discard corrections before deciding on this claim.
+              </p>
+            )}
+            {row.status === 'pending' && (
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={Boolean(blockers.acknowledge)}
+                  aria-describedby={describedBy('acknowledge')}
+                  onChange={(event) => setChecked(event.target.checked)}
+                />
+                {row.source === 'manual'
+                  ? 'I verified this manual claim and its item, collector, date and world.'
+                  : row.chatMessage
+                    ? 'I checked the chat message and any attached proof for the saved item, collector, date and hardcore claim.'
+                    : 'I checked the linked proof for the saved item, collector, date and hardcore claim.'}
+              </label>
+            )}
+            {row.status === 'pending' && explanations(['acknowledge'])}
+            <div className="admin-actions">
+              {row.status === 'pending' && (
+                <>
+                  <button
+                    className="site-button site-button--approve"
+                    type="button"
+                    disabled={Boolean(blockers.approve)}
+                    aria-describedby={describedBy('approve')}
+                    aria-busy={action.busy && action.operation === 'approve'}
+                    onClick={() => perform('approve')}
+                  >
+                    Approve submission
+                  </button>
+                  <button
+                    className="site-button"
+                    type="button"
+                    disabled={Boolean(blockers.reject)}
+                    aria-describedby={describedBy('reject')}
+                    aria-busy={action.busy && action.operation === 'reject'}
+                    onClick={() => perform('reject')}
+                  >
+                    Reject submission
+                  </button>
+                </>
+              )}
+              {row.status === 'approved' && (
+                <button
+                  className="site-button site-button--danger"
+                  type="button"
+                  disabled={Boolean(blockers.revoke)}
+                  aria-describedby={describedBy('revoke')}
+                  aria-busy={action.busy && action.operation === 'revoke'}
+                  onClick={() => perform('revoke')}
+                >
+                  Revoke credit
+                </button>
+              )}
             </div>
-            <label>
-              Collector name
-              <input
-                required
-                maxLength={80}
-                value={draft.collectorName}
-                onChange={(event) =>
-                  change({ collectorName: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Collection date
-              <input
-                type="date"
-                required
-                max={new Date().toISOString().slice(0, 10)}
-                value={draft.collectedOn}
-                onChange={(event) =>
-                  change({ collectedOn: event.target.value })
-                }
-              />
-            </label>
-          </div>
-          {selected && (
-            <p className="admin-note">
-              Canonical item #{selected.id} ·{' '}
-              {selected.origin === 'manual' ? 'Manual item' : 'Source item'} ·{' '}
-              {catalog.pages
-                .filter((page) => page.itemIds.includes(selected.id))
-                .map((page) => page.name)
-                .join(', ')}
-            </p>
-          )}
-          {!matches.length && (
-            <p className="admin-note">
-              No matching items. Add a missing item in Catalog items before
-              resolving this submission.
-            </p>
-          )}
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              checked={draft.hardcore}
-              onChange={(event) => change({ hardcore: event.target.checked })}
-            />
-            Collected on hardcore worlds
-          </label>
-          <label>
-            Review note
-            <textarea
-              maxLength={1000}
-              rows={3}
-              value={reviewNote}
-              onChange={(event) => setReviewNote(event.target.value)}
-            />
-            <span className="admin-note">
-              Saved staff note, separate from claim corrections and decision
-              reasons. Clear and save to remove the note.
-            </span>
-          </label>
-          <div className="admin-actions">
-            <button
-              className="site-button"
-              type="button"
-              disabled={Boolean(blockers.note)}
-              aria-describedby={describedBy('note')}
-              aria-busy={action.busy && action.operation === 'note'}
-              onClick={saveNote}
-            >
-              Save review note
-            </button>
-            <button
-              className="site-button"
-              type="button"
-              disabled={Boolean(blockers.discardNote)}
-              aria-describedby={describedBy('discardNote')}
-              onClick={() => setReviewNote(row.reviewNote)}
-            >
-              Discard review note
-            </button>
-          </div>
-          {explanations(['note', 'discardNote'])}
-          <label>
-            Review reason
-            <textarea
-              maxLength={1000}
-              rows={3}
-              value={draft.reason}
-              onChange={(event) =>
-                setDraft({ ...draft, reason: event.target.value })
-              }
-            />
-            <span className="admin-note">
-              One-time audit reason for rejection, revocation and corrections to
-              approved credits. Not saved as a lasting comment.
-            </span>
-          </label>
-          <div className="admin-actions">
-            <button
-              className="site-button"
-              type="submit"
-              disabled={Boolean(blockers.claim)}
-              aria-describedby={describedBy('claim')}
-              aria-busy={action.busy && action.operation === 'claim'}
-            >
-              Save corrections
-            </button>
-            <button
-              className="site-button"
-              type="button"
-              disabled={Boolean(blockers.discardClaim)}
-              aria-describedby={describedBy('discardClaim')}
-              onClick={() => {
-                setDraft(draftOf(row));
-                setChecked(false);
-              }}
-            >
-              Discard corrections
-            </button>
-          </div>
-          {explanations(['claim', 'discardClaim'])}
-        </fieldset>
-        {claimDirty && (
-          <p className="admin-note">
-            Save or discard corrections before deciding on this claim.
-          </p>
-        )}
-        {row.status === 'pending' && (
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              checked={checked}
-              disabled={Boolean(blockers.acknowledge)}
-              aria-describedby={describedBy('acknowledge')}
-              onChange={(event) => setChecked(event.target.checked)}
-            />
-            {row.source === 'manual'
-              ? 'I verified this manual claim and its item, collector, date and world.'
-              : row.chatMessage
-                ? 'I checked the chat message and any attached proof for the saved item, collector, date and hardcore claim.'
-                : 'I checked the linked proof for the saved item, collector, date and hardcore claim.'}
-          </label>
-        )}
-        {row.status === 'pending' && explanations(['acknowledge'])}
-        <div className="admin-actions">
-          {row.status === 'pending' && (
-            <>
-              <button
-                className="site-button site-button--approve"
-                type="button"
-                disabled={Boolean(blockers.approve)}
-                aria-describedby={describedBy('approve')}
-                aria-busy={action.busy && action.operation === 'approve'}
-                onClick={() => perform('approve')}
-              >
-                Approve submission
-              </button>
-              <button
-                className="site-button"
-                type="button"
-                disabled={Boolean(blockers.reject)}
-                aria-describedby={describedBy('reject')}
-                aria-busy={action.busy && action.operation === 'reject'}
-                onClick={() => perform('reject')}
-              >
-                Reject submission
-              </button>
-            </>
-          )}
-          {row.status === 'approved' && (
-            <button
-              className="site-button site-button--danger"
-              type="button"
-              disabled={Boolean(blockers.revoke)}
-              aria-describedby={describedBy('revoke')}
-              aria-busy={action.busy && action.operation === 'revoke'}
-              onClick={() => perform('revoke')}
-            >
-              Revoke credit
-            </button>
-          )}
+            {row.status === 'pending'
+              ? explanations(['approve', 'reject'])
+              : row.status === 'approved'
+                ? explanations(['revoke'])
+                : null}
+          </form>
         </div>
-        {row.status === 'pending'
-          ? explanations(['approve', 'reject'])
-          : row.status === 'approved'
-            ? explanations(['revoke'])
-            : null}
-      </form>
-      <ReviewAuditHistory
-        key={
-          detail.auditRevision +
-          ':' +
-          row.version +
-          ':' +
-          refresh +
-          ':' +
-          detail.audit[0]?.id
-        }
-        initial={detail}
-        client={client}
-        disabled={action.busy}
-        onAccessLost={onAccessLost}
-        onReload={() => setRefresh((v) => v + 1)}
-      />
-    </section>
+        <ReviewAuditHistory
+          key={
+            detail.auditRevision +
+            ':' +
+            row.version +
+            ':' +
+            refresh +
+            ':' +
+            detail.audit[0]?.id
+          }
+          initial={detail}
+          client={client}
+          disabled={action.busy}
+          onAccessLost={onAccessLost}
+          onReload={() => setRefresh((v) => v + 1)}
+        />
+      </section>
+    </ReviewWindow>
   );
 }

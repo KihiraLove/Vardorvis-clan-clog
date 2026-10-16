@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
-  dateSourceLabel,
+  safeScreenshotPath,
   type AdminCatalog,
   type AdminClient,
   type QueueResult,
@@ -13,16 +13,17 @@ import type { AdminSession } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
 import { SubmissionEditor } from './SubmissionEditor.tsx';
 import { ManualSubmissionForm } from './ManualSubmissionForm.tsx';
-import { ProofLink } from './AdminProofLink.tsx';
 import { usePreparedAdminData } from './admin-route-data.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import type { SubmissionFilters } from '@clog/domain';
 export function AdminQueue({
   client,
+  hardcoreEnabled,
   session,
   onAccessLost,
 }: {
   client: AdminClient;
+  hardcoreEnabled: boolean;
   session: AdminSession;
   onAccessLost: () => void;
 }) {
@@ -145,6 +146,7 @@ export function AdminQueue({
     <>
       {snapshot?.catalog && (
         <ManualSubmissionForm
+          hardcoreEnabled={hardcoreEnabled}
           catalog={snapshot.catalog}
           client={client}
           session={session}
@@ -159,34 +161,37 @@ export function AdminQueue({
         />
       )}
       <section className="admin-panel submission-filter-panel">
-        <label className="admin-checkbox">
-          <input
-            type="checkbox"
-            checked={filters?.filterCollected ?? false}
-            disabled={session.role !== 'admin' || !filters || filterAction.busy}
-            onChange={(event) => {
-              if (!filters || session.role !== 'admin') return;
-              const checked = event.target.checked;
-              void filterAction.execute(
-                async (signal) => {
-                  const saved = await client.saveSubmissionFilters(
-                    checked,
-                    filters.revision,
-                    session.csrfToken,
-                    signal,
-                  );
-                  if (!signal.aborted) setFilters(saved);
-                },
-                async (signal) => {
-                  const current = await client.queue(view, cursor, signal);
-                  if (!signal.aborted && current.filters)
-                    setFilters(current.filters);
-                },
-              );
-            }}
-          />
-          Filter out duplicates
-        </label>
+        <h2 id="submission-filter-title">Filter out duplicates</h2>
+        <button
+          type="button"
+          className="site-button admin-toggle"
+          role="switch"
+          aria-labelledby="submission-filter-title"
+          aria-checked={filters?.filterCollected ?? false}
+          disabled={session.role !== 'admin' || !filters || filterAction.busy}
+          onClick={() => {
+            if (!filters || session.role !== 'admin') return;
+            const checked = !filters.filterCollected;
+            void filterAction.execute(
+              async (signal) => {
+                const saved = await client.saveSubmissionFilters(
+                  checked,
+                  filters.revision,
+                  session.csrfToken,
+                  signal,
+                );
+                if (!signal.aborted) setFilters(saved);
+              },
+              async (signal) => {
+                const current = await client.queue(view, cursor, signal);
+                if (!signal.aborted && current.filters)
+                  setFilters(current.filters);
+              },
+            );
+          }}
+        >
+          {filters?.filterCollected ? 'On' : 'Off'}
+        </button>
         {filterAction.error && <p role="alert">{filterAction.error}</p>}
       </section>
       <section className="admin-panel">
@@ -258,87 +263,47 @@ export function AdminQueue({
                         : 'submission-card'
                     }
                   >
-                    <div className="submission-card__item">
-                      {item && <img src={item.iconPath} alt="" />}
-                      <div>
-                        <strong>
-                          {item?.name ??
-                            (row.itemId === null
-                              ? 'Needs item match'
-                              : 'Item unavailable in active catalog')}
-                        </strong>
-                        <span>
-                          {item
-                            ? 'Item #' + item.id
-                            : (row.itemId === null
-                                ? ''
-                                : `Item #${row.itemId} · `) +
-                              'Submitted: ' +
-                              row.rawItemText}
+                    <button
+                      type="button"
+                      className="submission-card__open"
+                      disabled={changing || !ready || Boolean(error)}
+                      onClick={() => setSelected(row.id)}
+                      aria-label={
+                        'Review ' +
+                        row.collectorName +
+                        ' · ' +
+                        (item?.name ?? row.rawItemText)
+                      }
+                    >
+                      <span className="submission-card__summary">
+                        <span className="submission-card__item">
+                          {item && <img src={item.iconPath} alt="" />}
+                          <strong>
+                            {item?.name ??
+                              (row.rawItemText || 'Needs item match')}
+                          </strong>
                         </span>
-                      </div>
+                        <span className="submission-card__collector">
+                          {row.collectorName}
+                        </span>
+                        <time dateTime={row.submittedAt}>
+                          {xpTime(row.submittedAt)}
+                        </time>
+                      </span>
+                      {safeScreenshotPath(row.screenshotPath) && (
+                        <img
+                          className="submission-card__screenshot"
+                          src={row.screenshotPath}
+                          alt="Submission screenshot"
+                          loading="lazy"
+                        />
+                      )}
                       <span
                         className={'admin-badge admin-badge--' + row.status}
                       >
                         {row.status}
                       </span>
-                    </div>
-                    <dl className="submission-facts">
-                      <div>
-                        <dt>Collector</dt>
-                        <dd>{row.collectorName}</dd>
-                      </div>
-                      <div>
-                        <dt>Collected on</dt>
-                        <dd>{row.collectedOn}</dd>
-                      </div>
-                      <div>
-                        <dt>Date source</dt>
-                        <dd>{dateSourceLabel(row.dateSource)}</dd>
-                      </div>
-                      <div>
-                        <dt>Submitted via</dt>
-                        <dd>
-                          {row.source === 'manual'
-                            ? 'Admin entry'
-                            : row.source === 'runelite'
-                              ? 'RuneLite'
-                              : 'Discord bot'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Claim</dt>
-                        <dd>
-                          {row.hardcore ? 'Hardcore worlds' : 'Ordinary worlds'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Submitted</dt>
-                        <dd>{xpTime(row.submittedAt)}</dd>
-                      </div>
-                    </dl>
-                    <div className="admin-actions">
-                      <ProofLink
-                        url={row.proofUrl}
-                        source={row.source}
-                        screenshot={row.screenshotPath}
-                        chatMessage={row.chatMessage}
-                      />
-                      <button
-                        type="button"
-                        className="site-button"
-                        disabled={changing || !ready || Boolean(error)}
-                        onClick={() => setSelected(row.id)}
-                        aria-label={
-                          'Review ' +
-                          row.collectorName +
-                          ' · ' +
-                          (item?.name ?? row.rawItemText)
-                        }
-                      >
-                        Review submission
-                      </button>
-                    </div>
+                    </button>
                   </li>
                 );
               })}
@@ -401,7 +366,7 @@ export function AdminQueue({
           </p>
         )}
       </section>
-      {selected && ready && (
+      {selected && snapshot && (
         <SubmissionEditor
           key={selected}
           id={selected}

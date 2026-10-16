@@ -1,4 +1,4 @@
-/** The shared catalog presented as an editable collection log. Writes publish immediately. */
+/** The shared catalog presented as an editable collection log. Reordering stays local until explicitly saved. */
 import {
   useEffect,
   useRef,
@@ -10,6 +10,7 @@ import { catalogSections, progressClass } from './model.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 import { CatalogInspector, type CatalogEditor } from './CatalogInspector.tsx';
 
 export interface CatalogEditorProps {
@@ -27,7 +28,58 @@ interface DragIdentity {
 }
 export function CatalogLogEditor(props: CatalogEditorProps) {
   const { catalog, client, session, refresh, onAccessLost } = props;
-  const sections = catalogSections(catalog);
+  const [draftOrder, setDraftOrder] = useState<{
+    sections?: string[];
+    pages: Record<string, string[]>;
+    items: Record<string, string[]>;
+  }>({ pages: {}, items: {} });
+  const arrange = <T,>(
+    entries: readonly T[],
+    ids: string[] | undefined,
+    key: (entry: T) => string,
+  ): T[] => {
+    if (!ids) return [...entries];
+    const rank = new Map(ids.map((id, index) => [id, index]));
+    return [...entries].sort(
+      (a, b) =>
+        (rank.get(key(a)) ?? ids.length) - (rank.get(key(b)) ?? ids.length),
+    );
+  };
+  const sections = arrange(
+    catalogSections(catalog),
+    draftOrder.sections,
+    (s) => s.id,
+  );
+  const displayPages = sections.flatMap((s) =>
+    arrange(
+      catalog.pages.filter((p) => p.category === s.id),
+      draftOrder.pages[s.id],
+      (p) => p.id,
+    ).map((p) => ({
+      ...p,
+      itemIds: arrange(p.itemIds, draftOrder.items[p.id], String),
+    })),
+  );
+  const orderDirty =
+    sections.some((s, index) => s.id !== catalogSections(catalog)[index]?.id) ||
+    sections.some((s) =>
+      displayPages
+        .filter((p) => p.category === s.id)
+        .some(
+          (p, index) =>
+            p.id !==
+            catalog.pages.filter((p) => p.category === s.id)[index]?.id,
+        ),
+    ) ||
+    displayPages.some((p) =>
+      p.itemIds.some(
+        (id, index) =>
+          id !==
+          catalog.pages.find((original) => original.id === p.id)?.itemIds[
+            index
+          ],
+      ),
+    );
   const initial =
     catalog.pages.find((p) => p.id === 'vardorvis') ?? catalog.pages[0];
   const [sectionId, setSectionId] = useState(
@@ -38,9 +90,10 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
     [formState, setFormState] = useState({ dirty: false, busy: false });
   const action = useAdminAction(onAccessLost),
     locked = action.busy || formState.busy;
+  useAdminDraft(orderDirty, locked);
   const panelRef = useRef<HTMLElement>(null);
   const section = sections.find((s) => s.id === sectionId) ?? sections[0];
-  const pages = catalog.pages.filter((p) => p.category === section?.id);
+  const pages = displayPages.filter((p) => p.category === section?.id);
   const page = pages.find((p) => p.id === pageId) ?? pages[0];
   const collected = new Set(catalog.collectedItemIds ?? []);
   const count = (ids: number[]) => ({
@@ -61,38 +114,85 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
     setEditor(next);
     return true;
   };
-  const saveOrder = (kind: DragKind, ids: string[]) => {
+  const stageOrder = (kind: DragKind, ids: string[]) => {
     if (locked) return;
+    action.setMessage(undefined);
+    setDraftOrder((current) =>
+      kind === 'section'
+        ? { ...current, sections: ids }
+        : kind === 'page' && section
+          ? { ...current, pages: { ...current.pages, [section.id]: ids } }
+          : kind === 'item' && page
+            ? { ...current, items: { ...current.items, [page.id]: ids } }
+            : current,
+    );
+  };
+  const saveOrder = () => {
+    if (locked || !orderDirty) return;
     void action.execute(
       async (signal) => {
-        if (kind === 'section')
+        let current = catalog;
+        const desiredSections = sections.map((s) => s.id);
+        const same = (
+          a: readonly (string | number)[],
+          b: readonly (string | number)[],
+        ) => JSON.stringify(a) === JSON.stringify(b);
+        if (
+          !same(
+            desiredSections,
+            catalogSections(current).map((s) => s.id),
+          )
+        ) {
           await client.reorderSections(
-            ids,
-            catalog.revision,
+            desiredSections,
+            current.revision,
             session.csrfToken,
             signal,
           );
-        else if (kind === 'page' && section)
-          await client.reorderPages(
-            section.id,
-            ids,
-            catalog.revision,
-            session.csrfToken,
-            signal,
-          );
-        else if (kind === 'item' && page)
-          await client.order(
-            page.id,
-            ids.map(Number),
-            page.version,
-            session.csrfToken,
-            signal,
-          );
-        await refresh(signal);
-        if (!signal.aborted)
-          action.setMessage(
-            `${kind === 'section' ? 'Section' : kind === 'page' ? 'Page' : 'Item'} order saved.`,
-          );
+          current = await refresh(signal);
+          signal.throwIfAborted();
+        }
+        for (const section of sections) {
+          const desiredPages = displayPages
+            .filter((p) => p.category === section.id)
+            .map((p) => p.id);
+          if (
+            !same(
+              desiredPages,
+              current.pages
+                .filter((p) => p.category === section.id)
+                .map((p) => p.id),
+            )
+          ) {
+            await client.reorderPages(
+              section.id,
+              desiredPages,
+              current.revision,
+              session.csrfToken,
+              signal,
+            );
+            current = await refresh(signal);
+            signal.throwIfAborted();
+          }
+        }
+        for (const page of displayPages) {
+          const saved = current.pages.find((p) => p.id === page.id);
+          if (saved && !same(page.itemIds, saved.itemIds)) {
+            await client.order(
+              page.id,
+              page.itemIds,
+              saved.version,
+              session.csrfToken,
+              signal,
+            );
+            current = await refresh(signal);
+            signal.throwIfAborted();
+          }
+        }
+        if (!signal.aborted) {
+          setDraftOrder({ pages: {}, items: {} });
+          action.setMessage('Item order saved.');
+        }
       },
       async (signal) => {
         await refresh(signal);
@@ -112,7 +212,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
     if (start < 0 || end < 0 || start === end) return;
     ids.splice(start, 1);
     ids.splice(end, 0, from);
-    saveOrder(kind, ids);
+    stageOrder(kind, ids);
   };
   const scope = (kind: DragKind) =>
     kind === 'section'
@@ -258,7 +358,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
               disabled={locked}
               onClick={() => open({ kind: 'section-add' })}
             >
-              + Add section
+              <span className="catalog-add-plus">+</span> Add section
             </button>
           </div>
           <div
@@ -309,7 +409,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
                     disabled={locked}
                     onClick={() => open({ kind: 'page-add', id: section.id })}
                   >
-                    + Add page
+                    <span className="catalog-add-plus">+</span> Add page
                   </button>
                 )}
               </div>
@@ -372,7 +472,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
                         disabled={locked}
                         onClick={() => open({ kind: 'item-add', id: page.id })}
                       >
-                        + Add item
+                        <span className="catalog-add-plus">+</span> Add item
                       </button>
                     </div>
                   </div>
@@ -389,7 +489,18 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
             </div>
           </div>
         </div>
-        {action.busy && <p role="status">Saving order…</p>}
+        {(orderDirty || action.message) && (
+          <div className="catalog-order-save">
+            <button
+              type="button"
+              className="site-button"
+              disabled={locked || !orderDirty}
+              onClick={saveOrder}
+            >
+              {action.busy ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        )}
         {action.error && (
           <p role="alert" className="admin-error">
             {action.error}
@@ -410,10 +521,11 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
           <button
             type="button"
             className="site-button catalog-close"
+            aria-label="Close editor"
             disabled={locked}
             onClick={() => open(undefined)}
           >
-            Close editor
+            ×
           </button>
           <CatalogInspector
             key={`${editor.kind}-${'id' in editor ? editor.id : ''}`}

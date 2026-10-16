@@ -81,6 +81,7 @@ for (const width of [1440, 1100, 320]) {
       ).toHaveCount(0);
       await expect(page.locator('.catalog-page-row')).toHaveCount(pages);
       await expect(page.locator('.catalog-item')).toHaveCount(items);
+      const before = await page.locator('.catalog-log').boundingBox();
       await page
         .getByRole('button', { name: '+ Add section', exact: true })
         .click();
@@ -101,6 +102,10 @@ for (const width of [1440, 1100, 320]) {
         };
       });
       expect(geometry.width).toBeLessThanOrEqual(width);
+      expect(geometry.log.right - geometry.log.left).toBeCloseTo(
+        before!.width,
+        0,
+      );
       if (width > 1050)
         expect(geometry.editor.left).toBeGreaterThan(geometry.log.right);
       else expect(geometry.editor.top).toBeGreaterThan(geometry.log.bottom);

@@ -138,7 +138,7 @@ export function AdminScheduling({
   return (
     <>
       <section className="admin-panel scheduling-panel">
-        <h2>Scheduling</h2>
+        <h2>Scheduling and Competitions</h2>
         {error && (
           <p role="alert">
             {error}{' '}
@@ -148,14 +148,18 @@ export function AdminScheduling({
           </p>
         )}
         {session.role === 'admin' ? (
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              checked={state?.enabled ?? false}
+          <div className="scheduling-toggle">
+            <h3 id="scheduling-toggle-title">Collection log scheduling</h3>
+            <button
+              type="button"
+              className="site-button admin-toggle"
+              role="switch"
+              aria-labelledby="scheduling-toggle-title"
+              aria-checked={state?.enabled ?? false}
               disabled={busy}
-              onChange={(event) => {
+              onClick={() => {
                 if (!state) return;
-                const enabled = event.target.checked;
+                const enabled = !state.enabled;
                 void action.execute(async (signal) => {
                   const saved = await client.setSchedulingEnabled(
                     enabled,
@@ -171,9 +175,10 @@ export function AdminScheduling({
                   }
                 }, reload);
               }}
-            />
-            Enable collection log scheduling
-          </label>
+            >
+              {state?.enabled ? 'On' : 'Off'}
+            </button>
+          </div>
         ) : (
           <p>
             Scheduling is{' '}
@@ -181,11 +186,12 @@ export function AdminScheduling({
             administrator can change this.
           </p>
         )}
-        <p className="admin-note">
-          {state?.enabled
-            ? 'Pages are closed outside their scheduled windows. No active windows means submissions are closed.'
-            : 'Scheduling is disabled. Submissions follow the usual rules; you can prepare windows here.'}
-        </p>
+        {state?.enabled && (
+          <p className="admin-note">
+            Pages are closed outside their scheduled windows. No active windows
+            means submissions are closed.
+          </p>
+        )}
       </section>
       <section className="admin-panel scheduling-panel">
         <h2>Schedule management</h2>
@@ -240,35 +246,42 @@ export function AdminScheduling({
                 onChange={(event) => setTitle(event.target.value)}
               />
             </label>
-            <label htmlFor="schedule-start">
-              Start date and time (local)
-              <input
-                id="schedule-start"
-                type="datetime-local"
-                step={1}
-                required
-                value={startLocal}
-                onChange={(event) => setStartLocal(event.target.value)}
-              />
-            </label>
-            <p className="schedule-utc" aria-live="polite">
-              Start UTC:{' '}
-              {startLocal ? previewUtc(startLocal) : 'Choose a start time.'}
-            </p>
-            <label htmlFor="schedule-end">
-              End date and time (local)
-              <input
-                id="schedule-end"
-                type="datetime-local"
-                step={1}
-                required
-                value={endLocal}
-                onChange={(event) => setEndLocal(event.target.value)}
-              />
-            </label>
-            <p className="schedule-utc" aria-live="polite">
-              End UTC: {endLocal ? previewUtc(endLocal) : 'Choose an end time.'}
-            </p>
+            <div className="schedule-datetime-field">
+              <label htmlFor="schedule-start">
+                Start date and time (local)
+              </label>
+              <div className="schedule-datetime-row">
+                <input
+                  id="schedule-start"
+                  type="datetime-local"
+                  step={1}
+                  required
+                  value={startLocal}
+                  onChange={(event) => setStartLocal(event.target.value)}
+                />
+                <span className="schedule-utc" aria-live="polite">
+                  Start UTC:{' '}
+                  {startLocal ? previewUtc(startLocal) : 'Choose a start time.'}
+                </span>
+              </div>
+            </div>
+            <div className="schedule-datetime-field">
+              <label htmlFor="schedule-end">End date and time (local)</label>
+              <div className="schedule-datetime-row">
+                <input
+                  id="schedule-end"
+                  type="datetime-local"
+                  step={1}
+                  required
+                  value={endLocal}
+                  onChange={(event) => setEndLocal(event.target.value)}
+                />
+                <span className="schedule-utc" aria-live="polite">
+                  End UTC:{' '}
+                  {endLocal ? previewUtc(endLocal) : 'Choose an end time.'}
+                </span>
+              </div>
+            </div>
             <label htmlFor="schedule-pages-search">
               Find collection log pages
               <input
@@ -346,30 +359,34 @@ export function AdminScheduling({
         <div className="schedule-list">
           {state?.schedules.map((schedule) => (
             <article className="schedule-card" key={schedule.id}>
-              <h4>{schedule.title}</h4>
-              <p>
-                {!state.enabled
-                  ? 'Inactive while scheduling is disabled'
-                  : now < schedule.startsAt
-                    ? 'Upcoming'
-                    : now < schedule.endsAt
-                      ? 'Open now'
-                      : 'Ended'}
-              </p>
-              <p>
-                Start: {localScheduleLabel(schedule.startsAt)}
-                <br />
-                <span className="schedule-utc">
-                  {utcScheduleLabel(schedule.startsAt)}
+              <div className="schedule-card__heading">
+                <h4>{schedule.title}</h4>
+                <span className="admin-badge">
+                  {!state.enabled
+                    ? 'Inactive while scheduling is disabled'
+                    : now < schedule.startsAt
+                      ? 'Upcoming'
+                      : now < schedule.endsAt
+                        ? 'Open now'
+                        : 'Ended'}
                 </span>
-              </p>
-              <p>
-                End: {localScheduleLabel(schedule.endsAt)}
-                <br />
-                <span className="schedule-utc">
-                  {utcScheduleLabel(schedule.endsAt)}
-                </span>
-              </p>
+              </div>
+              <div className="schedule-card__times">
+                <p>
+                  Start: {localScheduleLabel(schedule.startsAt)}
+                  <br />
+                  <span className="schedule-utc">
+                    {utcScheduleLabel(schedule.startsAt)}
+                  </span>
+                </p>
+                <p>
+                  End: {localScheduleLabel(schedule.endsAt)}
+                  <br />
+                  <span className="schedule-utc">
+                    {utcScheduleLabel(schedule.endsAt)}
+                  </span>
+                </p>
+              </div>
               <p>
                 Pages:{' '}
                 {schedule.pageIds
@@ -387,15 +404,15 @@ export function AdminScheduling({
                   disabled={busy}
                   onClick={() => edit(schedule)}
                 >
-                  Edit {schedule.title}
+                  Edit
                 </button>
                 <button
                   type="button"
-                  className="site-button"
+                  className="site-button site-button--danger"
                   disabled={busy}
                   onClick={() => setRemoving(schedule)}
                 >
-                  Delete {schedule.title}
+                  Delete
                 </button>
               </div>
             </article>
@@ -415,7 +432,7 @@ export function AdminScheduling({
             <div className="admin-actions">
               <button
                 type="button"
-                className="site-button"
+                className="site-button site-button--danger"
                 disabled={busy}
                 onClick={() => {
                   if (!state) return;

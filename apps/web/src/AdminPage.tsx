@@ -40,8 +40,7 @@ export function AdminNavigation({
       {[
         ['/admin', 'Submissions'],
         ['/admin/catalog', 'Items catalog'],
-        ['/admin/xp', 'XP imports'],
-        ['/admin/schedules', 'Scheduling'],
+        ['/admin/schedules', 'Scheduling and Competitions'],
         ['/admin/runelite', 'RuneLite submissions'],
         ...(session?.role === 'admin'
           ? [
@@ -56,7 +55,11 @@ export function AdminNavigation({
           key={url}
           href={url}
           onClick={onNavigate}
-          aria-current={path === url ? 'page' : undefined}
+          aria-current={
+            path === url || (path === '/admin/xp' && url === '/admin/schedules')
+              ? 'page'
+              : undefined
+          }
         >
           {label}
         </a>
@@ -68,8 +71,8 @@ export function AdminPage({
   client,
   path,
   onNavigate,
-  children,
   clanName,
+  hardcoreEnabled,
   onSettingsSaved,
   onBrandingSaved,
   competitionClient,
@@ -82,12 +85,9 @@ export function AdminPage({
   xpClient: XpClient;
   registerNavigation: (navigator: AdminNavigator | null) => void;
   clanName: string;
+  hardcoreEnabled: boolean;
   onSettingsSaved: (settings: SiteSettings) => void;
   onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
-  children?: (
-    session: AdminSession,
-    onAccessLost: () => void,
-  ) => React.ReactNode;
   initial?: PreparedAdminEntry | undefined;
 }) {
   const [access, setAccess] = useState<AdminAccess>(
@@ -348,7 +348,7 @@ export function AdminPage({
             }}
             onAccessLost={accessLost}
           />
-        ) : path === '/admin/schedules' ? (
+        ) : path === '/admin/schedules' || path === '/admin/xp' ? (
           <AdminScheduling
             client={client}
             session={session}
@@ -381,8 +381,6 @@ export function AdminPage({
           session.role === 'admin' ? null : (
             <p role="alert">Only the administrator can change site settings.</p>
           )
-        ) : children && path === '/admin/xp' ? (
-          children(session, accessLost)
         ) : path === '/admin/catalog' ? (
           <AdminCatalogPage
             client={client}
@@ -391,6 +389,7 @@ export function AdminPage({
           />
         ) : (
           <AdminQueue
+            hardcoreEnabled={hardcoreEnabled}
             client={client}
             session={session}
             onAccessLost={accessLost}

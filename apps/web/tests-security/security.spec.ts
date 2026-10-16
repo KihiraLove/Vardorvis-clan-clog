@@ -324,9 +324,7 @@ test('stored PNG evidence renders under enforcement', async ({ page }) => {
   await form
     .getByLabel('PNG screenshot (optional)')
     .setInputFiles({ name: 'proof.png', mimeType: 'image/png', buffer: png });
-  await form
-    .getByLabel('Approve immediately and show in the collection log')
-    .uncheck();
+  await form.getByLabel('Approve immediately').uncheck();
   await form.getByRole('button', { name: 'Create manual submission' }).click();
   await page.getByRole('button', { name: /^Review CSP PNG evidence/u }).click();
   const proof = page

@@ -296,9 +296,9 @@ function CatalogForm({
       {editor.kind === 'item-existing' ? (
         <div className="catalog-picker">
           <label>
-            Search items
             <input
               type="search"
+              aria-label="Search items"
               placeholder="Search by name or ID"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -347,9 +347,7 @@ function CatalogForm({
             {!choices.length && <p>No matching items.</p>}
           </div>
           {choices.length > 100 && (
-            <p className="admin-note">
-              Showing the first 100 matches. Search to find more items.
-            </p>
+            <p className="admin-note">Showing the first 100 matches.</p>
           )}
         </div>
       ) : (
@@ -426,7 +424,7 @@ function CatalogForm({
             <>
               <button
                 type="button"
-                className="site-button catalog-delete"
+                className="site-button site-button--danger catalog-delete"
                 disabled={
                   locked || catalog.pages.some((p) => p.category === section.id)
                 }
@@ -458,7 +456,7 @@ function CatalogForm({
           {page && (
             <button
               type="button"
-              className="site-button catalog-delete"
+              className="site-button site-button--danger catalog-delete"
               disabled={locked}
               onClick={() => {
                 if (
@@ -522,7 +520,7 @@ function CatalogForm({
               )}
               <button
                 type="button"
-                className="site-button catalog-delete"
+                className="site-button site-button--danger catalog-delete"
                 disabled={locked}
                 onClick={() => {
                   if (

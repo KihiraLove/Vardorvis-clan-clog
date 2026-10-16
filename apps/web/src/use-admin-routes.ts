@@ -154,9 +154,7 @@ export function useAdminRoutes({
               error: timedOut
                 ? 'Loading timed out. Retry or cancel navigation.'
                 : classifyAccessFailure(failure) === 'denied'
-                  ? target === '/admin/xp'
-                    ? 'Your account is not allowed to view XP import history.'
-                    : 'Your account is not allowed to view this page.'
+                  ? 'Your account is not allowed to view this page.'
                   : failure instanceof RouteCodeError
                     ? failure.message
                     : failure instanceof Error &&

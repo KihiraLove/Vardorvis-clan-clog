@@ -6,12 +6,19 @@ parallel code/data preparation and chunk-failure/cancellation recovery. Reports
 include `web-bundle.json`, `loading.log` and per-test loading measurements.
 
 Staff navigation prepares the authorized destination before changing the visible
-page. Queue/catalog, XP tracker/history, schedules/catalog, site settings/logo,
+page. Queue/catalog, schedules/catalog, site settings/logo,
 RuneLite settings/key and moderator accounts each have a route loader. The shell
 reuses its verified session; moderators never request administrator-only data,
 and mandatory password setup prepares only the account form. Destination modules
 are already available in the current application bundle. Bundle splitting is
 tracked separately in #101.
+
+Competition imports live under **Scheduling and Competitions**. The old
+`/admin/xp` URL opens that same page; there is no separate XP imports screen.
+Catalog section, page and item reordering stays local until **Save changes** is
+clicked. Pending orders participate in the unsaved-draft navigation guard.
+Submission review opens in a modal over the current content and stays mounted
+while its queue refreshes after a saved note, correction or decision.
 
 Prepared snapshots initialize the mounted forms directly. Initial reads are not
 repeated after mount, and catalog consumers share one snapshot. Later refreshes,

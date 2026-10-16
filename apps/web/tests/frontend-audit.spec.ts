@@ -512,7 +512,7 @@ test('audit: retain the current admin page until destination data is ready', asy
   }
 });
 
-test('audit: XP and Scheduling competition fields share input styling', async ({
+test('audit: the retired XP imports URL opens the shared scheduling competition form', async ({
   page,
 }) => {
   await liveAdmin(page);
@@ -529,12 +529,12 @@ test('audit: XP and Scheduling competition fields share input styling', async ({
   await page.goto('/admin/schedules');
   await expect(input).toBeVisible();
   const scheduling = await style();
-  await page.getByRole('link', { name: 'XP imports', exact: true }).click();
+  await page.goto('/admin/xp');
   await expect(input).toBeVisible();
   expect(await style()).toEqual(scheduling);
 });
 
-test('audit: a pending session check gates navigation and concurrent private XP loads', async ({
+test('audit: a pending session check gates navigation and private scheduling loads', async ({
   page,
 }) => {
   const f = await adminFixtures();
@@ -550,15 +550,10 @@ test('audit: a pending session check gates navigation and concurrent private XP 
     await gate;
     await route.fulfill({ json: f.session });
   });
-  await page.route('**/api/v1/admin/xp/imports', async (route) => {
+  await page.route('**/api/v1/admin/schedules', async (route) => {
     privateReads++;
     await route.fulfill({
-      json: {
-        imports: [],
-        revision: 'xp-history-1',
-        pageCursor: 'xp-first',
-        nextCursor: null,
-      },
+      json: { revision: 'schedules-1', enabled: false, schedules: [] },
     });
   });
   try {
@@ -598,75 +593,62 @@ test('audit: mandatory first-login password setup hides navigation and XP import
   await expect(page.getByLabel('Current password')).toBeVisible();
 });
 
-test('audit: XP history expiry clears private content without a second session waterfall', async ({
+test('audit: scheduling expiry clears private content without another session check', async ({
   page,
 }) => {
   const f = await adminFixtures();
-  let checks = 0;
-  let denied = false;
+  let checks = 0,
+    denied = false;
   await liveAdmin(page);
-  await page.route('**/api/v1/auth/session', async (route) => {
+  await page.route('**/api/v1/auth/session', (route) => {
     checks++;
-    await route.fulfill({ json: f.session });
+    return route.fulfill({ json: f.session });
   });
-  await page.route('**/api/v1/admin/xp/imports', (route) =>
+  await page.route('**/api/v1/admin/schedules', (route) =>
     route.fulfill(
       denied
         ? { status: 401, json: { error: 'expired' } }
-        : {
-            json: {
-              revision: 'xp-history-1',
-              pageCursor: 'xp-first',
-              nextCursor: null,
-              imports: [
-                {
-                  id: 'import-1',
-                  competitionId: 42,
-                  title: 'Private XP history',
-                  actorName: 'Admin',
-                  importedAt: '2026-10-13T06:00:00.000Z',
-                  outcome: 'applied',
-                  changes: [],
-                },
-              ],
-            },
-          },
+        : { json: { revision: 'schedules-1', enabled: false, schedules: [] } },
     ),
   );
-  await page.goto('/admin/xp');
-  await expect(page.getByText('Import history (1 on this page)')).toBeVisible();
-  await page.getByText('Import history (1 on this page)').click();
-  await expect(page.getByText('Private XP history')).toBeVisible();
-  expect(checks).toBe(1);
+  await page.goto('/admin/schedules');
+  await expect(page.getByLabel('Wise Old Man competition link')).toBeVisible();
   denied = true;
-  await page.getByRole('link', { name: 'Your account' }).click();
-  await page.getByRole('link', { name: 'XP imports' }).click();
+  await page.getByRole('link', { name: 'Your account', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Scheduling and Competitions', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Admin session expired' }),
   ).toBeVisible();
   await expect(
     page.getByRole('navigation', { name: 'Admin navigation' }),
   ).toHaveCount(0);
-  await expect(page.getByText('Private XP history')).toHaveCount(0);
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
   expect(checks).toBe(1);
 });
 
-test('audit: denied XP history is not mistaken for an expired login', async ({
+test('audit: denied scheduling is not mistaken for an expired login', async ({
   page,
 }) => {
   await liveAdmin(page);
-  await page.route('**/api/v1/admin/xp/imports', (route) =>
+  await page.route('**/api/v1/admin/schedules', (route) =>
     route.fulfill({ status: 403, json: { error: 'role denied' } }),
   );
-  await page.goto('/admin/xp');
+  await page.goto('/admin/account');
+  await expect(page.getByLabel('Current password')).toBeVisible();
+  await page
+    .getByRole('link', { name: 'Scheduling and Competitions', exact: true })
+    .click();
   await expect(
-    page.getByText('Your account is not allowed to view XP import history.'),
+    page.getByText('Your account is not allowed to view this page.', {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole('navigation', { name: 'Admin navigation' }),
   ).toBeVisible();
-  await expect(page.getByLabel('Wise Old Man competition link')).toBeVisible();
+  await expect(page.getByLabel('Current password')).toBeVisible();
 });
 
 test('audit: retrying a failed session refresh clears the prior error and restores navigation', async ({

@@ -21,8 +21,7 @@ test('site settings lives on its own page and edited labels appear across the pu
   ).toHaveText([
     'Submissions',
     'Items catalog',
-    'XP imports',
-    'Scheduling',
+    'Scheduling and Competitions',
     'RuneLite submissions',
     'Site settings',
     'Hardcore worlds',
@@ -198,7 +197,8 @@ test('hardcore appearance can be configured while disabled and switches independ
   );
   await expect(
     page.getByRole('heading', { name: 'Hardcore training', exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.locator('#xp-tracker')).toHaveCount(0);
   await expect(page).toHaveTitle('Hardcore clan · Hardcore collection');
   await expect(page.locator('.log-help')).toContainText('Hardcore drops');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
@@ -244,13 +244,15 @@ test('hardcore appearance can be configured while disabled and switches independ
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole('link', { name: 'XP imports', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Scheduling and Competitions', exact: true })
+    .click();
   await expect(page.locator('.event-tracker > h1')).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'XP competition imports', exact: true }),
+    page.getByRole('heading', { name: 'Schedule management', exact: true }),
   ).toBeVisible();
   await page.screenshot({
-    path: test.info().outputPath('admin-xp-mobile.png'),
+    path: test.info().outputPath('admin-scheduling-mobile.png'),
     fullPage: true,
   });
 });
