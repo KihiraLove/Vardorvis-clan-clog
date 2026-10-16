@@ -228,6 +228,8 @@ test('staff chunks, local icon previews and same-origin private image rendering 
   const audit = await watch(page);
   const f = await loadingFixtures(page);
   await page.goto('/admin/catalog');
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await expect(page.getByLabel('Item name', { exact: true })).toBeEnabled();
   const png = await sharp({
     create: { width: 16, height: 16, channels: 4, background: 'red' },

@@ -408,6 +408,11 @@ export class PgStore implements BackendStore {
     await this.settings();
   }
   private async loadCatalog(client: pg.PoolClient): Promise<CatalogData> {
+    const sections = (
+      await client.query<{ id: string; name: string }>(
+        'SELECT id,name FROM catalog_sections WHERE active ORDER BY sort_order,id',
+      )
+    ).rows;
     const items = (
       await client.query<{ id: number; name: string; iconPath: string }>(
         'SELECT id, name, icon_path AS "iconPath" FROM items WHERE active ORDER BY id LIMIT 10001',
@@ -445,9 +450,7 @@ export class PgStore implements BackendStore {
       pages.some(
         (p) =>
           !p.name.trim() ||
-          !['bosses', 'raids', 'clues', 'minigames', 'other'].includes(
-            p.category,
-          ),
+          !sections.some((section) => section.id === p.category),
       ) ||
       slots.some((s) => !ids.has(s.item_id) || !pageIds.has(s.page_id))
     )
@@ -465,6 +468,7 @@ export class PgStore implements BackendStore {
     ).rows[0]!.version;
     return {
       catalogVersion: 'catalog-' + version,
+      sections,
       items,
       pages: pages.map((p) => ({
         ...p,

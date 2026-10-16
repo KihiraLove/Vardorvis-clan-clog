@@ -115,6 +115,12 @@ test(
         [claim, owner.id],
       );
       const before = await snapshot();
+      // Migration 024 changes the public catalog payload and advances its cache keys once.
+      const upgraded = structuredClone(before);
+      (upgraded.catalog_state![0] as { version: number }).version++;
+      (
+        upgraded.projection_state as { resource: string; version: number }[]
+      ).find((row) => row.resource === 'catalog')!.version++;
 
       await t.test(
         'unexpected dependencies reject retirement atomically without CASCADE',
@@ -159,9 +165,9 @@ test(
                 'SELECT count(*)::int AS n FROM schema_migrations',
               )
             ).rows[0].n,
-            23,
+            24,
           );
-          assert.deepEqual(await snapshot(), before);
+          assert.deepEqual(await snapshot(), upgraded);
           assert.deepEqual(
             (
               await pool.query(
@@ -195,7 +201,7 @@ test(
             () => validateMigrationHistory(oldManifest, ledger),
             /Unknown applied migration: 021_retire_oauth_states.sql/u,
           );
-          assert.deepEqual(await snapshot(), before);
+          assert.deepEqual(await snapshot(), upgraded);
           assert.deepEqual(
             (
               await pool.query(

@@ -323,39 +323,56 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   page,
 }) => {
   await page.goto('/admin/catalog?preview=1');
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await page
     .getByLabel('Item icon (required)', { exact: true })
     .setInputFiles(itemIcon);
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByLabel('Item name', { exact: true }).fill('New clan drop');
-  for (const name of ['Vardorvis', 'Duke Sucellus'])
-    await page
-      .locator('.page-picker')
-      .getByLabel(name, { exact: true })
-      .check();
+  await page
+    .getByLabel('In-game item ID (required)', { exact: true })
+    .fill('900001');
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(page.locator('.item-creator').getByRole('status')).toContainText(
-    'created. Every selected page starts uncollected.',
+    'created.',
   );
-  const rows = page.locator('.page-order-editor .page-order-list li');
-  await expect(rows.last()).toContainText('New clan drop');
+  const rows = page.locator('.catalog-item');
   const id = Number(await rows.last().getAttribute('data-item-id'));
-  const count = await rows.count();
-  const added = page.locator(
-    `.page-order-editor .page-order-list li[data-item-id="${id}"]`,
-  );
-  await added.focus();
-  for (let i = 1; i < count; i++) await added.press('Alt+ArrowUp');
-  await expect(rows.first()).toHaveAttribute('data-item-id', String(id));
-  await rows.first().dragTo(rows.nth(1));
-  await expect(rows.nth(1)).toHaveAttribute('data-item-id', String(id));
   await page
-    .getByRole('button', { name: 'Move New clan drop up', exact: true })
-    .focus();
-  await page.keyboard.press('Enter');
+    .getByRole('button', { name: 'Duke Sucellus', exact: true })
+    .click();
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add existing item', exact: true })
+    .click();
+  await page
+    .getByRole('searchbox', { name: 'Search items', exact: true })
+    .fill('New clan drop');
+  await page
+    .getByRole('button', { name: 'Add New clan drop to page', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Vardorvis', exact: true }).click();
+  const count = await rows.count();
+  const added = page.locator('.catalog-item[data-item-id="' + id + '"]');
+  for (let i = count - 1; i > 0; i--) {
+    await added
+      .getByRole('button', { name: 'Reorder item New clan drop', exact: true })
+      .press('Alt+ArrowUp');
+    await expect(rows.nth(i - 1)).toHaveAttribute('data-item-id', String(id));
+  }
+  await rows
+    .first()
+    .getByRole('button', { name: /^Reorder item / })
+    .dragTo(rows.nth(1));
+  await expect(rows.nth(1)).toHaveAttribute('data-item-id', String(id));
+  await added
+    .getByRole('button', { name: 'Reorder item New clan drop', exact: true })
+    .press('Alt+ArrowUp');
   await expect(rows.first()).toHaveAttribute('data-item-id', String(id));
-  await page.getByRole('button', { name: 'Save order', exact: true }).click();
-  await expect(page.getByText(/Page order saved\./)).toBeVisible();
+  await expect(
+    page.getByText('Item order saved.', { exact: true }),
+  ).toBeVisible();
   await capture(page, 'admin-catalog-desktop.png');
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot').first()).toHaveAttribute(
@@ -436,14 +453,17 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
   ).toBeLessThanOrEqual(320);
   await capture(page, 'admin-review-mobile.png');
   await page.getByRole('link', { name: 'Items catalog', exact: true }).tap();
-  const first = page.locator('.page-order-editor .page-order-list li').first();
+  const first = page.locator('.catalog-item').first();
   const id = await first.getAttribute('data-item-id');
-  await first.getByRole('button', { name: / down$/ }).tap();
+  await first.getByRole('button', { name: /^Item settings for / }).tap();
+  await page.getByRole('button', { name: 'Move later', exact: true }).tap();
+  await expect(page.locator('.catalog-item').nth(1)).toHaveAttribute(
+    'data-item-id',
+    id!,
+  );
   await expect(
-    page.locator('.page-order-editor .page-order-list li').nth(1),
-  ).toHaveAttribute('data-item-id', id!);
-  await page.getByRole('button', { name: 'Save order', exact: true }).tap();
-  await expect(page.getByText(/Page order saved\./)).toBeVisible();
+    page.getByText('Item order saved.', { exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
@@ -671,11 +691,12 @@ test('invalid icons do not upload; an uncertain create retries identical payload
     return route.fulfill({ status: 409, json: {} });
   });
   await page.goto('/admin/catalog');
-  await page.getByLabel('Item name', { exact: true }).fill('New live drop');
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await page
-    .locator('.page-picker')
-    .getByLabel('Vardorvis', { exact: true })
-    .check();
+    .getByLabel('In-game item ID (required)', { exact: true })
+    .fill('900001');
+  await page.getByLabel('Item name', { exact: true }).fill('New live drop');
   await page.getByLabel('Item icon (required)', { exact: true }).setInputFiles({
     name: 'spoof.png',
     mimeType: 'image/png',
@@ -703,26 +724,24 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   await expect(page.locator('.admin-created')).toContainText(
     'New live drop · #50001',
   );
-  await expect(
-    page.locator('.page-order-editor .page-order-list li').last(),
-  ).toHaveAttribute('data-item-id', '50001');
+  await expect(page.locator('.catalog-item').last()).toHaveAttribute(
+    'data-item-id',
+    '50001',
+  );
   expect(uploads).toBe(1);
   expect(creates).toBe(2);
   await page
-    .locator('.page-order-editor .page-order-list li')
+    .locator('.catalog-item')
     .first()
-    .getByRole('button', { name: / down$/ })
-    .click();
-  await page.getByRole('button', { name: 'Save order', exact: true }).click();
+    .getByRole('button', { name: /^Reorder item / })
+    .press('Alt+ArrowDown');
   await expect(
-    page.locator('.page-order-editor').getByRole('alert'),
+    page.locator('.catalog-log-wrap').getByRole('alert'),
   ).toContainText('The latest data is loaded');
-  await expect(
-    page.locator('.page-order-editor .page-order-list li').first(),
-  ).toHaveAttribute('data-item-id', '50001');
-  await expect(
-    page.getByRole('button', { name: 'Save order', exact: true }),
-  ).toBeDisabled();
+  await expect(page.locator('.catalog-item').first()).toHaveAttribute(
+    'data-item-id',
+    '50001',
+  );
   expect(orders).toBe(1);
 });
 

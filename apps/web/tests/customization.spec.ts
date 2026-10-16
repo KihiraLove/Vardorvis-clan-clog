@@ -365,117 +365,60 @@ test('administrator can disable, re-enable and delete moderator accounts without
     page.getByRole('button', { name: 'Delete preview-admin', exact: true }),
   ).toHaveCount(0);
 });
-test('item management confirms page-only deletion, retires the last membership and preserves reviews', async ({
+
+test('item settings preserve a pageless item until explicit deletion, including review history', async ({
   page,
 }) => {
   await page.goto('/admin/catalog?preview=1');
-  await expect(
-    page.getByRole('heading', { name: 'Item management', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Catalog maintenance', exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole('heading', { name: 'Delete catalog item', exact: true }),
-  ).toHaveCount(0);
-  const picker = page.getByRole('group', {
-    name: 'Collection-log pages (required)',
-  });
-  const search = picker.getByRole('searchbox', {
-    name: 'Search collection-log pages',
-  });
-  await expect(search).toHaveAttribute('placeholder', 'Search');
-  await expect(
-    page.getByText('Find collection-log pages', { exact: true }),
-  ).toHaveCount(0);
-  await search.fill('Duke');
-  await expect(picker.getByRole('checkbox')).toHaveCount(1);
-  await expect(
-    picker.getByRole('checkbox', { name: 'Duke Sucellus', exact: true }),
-  ).toBeVisible();
-  await search.fill('');
+  await page
+    .getByRole('button', { name: 'Item settings for Virtus mask', exact: true })
+    .click();
   const mask = previewCatalog.items.find(
     (item) => item.name === 'Virtus mask',
   )!;
-  const pages = previewCatalog.pages.filter((row) =>
-    row.itemIds.includes(mask.id),
-  );
-  const initial = pages.find((row) => row.id === 'vardorvis')!;
-  const confirm = async (name: string, accept: boolean, last = false) => {
-    await Promise.all([
-      page.waitForEvent('dialog').then(async (dialog) => {
-        expect(dialog.type()).toBe('confirm');
-        expect(dialog.message()).toContain('Are you sure');
-        expect(dialog.message()).toContain('Virtus mask from ' + name);
-        expect(dialog.message()).toContain(last ? 'last page' : 'other pages');
-        if (accept) await dialog.accept();
-        else await dialog.dismiss();
-      }),
-      page
-        .getByRole('button', {
-          name: 'Delete Virtus mask from ' + name,
-          exact: true,
-        })
-        .click(),
-    ]);
-  };
-  await confirm(initial.name, false);
-  await expect(
-    page
-      .locator('.page-order-editor .page-order-list li')
-      .filter({ hasText: 'Virtus mask' }),
-  ).toHaveCount(1);
-  await confirm(initial.name, true);
-  await expect(
-    page
-      .locator('.page-order-editor .page-order-list li')
-      .filter({ hasText: 'Virtus mask' }),
-  ).toHaveCount(0);
-  await page.locator('header a.clan-brand').click();
-  await expect(
-    page.locator('.item-slot[aria-label^="Virtus mask:"]'),
-  ).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Duke Sucellus', exact: true })
-    .click();
-  await expect(
-    page.locator('.item-slot[aria-label^="Virtus mask:"]'),
-  ).toHaveCount(1);
-  await page.goBack();
-  await expect(
-    page.getByRole('heading', { name: 'Item management', exact: true }),
-  ).toBeVisible();
-  const remaining = pages.filter((row) => row.id !== initial.id);
-  for (const [index, row] of remaining.entries()) {
+  for (const entry of previewCatalog.pages.filter((p) =>
+    p.itemIds.includes(mask.id),
+  )) {
     await page
-      .getByLabel('Collection-log page', { exact: true })
-      .selectOption(row.id);
-    await confirm(row.name, true, index === remaining.length - 1);
+      .getByRole('button', {
+        name: 'Remove Virtus mask from ' + entry.name,
+        exact: true,
+      })
+      .click();
     await expect(
-      page
-        .locator('.page-order-editor .page-order-list li')
-        .filter({ hasText: 'Virtus mask' }),
-    ).toHaveCount(0);
+      page.getByText('Removed from ' + entry.name + '.', { exact: true }),
+    ).toBeVisible();
   }
   await expect(
-    page.getByText('Virtus mask deleted from its last page and the catalog.', {
-      exact: true,
-    }),
+    page.getByText('This item is pageless.', { exact: true }),
   ).toBeVisible();
-  await page.setViewportSize({ width: 320, height: 850 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.evaluate(() => {
-    (document.activeElement as HTMLElement)?.blur();
-    window.scrollTo(0, 0);
-  });
-  await page.screenshot({
-    path: test.info().outputPath('item-management-mobile.png'),
-    fullPage: true,
-  });
+  await page.getByRole('button', { name: 'Close editor', exact: true }).click();
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add existing item', exact: true })
+    .click();
+  await page
+    .getByRole('searchbox', { name: 'Search items', exact: true })
+    .fill('Virtus mask');
+  await expect(
+    page.getByRole('button', { name: 'Add Virtus mask to page', exact: true }),
+  ).toContainText('Pageless');
+  await page
+    .getByRole('button', { name: 'Add Virtus mask to page', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Item settings for Virtus mask', exact: true })
+    .click();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'Delete item', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Edit item Virtus mask', exact: true }),
+  ).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete item', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Edit item Virtus mask', exact: true }),
+  ).toHaveCount(0);
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('button', { name: /^Review KihiraVD/ }).click();
   await expect(

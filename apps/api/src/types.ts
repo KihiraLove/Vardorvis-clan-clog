@@ -7,6 +7,7 @@ export interface Settings {
   hardcoreEnabled: boolean;
 }
 export interface CatalogData {
+  sections?: { id: string; name: string }[];
   catalogVersion?: string;
   items: { id: number; name: string; iconPath: string }[];
   pages: { id: string; name: string; category: string; itemIds: number[] }[];

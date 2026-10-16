@@ -60,6 +60,10 @@ export class AdminRequestError extends Error {
           'A page with this name already exists in this category.',
           'Choose distinct active catalog items.',
           'The catalog has reached its page or item-slot limit.',
+          'An in-game item ID already belongs to another item.',
+          'A section with this name already exists.',
+          'A page with this name already exists in this section.',
+          'Only sections with no pages can be deleted.',
         ].includes(serverConflict)
         ? serverConflict
         : status === 409 &&
@@ -649,6 +653,135 @@ export class LiveAdminClient implements AdminClient {
   }
   async catalog(signal: AbortSignal): Promise<AdminCatalog> {
     return parseAdminCatalog(await this.json('/api/v1/admin/catalog', signal));
+  }
+  async createSection(
+    name: string,
+    key: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json(
+        '/api/v1/admin/catalog/sections',
+        signal,
+        this.write(csrf, { name, expectedRevision: revision }, 'POST', key),
+      ),
+    );
+    const section = object(result.section);
+    if (section.name !== name) throw new Error('Unexpected section receipt.');
+    return { id: text(section.id), name: text(section.name) };
+  }
+  private async catalogWrite(
+    path: string,
+    fields: object,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  ) {
+    const result = object(
+      await this.json(
+        '/api/v1/admin/catalog/' + path,
+        signal,
+        this.write(csrf, { ...fields, expectedRevision: revision }, method),
+      ),
+    );
+    text(result.catalogRevision);
+  }
+  async editSection(
+    id: string,
+    name: string | null,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'sections/' + encodeURIComponent(id),
+      name === null ? {} : { name },
+      revision,
+      csrf,
+      signal,
+      name === null ? 'DELETE' : 'PATCH',
+    );
+  }
+  async reorderSections(
+    ids: string[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'sections/order',
+      { orderedSectionIds: ids },
+      revision,
+      csrf,
+      signal,
+      'PUT',
+    );
+  }
+  async renamePage(
+    id: string,
+    name: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'pages/' + encodeURIComponent(id),
+      { name },
+      revision,
+      csrf,
+      signal,
+      'PATCH',
+    );
+  }
+  async attachItem(
+    pageId: string,
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'pages/' + encodeURIComponent(pageId) + '/items/' + id,
+      {},
+      revision,
+      csrf,
+      signal,
+      'PUT',
+    );
+  }
+  async editItem(
+    id: number,
+    fields: { name: string; gameItemIds: number[]; iconAssetId?: string },
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'items/' + id,
+      fields,
+      revision,
+      csrf,
+      signal,
+      'PATCH',
+    );
+  }
+  async deleteItem(
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'items/' + id,
+      {},
+      revision,
+      csrf,
+      signal,
+      'DELETE',
+    );
   }
   async queue(
     view: QueueView,

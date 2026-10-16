@@ -16,7 +16,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT',
-    'audit_events catalog_audit catalog_page_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history game_item_ids manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit submission_images xp_import_history',
+    'audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit submission_images xp_import_history',
   ],
   [
     'SELECT UPDATE',
@@ -24,11 +24,11 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT UPDATE',
-    'catalog_assets clan_api_keys competition_previews items pages staff_accounts submissions wom_competitions xp_events xp_previews',
+    'catalog_assets catalog_sections clan_api_keys competition_previews items pages staff_accounts submissions wom_competitions xp_events xp_previews',
   ],
   [
     'SELECT INSERT DELETE',
-    'admin_sessions collection_log_schedule_pages page_items',
+    'admin_sessions collection_log_schedule_pages game_item_ids page_items',
   ],
   ['SELECT INSERT UPDATE DELETE', 'auth_rate_limits collection_log_schedules'],
 ])
@@ -262,7 +262,10 @@ test(
             "INSERT INTO items(id,name) VALUES(1000001,'Runtime fixture')",
           );
           await runtime.query(
-            "INSERT INTO pages(id,category,name,sort_order) VALUES('runtime-page','Test','Runtime page',0)",
+            "INSERT INTO catalog_sections(id,name,sort_order) VALUES('runtime-section','Runtime section',5)",
+          );
+          await runtime.query(
+            "INSERT INTO pages(id,category,name,sort_order) VALUES('runtime-page','runtime-section','Runtime page',0)",
           );
           await runtime.query(
             "INSERT INTO page_items(page_id,item_id,slot) VALUES('runtime-page',1000001,0)",

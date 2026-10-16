@@ -41,9 +41,11 @@ test('measure initial public JavaScript and cold authenticated deep-link readine
   const deepStarted = Date.now();
   await page.goto('/admin/catalog');
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel('Item name', { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: '+ Add section', exact: true }),
+  ).toBeEnabled();
   const coldAdminReadyMs = Date.now() - deepStarted;
   const accountStarted = Date.now();
   await page.getByRole('link', { name: 'Your account', exact: true }).click();
@@ -53,7 +55,9 @@ test('measure initial public JavaScript and cold authenticated deep-link readine
   const warmAccountReadyMs = Date.now() - accountStarted;
   const catalogStarted = Date.now();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
-  await expect(page.getByLabel('Item name', { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: '+ Add section', exact: true }),
+  ).toBeEnabled();
   const warmCatalogReadyMs = Date.now() - catalogStarted;
   const measurement = {
     publicScripts,
@@ -98,7 +102,7 @@ test('cold staff code and authorized destination reads overlap; completed reads 
   const beforeRelease = Date.now();
   release();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   expect(
     f.calls.filter((path) => path === '/api/v1/auth/session'),
@@ -132,7 +136,7 @@ test('cold deep-link read stays cancellable in the staff shell and Retry does no
   release();
   await page.getByRole('button', { name: 'Retry navigation' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   expect(
     f.calls.filter((path) => path === '/api/v1/auth/session'),
@@ -161,7 +165,7 @@ test('failed cold staff chunk offers document reload and never mounts private fo
   await expect(page.getByLabel('Item name', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Reload page', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   expect(
     f.calls.filter((path) => path === '/api/v1/auth/session').length,

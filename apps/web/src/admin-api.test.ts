@@ -185,6 +185,7 @@ test('icon staging uses multipart, and item retries retain the same idempotency 
   const asset = await client.upload(file, 'csrf', signal());
   const fields = {
     name: 'Future drop',
+    gameItemIds: [900001],
     iconAssetId: asset.assetId,
     pageIds: [fixture.catalog.pages[0]!.id],
   };

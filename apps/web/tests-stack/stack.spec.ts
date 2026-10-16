@@ -595,6 +595,12 @@ test('real moderator setup, role denial and server-side access revocation clear 
       .getByRole('link', { name: 'Items catalog', exact: true })
       .click();
     await staff
+      .getByRole('button', { name: '+ Add item', exact: true })
+      .click();
+    await staff
+      .getByRole('button', { name: 'Add new item', exact: true })
+      .click();
+    await staff
       .getByLabel('Item name', { exact: true })
       .fill('Private unsaved browser draft');
     // First-password setup advances the account revision; refresh the owner's view.
@@ -678,27 +684,20 @@ test('slow real reads preserve keyboard navigation; catalog geometry and both pr
   release();
   await page.unrouteAll({ behavior: 'wait' });
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await expect(page.getByLabel('Item name', { exact: true })).toBeEnabled();
   const geometry = await page.evaluate(() => {
     const box = (selector: string) => {
       const r = document.querySelector(selector)!.getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom, height: r.height };
+      return { top: r.top, left: r.left, right: r.right, bottom: r.bottom };
     };
-    return {
-      creator: box('.item-creator'),
-      manager: box('.page-order-editor'),
-      choices: box('.page-picker-choices'),
-      submit: box('.item-creator button[type="submit"]'),
-    };
+    return { log: box('.catalog-log'), editor: box('.catalog-inspector') };
   });
-  expect(
-    Math.abs(geometry.creator.top - geometry.manager.top),
-  ).toBeLessThanOrEqual(1);
-  expect(
-    Math.abs(geometry.creator.bottom - geometry.manager.bottom),
-  ).toBeLessThanOrEqual(1);
-  expect(geometry.choices.height).toBeGreaterThan(100);
-  expect(geometry.choices.bottom).toBeLessThan(geometry.submit.top);
+  expect(geometry.editor.left).toBeGreaterThan(geometry.log.right);
   await writeFile(
     test.info().outputPath('catalog-geometry.json'),
     JSON.stringify(geometry, null, 2),

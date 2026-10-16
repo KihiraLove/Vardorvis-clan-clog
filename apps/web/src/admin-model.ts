@@ -4,13 +4,7 @@ import {
   validateProofUrl,
   parseSubmissionFilters,
 } from '@clog/domain';
-import {
-  categories,
-  parseCatalog,
-  type Catalog,
-  type Item,
-  type Page,
-} from './model.ts';
+import { parseCatalog, type Catalog, type Item, type Page } from './model.ts';
 import {
   identity,
   list,
@@ -90,14 +84,16 @@ export interface QueueResult {
   pageCursor: string;
 }
 export interface AdminItem extends Item {
+  gameItemIds?: number[];
   origin: 'source' | 'manual';
-  overrides: ('name' | 'icon' | 'pages')[];
+  overrides: ('name' | 'icon' | 'pages' | 'game_ids')[];
 }
 export interface AdminPage extends Page {
   version: string;
   orderOrigin: 'source' | 'manual';
 }
 export interface AdminCatalog extends Catalog {
+  collectedItemIds?: number[];
   sourceRevision: string | null;
   items: AdminItem[];
   pages: AdminPage[];
@@ -108,6 +104,7 @@ export interface StagedIcon {
   expiresAt: string;
 }
 export interface CreateItem {
+  gameItemIds: number[];
   name: string;
   iconAssetId: string;
   pageIds: string[];
@@ -154,6 +151,53 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  createSection(
+    name: string,
+    key: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<{ id: string; name: string }>;
+  editSection(
+    id: string,
+    name: string | null,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
+  reorderSections(
+    ids: string[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
+  renamePage(
+    id: string,
+    name: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
+  attachItem(
+    pageId: string,
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
+  editItem(
+    id: number,
+    fields: { name: string; gameItemIds: number[]; iconAssetId?: string },
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
+  deleteItem(
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
   saveSubmissionFilters(
     filterCollected: boolean,
     revision: string,
@@ -470,23 +514,24 @@ export function parseAdminItem(value: unknown): AdminItem {
   const item = parseCatalog({ revision: 'item', items: [data], pages: [] })
     .items[0]!;
   const overrides = list(data.overrides).map((v) =>
-    choice(v, ['name', 'icon', 'pages'] as const),
+    choice(v, ['name', 'icon', 'pages', 'game_ids'] as const),
   );
   unique(overrides);
   return {
     ...item,
     origin: choice(data.origin, ['source', 'manual']),
     overrides,
+    gameItemIds:
+      data.gameItemIds === undefined
+        ? []
+        : list(data.gameItemIds).map(identity),
   };
 }
 export function parseAdminPage(value: unknown): AdminPage {
   const page = object(value),
     itemIds = list(page.itemIds).map(identity);
   unique(itemIds);
-  const category = choice(
-    page.category,
-    categories.map((c) => c.id),
-  );
+  const category = text(page.category);
   return {
     id: text(page.id),
     name: text(page.name),
@@ -514,6 +559,10 @@ export function parseAdminCatalog(value: unknown): AdminCatalog {
   );
   return {
     ...base,
+    collectedItemIds:
+      data.collectedItemIds === undefined
+        ? []
+        : list(data.collectedItemIds).map(identity),
     sourceRevision:
       data.sourceRevision === null ? null : text(data.sourceRevision),
     items: list(data.items).map(parseAdminItem),
@@ -544,7 +593,7 @@ export function validateCorrection(
     collectedOn: validateCollectionDate(fields.collectedOn),
   };
 }
-/** New manual items need a staged icon and existing pages, but no external game ID. */
+/** New manual items need a game identity, staged icon and existing page. */
 export function validateItem(fields: CreateItem, catalog: Catalog): CreateItem {
   const name = fields.name.trim();
   if (!name || name.length > 200)
@@ -552,12 +601,35 @@ export function validateItem(fields: CreateItem, catalog: Catalog): CreateItem {
   if (!fields.iconAssetId.trim())
     throw new Error('Choose and upload an item icon.');
   if (
+    !fields.gameItemIds?.length ||
+    fields.gameItemIds.length > 100 ||
+    new Set(fields.gameItemIds).size !== fields.gameItemIds.length ||
+    fields.gameItemIds.some(
+      (id) => !Number.isInteger(id) || id < 1 || id > 2147483647,
+    )
+  )
+    throw new Error('Enter distinct positive in-game item IDs.');
+  if (
     !fields.pageIds.length ||
     new Set(fields.pageIds).size !== fields.pageIds.length ||
     fields.pageIds.some((id) => !catalog.pages.some((page) => page.id === id))
   )
     throw new Error('Select one or more existing collection-log pages.');
   return { ...fields, name };
+}
+
+export function parseGameItemIds(value: string): number[] {
+  const tokens = value.trim().split(/[\s,]+/u);
+  if (!value.trim() || tokens.some((token) => !/^\d+$/u.test(token)))
+    throw new Error('Enter positive in-game item IDs separated by commas.');
+  const ids = tokens.map(Number);
+  if (
+    ids.length > 100 ||
+    new Set(ids).size !== ids.length ||
+    ids.some((id) => !Number.isInteger(id) || id < 1 || id > 2147483647)
+  )
+    throw new Error('Enter distinct positive in-game item IDs.');
+  return ids;
 }
 /** An order edit must be a permutation, with no added, missing or duplicate memberships. */
 export function validateOrder(

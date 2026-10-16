@@ -1,10 +1,58 @@
 import { expect, test } from '@playwright/test';
 import catalog from '../src/preview/catalog.json' with { type: 'json' };
 
+test('additional catalog sections remain scrollable and keyboard accessible in the public log', async ({
+  page,
+}) => {
+  const sections = Array.from({ length: 9 }, (_, i) => ({
+    id: 'section-' + i,
+    name: 'Section ' + i,
+  }));
+  const items = catalog.items.slice(0, 1);
+  await page.route('**/api/v1/catalog', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'sections',
+        sections,
+        items,
+        pages: sections.map((section) => ({
+          id: section.id,
+          name: 'Page ' + section.id,
+          category: section.id,
+          itemIds: [items[0]!.id],
+        })),
+      },
+    }),
+  );
+  await page.route('**/api/v1/collections', (route) =>
+    route.fulfill({ json: { revision: 'sections', credits: [] } }),
+  );
+  await page.goto('/');
+  const tabs = page
+    .getByRole('tablist', { name: 'Collection log categories' })
+    .getByRole('tab');
+  await expect(tabs).toHaveCount(9);
+  await tabs.first().focus();
+  await page.keyboard.press('End');
+  await expect(tabs.last()).toBeFocused();
+  await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.page-heading h3')).toHaveText('Page section-8');
+  expect((await tabs.last().boundingBox())!.height).toBeGreaterThan(15);
+});
+
 test('page names distinguish zero, partial and complete collections in the current world mode', async ({
   page,
 }) => {
   const items = catalog.items.slice(0, 2);
+  await page.route('**/api/v1/settings', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'color-settings',
+        clanName: 'Colours',
+        hardcoreEnabled: true,
+      },
+    }),
+  );
   const pages = [
     {
       id: 'empty',
@@ -41,6 +89,14 @@ test('page names distinguish zero, partial and complete collections in the curre
             hardcore: false,
             status: 'approved',
           },
+          {
+            submissionId: 'hc-credit',
+            itemId: items[1]!.id,
+            collectorName: 'Hardcore collector',
+            collectedOn: '2026-10-01',
+            hardcore: true,
+            status: 'approved',
+          },
         ],
       },
     }),
@@ -49,13 +105,60 @@ test('page names distinguish zero, partial and complete collections in the curre
   const list = page.locator('.page-list');
   await expect(
     list.getByRole('button', { name: 'No collections', exact: true }),
-  ).toHaveCSS('color', 'rgb(255, 32, 32)');
+  ).toHaveCSS('color', 'rgb(255, 152, 31)');
   await expect(
     list.getByRole('button', { name: 'Partial collections', exact: true }),
   ).toHaveCSS('color', 'rgb(255, 152, 31)');
   await expect(
     list.getByRole('button', { name: 'Full collections', exact: true }),
-  ).toHaveCSS('color', 'rgb(0, 255, 0)');
+  ).toHaveCSS('color', 'rgb(13, 193, 13)');
+  for (const [name, color] of [
+    ['No collections', 'rgb(255, 0, 0)'],
+    ['Partial collections', 'rgb(255, 255, 0)'],
+    ['Full collections', 'rgb(13, 193, 13)'],
+  ]) {
+    await list.getByRole('button', { name: name!, exact: true }).click();
+    await expect(page.locator('.page-heading h3')).toHaveCSS(
+      'color',
+      'rgb(255, 152, 31)',
+    );
+    await expect(page.locator('.page-heading p span')).toHaveCSS(
+      'color',
+      color!,
+    );
+  }
+  await expect(list.getByRole('button').nth(0)).toHaveCSS(
+    'background-color',
+    'rgb(87, 78, 67)',
+  );
+  await expect(list.getByRole('button').nth(1)).toHaveCSS(
+    'background-color',
+    'rgb(71, 61, 50)',
+  );
+  await expect(page.locator('.game-sidebar')).toHaveCSS(
+    'border-right-color',
+    'rgb(88, 80, 64)',
+  );
+  await expect(page.locator('.page-heading')).toHaveCSS(
+    'border-bottom-color',
+    'rgb(88, 80, 64)',
+  );
+  await page
+    .getByRole('button', { name: 'Hardcore worlds', exact: true })
+    .click();
+  await expect(
+    list.getByRole('button', { name: 'No collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(13, 193, 13)');
+  await expect(
+    list.getByRole('button', { name: 'Full collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(255, 152, 31)');
+  await list
+    .getByRole('button', { name: 'No collections', exact: true })
+    .click();
+  await expect(page.locator('.page-heading p span')).toHaveCSS(
+    'color',
+    'rgb(13, 193, 13)',
+  );
 });
 
 test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({

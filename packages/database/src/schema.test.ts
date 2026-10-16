@@ -46,6 +46,7 @@ test(
           '021_retire_oauth_states.sql',
           '022_submission_duplicate_filters.sql',
           '023_runelite_chat_proof.sql',
+          '024_catalog_editor.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.
@@ -54,7 +55,7 @@ test(
         "INSERT INTO items (id, name) VALUES (900001, 'Fixture item')",
       );
       await client.query(
-        "INSERT INTO pages (id, category, name, sort_order) VALUES ('fixture-a', 'Test', 'A', 0), ('fixture-b', 'Test', 'B', 1)",
+        "INSERT INTO pages (id, category, name, sort_order) VALUES ('fixture-a', 'bosses', 'A', 0), ('fixture-b', 'bosses', 'B', 1)",
       );
       await client.query(
         "INSERT INTO page_items (page_id, item_id, slot) VALUES ('fixture-a', 900001, 0), ('fixture-b', 900001, 0)",

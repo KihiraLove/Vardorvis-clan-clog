@@ -49,7 +49,7 @@ import {
   type Submission,
   type StaffAccount,
 } from '../admin-model.ts';
-import type { LogData } from '../model.ts';
+import { catalogSections, type LogData } from '../model.ts';
 import {
   previewCatalog,
   previewCollections,
@@ -298,11 +298,13 @@ export class PreviewAdminClient implements AdminClient {
   );
   private data: AdminCatalog = {
     ...structuredClone(previewCatalog),
+    sections: [...catalogSections(previewCatalog)],
     sourceRevision: 'wiki-15356324 (review sample)',
     items: previewCatalog.items.map((item) => ({
       ...item,
       origin: 'source',
       overrides: [],
+      gameItemIds: [item.id],
     })),
     pages: previewCatalog.pages.map((page) => ({
       ...page,
@@ -591,12 +593,7 @@ export class PreviewAdminClient implements AdminClient {
     const page = this.data.pages.find((p) => p.id === id);
     if (!page || page.version !== version) throw new AdminRequestError(409);
     this.data.pages = this.data.pages.filter((p) => p.id !== id);
-    const retiredItemIds = page.itemIds.filter(
-      (item) => !this.data.pages.some((p) => p.itemIds.includes(item)),
-    );
-    this.data.items = this.data.items.filter(
-      (item) => !retiredItemIds.includes(item.id),
-    );
+    const retiredItemIds: number[] = [];
     this.pageVersions.delete(id);
     this.changed();
     this.data.revision = 'preview-catalog-' + this.revision;
@@ -648,9 +645,7 @@ export class PreviewAdminClient implements AdminClient {
     this.pageVersions.set(page.id, version);
     page.version = 'page-' + version;
     page.orderOrigin = 'manual';
-    const retired = !this.data.pages.some((row) => row.itemIds.includes(id));
-    if (retired)
-      this.data.items = this.data.items.filter((row) => row.id !== id);
+    const retired = false;
     this.changed();
     this.data.revision = 'preview-catalog-' + this.revision;
     return { retired };
@@ -774,13 +769,187 @@ export class PreviewAdminClient implements AdminClient {
   }
   async catalog(signal: AbortSignal) {
     this.access(signal);
-    return structuredClone(this.data);
+    return structuredClone({
+      ...this.data,
+      collectedItemIds: this.rows
+        .filter(
+          (row) =>
+            row.status === 'approved' && !row.hardcore && row.itemId !== null,
+        )
+        .map((row) => row.itemId!),
+    });
+  }
+  private checkCatalog(revision: string, signal: AbortSignal) {
+    this.access(signal);
+    if (revision !== this.data.revision) throw new AdminRequestError(409);
+  }
+  private catalogChanged() {
+    this.changed();
+    this.data.revision = 'preview-catalog-' + this.revision;
+  }
+  private sectionRequests = new Map<
+    string,
+    { name: string; section: { id: string; name: string } }
+  >();
+  async createSection(
+    name: string,
+    key: string,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const prior = this.sectionRequests.get(key);
+    if (prior) {
+      if (prior.name !== name) throw new AdminRequestError(409);
+      return structuredClone(prior.section);
+    }
+    this.checkCatalog(revision, signal);
+    if (
+      this.data.sections!.some(
+        (s) => s.name.toLowerCase() === name.toLowerCase(),
+      )
+    )
+      throw new AdminRequestError(400);
+    const section = { id: 'section-' + crypto.randomUUID(), name };
+    this.data.sections!.push(section);
+    this.catalogChanged();
+    this.sectionRequests.set(key, { name, section });
+    return { ...section };
+  }
+  async editSection(
+    id: string,
+    name: string | null,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkCatalog(revision, signal);
+    const section = this.data.sections!.find((s) => s.id === id);
+    if (!section) throw new AdminRequestError(404);
+    if (name === null) {
+      if (this.data.pages.some((p) => p.category === id))
+        throw new AdminRequestError(409);
+      this.data.sections = this.data.sections!.filter((s) => s.id !== id);
+    } else {
+      if (
+        this.data.sections!.some(
+          (s) => s.id !== id && s.name.toLowerCase() === name.toLowerCase(),
+        )
+      )
+        throw new AdminRequestError(400);
+      section.name = name;
+    }
+    this.catalogChanged();
+  }
+  async reorderSections(
+    ids: string[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkCatalog(revision, signal);
+    const sections = this.data.sections!;
+    if (
+      ids.length !== sections.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !sections.some((s) => s.id === id))
+    )
+      throw new AdminRequestError(400);
+    this.data.sections = ids.map((id) => sections.find((s) => s.id === id)!);
+    this.catalogChanged();
+  }
+  async renamePage(
+    id: string,
+    name: string,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkCatalog(revision, signal);
+    const page = this.data.pages.find((p) => p.id === id);
+    if (!page) throw new AdminRequestError(404);
+    if (
+      this.data.pages.some(
+        (p) =>
+          p.id !== id &&
+          p.category === page.category &&
+          p.name.toLowerCase() === name.toLowerCase(),
+      )
+    )
+      throw new AdminRequestError(400);
+    page.name = name;
+    this.catalogChanged();
+  }
+  async attachItem(
+    pageId: string,
+    id: number,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkCatalog(revision, signal);
+    const page = this.data.pages.find((p) => p.id === pageId);
+    if (!page || !this.data.items.some((item) => item.id === id))
+      throw new AdminRequestError(404);
+    if (!page.itemIds.includes(id)) {
+      page.itemIds.push(id);
+      page.version = 'page-' + ((this.pageVersions.get(pageId) ?? 1) + 1);
+      this.pageVersions.set(pageId, Number(page.version.slice(5)));
+      this.catalogChanged();
+    }
+  }
+  async editItem(
+    id: number,
+    fields: { name: string; gameItemIds: number[]; iconAssetId?: string },
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkCatalog(revision, signal);
+    const item = this.data.items.find((i) => i.id === id),
+      asset = fields.iconAssetId
+        ? this.assets.get(fields.iconAssetId)
+        : undefined;
+    if (!item) throw new AdminRequestError(404);
+    if (
+      this.data.items.some(
+        (i) =>
+          i.id !== id &&
+          i.gameItemIds?.some((game) => fields.gameItemIds.includes(game)),
+      )
+    )
+      throw new AdminRequestError(409);
+    if (fields.iconAssetId && !asset) throw new AdminRequestError(422);
+    item.name = fields.name;
+    item.gameItemIds = [...fields.gameItemIds];
+    if (asset) item.iconPath = asset.iconPath;
+    this.catalogChanged();
+  }
+  async deleteItem(
+    id: number,
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkCatalog(revision, signal);
+    if (!this.data.items.some((item) => item.id === id))
+      throw new AdminRequestError(404);
+    this.data.items = this.data.items.filter((item) => item.id !== id);
+    for (const page of this.data.pages.filter((p) => p.itemIds.includes(id))) {
+      page.itemIds = page.itemIds.filter((item) => item !== id);
+      const version = (this.pageVersions.get(page.id) ?? 1) + 1;
+      this.pageVersions.set(page.id, version);
+      page.version = 'page-' + version;
+    }
+    this.catalogChanged();
   }
   /** Project only public catalog fields and approved credits, excluding private review data. */
   publicLog(scenario: Scenario | 'reviewed' = 'reviewed'): LogData {
     return structuredClone({
       catalog: {
         revision: this.data.revision,
+        sections: this.data.sections!,
         items: this.data.items.map(({ id, name, iconPath }) => ({
           id,
           name,
@@ -1013,12 +1182,19 @@ export class PreviewAdminClient implements AdminClient {
       return structuredClone(receipt.result);
     }
     const asset = this.assets.get(clean.iconAssetId);
+    if (
+      this.data.items.some((item) =>
+        item.gameItemIds?.some((id) => clean.gameItemIds.includes(id)),
+      )
+    )
+      throw new AdminRequestError(409);
     if (!asset || Date.parse(asset.expiresAt) <= Date.now())
       throw new AdminRequestError(422);
     // This allocator is safe only in this single in-memory simulator, not a concurrent API.
     const item = {
       id: this.nextItemId++,
       name: clean.name,
+      gameItemIds: [...clean.gameItemIds],
       iconPath: asset.iconPath,
       origin: 'manual' as const,
       overrides: ['name', 'icon', 'pages'] as const,

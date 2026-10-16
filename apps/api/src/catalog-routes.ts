@@ -5,6 +5,7 @@ import { ApiError, type AdminIdentity } from './types.js';
 import { assetIdPattern, MAX_ICON_BYTES } from './icon-storage.js';
 import type { NewItem, NewPage } from './catalog-store.js';
 import type { CatalogRouteStore, IconFiles } from './route-services.js';
+import { catalogEditorRoutes } from './catalog-editor-routes.js';
 export type RequireAdmin = (
   request: FastifyRequest,
   write?: boolean,
@@ -23,7 +24,8 @@ const revision = {
 };
 const category = {
   type: 'string',
-  enum: ['bosses', 'raids', 'clues', 'minigames', 'other'],
+  minLength: 1,
+  maxLength: 200,
 };
 export function catalogRoutes(
   app: FastifyInstance,
@@ -35,6 +37,7 @@ export function catalogRoutes(
     if (!authorize) throw new ApiError(503, 'Admin sign-in is not configured.');
     return authorize(request, write);
   };
+  catalogEditorRoutes(app, store, icons, admin);
   app.get<{ Params: { id: string } }>(
     '/api/v1/catalog/icons/:id.png',
     async (request, reply) => {
@@ -225,8 +228,9 @@ export function catalogRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['name', 'iconAssetId', 'pageIds'],
+          required: ['name', 'iconAssetId', 'pageIds', 'gameItemIds'],
           properties: {
+            gameItemIds: { ...ids, minItems: 1, maxItems: 100 },
             name: { type: 'string', minLength: 1, maxLength: 200 },
             iconAssetId: uuid,
             pageIds: {

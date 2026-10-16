@@ -41,6 +41,13 @@ export interface CompetitionService {
 export type CatalogRouteStore = Pick<
   PgCatalogStore,
   | 'asset'
+  | 'createSection'
+  | 'editSection'
+  | 'reorderSections'
+  | 'renamePage'
+  | 'attachItem'
+  | 'editItem'
+  | 'deleteItem'
   | 'stage'
   | 'createPage'
   | 'removePage'

@@ -3,9 +3,7 @@ import { useEffect, useState } from 'react';
 import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { ItemCreator } from './ItemCreator.tsx';
-import { PageOrderEditor } from './PageOrderEditor.tsx';
-import { PageManagement } from './PageManagement.tsx';
+import { CatalogLogEditor } from './CatalogLogEditor.tsx';
 import { usePreparedAdminData } from './admin-route-data.ts';
 
 export function AdminCatalogPage({
@@ -75,29 +73,13 @@ export function AdminCatalogPage({
         </section>
       )}
       {catalog && (
-        <div className="catalog-editor-layout">
-          <ItemCreator
-            client={client}
-            catalog={catalog}
-            session={session}
-            onAccessLost={onAccessLost}
-            refresh={refresh}
-          />
-          <PageOrderEditor
-            client={client}
-            catalog={catalog}
-            session={session}
-            onAccessLost={onAccessLost}
-            refresh={refresh}
-          />
-          <PageManagement
-            client={client}
-            catalog={catalog}
-            session={session}
-            onAccessLost={onAccessLost}
-            refresh={refresh}
-          />
-        </div>
+        <CatalogLogEditor
+          client={client}
+          catalog={catalog}
+          session={session}
+          onAccessLost={onAccessLost}
+          refresh={refresh}
+        />
       )}
     </>
   );

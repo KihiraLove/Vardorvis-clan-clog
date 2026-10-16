@@ -9,7 +9,8 @@ import {
   type CSSProperties,
 } from 'react';
 import {
-  categories,
+  catalogSections,
+  progressClass,
   itemState,
   progress,
   modeCredits,
@@ -123,6 +124,11 @@ export function CollectionLog({
   const gridRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | undefined>(undefined);
   const catalog = data?.catalog;
+  const categories = catalogSections(catalog);
+  useEffect(() => {
+    if (catalog && !categories.some((section) => section.id === category))
+      setCategory(categories[0]?.id ?? '');
+  }, [catalog, categories, category]);
   // Resolve deep links once asynchronous live data arrives without resetting later choices.
   const initialized = useRef(Boolean(catalog));
   useEffect(() => {
@@ -147,7 +153,7 @@ export function CollectionLog({
   );
   const items = new Map(catalog?.items.map((item) => [item.id, item]));
   const globalProgress = progress(
-    catalog?.items.map((item) => item.id) ?? [],
+    catalog?.pages.flatMap((page) => page.itemIds) ?? [],
     credits,
   );
   const pageProgress = progress(page?.itemIds ?? [], credits);
@@ -272,7 +278,7 @@ export function CollectionLog({
             >
               <aside
                 className="game-sidebar"
-                aria-label={`${categories.find((tab) => tab.id === category)!.name} pages`}
+                aria-label={`${categories.find((tab) => tab.id === category)?.name ?? 'Collection log'} pages`}
               >
                 {searching && (
                   <label className="page-search" id="page-search">
@@ -338,12 +344,10 @@ export function CollectionLog({
                       <p>
                         Obtained:{' '}
                         <span
-                          className={
-                            pageProgress.collected === pageProgress.total &&
-                            pageProgress.total > 0
-                              ? 'complete'
-                              : 'count'
-                          }
+                          className={progressClass(
+                            pageProgress.collected,
+                            pageProgress.total,
+                          )}
                         >
                           {pageProgress.collected}/{pageProgress.total}
                         </span>

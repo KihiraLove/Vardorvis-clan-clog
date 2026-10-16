@@ -234,17 +234,25 @@ test('corrections require a canonical item and valid collector/calendar date', a
   );
 });
 
-test('item creation requires name/icon/pages while game IDs remain optional', async () => {
+test('item creation requires name/icon/pages and in-game IDs', async () => {
   const catalog = await new PreviewAdminClient().catalog(signal()),
     page = catalog.pages[0]!.id;
-  const valid = { name: ' New drop ', iconAssetId: 'asset', pageIds: [page] };
+  const valid = {
+    name: ' New drop ',
+    gameItemIds: [900001],
+    iconAssetId: 'asset',
+    pageIds: [page],
+  };
   assert.equal(validateItem(valid, catalog).name, 'New drop');
   for (const fields of [
     { ...valid, name: ' ' },
-    { ...valid, iconAssetId: '' },
+    { ...valid, gameItemIds: [900001], iconAssetId: '' },
     { ...valid, pageIds: [] },
     { ...valid, pageIds: [page, page] },
     { ...valid, pageIds: ['missing'] },
+    { ...valid, gameItemIds: [] },
+    { ...valid, gameItemIds: [1, 1] },
+    { ...valid, gameItemIds: [2147483648] },
   ])
     assert.throws(() => validateItem(fields, catalog));
 });
@@ -426,6 +434,7 @@ test('shared manual items append once, are available for matching, and order edi
     const asset = await client.upload(iconFile(), 'csrf', signal()),
       fields = {
         name: 'Future clan drop',
+        gameItemIds: [900001],
         iconAssetId: asset.assetId,
         pageIds: pages,
       };

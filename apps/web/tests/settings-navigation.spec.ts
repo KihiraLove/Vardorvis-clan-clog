@@ -134,7 +134,7 @@ test('settings-navigation: admin background stays fixed across delayed page chan
     page.screenshot({ clip: { x: 1, y: 400, width: 3, height: 3 } });
   const original = await background();
   for (const [name, ready] of [
-    ['Items catalog', 'Add item'],
+    ['Items catalog', 'Items catalog'],
     ['XP imports', 'XP competition imports'],
     ['Submissions', 'Submissions'],
     ['Moderator accounts', 'Existing accounts'],

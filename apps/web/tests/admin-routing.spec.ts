@@ -100,7 +100,7 @@ test('scrolling before a native history event cannot overwrite its destination',
     );
   });
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await expect(catalogLink(page)).toHaveAttribute('aria-current', 'page');
   expect(new URL(page.url()).pathname).toBe('/admin/catalog');
@@ -108,7 +108,7 @@ test('scrolling before a native history event cannot overwrite its destination',
   await expect(account(page)).toBeVisible();
   await catalogLink(page).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
 });
 
@@ -118,7 +118,7 @@ test('scrolling between repeated admin navigations keeps the URL, current link a
   await routedAdmin(page);
   await page.goto('/admin');
   const destinations = [
-    ['Items catalog', '/admin/catalog', 'Add item'],
+    ['Items catalog', '/admin/catalog', 'Items catalog'],
     ['RuneLite submissions', '/admin/runelite', 'RuneLite submissions'],
     ['Your account', '/admin/account', 'Your account'],
     ['Scheduling', '/admin/schedules', 'Schedule management'],
@@ -157,10 +157,10 @@ test('route failure retains current content and URL; Retry prepares once and com
   fixture.recover('/api/v1/admin/catalog');
   await page.getByRole('button', { name: 'Retry navigation' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeFocused();
   expect(new URL(page.url()).pathname).toBe('/admin/catalog');
   expect(await page.evaluate(() => history.length)).toBe(length + 1);
@@ -189,7 +189,7 @@ test('timeout and Cancel settle without committing; a later response cannot moun
     page.getByRole('complementary', { name: 'Page navigation' }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toHaveCount(0);
   expect(new URL(page.url()).pathname).toBe('/admin/account');
 });
@@ -221,7 +221,7 @@ test('rapid destinations cancel previous generations and mount only the latest r
     page.getByRole('heading', { name: 'Your account', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole('heading', { name: 'Site settings', exact: true }),
@@ -239,7 +239,7 @@ test('Back/Forward load ready data and Cancel restores the original entry withou
   await expect(account(page)).toBeVisible();
   await catalogLink(page).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Your account', exact: true }).click();
   await expect(account(page)).toBeVisible();
@@ -258,7 +258,7 @@ test('Back/Forward load ready data and Cancel restores the original entry withou
     .toBe(3);
   release();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await page.goForward();
   await expect(account(page)).toBeVisible();
@@ -279,7 +279,7 @@ test('dirty forms survive a declined leave; confirmed navigation discards the dr
   page.once('dialog', (dialog) => dialog.accept());
   await catalogLink(page).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await expect(currentPassword).toHaveCount(0);
   await page.getByRole('link', { name: 'Your account', exact: true }).click();
@@ -306,7 +306,7 @@ test('logout cancels pending navigation and late private reads cannot revive the
     page.getByRole('navigation', { name: 'Admin navigation' }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByLabel('Current password', { exact: true }),
@@ -353,7 +353,7 @@ test('refresh and deep links use one stable shell with no hidden forms or duplic
   release();
   await page.getByRole('button', { name: 'Retry navigation' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   expect(calls(fixture.requests, '/api/v1/admin/catalog')).toBe(2);
   release = fixture.block('/api/v1/admin/catalog');
@@ -362,7 +362,7 @@ test('refresh and deep links use one stable shell with no hidden forms or duplic
   await expect(page.getByLabel('Item name', { exact: true })).toHaveCount(0);
   release();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   expect(calls(fixture.requests, '/api/v1/admin/catalog')).toBe(3);
   expect(calls(fixture.requests, '/api/v1/auth/session')).toBe(2);
@@ -375,6 +375,8 @@ test('Back respects a dirty catalog draft and a declined leave restores the curr
   await page.goto('/admin/account');
   await expect(account(page)).toBeVisible();
   await catalogLink(page).click();
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   const name = page.getByLabel('Item name', { exact: true });
   await name.fill('Unsaved item');
   page.once('dialog', (dialog) => dialog.dismiss());
@@ -445,7 +447,7 @@ test('a staff write in progress blocks route commit instead of unmounting its fo
   ).toHaveValue('');
   await catalogLink(page).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
 });
 
@@ -457,7 +459,7 @@ test('a new link supersedes a pending Back load and pushes from the restored cur
   await expect(account(page)).toBeVisible();
   await catalogLink(page).click();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Your account', exact: true }).click();
   await expect(account(page)).toBeVisible();
@@ -475,7 +477,7 @@ test('a new link supersedes a pending Back load and pushes from the restored cur
   await expect(account(page)).toBeVisible();
   await page.goBack();
   await expect(
-    page.getByRole('heading', { name: 'Add item', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
 });
 

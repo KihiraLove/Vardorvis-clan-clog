@@ -245,7 +245,7 @@ test('moderators retain review tools, have no owner controls and can update thei
   ]);
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Page management', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel('Enable hardcore worlds')).toHaveCount(0);
   await expect(
