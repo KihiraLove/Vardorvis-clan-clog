@@ -1,15 +1,16 @@
-# RuneLite submissions and screenshot evidence
+# RuneLite submissions and private proof
 
 `POST /api/v1/runelite/submissions` accepts `multipart/form-data` with exactly
 these fields (their order does not matter):
 
-| Field        | Value                                              |
-| ------------ | -------------------------------------------------- |
-| `username`   | Collector name, 1–80 characters                    |
-| `clanName`   | In-game clan name, 1–80 characters                 |
-| `itemId`     | Positive OSRS game item ID, as decimal text        |
-| `worldType`  | World type identifier or JSON array of identifiers |
-| `screenshot` | One PNG file, MIME `image/png`, up to 10 MiB       |
+| Field         | Value                                                        |
+| ------------- | ------------------------------------------------------------ |
+| `username`    | Collector name, 1–80 characters                              |
+| `clanName`    | In-game clan name, 1–80 characters                           |
+| `itemId`      | Positive OSRS game item ID, as decimal text                  |
+| `worldType`   | World type identifier or JSON array of identifiers           |
+| `chatMessage` | Required full chat message, nonempty, up to 8192 UTF-8 bytes |
+| `screenshot`  | Optional PNG file, MIME `image/png`, up to 10 MiB            |
 
 ```bash
 curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
@@ -17,8 +18,23 @@ curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
   -H 'Idempotency-Key: 00000000-0000-4000-8000-000000000001' \
   -F 'username=Collector' -F 'clanName=Clan name' -F 'itemId=4151' \
   -F 'worldType=["MEMBERS"]' \
-  -F 'screenshot=@drop.png;type=image/png'
+  -F 'chatMessage=Collector received a drop: Abyssal whip'
 ```
+
+Screenshots are optional. To include one, add
+`-F 'screenshot=@drop.png;type=image/png'`. Without a file, the API stores no image
+or image metadata. New submissions always require `chatMessage`, even when a PNG
+is attached. Missing/blank messages return **422**; truncated multipart fields
+return **400**. The server preserves the complete text, including whitespace,
+Unicode and game markup, and rejects NUL characters. It never renders the message
+as HTML or follows links from it.
+
+Staff see **Chat message** in the private review panel, alongside any optional
+screenshot. Chat-only claims can be reviewed and approved after the usual proof
+acknowledgement. The original message is retained through corrections, decisions
+and audit history; staff cannot edit it. Public catalog, collection credits and
+RuneLite receipts never expose the message. Existing world, clan/key, scheduling,
+automatic review, rate limits and duplicate filtering still apply.
 
 The shared clan API key is **required by default**, in the `X-Clan-API-Key`
 header. The API generates a cryptographically random 16-byte key written as
@@ -65,7 +81,7 @@ Success returns **201**, for example:
 ```
 
 The optional UUID `Idempotency-Key` should be generated once per drop and reused
-on retries. Identical fields and decoded PNG pixels return the original receipt,
+on retries. Identical fields, exact chat message and decoded PNG pixels (if any) return the original receipt,
 including after review/restart. Changing the payload with that key returns
 **409**. Without a key, the server assigns a fresh request key; the cross-client
 duplicate filter below still applies. Replays must
@@ -77,15 +93,20 @@ Replays must still pass current world rejection policies, match the configured
 in-game clan when matching is enabled and, when required, use the current
 API key. Credentials are not part of the immutable submission payload, so a
 retry using a newly rotated key can recover its original receipt. A future plugin should retain the
-key, payload and PNG until it receives the receipt.
+key, payload and optional PNG until it receives the receipt. Changing the chat
+message or adding/removing a screenshot under the same key returns **409**.
+Historical screenshot-only receipts can still replay their original payload
+without `chatMessage`; this exception cannot create a new submission.
 
 Independent clients observing the same player and canonical item in the same
 world mode within one minute share the first submission. This applies even when
-their request keys, game-item variants or screenshots differ. Player matching
+their request keys, game-item variants, chat messages or screenshots differ. Player matching
 normalizes case, underscores, nonbreaking spaces and repeated whitespace.
 The window starts at the first accepted request and duplicates do not extend it.
 The API returns **201** with the original receipt plus `duplicate: true`, stores
 the new request key for durable retries and discards the duplicate screenshot.
+The first submission's proof remains the review evidence; later duplicate chat
+messages do not overwrite it.
 It creates no extra claim, credit or review entry. Regular and hardcore events
 are separate. A new key after the minute can create a new claim; retrying an
 existing key always retains its original receipt. Staff corrections do not
@@ -110,7 +131,7 @@ allows `POST` with `Content-Type`, `Idempotency-Key`, `X-Clan-API-Key` and
 checks. Successful and error responses expose CORS headers, including access to
 `Retry-After` and `X-Error-Category`. Staff routes and cookies are not exposed.
 
-Malformed multipart or invalid PNG returns **400**, oversize uploads **413**,
+Malformed multipart or an invalid attached PNG returns **400**, oversize uploads **413**,
 rate limits **429** with `Retry-After: 60`, and unavailable database/storage
 **503**. Uploads are limited to ten requests per client IP per minute and 120
 globally per minute, shared across API processes. Configure the existing trusted
@@ -243,6 +264,13 @@ uploaded image data. Files remain available after approval/rejection/revocation
 for later review; uploads never grant approval privileges.
 
 ## Persistence, upgrade and recovery
+
+[`023_runelite_chat_proof.sql`](../packages/database/migrations/023_runelite_chat_proof.sql)
+adds a nullable private chat-message column and permits chat proof without an
+image. Existing screenshot-only claims, receipts, audits and files are retained.
+Apply the migration before starting the updated API. Runtime table grants cover
+the new column; normal bootstrap still verifies them. Take a coordinated backup
+before upgrading; older images require their matching pre-023 backup.
 
 Forward-only migration
 [`004_runelite_submissions.sql`](../packages/database/migrations/004_runelite_submissions.sql)

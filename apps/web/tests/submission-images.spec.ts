@@ -117,3 +117,88 @@ test('moderators can review stored RuneLite screenshots without access to clan s
     editor.getByRole('button', { name: 'Approve submission', exact: true }),
   ).toBeEnabled();
 });
+
+for (const screenshot of [false, true]) {
+  test(`RuneLite full chat proof is safe, readable and sufficient for review, screenshot=${screenshot}`, async ({
+    page,
+  }) => {
+    const f = await adminFixtures();
+    const chatMessage =
+      '  Collector received <img src="https://example.org/tracker">: Rare item & 100 coins.\nFull original message 😀  ';
+    const path =
+      '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    const row = {
+      ...f.detail.submission,
+      source: 'runelite',
+      proofUrl: '',
+      chatMessage,
+      screenshotPath: screenshot ? path : null,
+      status: 'pending',
+      hardcore: false,
+    };
+    let approved = false;
+    await page.route('**/api/v1/**', async (route) => {
+      const url = new URL(route.request().url()).pathname;
+      if (url === '/api/v1/admin/submissions/' + row.id + '/approve') {
+        expect(route.request().postDataJSON().expectedVersion).toBe(
+          row.version,
+        );
+        approved = true;
+        row.status = 'approved';
+        row.version++;
+        return route.fulfill({ json: row });
+      }
+      if (url === path)
+        return route.fulfill({
+          path: resolve('public/skills/sailing.png'),
+          contentType: 'image/png',
+        });
+      const responses: Record<string, unknown> = {
+        '/api/v1/auth/session': { ...f.session, role: 'moderator' },
+        '/api/v1/settings': {
+          revision: 'settings-1',
+          clanName: 'Clan name',
+          hardcoreEnabled: false,
+        },
+        '/api/v1/admin/catalog': f.catalog,
+        '/api/v1/admin/submissions': {
+          ...f.pending,
+          submissions: row.status === 'pending' ? [row] : [],
+        },
+        ['/api/v1/admin/submissions/' + row.id]: {
+          ...f.detail,
+          submission: row,
+          audit: [],
+        },
+      };
+      return route.fulfill({
+        status: url in responses ? 200 : 404,
+        json: responses[url] ?? {},
+      });
+    });
+    await page.goto('/admin');
+    await page.getByRole('button', { name: /^Review / }).click();
+    const editor = page.locator('.submission-editor');
+    const message = editor.locator('.submission-chat-proof p');
+    await expect(message).toBeVisible();
+    expect(await message.textContent()).toBe(chatMessage);
+    await expect(message).toHaveCSS('white-space', 'pre-wrap');
+    await expect(message.locator('img,a,script')).toHaveCount(0);
+    await expect(editor.getByAltText('Submission screenshot')).toHaveCount(
+      screenshot ? 1 : 0,
+    );
+    await editor.getByLabel(/^I checked the chat message/).check();
+    await expect(
+      editor.getByRole('button', { name: 'Approve submission', exact: true }),
+    ).toBeEnabled();
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(message).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await editor
+      .getByRole('button', { name: 'Approve submission', exact: true })
+      .click();
+    await expect.poll(() => approved).toBe(true);
+  });
+}

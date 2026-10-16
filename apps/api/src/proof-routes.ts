@@ -12,7 +12,12 @@ import { ApiError } from './types.js';
 import { suppliedClanKey } from './clan-api-key.js';
 import { runeLiteCors } from './runelite-cors.js';
 
-async function parts(request: FastifyRequest, allowed: string[]) {
+async function parts(
+  request: FastifyRequest,
+  required: string[],
+  optional: string[] = [],
+  requireFile = true,
+) {
   if (!request.isMultipart())
     throw new ApiError(400, 'Use multipart/form-data.');
   const fields: Record<string, string> = {};
@@ -27,7 +32,7 @@ async function parts(request: FastifyRequest, allowed: string[]) {
       file = { bytes, mime: part.mimetype };
     } else {
       if (
-        !allowed.includes(part.fieldname) ||
+        ![...required, ...optional].includes(part.fieldname) ||
         Object.hasOwn(fields, part.fieldname) ||
         typeof part.value !== 'string' ||
         part.valueTruncated
@@ -36,7 +41,10 @@ async function parts(request: FastifyRequest, allowed: string[]) {
       fields[part.fieldname] = part.value;
     }
   }
-  if (!file || allowed.some((key) => !Object.hasOwn(fields, key)))
+  if (
+    (requireFile && !file) ||
+    required.some((key) => !Object.hasOwn(fields, key))
+  )
     throw new ApiError(400, 'Missing submission fields or screenshot.');
   return { fields, file };
 }
@@ -127,9 +135,9 @@ export function proofRoutes(
       limits: {
         fileSize: MAX_SCREENSHOT_BYTES,
         files: 1,
-        fields: 4,
-        parts: 5,
-        fieldSize: 8192,
+        fields: 5,
+        parts: 6,
+        fieldSize: 8193,
       },
     });
     scope.post(
@@ -146,12 +154,12 @@ export function proofRoutes(
       },
       async (req, reply) => {
         const key = requestKey(req, false);
-        const { fields, file } = await parts(req, [
-          'username',
-          'clanName',
-          'itemId',
-          'worldType',
-        ]);
+        const { fields, file } = await parts(
+          req,
+          ['username', 'clanName', 'itemId', 'worldType'],
+          ['chatMessage'],
+          false,
+        );
         if (
           !fields.username!.trim() ||
           fields.username!.length > 80 ||
@@ -170,9 +178,14 @@ export function proofRoutes(
           clanName: fields.clanName!,
           itemId: Number(fields.itemId),
           worldTypes: world.worldTypes,
+          ...(fields.chatMessage === undefined
+            ? {}
+            : { chatMessage: fields.chatMessage }),
         };
-        await store.validateSubmission(submission);
-        const image = await storage.save(file.bytes, file.mime);
+        await store.validateSubmission(submission, key);
+        const image = file
+          ? await storage.save(file.bytes, file.mime)
+          : undefined;
         // Commit outcome may be uncertain: preserve the file for maintenance.
         const result = await store.createRuneLite(
           submission,
@@ -182,7 +195,7 @@ export function proofRoutes(
         );
         // A committed duplicate receipt confirms this new file is unreferenced.
         // Uncertain commits still retain evidence for reference-checked maintenance.
-        if (result.receipt.duplicate && result.imageId !== image.id)
+        if (image && result.receipt.duplicate && result.imageId !== image.id)
           await storage.remove?.(image.id).catch(() => {});
         return reply.code(201).send(result.receipt);
       },
@@ -200,6 +213,7 @@ export function proofRoutes(
           const key = requestKey(req, true);
           const { fields, file } = await parts(req, ['submission']);
           const input = manualFields(fields.submission!);
+          if (!file) throw new ApiError(400, 'Supply one screenshot file.');
           const image = await storage.save(file.bytes, file.mime);
           // Commit outcome may be uncertain: preserve the file for maintenance.
           const result = await review.createManual(

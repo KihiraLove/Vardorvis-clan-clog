@@ -22,6 +22,25 @@ import { PreviewAdminClient } from './preview/admin.ts';
 
 const signal = () => new AbortController().signal;
 
+test('RuneLite chat proof preserves full text and rejects malformed private evidence', async () => {
+  const seed = (
+    await new PreviewAdminClient().queue('pending', undefined, signal())
+  ).submissions[0]!;
+  const chatMessage =
+    '  Collector received <item>: Rare item & coins.\n符号 😀  ';
+  const row = {
+    ...seed,
+    source: 'runelite',
+    proofUrl: '',
+    screenshotPath: null,
+    chatMessage,
+  };
+  assert.equal(parseSubmission(row).chatMessage, chatMessage);
+  for (const invalid of [null, {}, '', 'a'.repeat(8193)])
+    assert.throws(() => parseSubmission({ ...row, chatMessage: invalid }));
+  assert.throws(() => parseSubmission({ ...row, source: 'discord' }));
+});
+
 test('preview audit pagination retains every event, binds scope/revision and validates bounded wire pages', async () => {
   const client = new PreviewAdminClient();
   const queue = await client.queue('pending', undefined, signal());

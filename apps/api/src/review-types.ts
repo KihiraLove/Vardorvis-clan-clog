@@ -11,6 +11,7 @@ export interface ReviewSubmission {
   submittedAt: string;
   proofUrl: string;
   screenshotPath?: string | null;
+  chatMessage?: string;
   hardcore: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
   /** Persisted staff note; unrelated to approve/reject/revoke audit reason. */

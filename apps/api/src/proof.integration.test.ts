@@ -18,7 +18,7 @@ import { hashPassword } from './passwords.js';
 test(
   'RuneLite clan validation, canonical IDs, retries, optional manual PNGs, private reads and moderator review',
   { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
+  async (t) => {
     const root = new pg.Pool({
       connectionString: process.env.TEST_DATABASE_URL!,
     });
@@ -117,18 +117,21 @@ test(
         .toBuffer();
       const multipart = (
         fields: [string, string][],
-        bytes = png,
+        bytes: Buffer | null = png,
         mime = 'image/png',
         fileFirst = false,
       ) => {
         const boundary = 'proof-boundary';
-        const file = Buffer.concat([
-          Buffer.from(
-            `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="../../untrusted.png"\r\nContent-Type: ${mime}\r\n\r\n`,
-          ),
-          bytes,
-          Buffer.from('\r\n'),
-        ]);
+        const file =
+          bytes === null
+            ? null
+            : Buffer.concat([
+                Buffer.from(
+                  `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="../../untrusted.png"\r\nContent-Type: ${mime}\r\n\r\n`,
+                ),
+                bytes,
+                Buffer.from('\r\n'),
+              ]);
         const texts = fields.map(([name, value]) =>
           Buffer.from(
             `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
@@ -139,7 +142,11 @@ test(
             'content-type': `multipart/form-data; boundary=${boundary}`,
           },
           payload: Buffer.concat([
-            ...(fileFirst ? [file, ...texts] : [...texts, file]),
+            ...(file
+              ? fileFirst
+                ? [file, ...texts]
+                : [...texts, file]
+              : texts),
             Buffer.from(`--${boundary}--\r\n`),
           ]),
         };
@@ -147,7 +154,7 @@ test(
       let address = 1;
       const runelite = (
         fields: [string, string][],
-        bytes = png,
+        bytes: Buffer | null = png,
         key?: string,
         mime = 'image/png',
         first = false,
@@ -168,6 +175,7 @@ test(
         ['clanName', ' clan name '],
         ['itemId', '900001'],
         ['worldType', 'MEMBERS'],
+        ['chatMessage', 'Collector received a drop: Test item'],
       ];
       const generated = apiKey!;
       assert.match(generated, /^[a-f0-9]{32}$/u);
@@ -316,6 +324,10 @@ test(
         })
       ).json();
       assert.equal(detail.submission.source, 'runelite');
+      assert.equal(
+        detail.submission.chatMessage,
+        fields.find(([name]) => name === 'chatMessage')![1],
+      );
       const imagePath = detail.submission.screenshotPath as string;
       assert.equal((await app.inject(imagePath)).statusCode, 401);
       const image = await app.inject({ url: imagePath, headers: moderator });
@@ -568,6 +580,147 @@ test(
           )
         ).rows,
         [{ old_clan_name: 'Clan name', new_clan_name: 'New Clan' }],
+      );
+      await t.test(
+        'chat proof is exact, private, reviewable and replay-bound without an image',
+        async () => {
+          await pool.query(
+            "INSERT INTO items(id,name) VALUES(43,'Chat proof item'); INSERT INTO game_item_ids(game_item_id,item_id) VALUES(990043,43)",
+          );
+          const message =
+            '  Clan: Chat Collector received <item=990043>: Test item & 100 coins.\n符号 😀  ';
+          const chatFields: [string, string][] = [
+            ['username', 'Chat Collector'],
+            ['clanName', 'Clan name'],
+            ['itemId', '990043'],
+            ['worldType', 'MEMBERS'],
+            ['chatMessage', message],
+          ];
+          const chatKey = randomUUID();
+          const imagesBefore = (
+            await pool.query('SELECT count(*)::int n FROM submission_images')
+          ).rows[0].n;
+          const filesBefore = await readdir(directory);
+          const created = await runelite(chatFields, null, chatKey);
+          assert.equal(created.statusCode, 201, created.body);
+          const chatReceipt = created.json();
+          assert.deepEqual(
+            (await runelite(chatFields, null, chatKey)).json(),
+            chatReceipt,
+          );
+          const modified = chatFields.map(([k, v]): [string, string] => [
+            k,
+            k === 'chatMessage' ? v + ' changed' : v,
+          ]);
+          assert.equal(
+            (await runelite(modified, null, chatKey)).statusCode,
+            409,
+          );
+          assert.equal(
+            (await runelite(chatFields, png, chatKey)).statusCode,
+            409,
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submission_images'))
+              .rows[0].n,
+            imagesBefore,
+          );
+          // A conflicting optional upload is retained for reference-checked maintenance.
+          assert.equal(
+            (await readdir(directory)).length,
+            filesBefore.length + 1,
+          );
+          const stored = await app.inject({
+            url: '/api/v1/admin/submissions/' + chatReceipt.submissionId,
+            headers: moderator,
+          });
+          assert.equal(stored.statusCode, 200, stored.body);
+          assert.equal(stored.json().submission.chatMessage, message);
+          assert.equal(stored.json().submission.screenshotPath, null);
+          assert.equal(
+            (
+              await app.inject(
+                '/api/v1/admin/submissions/' + chatReceipt.submissionId,
+              )
+            ).statusCode,
+            401,
+          );
+          const duplicate = await runelite(modified, null, randomUUID());
+          assert.equal(duplicate.statusCode, 201, duplicate.body);
+          assert.equal(duplicate.json().duplicate, true);
+          assert.equal(duplicate.json().submissionId, chatReceipt.submissionId);
+          const filesBeforeDuplicate = await readdir(directory);
+          const withImage = await runelite(chatFields, png, randomUUID());
+          assert.equal(withImage.json().duplicate, true, withImage.body);
+          assert.deepEqual(await readdir(directory), filesBeforeDuplicate);
+          const accepted = await app.inject({
+            method: 'POST',
+            url:
+              '/api/v1/admin/submissions/' +
+              chatReceipt.submissionId +
+              '/approve',
+            headers: moderator,
+            payload: { expectedVersion: 1 },
+          });
+          assert.equal(accepted.statusCode, 200, accepted.body);
+          assert.equal(accepted.json().chatMessage, message);
+          const history = (
+            await app.inject({
+              url: '/api/v1/admin/submissions/' + chatReceipt.submissionId,
+              headers: owner,
+            })
+          ).json();
+          assert.equal(history.audit[0].before.chatMessage, message);
+          assert.equal(history.audit[0].after.chatMessage, message);
+          for (const url of [
+            '/api/v1/catalog',
+            '/api/v1/collections',
+            '/api/v1/xp/tracker',
+          ]) {
+            const publicResponse = await app.inject(url);
+            assert.ok(
+              !publicResponse.body.includes(message) &&
+                !publicResponse.body.includes('chatMessage'),
+              url,
+            );
+          }
+          assert.deepEqual(
+            (await runelite(chatFields, null, chatKey)).json(),
+            chatReceipt,
+          );
+        },
+      );
+      await t.test(
+        'new claims require bounded nonempty chat proof even with a screenshot',
+        async () => {
+          const noChat = fields.filter(([name]) => name !== 'chatMessage');
+          const before = await readdir(directory);
+          assert.equal((await runelite(noChat, null)).statusCode, 422);
+          assert.equal((await runelite(noChat, png)).statusCode, 422);
+          for (const value of [' \n\t ', '\0bad'])
+            assert.equal(
+              (await runelite([...noChat, ['chatMessage', value]], null))
+                .statusCode,
+              422,
+            );
+          const oversized = await runelite(
+            [...noChat, ['chatMessage', 'é'.repeat(4097)]],
+            null,
+          );
+          assert.equal(oversized.statusCode, 400, oversized.body);
+          const maximum = await runelite(
+            [
+              ...noChat.map(([k, v]): [string, string] => [
+                k,
+                k === 'username' ? 'Boundary Collector' : v,
+              ]),
+              ['chatMessage', 'a'.repeat(8192)],
+            ],
+            null,
+          );
+          assert.equal(maximum.statusCode, 201, maximum.body);
+          assert.deepEqual(await readdir(directory), before);
+        },
       );
       for (let i = 0; i < 10; i++)
         assert.equal(await store.allowIntake('192.0.2.200'), true);

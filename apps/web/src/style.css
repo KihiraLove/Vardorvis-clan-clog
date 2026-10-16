@@ -2038,6 +2038,10 @@ main {
   margin-top: 1.5rem;
 }
 
+.submission-chat-proof p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .submission-proof img {
   display: block;
   max-width: 100%;

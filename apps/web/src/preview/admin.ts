@@ -969,7 +969,9 @@ export class PreviewAdminClient implements AdminClient {
         : row.status !== 'pending') ||
       (action === 'approve'
         ? !this.data.items.some((item) => item.id === row.itemId) ||
-          (row.source !== 'manual' && !safeProof(row.proofUrl))
+          (row.source !== 'manual' &&
+            !safeProof(row.proofUrl) &&
+            !(row.source === 'runelite' && row.chatMessage?.trim()))
         : !reason.trim())
     )
       throw new AdminRequestError(422);

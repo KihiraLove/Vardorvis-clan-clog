@@ -68,6 +68,12 @@ return the durable original receipt; changed payload/key reuse conflicts.
 Review, catalog, competition and import writes keep their own documented revision,
 preview and replay rules; there is no blanket retry for uncertain COMMIT outcomes.
 
+RuneLite multipart intake requires the full `chatMessage` for new submissions
+and accepts an optional PNG. Chat proof is visible only in staff review and
+audit data; public credits and receipts omit it. Same-key changes to the message
+or screenshot presence conflict. Historical screenshot-only requests can replay
+their original payload without a message. See [the intake contract](runelite-submissions.md).
+
 ## Imports, catalog and intake
 
 | Feature            | Current authoritative contract                                                                                                                                                                                                                          |

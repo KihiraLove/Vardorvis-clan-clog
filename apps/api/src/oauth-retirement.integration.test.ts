@@ -46,7 +46,12 @@ test(
           await pool.query(
             `SELECT to_jsonb(r) AS value FROM ${quoted} r ORDER BY to_jsonb(r)::text`,
           )
-        ).rows.map((r) => r.value);
+        ).rows.map((r) => {
+          // Forward upgrades may add nullable proof fields to preserved claims.
+          if (tablename === 'submissions' && r.value.chat_message === null)
+            delete r.value.chat_message;
+          return r.value;
+        });
       }
       return values;
     }
@@ -154,7 +159,7 @@ test(
                 'SELECT count(*)::int AS n FROM schema_migrations',
               )
             ).rows[0].n,
-            22,
+            23,
           );
           assert.deepEqual(await snapshot(), before);
           assert.deepEqual(

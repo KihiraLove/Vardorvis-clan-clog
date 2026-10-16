@@ -138,7 +138,10 @@ export function SubmissionEditor({
     draft.hardcore !== row.hardcore;
   const noteDirty = reviewNote.trim() !== row.reviewNote;
   const locked = action.busy || disabled || Boolean(readError),
-    proof = safeProof(row.proofUrl) || safeScreenshotPath(row.screenshotPath);
+    proof =
+      safeProof(row.proofUrl) ||
+      safeScreenshotPath(row.screenshotPath) ||
+      (row.source === 'runelite' && Boolean(row.chatMessage?.trim()));
   const change = (fields: Partial<Correction>) => {
     setDraft({ ...draft, ...fields });
     setChecked(false);
@@ -328,10 +331,17 @@ export function SubmissionEditor({
               source={row.source}
               screenshot={row.screenshotPath}
               previewScreenshot={row.previewScreenshot}
+              chatMessage={row.chatMessage}
             />
           </dd>
         </div>
       </dl>
+      {row.chatMessage && (
+        <div className="submission-chat-proof">
+          <strong>Chat message</strong>
+          <p>{row.chatMessage}</p>
+        </div>
+      )}
       {action.busy && (
         <p role="status" className="admin-note">
           {action.operation === 'approve'
@@ -549,7 +559,9 @@ export function SubmissionEditor({
             />
             {row.source === 'manual'
               ? 'I verified this manual claim and its item, collector, date and world.'
-              : 'I checked the linked proof for the saved item, collector, date and hardcore claim.'}
+              : row.chatMessage
+                ? 'I checked the chat message and any attached proof for the saved item, collector, date and hardcore claim.'
+                : 'I checked the linked proof for the saved item, collector, date and hardcore claim.'}
           </label>
         )}
         {row.status === 'pending' && explanations(['acknowledge'])}

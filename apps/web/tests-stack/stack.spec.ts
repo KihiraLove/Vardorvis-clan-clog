@@ -148,6 +148,105 @@ test('GitHub Pages tester can preflight and read authenticated intake errors acr
   expect(response.category).toBeTruthy();
 });
 
+test('RuneLite chat-only proof is private, persisted and reviewable without a screenshot', async ({
+  page,
+  browserName,
+}) => {
+  await owner(page);
+  const key = (
+    await (await page.request.get('/api/v1/admin/clan-api-key')).json()
+  ).key;
+  const rules = await (
+    await page.request.get('/api/v1/admin/runelite-settings')
+  ).json();
+  const collector = 'Chat proof ' + browserName;
+  const message = `  ${collector} received <item>: Rare item & coins.\nPrivate full chat proof 😀  `;
+  const item = (
+    await database<{ game_item_id: number }>(
+      "SELECT g.game_item_id FROM items i JOIN game_item_ids g ON g.item_id=i.id WHERE i.active AND NOT EXISTS(SELECT 1 FROM submissions s WHERE s.item_id=i.id AND s.hardcore AND s.status='approved') ORDER BY i.id,g.game_item_id LIMIT 1",
+    )
+  )[0]!;
+  const imagesBefore = (
+    await database<{ n: number }>(
+      'SELECT count(*)::int n FROM submission_images',
+    )
+  )[0]!.n;
+  const response = await page.request.post('/api/v1/runelite/submissions', {
+    headers: {
+      'idempotency-key': crypto.randomUUID(),
+      'x-clan-api-key-base64': Buffer.from(key, 'utf8').toString('base64url'),
+    },
+    multipart: {
+      username: collector,
+      clanName: rules.clanName,
+      itemId: String(item.game_item_id),
+      worldType: 'HARDCORE_MAIN',
+      chatMessage: message,
+    },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  const receipt = await response.json();
+  expect(receipt.status).toBe('pending');
+  expect(
+    (
+      await database<{ n: number }>(
+        'SELECT count(*)::int n FROM submission_images',
+      )
+    )[0]!.n,
+  ).toBe(imagesBefore);
+  const stored = (
+    await database<{ chat_message: string; proof_image_id: null }>(
+      'SELECT chat_message,proof_image_id FROM submissions WHERE id=$1',
+      [receipt.submissionId],
+    )
+  )[0]!;
+  expect(stored).toEqual({ chat_message: message, proof_image_id: null });
+  await page.reload();
+  await page
+    .getByRole('button', { name: new RegExp('^Review ' + collector) })
+    .click();
+  expect(
+    await editor(page).locator('.submission-chat-proof p').textContent(),
+  ).toBe(message);
+  await expect(editor(page).getByAltText('Submission screenshot')).toHaveCount(
+    0,
+  );
+  await editor(page)
+    .getByLabel(/^I checked the chat message/)
+    .check();
+  await editor(page)
+    .getByRole('button', { name: 'Approve submission', exact: true })
+    .click();
+  await expect(
+    page.getByText('Saved submission state: approved.', { exact: true }),
+  ).toBeVisible();
+  const detail = await (
+    await page.request.get('/api/v1/admin/submissions/' + receipt.submissionId)
+  ).json();
+  expect(detail.submission.chatMessage).toBe(message);
+  expect(detail.audit[0].after.chatMessage).toBe(message);
+  const collections = await (
+    await page.request.get('/api/v1/collections')
+  ).text();
+  expect(collections).not.toContain('chatMessage');
+  expect(collections).not.toContain('Private full chat proof');
+  // Restore the empty-credit baseline required by the following backup smoke test.
+  await editor(page)
+    .getByLabel('Review reason')
+    .fill('Chat proof acceptance complete');
+  await editor(page)
+    .getByRole('button', { name: 'Revoke credit', exact: true })
+    .click();
+  await expect(
+    page.getByText('Saved submission state: revoked.', { exact: true }),
+  ).toBeVisible();
+  const revoked = await (
+    await page.request.get('/api/v1/admin/submissions/' + receipt.submissionId)
+  ).json();
+  expect(revoked.submission.chatMessage).toBe(message);
+  expect(revoked.submission.status).toBe('revoked');
+});
+
 test('real login, PNG claim, independent note/correction, canonical public credit and audited revoke', async ({
   page,
   context,

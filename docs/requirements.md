@@ -10,6 +10,11 @@ Administrator-managed labels, a dedicated site-settings page, moderator disable/
 
 > **9 October 2026 DEC-01 review:** [ADR 002](decisions/002-command-date-display.md) records the approved one-credit-per-mode policy, actual password auth and command/date defaults. The sole `/cc-clog submit` command and API receipt-date policy are confirmed. The owner confirmed Traefik/Let's Encrypt using Docker networks `web` and `socknet` and visually approved the frontend on 9 October 2026. Actual domain/DNS, deployed TLS routing/certificate and live login checks remain unverified.
 
+RuneLite clients must send the complete `chatMessage` as private proof for new
+submissions. A screenshot is optional. Both staff roles can read the original
+message during review and approve chat-only evidence; proof text is never public.
+Exact retries bind the message and screenshot presence to the request key.
+
 ## Public collection log
 
 - Recreate the OSRS collection-log layout 1:1 at its reference desktop size: window frame, five top-level tabs, page navigation, scrollbars, item grid and ordering, labels, counters, font, spacing and icon treatment. Preserve the original proportions when adapting to small screens.

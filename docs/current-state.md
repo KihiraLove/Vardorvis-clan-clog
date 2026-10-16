@@ -69,11 +69,11 @@ transactionally, including removal of retired OAuth grants. Do not run destructi
 integration tests on a live cluster. See [OPS handover](ops-01.md).
 
 The current schema is immutable SQL `001_baseline.sql` through
-`022_submission_duplicate_filters.sql`. A complete checksummed prefix may upgrade; changed,
+`023_runelite_chat_proof.sql`. A complete checksummed prefix may upgrade; changed,
 missing, future or unknown ledger entries fail closed. Repeated exact startup is
 supported. Image rollback requires the identical applied schema manifest and
-compatible application/catalog contracts. A pre-022 image cannot run against a
-022 ledger. There is no automatic schema downgrade. The original nine development
+compatible application/catalog contracts. A pre-023 image cannot run against a
+023 ledger. There is no automatic schema downgrade. The original nine development
 migrations are not an accepted upgrade prefix of the consolidated baseline;
 recover/rehearse a matching installation before any intentional migration.
 

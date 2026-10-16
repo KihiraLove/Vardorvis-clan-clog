@@ -50,6 +50,16 @@ export function runeLiteWorld(value: unknown) {
   };
 }
 function validateSubmission(fields: RuneLiteFields, rules: RuneLiteRules) {
+  if (
+    fields.chatMessage !== undefined &&
+    (!fields.chatMessage.trim() ||
+      fields.chatMessage.includes('\0') ||
+      Buffer.byteLength(fields.chatMessage, 'utf8') > 8192)
+  )
+    throw new ApiError(
+      422,
+      'Supply the full chat message, up to 8192 UTF-8 bytes.',
+    );
   if (rules.matchClanName && !clanMatches(fields.clanName, rules.clanName))
     throw new ApiError(
       403,
@@ -70,6 +80,8 @@ export interface RuneLiteFields {
   clanName: string;
   itemId: number;
   worldTypes: string[];
+  /** Required for new claims; omitted only when replaying a historical screenshot-only receipt. */
+  chatMessage?: string;
 }
 export interface RuneLiteReceipt {
   submissionId: string;
@@ -83,14 +95,14 @@ export interface RuneLiteReceipt {
 export interface ProofStore {
   allowIntake(ip: string): Promise<boolean>;
   authorizeIntake(apiKey: string | undefined): Promise<void>;
-  validateSubmission(fields: RuneLiteFields): Promise<void>;
+  validateSubmission(fields: RuneLiteFields, key?: string): Promise<void>;
   image(id: string): Promise<IconRecord | null>;
   createRuneLite(
     fields: RuneLiteFields,
-    image: IconRecord,
+    image: IconRecord | undefined,
     key: string,
     apiKey?: string,
-  ): Promise<{ receipt: RuneLiteReceipt; imageId: string }>;
+  ): Promise<{ receipt: RuneLiteReceipt; imageId: string | null }>;
 }
 export class PgProofStore implements ProofStore {
   constructor(private readonly pool: pg.Pool) {}
@@ -98,8 +110,19 @@ export class PgProofStore implements ProofStore {
     const rules = await readRuneLiteSettings(this.pool);
     await requireClanKey(this.pool, apiKey, false, !rules.matchClanName);
   }
-  async validateSubmission(fields: RuneLiteFields) {
+  async validateSubmission(fields: RuneLiteFields, key?: string) {
     validateSubmission(fields, await readRuneLiteSettings(this.pool));
+    if (
+      fields.chatMessage === undefined &&
+      (!key ||
+        !(
+          await this.pool.query(
+            'SELECT 1 FROM runelite_submission_requests WHERE request_key=$1',
+            [key],
+          )
+        ).rowCount)
+    )
+      throw new ApiError(422, 'Supply the full chat message as proof.');
   }
   async allowIntake(ip: string) {
     // Durable namespace shared across replicas, independent of staff login limits.
@@ -130,7 +153,7 @@ export class PgProofStore implements ProofStore {
   }
   async createRuneLite(
     fields: RuneLiteFields,
-    image: IconRecord,
+    image: IconRecord | undefined,
     key: string,
     apiKey?: string,
   ) {
@@ -139,10 +162,16 @@ export class PgProofStore implements ProofStore {
       fields.username.trim(),
       fields.clanName.trim().toLowerCase(),
       fields.itemId,
-      image.sha256,
+      image?.sha256 ?? null,
     ];
     const hash = createHash('sha256')
-      .update(JSON.stringify([...payload, world.worldTypes]))
+      .update(
+        JSON.stringify([
+          ...payload,
+          world.worldTypes,
+          ...(fields.chatMessage === undefined ? [] : [fields.chatMessage]),
+        ]),
+      )
       .digest('hex');
     const client = await this.pool.connect();
     try {
@@ -160,7 +189,7 @@ export class PgProofStore implements ProofStore {
         await client.query<{
           payload_hash: string;
           response: RuneLiteReceipt;
-          image_id: string;
+          image_id: string | null;
           legacy: boolean;
         }>(
           'SELECT r.payload_hash,r.response,s.proof_image_id::text AS image_id,s.submitted_world_types IS NULL AS legacy FROM runelite_submission_requests r JOIN submissions s ON s.id=r.submission_id WHERE r.request_key=$1',
@@ -170,6 +199,7 @@ export class PgProofStore implements ProofStore {
       if (prior) {
         const legacyMatch =
           prior.legacy &&
+          fields.chatMessage === undefined &&
           !world.hardcore &&
           prior.payload_hash ===
             createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -181,6 +211,8 @@ export class PgProofStore implements ProofStore {
         await client.query('COMMIT');
         return { receipt: prior.response, imageId: prior.image_id };
       }
+      if (fields.chatMessage === undefined)
+        throw new ApiError(422, 'Supply the full chat message as proof.');
       const item = (
         await client.query<{ id: number; name: string }>(
           'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active FOR UPDATE OF i',
@@ -201,7 +233,10 @@ export class PgProofStore implements ProofStore {
       // The item lock serializes independent observers, including game-ID aliases.
       // Immutable event time/identity keep staff edits and duplicate deliveries from extending the window.
       const duplicate = (
-        await client.query<{ receipt: RuneLiteReceipt; imageId: string }>(
+        await client.query<{
+          receipt: RuneLiteReceipt;
+          imageId: string | null;
+        }>(
           'SELECT e.receipt,s.proof_image_id::text AS "imageId" FROM runelite_drop_events e JOIN submissions s ON s.id=e.submission_id WHERE e.player_key=$1 AND e.item_id=$2 AND e.hardcore=$3 AND e.first_received_at > $4::timestamptz - interval \'1 minute\' ORDER BY e.first_received_at LIMIT 1',
           [playerKey, item.id, world.hardcore, receivedAt],
         )
@@ -221,21 +256,22 @@ export class PgProofStore implements ProofStore {
         item.id,
         world.hardcore,
       );
-      await insertImage(client, image);
+      if (image) await insertImage(client, image);
       const id = randomUUID();
       const row = (
         await client.query<{ submitted_at: Date; collected_on: string }>(
-          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types) VALUES($1,'runelite',$2,$3,$4,(now() AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
+          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types,chat_message) VALUES($1,'runelite',$2,$3,$4,(now() AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9,$10) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
           [
             id,
             item.name,
             item.id,
             fields.username.trim(),
-            image.id,
+            image?.id ?? null,
             fields.clanName.trim(),
             fields.itemId,
             world.hardcore,
             world.worldTypes,
+            fields.chatMessage,
           ],
         )
       ).rows[0]!;
@@ -273,7 +309,8 @@ export class PgProofStore implements ProofStore {
           dateSource: 'submission',
           submittedAt: row.submitted_at.toISOString(),
           proofUrl: '',
-          screenshotPath: screenshotPath(image.id),
+          screenshotPath: image ? screenshotPath(image.id) : null,
+          chatMessage: fields.chatMessage,
           hardcore: world.hardcore,
           status: 'pending',
         };
@@ -320,7 +357,7 @@ export class PgProofStore implements ProofStore {
         ],
       );
       await client.query('COMMIT');
-      return { receipt, imageId: image.id };
+      return { receipt, imageId: image?.id ?? null };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

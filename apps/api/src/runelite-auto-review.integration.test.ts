@@ -184,6 +184,7 @@ test(
         clanName = 'Clan name',
         key = randomUUID(),
         credential: string | null = apiKey,
+        screenshot = true,
       ) => {
         const boundary = 'auto-review-boundary';
         return app.inject({
@@ -198,6 +199,7 @@ test(
           payload: Buffer.concat([
             ...Object.entries({
               worldType,
+              chatMessage: `${username} received a collection log item.`,
               username,
               clanName,
               itemId: String(900000 + itemId),
@@ -206,11 +208,16 @@ test(
                 `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
               ),
             ),
-            Buffer.from(
-              `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="proof.png"\r\nContent-Type: image/png\r\n\r\n`,
-            ),
-            png,
-            Buffer.from(`\r\n--${boundary}--\r\n`),
+            ...(screenshot
+              ? [
+                  Buffer.from(
+                    `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="proof.png"\r\nContent-Type: image/png\r\n\r\n`,
+                  ),
+                  png,
+                  Buffer.from('\r\n'),
+                ]
+              : []),
+            Buffer.from(`--${boundary}--\r\n`),
           ]),
         });
       };
@@ -257,7 +264,15 @@ test(
         (await pool.query('SELECT count(*)::int n FROM submissions')).rows[0].n,
         blockedCount,
       );
-      const trusted = await submit('MEMBERS', 2, 'TRUSTED_PLAYER', 'Game Clan');
+      const trusted = await submit(
+        'MEMBERS',
+        2,
+        'TRUSTED_PLAYER',
+        'Game Clan',
+        randomUUID(),
+        apiKey,
+        false,
+      );
       assert.equal(trusted.statusCode, 201, trusted.body);
       assert.equal(trusted.json().status, 'approved');
       const detail = (
@@ -267,6 +282,15 @@ test(
         })
       ).json();
       assert.equal(detail.submission.status, 'approved');
+      assert.equal(detail.submission.screenshotPath, null);
+      assert.equal(
+        detail.submission.chatMessage,
+        'TRUSTED_PLAYER received a collection log item.',
+      );
+      assert.equal(
+        detail.audit[0].before.chatMessage,
+        detail.submission.chatMessage,
+      );
       assert.equal(detail.audit[0].actorName, 'RuneLite auto review');
       assert.equal(detail.audit[0].action, 'approve');
       assert.equal(detail.audit[0].before.status, 'pending');

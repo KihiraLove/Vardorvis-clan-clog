@@ -45,6 +45,7 @@ test(
           '020_public_projections.sql',
           '021_retire_oauth_states.sql',
           '022_submission_duplicate_filters.sql',
+          '023_runelite_chat_proof.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

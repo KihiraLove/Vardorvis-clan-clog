@@ -253,6 +253,7 @@ test(
               clanName: 'Clan name',
               itemId: String(900000 + itemId),
               worldType: hardcore ? 'HARDCORE_MAIN' : 'MEMBERS',
+              chatMessage: `${username} received a collection log item.`,
             }).map(([name, value]) =>
               Buffer.from(
                 `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,

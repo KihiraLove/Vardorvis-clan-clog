@@ -95,7 +95,12 @@ test(
         .png()
         .toBuffer();
       let address = 1;
-      const run = (worldType: string | undefined, key = randomUUID()) => {
+      const run = (
+        worldType: string | undefined,
+        key = randomUUID(),
+        chatMessage:
+          string | null = 'Collector received a collection log item.',
+      ) => {
         const boundary = 'world-boundary';
         const fields = [
           ['username', 'Collector'],
@@ -103,6 +108,7 @@ test(
           ['itemId', '900001'],
         ];
         if (worldType !== undefined) fields.push(['worldType', worldType]);
+        if (chatMessage !== null) fields.push(['chatMessage', chatMessage]);
         return app.inject({
           method: 'POST',
           url: '/api/v1/runelite/submissions',
@@ -260,7 +266,7 @@ test(
         )
         .digest('hex');
       await pool.query(
-        'UPDATE submissions SET submitted_world_types=NULL WHERE id=$1',
+        'UPDATE submissions SET submitted_world_types=NULL,chat_message=NULL WHERE id=$1',
         [legacy.json().submissionId],
       );
       await pool.query(
@@ -269,8 +275,15 @@ test(
       );
       const original = { ...legacy.json() };
       delete original.hardcore;
-      assert.deepEqual((await run('MEMBERS', legacyKey)).json(), original);
-      assert.equal((await run('HARDCORE_MAIN', legacyKey)).statusCode, 409);
+      assert.deepEqual(
+        (await run('MEMBERS', legacyKey, null)).json(),
+        original,
+      );
+      assert.equal((await run('MEMBERS', legacyKey)).statusCode, 409);
+      assert.equal(
+        (await run('HARDCORE_MAIN', legacyKey, null)).statusCode,
+        409,
+      );
 
       // Headers encode keys that cannot be represented literally in HTTP.
       for (const custom of [

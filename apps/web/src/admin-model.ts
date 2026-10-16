@@ -42,6 +42,7 @@ export interface Submission {
   submittedAt: string;
   proofUrl: string;
   screenshotPath?: string | null;
+  chatMessage?: string;
   /** Locally generated PNG in the in-memory preview only; never read from API payloads. */
   previewScreenshot?: string;
   hardcore: boolean;
@@ -356,7 +357,12 @@ export function parseSubmission(value: unknown): Submission {
   if (
     typeof row.hardcore !== 'boolean' ||
     typeof row.rawItemText !== 'string' ||
-    typeof row.proofUrl !== 'string'
+    typeof row.proofUrl !== 'string' ||
+    (row.chatMessage !== undefined &&
+      (row.source !== 'runelite' ||
+        typeof row.chatMessage !== 'string' ||
+        !row.chatMessage.trim() ||
+        row.chatMessage.length > 8192))
   )
     throw new Error('Invalid submission data.');
   return {
@@ -374,6 +380,9 @@ export function parseSubmission(value: unknown): Submission {
     submittedAt: timestamp(row.submittedAt),
     // Manual submissions may have no proof; bot claims must provide evidence.
     proofUrl: row.proofUrl,
+    ...(row.chatMessage === undefined
+      ? {}
+      : { chatMessage: row.chatMessage as string }),
     ...(row.screenshotPath === undefined
       ? {}
       : { screenshotPath: parseScreenshotPath(row.screenshotPath) }),

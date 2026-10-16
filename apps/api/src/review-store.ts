@@ -29,6 +29,7 @@ type Row = {
   submittedAt: Date;
   proofUrl: string;
   proofImageId: string | null;
+  chatMessage: string | null;
   hardcore: boolean;
   status: ReviewSubmission['status'];
   reviewNote: string;
@@ -38,7 +39,7 @@ const selection =
   'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",' +
   'collector_name AS "collectorName",to_char(collected_on,\'YYYY-MM-DD\') AS "collectedOn",' +
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
-  'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",hardcore,status,' +
+  'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",chat_message AS "chatMessage",hardcore,status,' +
   'review_note AS "reviewNote",review_reason AS "reviewReason"';
 const view = (row: Row): ReviewSubmission => ({
   id: row.id,
@@ -54,6 +55,7 @@ const view = (row: Row): ReviewSubmission => ({
   reviewNote: row.reviewNote,
   reviewReason: row.reviewReason,
   screenshotPath: row.proofImageId ? screenshotPath(row.proofImageId) : null,
+  ...(row.chatMessage === null ? {} : { chatMessage: row.chatMessage }),
   dateSource:
     row.dateSource === 'submission_default'
       ? 'submission'
@@ -498,6 +500,7 @@ export class PgReviewStore implements ReviewStore {
               !row.collectorName.trim() ||
               (row.source !== 'manual' &&
                 !row.proofImageId &&
+                !(row.source === 'runelite' && row.chatMessage?.trim()) &&
                 !validProofUrl(row.proofUrl))
             )
               throw new ApiError(

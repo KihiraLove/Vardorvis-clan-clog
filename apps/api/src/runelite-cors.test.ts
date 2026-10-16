@@ -116,6 +116,7 @@ test('browser tester preflight is public and scoped; upload errors retain CORS a
         clanName: 'Clan',
         itemId: '4151',
         worldType: 'HARDCORE_MAIN',
+        chatMessage: 'Collector received a drop: Test item',
       }).map(
         ([name, value]) =>
           `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,

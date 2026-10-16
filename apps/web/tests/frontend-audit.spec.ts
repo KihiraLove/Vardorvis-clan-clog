@@ -804,7 +804,7 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
   await expect(
     editor
       .getByText(
-        'A valid proof link or saved screenshot is required for approval.',
+        'A valid proof link, chat message or saved screenshot is required for approval.',
       )
       .first(),
   ).toBeVisible();

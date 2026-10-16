@@ -323,6 +323,7 @@ export function AdminQueue({
                         source={row.source}
                         screenshot={row.screenshotPath}
                         previewScreenshot={row.previewScreenshot}
+                        chatMessage={row.chatMessage}
                       />
                       <button
                         type="button"

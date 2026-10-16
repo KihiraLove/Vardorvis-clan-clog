@@ -59,6 +59,7 @@ test(
         itemId,
         clanName: 'Clan name',
         worldTypes: hardcore ? ['HARDCORE_MAIN'] : ['MEMBERS'],
+        chatMessage: `${username} received item ${itemId}.`,
       });
       const firstKey = randomUUID(),
         firstImage = image();
