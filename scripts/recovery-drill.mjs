@@ -304,14 +304,14 @@ try {
     'corrupt/incomplete backup and existing namespace rejected without touching healthy clone',
   );
   const prefix = id,
-    originalTag = prefix + '-app:sha-' + manifest.revision;
+    originalTag = prefix + ':sha-' + manifest.revision;
   await docker(['tag', baseId, originalTag]);
   tags.push(originalTag);
   const deployEnv = {
     ...cloneEnv,
     CLOG_DEPLOY_ROOT: target,
     CLOG_DEPLOY_PROJECT: project,
-    CLOG_IMAGE_PREFIX: prefix,
+    CLOG_IMAGE_NAME: prefix,
   };
   const deploy = (revision, expectFailure = false) =>
     run('bash', [path.resolve('infra/deploy.sh'), revision], {
@@ -394,7 +394,7 @@ try {
         path.join(payload, 'infra/start-app.sh'),
         '# invalid changed helper\n',
       );
-    const tag = prefix + '-app:sha-' + revision;
+    const tag = prefix + ':sha-' + revision;
     tags.push(tag);
     await docker(['build', '--network=none', '--tag', tag, directory]);
     return revision;

@@ -120,7 +120,7 @@ export class MemoryStore implements BackendStore {
   attempts = 0;
   setting: Settings = {
     revision: 'settings-1',
-    clanName: 'Vardorvis',
+    clanName: 'Example clan',
     hardcoreEnabled: false,
   };
   audits: { actor: string; enabled: boolean }[] = [];
@@ -152,7 +152,7 @@ export class MemoryStore implements BackendStore {
     if (this.setting.revision !== revision) return null;
     this.setting = {
       revision: 'settings-' + (Number(revision.split('-')[1]) + 1),
-      clanName: 'Vardorvis',
+      clanName: 'Example clan',
       hardcoreEnabled: enabled,
     };
     this.audits.push({ actor, enabled });
@@ -386,7 +386,7 @@ test('settings require origin, CSRF, strict fields and current revision; every s
     });
     assert.deepEqual(saved.json(), {
       revision: 'settings-2',
-      clanName: 'Vardorvis',
+      clanName: 'Example clan',
       hardcoreEnabled: true,
     });
     assert.equal(saved.headers['cache-control'], 'no-store');

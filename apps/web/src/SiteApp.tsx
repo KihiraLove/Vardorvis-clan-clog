@@ -243,7 +243,6 @@ export function SiteApp({
             <AdminEntry
               competitionClient={competitionClient}
               client={adminClient}
-              xpClient={xpClient}
               registerNavigation={register}
               clanName={clanName}
               hardcoreEnabled={liveEnabled}
@@ -264,9 +263,7 @@ export function SiteApp({
                 copy={copy}
                 competitionClient={competitionClient}
               />
-              {!hardcore && (
-                <XpPage client={xpClient} admin={false} copy={copy} />
-              )}
+              {!hardcore && <XpPage client={xpClient} copy={copy} />}
             </>
           )}
         </main>

@@ -1,7 +1,7 @@
-/** Upgrade existing presentation and verify independently audited hardcore settings. */
+/** Verify independently audited regular and hardcore settings from a fresh setup. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -14,7 +14,7 @@ import { BrandingStorage } from './branding-storage.js';
 import { hashPassword } from './passwords.js';
 
 test(
-  'upgrade copies existing appearance, removes the caption and keeps hardcore writes independent while disabled',
+  'fresh appearance defaults and hardcore writes stay independent while disabled',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const root = new pg.Pool({
@@ -47,10 +47,9 @@ test(
         '../../../packages/database/migrations/',
         import.meta.url,
       );
-      for (const file of (await readdir(migrations))
-        .filter((f) => f.endsWith('.sql') && f < '010_')
-        .sort())
-        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
+      await pool.query(
+        await readFile(new URL('001_baseline.sql', migrations), 'utf8'),
+      );
       await logos.initialize();
       const svg = Buffer.from(
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>',
@@ -73,9 +72,10 @@ test(
           f.height,
         ],
       );
-      await pool.query('UPDATE clan_branding SET version=2,logo_asset_id=$1', [
-        l.id,
-      ]);
+      await pool.query(
+        'UPDATE clan_branding SET version=2,logo_asset_id=$1,hardcore_logo_asset_id=$1',
+        [l.id],
+      );
       await pool.query(
         'INSERT INTO clan_branding_audit(actor_id,old_logo_asset_id,new_logo_asset_id,version) VALUES($1,NULL,$2,2)',
         ['historical-owner', l.id],
@@ -84,25 +84,9 @@ test(
         ...defaultSiteCopy,
         collectionTitle: 'Existing collection',
       };
-      await pool.query('UPDATE site_settings SET clan_name=$1,public_copy=$2', [
-        'Regular clan',
-        JSON.stringify({ ...regularCopy, xpTotalCaption: 'Old caption' }),
-      ]);
       await pool.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_public_copy,new_public_copy) VALUES($1,false,false,99,$2,$2)',
-        [
-          'historical-owner',
-          JSON.stringify({
-            ...regularCopy,
-            xpTotalCaption: 'Historical caption',
-          }),
-        ],
-      );
-      await pool.query(
-        await readFile(
-          new URL('010_hardcore_appearance.sql', migrations),
-          'utf8',
-        ),
+        'UPDATE site_settings SET clan_name=$1,hardcore_name=$1,public_copy=$2,hardcore_copy=$2',
+        ['Regular clan', JSON.stringify(regularCopy)],
       );
       const initial = await backend.settings();
       assert.deepEqual(initial.copy, regularCopy);
@@ -111,14 +95,6 @@ test(
         copy: regularCopy,
       });
       assert.equal(initial.hardcoreEnabled, false);
-      assert.equal(
-        (
-          await pool.query(
-            'SELECT new_public_copy FROM site_settings_audit WHERE version=99',
-          )
-        ).rows[0].new_public_copy.xpTotalCaption,
-        'Historical caption',
-      );
       assert.equal(
         (await pool.query('SELECT public_copy FROM site_settings')).rows[0]
           .public_copy.xpTotalCaption,

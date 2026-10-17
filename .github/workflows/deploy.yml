@@ -1,5 +1,5 @@
 # Manual promotion: verify release provenance on GitHub before using the home runner.
-name: Deploy home
+name: Deploy
 on:
   workflow_dispatch:
     inputs:
@@ -11,7 +11,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: home-production
+  group: production
   cancel-in-progress: false
 jobs:
   verify:
@@ -42,8 +42,8 @@ jobs:
   deploy:
     # Verify the installed launcher; it extracts versioned infrastructure from the approved image.
     needs: verify
-    environment: home-production
-    runs-on: [self-hosted, Linux, clog-production]
+    environment: production
+    runs-on: [self-hosted, Linux, clan-clog-production]
     timeout-minutes: 15
     steps:
       - name: Deploy installed release
@@ -53,5 +53,5 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$LAUNCHER_SHA256" =~ ^[a-f0-9]{64}$ ]] || { echo 'Configure the reviewed launcher checksum'; exit 1; }
-          test "$(sha256sum /srv/vardorvis-clan-clog/deploy.sh | cut -d' ' -f1)" = "$LAUNCHER_SHA256"
-          /srv/vardorvis-clan-clog/deploy.sh "$RELEASE_SHA"
+          test "$(sha256sum /srv/clan-collection-log/deploy.sh | cut -d' ' -f1)" = "$LAUNCHER_SHA256"
+          /srv/clan-collection-log/deploy.sh "$RELEASE_SHA"

@@ -34,11 +34,11 @@ async function publicLayout(page: Page, count: number) {
       '/api/v1/auth/session': { authenticated: false },
       '/api/v1/settings': {
         revision: 'settings-layout',
-        clanName: 'Vardorvis',
+        clanName: 'Example clan',
         hardcoreEnabled: true,
         copy: { ...defaultSiteCopy, collectionCaption: caption },
         hardcore: {
-          clanName: 'Hardcore Vardorvis',
+          clanName: 'Example hardcore clan',
           copy: {
             ...defaultSiteCopy,
             collectionCaption: 'Hardcore collection',

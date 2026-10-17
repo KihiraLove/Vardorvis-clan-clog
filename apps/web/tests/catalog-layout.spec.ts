@@ -42,7 +42,7 @@ async function liveCatalog(page: Page, pages: number, items: number) {
       '/api/v1/admin/catalog': catalog,
       '/api/v1/settings': {
         revision: 'settings-layout',
-        clanName: 'Vardorvis',
+        clanName: 'Example clan',
         hardcoreEnabled: false,
       },
       '/api/v1/branding': defaultBranding,

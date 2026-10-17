@@ -1,132 +1,63 @@
-# Local acceptance and release-only CI
+# Development and tests
 
-[Frontend loading acceptance](frontend-loading.md) adds a production-build browser
-gate after the ordinary Chromium suite. It verifies entry-byte/module budgets,
-parallel code/data preparation and chunk-failure/cancellation recovery. Reports
-include `web-bundle.json`, `loading.log` and per-test loading measurements.
-
-See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
-
-[Release acceptance](release-acceptance.md) adds a fresh lockfile-bound advisory
-check and consolidated `acceptance.json`. High/critical advisories, unavailable
-audit data, omitted database/retry regressions and incomplete recovery evidence
-fail the gate. Manual guild/host/device/release results remain explicitly pending.
-
-[CSP/framing acceptance](browser-security.md) runs against the actual production
-proxy during `smoke.log`, with per-test artifacts under `browser/security/`.
-It checks enforced headers, compatible resources, blocked injections and embedding.
-
-[Real-stack browser acceptance](browser-acceptance.md) runs Chromium, Firefox and
-WebKit against disposable HTTPS/production proxy/API/PostgreSQL with real staff
-sessions. No host port or public DNS is used. `stack-report.json`, per-test
-`browser/stack/` captures and `browser-results.log` record acceptance; the report
-guard rejects skipped/expected/flaky cases and missing audit scenarios/engines.
-
-Run the complete automated suite before pushing or requesting review:
+Use Node 24. For host development:
 
 ```bash
-npm run test:all
+npm ci
+npm run build
+npm run dev:web
+# In another terminal, with configured local DB/storage:
+npm run dev:api
 ```
 
-Only **Node 24 and a running Linux Docker engine** are required on the host.
-Windows/macOS users can use Docker Desktop; Linux users can use Docker Engine.
-The command works from PowerShell, Bash or another terminal. Host `npm ci`,
-PostgreSQL, Bash, Chromium, GitHub credentials and production `.env` files are
-not required. Without npm installed, run `node scripts/check-local.mjs` directly.
-Use Docker Compose 2.24.4 or newer. A rootless Linux engine may need
-`LOCAL_DOCKER_SOCKET` set to its Unix socket path.
+Vite proxies `/api` to `127.0.0.1:3000`. The frontend always uses the API;
+there is no demo fallback. Browser fixtures live under `apps/web/tests/support`
+and cannot enter production bundles. See [configuration](environment.md).
 
-The first run downloads/builds the Linux dependencies and Chromium. Later runs
-reuse Docker's local build cache. Nothing is uploaded to GitHub or GHCR.
-The runner mounts the local Docker socket to manage its disposable containers;
-run it only for repository code you trust, on your development machine.
+## Focused checks
 
-## What runs
+Run checks for the behavior/files you changed. Examples:
 
-1. Script tests, including backup fault injection, package-cleanup planning and
-   local-runner isolation checks.
-2. `npm run validate`: formatting, ESLint, workspace builds, catalog verification,
-   typechecks, all Node tests and documentation links. A fresh PostgreSQL 17
-   instance is mandatory; skipped/TODO workspace tests fail the full gate.
-   This includes large-ledger [review](review-pagination.md) and
-   [XP history](xp-history-pagination.md) traversal, concurrency and query-plan checks,
-   plus [lifecycle archival](lifecycle-archive.md) capacity and preservation checks.
-3. Reproducible [workload measurements](workload-budgets.md) for WOM parsing,
-   native password hashing and Discord admission, plus real PostgreSQL query-volume coverage.
-   [Public projection measurements](public-performance.md) also record catalog,
-   collection, XP, activity and history latency/query/CPU/memory evidence and lookup plans.
-4. All Chromium tests, with CI's focused-test protection and retry policy.
-5. A production image and a second disposable database: migrations, runtime
-   permissions, Nginx routing, auth/review, competitions, large branding uploads,
-   preview maintenance, owner archival/restore, catalog/icon persistence, coordinated backup and recovery
-   after database restart. The Traefik configuration is validated as well.
-   [Runtime operations](runtime-operations.md) acceptance also covers real query/COMMIT
-   termination, supervisor ordering/deadlines/crashes, independent Discord health and
-   committed-response uncertainty with durable receipt replay. Gateway health uses
-   a local fixture; no live Discord login or command registration occurs.
+```bash
+npx prettier --check path/to/changed-file.ts
+npx eslint apps/web/src/changed-file.ts
+npm run typecheck -w @clog/web
+node --test apps/web/src/changed-file.test.ts
+npm run build -w @clog/database
+node --test packages/database/dist/migration-audit.test.js
+npm run check:docs
+```
 
-Every run uses unique containers, network and volumes; it publishes no host
-ports and does not read your `.env`. Development/production stacks can remain
-running. Test secrets are generated independently. The runner cleans up its own
-resources after success, failure or a handled interrupt, and removes temporary
-image tags while retaining build cache. Cleanup errors make the command fail.
-After a machine crash, inspect containers/networks with label `clog.local-checks`
-and Compose resources with the matching `clog-checks-*` project before manually
-removing them; do not use global Docker prune against a shared machine.
+Database tests need `TEST_DATABASE_URL` pointing to a disposable PostgreSQL 17
+database. They can create/drop schemas and change roles; never use personal or
+production data. Some tests skip without it, which is not complete validation.
+Build shared packages before running their dependent compiled tests.
 
-Logs, browser traces/screenshots and `result.json` are saved under
-`.data/local-checks/<run-id>/`. A result records the Git revision, but covers the
-**working tree**, including uncommitted files copied into the image. Attach the
-summary to the PR and record the exact commit tested; local results are review
-evidence, not a hosted status check. Existing external Discord/server recovery
-acceptance still needs its dedicated environment; this command runs all current
-automated repository gates.
+For UI behavior, run a selected Playwright spec from `apps/web`, for example
+`npx playwright test tests/admin.spec.ts --grep 'review'`. Its config starts
+Vite on port 5187. Use a production web build to verify bundle budgets and that
+no staff/test modules enter the initial public bundle.
 
-For a focused edit, use `npm run validate`, `npm run test:tools`, workspace unit
-tests or `npm run test:e2e -w @clog/web` after installing local dependencies.
-Plain `npm run validate` alone is not the full acceptance gate and can skip DB
-integration tests if `TEST_DATABASE_URL` is absent.
+## Complete acceptance
 
-## GitHub usage policy
+The maintainer runs this before release, with Linux Docker running:
 
-Production smoke also runs the [complete isolated recovery job](release-recovery.md):
-real coordinated backup, fresh database and file-volume restore, complete state
-fingerprints, restored logins/assets/private proof/clan-key decryption, rejected
-corrupt backups and namespace reuse, versioned deployment/schema failures,
-credential rotation, compatible rollback and process-crash recovery. Sanitized
-scenario/version/inventory evidence is retained in the run's `recovery/` directory;
-clone secrets, raw dumps and private filesystem contents are excluded. Cleanup is
-limited to the drill's labelled `clog-restore-*` namespace and temporary image tags.
+```bash
+node scripts/check-local.mjs
+```
 
-- Pushes and PR updates run no hosted CI. Use local acceptance for development.
-- **CI → Run workflow** explicitly runs the same full command on GitHub, without
-  publishing. Use it only when a hosted confirmation is worth the budget.
-- Publishing a GitHub Release runs full acceptance, then publishes the unified
-  multi-architecture image. Use a main-branch commit and a version tag such as
-  `v1.2.3` or `v1.2.3-rc.1`. A tag push or draft release alone publishes nothing.
-- Images receive the version tag, `release-<full SHA>` and compatible
-  `sha-<full SHA>` aliases. Release aliases preserve the entire manifest graph
-  from the existing cleanup policy. There are no per-push packages.
-- Successful checks upload no artifacts. Failure evidence expires after one day;
-  Buildx record uploads and GitHub-hosted image caches are disabled.
-- **Clean up development images** is manual and defaults to dry-run. There is no
-  hourly cleanup runner. Review its plan before applying deletion to old images.
-- Home deployment remains manual and requires a successful **release-triggered**
-  CI run. Deployment no longer creates or promotes package tags.
+Only Node 24 and Docker Compose 2.24.4+ are required on the host. The runner
+builds isolated Linux tooling, PostgreSQL and browser environments without
+reading runtime `.env` or logging into real Discord. It covers formatting,
+lint, builds, catalog checks, typechecks, Node tests, three-browser HTTPS flows,
+security headers, image inspection, performance and backup/recovery. Full
+acceptance rejects skips and missing required scenarios.
 
-These workflow changes take full effect when merged to the default branch. Until
-then, the old default-branch cleanup schedule still exists. If budget is already
-exhausted, disable that workflow in Actions while awaiting merge. Required branch
-checks named `validate`, `docker-smoke` or `frontend-browser` must be removed or
-reconfigured by a repository admin when adopting this policy; otherwise GitHub
-can wait indefinitely for checks that no longer run automatically. Do not mark
-missing checks as passed. No release or hosted run is required for ordinary work.
+Reports and logs are in `.data/local-checks/<run-id>/`; record the tested commit
+and dirty/clean state. The runner removes its own containers and volumes.
+After a crash, inspect resources labelled `clog.local-checks` and clean up only
+that run's namespace. Avoid global Docker prune on a shared machine.
 
-Existing artifacts, caches and packages are not removed by this change. Their
-storage usage may remain until expiration or explicit cleanup. Workflow YAML
-cannot raise a spending limit or bypass an exhausted account budget; release CI
-also needs available hosted-runner budget.
-
-See [deployment](deployment.md) for release operation, and GitHub's
-[release event documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)
-for published-release triggers.
+Hosted CI runs manually or on a published Release. Publishing waits for complete
+acceptance. Local evidence does not replace checking your own HTTPS host,
+Discord guild, supported devices and off-host recovery before launch.

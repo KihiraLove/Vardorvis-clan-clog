@@ -15,7 +15,7 @@ import {
   type SubmissionDetail,
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { xpTime } from './XpTables.tsx';
+import { formatUtcTime } from './format-time.ts';
 import { ReviewAuditHistory } from './ReviewAuditHistory.tsx';
 import { ProofLink } from './AdminProofLink.tsx';
 import { useAdminAction } from './use-admin-action.ts';
@@ -382,7 +382,7 @@ export function SubmissionEditor({
               </div>
               <div>
                 <dt>Submitted</dt>
-                <dd>{xpTime(row.submittedAt)}</dd>
+                <dd>{formatUtcTime(row.submittedAt)}</dd>
               </div>
               <div>
                 <dt>Collected on</dt>

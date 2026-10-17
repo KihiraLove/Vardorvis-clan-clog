@@ -76,7 +76,7 @@ async function formFixture(page: Page, role: 'admin' | 'moderator' = 'admin') {
       '/api/v1/auth/session': { ...f.session, role },
       '/api/v1/settings': {
         revision: 'settings-style',
-        clanName: 'Vardorvis',
+        clanName: 'Example clan',
         hardcoreEnabled: false,
       },
       '/api/v1/branding': defaultBranding,

@@ -538,7 +538,7 @@ test(
       );
       const rename = {
         hardcoreEnabled: false,
-        expectedRevision: 'settings-2',
+        expectedRevision: (await backend.settings()).revision,
         clanName: 'New Clan',
       };
       assert.equal(

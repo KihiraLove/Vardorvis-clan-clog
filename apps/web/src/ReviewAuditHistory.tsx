@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AdminClient, SubmissionDetail } from './admin-model.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
-import { xpTime } from './XpTables.tsx';
+import { formatUtcTime } from './format-time.ts';
 export function ReviewAuditHistory({
   initial,
   client,
@@ -132,7 +132,7 @@ export function ReviewAuditHistory({
               <strong>
                 {entry.action} · {entry.actorName}
               </strong>
-              <p>{xpTime(entry.at)}</p>
+              <p>{formatUtcTime(entry.at)}</p>
               {entry.reason && <p>Reason: {entry.reason}</p>}
               <div className="admin-table-scroll">
                 <table className="admin-table">

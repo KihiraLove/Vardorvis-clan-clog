@@ -13,6 +13,7 @@ let bytes = 0;
 for (const [file, expected] of Object.entries(manifest.files)) {
   assert.ok(
     file === 'package.json' ||
+      file === 'LICENSE' ||
       /^(?:apps\/(?:api|bot)|packages\/(?:database|domain))\/(?:package\.json|dist\/.+\.js)$/u.test(
         file,
       ),
@@ -89,7 +90,7 @@ for (const file of [
 const migrations = (await readdir('packages/database/migrations'))
   .filter((name) => name.endsWith('.sql'))
   .sort();
-assert.equal(migrations.at(-1), '024_catalog_editor.sql');
+assert.deepEqual(migrations, ['001_baseline.sql']);
 const cleanup = JSON.parse(
   await readFile('runtime-dependency-cleanup.json', 'utf8'),
 );

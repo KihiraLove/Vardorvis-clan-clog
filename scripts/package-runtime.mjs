@@ -72,6 +72,7 @@ export async function packageRuntime(root, output) {
     }
   }
   await copy('package.json');
+  await copy('LICENSE');
   for (const workspace of workspaces) {
     const directory = path.join(root, workspace, 'dist');
     const info = await lstat(directory);

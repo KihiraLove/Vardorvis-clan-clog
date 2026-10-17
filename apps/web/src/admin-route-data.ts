@@ -6,8 +6,7 @@ import type {
   QueueResult,
   StaffAccount,
 } from './admin-model.ts';
-import type { AdminSession, ImportHistoryPage, XpClient } from './xp-model.ts';
-import type { XpTracker } from './xp-tracker.ts';
+import type { AdminSession } from './xp-model.ts';
 import type { Branding } from './branding.ts';
 import type { SiteSettings } from './site-settings.ts';
 import type { ClanKeySettings } from './clan-api-key.ts';
@@ -18,7 +17,6 @@ export interface PreparedAdminData {
   kind:
     | 'queue'
     | 'catalog'
-    | 'xp'
     | 'schedules'
     | 'settings'
     | 'runelite'
@@ -27,9 +25,6 @@ export interface PreparedAdminData {
     | 'denied';
   catalog?: AdminCatalog;
   queue?: QueueResult;
-  tracker?: XpTracker;
-  history?: ImportHistoryPage;
-  historyError?: string;
   schedules?: SchedulingState;
   settings?: SiteSettings;
   branding?: Branding;
@@ -56,16 +51,14 @@ export async function loadAdminRoute(
   path: string,
   session: AdminSession,
   client: AdminClient,
-  xp: XpClient,
   signal: AbortSignal,
 ): Promise<PreparedAdminData> {
-  return withAbort(readAdminRoute(path, session, client, xp, signal), signal);
+  return withAbort(readAdminRoute(path, session, client, signal), signal);
 }
 async function readAdminRoute(
   path: string,
   session: AdminSession,
   client: AdminClient,
-  xp: XpClient,
   signal: AbortSignal,
 ): Promise<PreparedAdminData> {
   signal.throwIfAborted();

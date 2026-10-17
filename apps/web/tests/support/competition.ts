@@ -4,11 +4,9 @@ import {
   competitionScope,
   type WomCompetition,
 } from '@clog/domain';
-import {
-  competitionUrl,
-  type XpClient,
-  type ImportPreview,
-} from '../../src/xp-model.ts';
+import { competitionUrl } from '../../src/xp-model.ts';
+import type { MemoryXpClient } from './xp.ts';
+import { type ImportPreview } from './xp-contracts.ts';
 import type { AdminClient } from '../../src/admin-model.ts';
 import {
   CompetitionRequestError,
@@ -18,12 +16,12 @@ import {
 /** Controlled preview fixtures mirror the live lifecycle and never fetch WOM. */
 export class MemoryCompetitionClient implements CompetitionClient {
   private readonly scheduleClient: AdminClient | undefined;
-  private readonly xpClient: XpClient | undefined;
+  private readonly xpClient: MemoryXpClient | undefined;
   private readonly onSkillMetadata:
     ((competition: WomCompetition) => void) | undefined;
   constructor(
     scheduleClient?: AdminClient,
-    xpClient?: XpClient,
+    xpClient?: MemoryXpClient,
     onSkillMetadata?: (competition: WomCompetition) => void,
   ) {
     this.scheduleClient = scheduleClient;
@@ -295,7 +293,7 @@ export class MemoryCompetitionClient implements CompetitionClient {
     const xpPreview = this.xpPreviews.get(p.previewToken);
     const outcome =
       xpPreview && this.xpClient
-        ? (await this.xpClient.apply(xpPreview, csrf, key, signal, ack)).outcome
+        ? (await this.xpClient.apply(xpPreview, csrf, key, signal)).outcome
         : JSON.stringify(this.stored.get(p.competition.id)) ===
             JSON.stringify(p.competition)
           ? 'unchanged'

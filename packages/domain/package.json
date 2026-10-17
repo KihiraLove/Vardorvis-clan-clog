@@ -1,6 +1,6 @@
 {
   "name": "@clog/domain",
-  "version": "0.1.0",
+  "version": "1.0.0-SNAPSHOT",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,5 +14,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/*.test.js",
     "build:runtime": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.runtime.json"
-  }
+  },
+  "license": "MIT"
 }

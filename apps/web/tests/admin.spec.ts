@@ -86,7 +86,7 @@ async function mockAdmin(page: Page) {
       return route.fulfill({
         json: {
           revision: 'settings-1',
-          clanName: 'Vardorvis',
+          clanName: 'Example clan',
           hardcoreEnabled: false,
         },
       });
@@ -882,7 +882,7 @@ test('live admin shows a password form and submits a password without Discord OA
       return route.fulfill({
         json: {
           revision: 'settings-1',
-          clanName: 'Vardorvis',
+          clanName: 'Example clan',
           hardcoreEnabled: false,
         },
       });

@@ -9,7 +9,6 @@ import {
 } from './admin-session.ts';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import type { XpClient } from './xp-model.ts';
 import { AdminRouteContext, adminRouteLabels } from './admin-route-data.ts';
 import { useAdminRoutes, type AdminNavigator } from './use-admin-routes.ts';
 import { withAbort } from './with-abort.ts';
@@ -76,13 +75,11 @@ export function AdminPage({
   onSettingsSaved,
   onBrandingSaved,
   competitionClient,
-  xpClient,
   registerNavigation,
   initial,
 }: AdminRouteProps & {
   client: AdminClient;
   competitionClient: CompetitionClient;
-  xpClient: XpClient;
   registerNavigation: (navigator: AdminNavigator | null) => void;
   clanName: string;
   hardcoreEnabled: boolean;
@@ -111,7 +108,6 @@ export function AdminPage({
     path,
     session,
     client,
-    xp: xpClient,
     onAccessLost: accessLost,
     register: registerNavigation,
     initial,

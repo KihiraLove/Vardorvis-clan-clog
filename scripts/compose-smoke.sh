@@ -28,7 +28,7 @@ printf "\nStart and smoke test\n"
 docker run --rm -i --read-only --network none --label "clog.local-checks=$COMPOSE_PROJECT_NAME" --entrypoint node "$CHECK_APP_IMAGE" --input-type=module < scripts/inspect-runtime.mjs | tee .data/local-checks/runtime-image.json
 docker compose up -d --wait --wait-timeout 120
 # Fresh install applies the immutable baseline and forward-only upgrades.
-test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_manual_submission_requests.sql,003_staff_accounts.sql,004_runelite_submissions.sql,005_clan_api_keys.sql,006_clan_logos.sql,007_site_customization.sql,008_default_clan_name.sql,009_runelite_world_types.sql,010_hardcore_appearance.sql,011_catalog_page_management.sql,012_runelite_auto_review.sql,013_collection_log_schedules.sql,014_wom_competitions.sql,015_review_notes.sql,016_asset_maintenance.sql,017_review_pagination.sql,018_xp_history_pagination.sql,019_lifecycle_archive.sql,020_public_projections.sql,021_retire_oauth_states.sql,022_submission_duplicate_filters.sql,023_runelite_chat_proof.sql,024_catalog_editor.sql"
+test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql"
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
 curl --fail http://app:8080/api/v1/status
 curl --fail --output /tmp/catalog.json http://app:8080/api/v1/catalog

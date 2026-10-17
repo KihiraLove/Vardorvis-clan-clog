@@ -1,6 +1,6 @@
 {
-  "name": "vardorvis-clan-clog",
-  "version": "0.1.0",
+  "name": "clan-collection-log",
+  "version": "1.0.0-SNAPSHOT",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -37,5 +37,6 @@
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.44.1"
-  }
+  },
+  "license": "MIT"
 }

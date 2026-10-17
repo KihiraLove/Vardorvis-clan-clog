@@ -1,10 +1,9 @@
 ## Change
 
-Describe the problem and resulting behavior. Link the issue.
+Describe the problem and resulting behavior.
 
 ## Validation
 
-- [ ] `npm run test:all` passed locally (record commit and result summary)
-- [ ] Any required live-service acceptance is recorded separately
-- [ ] Schema migrations are additive; deployed migration files remain unchanged
-- [ ] Catalog/visual changes include source revisions or reference screenshots
+List the focused checks run and any remaining release acceptance. Follow AGENTS.md.
+For schema changes, describe setup/compatibility implications. Record provenance
+for catalog/assets changes and screenshots for material UI changes.

@@ -341,7 +341,7 @@ if (
         );
       if (!match || values.has(match[1]!))
         throw new Error(
-          'Unknown or duplicate option. See docs/lifecycle-archive.md.',
+          'Unknown or duplicate option. See docs/maintenance.md.',
         );
       values.set(match[1]!, match[2]!);
     }

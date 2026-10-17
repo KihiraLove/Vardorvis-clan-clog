@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { PgCompetitionStore } from './competition-store.js';
 import { PgXpStore } from './xp-store.js';
@@ -19,7 +19,7 @@ import type { CompetitionSnapshot } from './competition-types.js';
 import { PreviewWork } from './preview-work.js';
 import { WorkBudget } from '@clog/domain';
 test(
-  'unified competitions preserve legacy data, isolate kinds, schedule atomically, reconcile results and enforce staff permissions',
+  'unified competitions isolate kinds, schedule atomically, reconcile results and enforce staff permissions',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const connectionString = process.env.TEST_DATABASE_URL!,
@@ -141,68 +141,20 @@ test(
         '../../../packages/database/migrations/',
         import.meta.url,
       );
-      const files = (await readdir(migrations))
-        .filter((f) => f.endsWith('.sql'))
-        .sort();
-      for (const file of files.filter((f) => f < '014'))
-        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
-      const legacy = await snapshot(
+      await pool.query(
+        await readFile(new URL('001_baseline.sql', migrations), 'utf8'),
+      );
+      const initial = await snapshot(
         99,
         'SKILL',
         now - 3 * day,
         now - day,
         '123',
       );
-      await pool.query(
-        'INSERT INTO xp_events(competition_id,title,source_url,skills,gains,source_hash,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7)',
-        [
-          99,
-          legacy.competition.title,
-          legacy.competition.sourceUrl,
-          JSON.stringify(['attack']),
-          JSON.stringify({ attack: '123' }),
-          legacy.results!.xp!.sourceHash,
-          JSON.stringify(legacy.results!.xp),
-        ],
-      );
-      await pool.query(
-        "INSERT INTO xp_import_history(id,actor_discord_id,actor_name,request_key,token_hash,expected_revision,competition_id,title,outcome,changes,resulting_revision) VALUES($1,'legacy','Legacy Staff',$2,$3,'xp-1',99,'Legacy competition','applied','[]','xp-2')",
-        [randomUUID(), randomUUID(), 'a'.repeat(64)],
-      );
-      const liveLegacy = await snapshot(98, 'SKILL', now - day, now + day);
-      await pool.query(
-        "INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at) VALUES($1,'legacy','xp-1',$2,now()+interval '1 hour')",
-        [
-          'b'.repeat(64),
-          JSON.stringify({
-            ...legacy.results!.xp,
-            startsAt: liveLegacy.competition.startsAt,
-            endsAt: liveLegacy.competition.endsAt,
-          }),
-        ],
-      );
-      await pool.query(
-        await readFile(new URL('014_wom_competitions.sql', migrations), 'utf8'),
-      );
-      for (const file of files.filter((f) => f > '014_wom_competitions.sql'))
-        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
-      assert.equal(
-        (await pool.query('SELECT count(*)::int AS count FROM xp_previews'))
-          .rows[0].count,
-        0,
-      );
-      assert.equal((await xp.history()).imports[0]?.actorName, 'Legacy Staff');
-      const legacyPreview = await preview(legacy);
-      assert.equal((await apply(legacyPreview)).outcome, 'unchanged');
+      const initialPreview = await preview(initial);
+      await apply(initialPreview);
+      assert.equal((await apply(await preview(initial))).outcome, 'unchanged');
       assert.equal((await xp.tracker()).totals.attack, '123');
-      assert.equal(
-        (
-          await pool.query(
-            'SELECT kind FROM wom_competitions WHERE competition_id=99',
-          )
-        ).rows[0].kind,
-        'SKILL',
-      );
       await pool.query(
         "INSERT INTO pages(id,name,category,sort_order) VALUES('vardorvis','Vardorvis','bosses',0),('other','Other','bosses',1),('inactive','Inactive','bosses',2);UPDATE pages SET active=false WHERE id='inactive';INSERT INTO items(id,name) VALUES(1,'Shared');INSERT INTO page_items(page_id,item_id,slot) VALUES('vardorvis',1,0),('other',1,0)",
       );

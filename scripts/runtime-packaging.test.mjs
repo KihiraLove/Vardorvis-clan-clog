@@ -25,6 +25,7 @@ async function fixture(t) {
     await writeFile(path.join(root, name), text);
   };
   await put('package.json', '{}');
+  await put('LICENSE', 'MIT License\n');
   for (const workspace of workspaces)
     await put(workspace + '/package.json', '{}');
   for (const entry of runtimeEntries)
@@ -40,6 +41,10 @@ test('runtime package retains operator/server entries while omitting declaration
     manifest = await packageRuntime(root, output);
   assert.ok(manifest.files['apps/api/dist/server.js']);
   assert.ok(manifest.files['packages/database/dist/bootstrap.js']);
+  assert.equal(
+    await readFile(path.join(output, 'LICENSE'), 'utf8'),
+    'MIT License\n',
+  );
   assert.ok(
     !Object.keys(manifest.files).some((name) =>
       /\.map$|\.d\.ts$|fixtures|\/src\//u.test(name),

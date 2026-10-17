@@ -1,82 +1,62 @@
-# Vardorvis Clan Collection Log
+# Clan Collection Log
 
-A public OSRS collection log with independent ordinary/hardcore credits, staff
-review and catalog tools, Discord/RuneLite intake and Wise Old Man competition
-imports. PostgreSQL stores the authoritative ledger; approved evidence credits
-one canonical item everywhere it appears in the selected mode.
+A self-hosted Old School RuneScape collection log for any clan. Track ordinary
+and hardcore collections, review drop evidence, manage your catalog, accept
+Discord and RuneLite submissions, and import Wise Old Man competitions.
 
-The [current architecture, operations and test inventory](docs/current-state.md)
-is the maintained starting point. Features are implemented in draft remediation
-[PR #105](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/105) and awaiting
-merge. Remaining launch acceptance is listed there explicitly.
+Version: **1.0.0-SNAPSHOT**. This is the first-release baseline. Existing
+development databases must be recreated; there is no pre-release upgrade path.
 
-## Run all checks locally
+## Get started
 
-Install Node 24 and start Linux Docker with Compose, then run:
+Install Docker with Compose v2, download or clone this repository, and open a
+terminal in its folder. Copy the example configuration:
 
 ```bash
-node scripts/check-local.mjs
+cp .env.example .env
 ```
 
-This builds disposable Linux test environments and runs all automated repository
-checks, real PostgreSQL tests, Chromium, production-image inspection/smoke and
-isolated backup/recovery. Host npm dependencies, production secrets and GitHub
-credentials are unnecessary. Reports are under `.data/local-checks/<run-id>/`.
-See [local testing](docs/local-testing.md) for focused checks and cleanup.
-
-Pushes/PRs use no hosted CI. GitHub packages are published only after acceptance
-on a published Release. Deployment remains explicit; see
-[release deployment](docs/deployment.md).
-
-## Start a local application
-
-Copy `.env.example` to `.env`. Independently generate `POSTGRES_PASSWORD` and
-`APP_DB_PASSWORD` (32 random bytes as hex each); mirror the owner password in
-host `DATABASE_URL` only if using host tools. To enable staff tools, set
-`AUTH_ENABLED=true`, the loopback `PUBLIC_ORIGIN`, and independently generated
-`SESSION_SECRET` and `ADMIN_BOOTSTRAP_PASSWORD`. Sign in as `admin`, change its
-password, then remove the bootstrap value. Existing accounts survive restart.
+Generate four different secrets with `openssl rand -hex 32` and put them in
+`.env`: `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `SESSION_SECRET` and
+`ADMIN_BOOTSTRAP_PASSWORD`. Set `AUTH_ENABLED=true`. The default
+`PUBLIC_ORIGIN=http://127.0.0.1:8088` is suitable for this local setup.
+Keep this file private; never commit it.
 
 ```bash
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 ```
 
-Open the configured loopback origin (default `http://127.0.0.1:8088`). The local
-override builds the unified app image; PostgreSQL remains a separate container.
-Bootstrap applies migrations, imports the pinned full catalog and reconciles
-restricted runtime permissions. Bot gateway startup is optional and command
-registration is separate. See [environment setup](docs/environment.md) before
-enabling credentials; production staff access requires HTTPS.
+Open http://127.0.0.1:8088/admin. Sign in as `admin` with the bootstrap password,
+choose a new password, then remove `ADMIN_BOOTSTRAP_PASSWORD` from `.env` and
+recreate the app with the same Compose command. Set your clan name, logo and
+submission rules in Site settings and RuneLite submissions.
 
-## Workspace and development
+The local build is named `clan-clog:dev`. PostgreSQL and uploaded images live
+in Docker volumes and survive container restarts. Startup creates the database,
+imports the bundled catalog, and gives the running app restricted DB access.
 
-| Path                | Responsibility                                                           |
-| ------------------- | ------------------------------------------------------------------------ |
-| `apps/web`          | React/Vite public log and staff UI                                       |
-| `apps/api`          | Fastify reads, staff authentication, intake, review, catalog and imports |
-| `apps/bot`          | Optional Discord adapter calling the API                                 |
-| `packages/domain`   | Shared identity, validation and exact XP rules                           |
-| `packages/database` | Immutable SQL, owner/bootstrap/maintenance CLIs and integration tests    |
-| `infra`             | Unified container supervisor/proxy and versioned deployment/recovery     |
+## Guides
 
-For host development, install Node 24 dependencies with `npm ci`, build shared
-workspaces and use `npm run dev:web` / `npm run dev:api` with the documented
-local database configuration. `npm run build` includes tests; Docker production
-uses the separate `npm run build:runtime` packaging path.
+- [Configuration](docs/environment.md) and [hosting with HTTPS](docs/deployment.md)
+- [Staff guide](docs/staff-guide.md): reviews, catalog, scheduling and settings
+- [RuneLite submissions](docs/runelite-submissions.md) and [Discord setup](docs/bot-operations.md)
+- [Competitions](docs/wom-competitions.md) and [catalog sources](docs/catalog-import.md)
+- [Backups and recovery](docs/release-recovery.md) and [maintenance](docs/maintenance.md)
+- [Architecture](docs/architecture.md), [API contracts](docs/contracts.md) and [security](docs/security.md)
+- [Development and tests](docs/local-testing.md), [contributing](CONTRIBUTING.md) and [asset attribution](docs/assets.md)
 
-The frontend uses the API in every environment. If the backend is unavailable,
-it shows an unavailable state with retry controls. There is no frontend demo
-mode or sample-data fallback. Test fixtures live outside the production graph;
-see the [loading policy](docs/frontend-loading.md).
+## Run the complete checks
 
-## Documentation
+With Node 24 and Linux Docker available:
 
-- [Current architecture, behavior, runbooks, automated inventory and launch limits](docs/current-state.md)
-- [Requirements](docs/requirements.md) and [HTTP/Discord contracts](docs/contracts.md)
-- [Deployment](docs/deployment.md), [runtime operations](docs/runtime-operations.md) and [release recovery](docs/release-recovery.md)
-- [Schema retirement and runtime packaging](docs/runtime-packaging-and-auth-retirement.md)
-- [Local testing and release-only CI](docs/local-testing.md)
-- [Contribution workflow](CONTRIBUTING.md)
+```bash
+node scripts/check-local.mjs
+```
 
-Dated reviews and ADRs preserve historical reasoning; their feature status is
-superseded by the current inventory and linked implementation guides.
+This uses disposable containers and test data, without reading your runtime
+`.env`. Results are saved in `.data/local-checks/<run-id>/`. Focused checks are
+described in the development guide. Published GitHub Releases run acceptance
+before publishing the `clan-clog` image; normal PR pushes do not run hosted CI.
+
+Project code is [MIT licensed](LICENSE). Bundled game and third-party assets
+retain their own ownership and licenses; see the asset attribution guide.

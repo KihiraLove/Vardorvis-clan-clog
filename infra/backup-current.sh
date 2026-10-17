@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-export CLOG_DEPLOY_ROOT="${CLOG_DEPLOY_ROOT:-/srv/vardorvis-clan-clog}"
-export CLOG_DEPLOY_PROJECT="${CLOG_DEPLOY_PROJECT:-vardorvis-clog}"
+export CLOG_DEPLOY_ROOT="${CLOG_DEPLOY_ROOT:-/srv/clan-collection-log}"
+export CLOG_DEPLOY_PROJECT="${CLOG_DEPLOY_PROJECT:-clan-clog}"
 cd "$CLOG_DEPLOY_ROOT"
 exec 9>.deploy.lock
 flock -n 9 || { echo 'Another deployment/backup is in progress' >&2; exit 1; }

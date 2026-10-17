@@ -1,8 +1,7 @@
 /** Exercise the migration runner itself, using an isolated disposable schema. */
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 import { migrate, validateMigrationHistory } from './migrate.js';
 
@@ -35,10 +34,10 @@ test(
       await Promise.all([migrate(url), migrate(url)]);
       const rows = (await client.query('SELECT name FROM schema_migrations'))
         .rows;
-      assert.equal(rows.length, 24);
+      assert.equal(rows.length, 1);
       assert.equal(
         new Set(rows.map((row: { name: string }) => row.name)).size,
-        24,
+        1,
       );
       assert.equal(
         (await client.query('SELECT count(*)::int AS count FROM xp_state'))
@@ -119,35 +118,22 @@ test(
 );
 
 test(
-  'a missing middle migration and out-of-order timestamps reject an existing database',
+  'a missing baseline ledger entry cannot reinitialize a populated database',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     await withSchema(async (url, client) => {
       await migrate(url);
-      await client.query(
-        "DELETE FROM schema_migrations WHERE name='006_clan_logos.sql'",
+      await client.query('DELETE FROM schema_migrations');
+      await assert.rejects(migrate(url), { code: '42723' });
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM schema_migrations'))
+          .rows[0].n,
+        0,
       );
-      const before = (
-        await client.query('SELECT * FROM schema_migrations ORDER BY name')
-      ).rows;
-      await assert.rejects(
-        migrate(url),
-        /Non-prefix migration history at: 007_site_customization.sql/u,
-      );
-      assert.deepEqual(
-        (await client.query('SELECT * FROM schema_migrations ORDER BY name'))
-          .rows,
-        before,
-      );
-    });
-    await withSchema(async (url, client) => {
-      await migrate(url);
-      await client.query(
-        "UPDATE schema_migrations SET applied_at=now()-interval '1 day' WHERE name='014_wom_competitions.sql'",
-      );
-      await assert.rejects(
-        migrate(url),
-        /Reordered migration history at: 014_wom_competitions.sql/u,
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM catalog_sections'))
+          .rows[0].n,
+        5,
       );
     });
   },
@@ -213,115 +199,65 @@ test('manifest compatibility approves unchanged histories and upgrading a prefix
 });
 
 test(
-  'populated 013 to 014 upgrade backfills legacy competitions and rolls back a broken batch',
+  'fresh setup seeds generic defaults without historical audits or retired authentication',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     await withSchema(async (url, client) => {
-      const directory = new URL('../migrations/', import.meta.url);
-      const names = (await readdir(directory))
-        .filter((name) => name.endsWith('.sql'))
-        .sort();
-      await client.query(
-        'CREATE TABLE schema_migrations (name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())',
-      );
-      for (const name of names.filter(
-        (name) => name <= '013_collection_log_schedules.sql',
-      )) {
-        const sql = await readFile(new URL(name, directory), 'utf8');
-        await client.query('BEGIN');
-        await client.query(sql);
-        await client.query(
-          'INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)',
-          [name, createHash('sha256').update(sql).digest('hex')],
-        );
-        await client.query('COMMIT');
-      }
+      await migrate(url);
+      const settings = (await client.query('SELECT * FROM site_settings'))
+        .rows[0];
+      assert.equal(settings.clan_name, 'Clan name');
+      assert.equal(settings.hardcore_name, 'Clan name');
+      assert.equal(settings.hardcore_enabled, false);
+      assert.equal(settings.version, 1);
+      assert.deepEqual(settings.public_copy, settings.hardcore_copy);
+      assert.equal(settings.public_copy.xpTotalCaption, undefined);
       assert.equal(
-        (
-          await client.query(
-            'SELECT count(*)::int AS count FROM schema_migrations',
-          )
-        ).rows[0].count,
-        13,
+        (await client.query('SELECT rules FROM runelite_settings')).rows[0]
+          .rules.clanName,
+        'Clan name',
       );
-      await client.query(
-        "UPDATE site_settings SET clan_name='A preserved clan',version=4",
-      );
-      await client.query(
-        `INSERT INTO xp_events(competition_id,title,source_url,skills,gains,source_hash,source_snapshot)
-         VALUES(98765,'Legacy WOM','https://wiseoldman.net/competitions/98765','["mining"]','{"mining":"123"}',$1,$2)`,
-        ['a'.repeat(64), JSON.stringify({ startsAt: '2026-10-01T00:00:00Z' })],
-      );
-      const before = (await client.query('SELECT * FROM xp_events')).rows;
-      await assert.rejects(migrate(url), { code: '23502' });
       assert.deepEqual(
-        (await client.query('SELECT * FROM xp_events')).rows,
-        before,
+        (
+          await client.query(
+            'SELECT name FROM catalog_sections ORDER BY sort_order',
+          )
+        ).rows.map((row) => row.name),
+        ['Bosses', 'Raids', 'Clues', 'Minigames', 'Other'],
       );
+      assert.ok(
+        (await client.query('SELECT version FROM projection_state')).rows.every(
+          (row) => row.version === '1',
+        ),
+      );
+      for (const table of [
+        'staff_accounts',
+        'admin_sessions',
+        'site_settings_audit',
+        'clan_api_keys',
+        'submissions',
+        'wom_competitions',
+      ])
+        assert.equal(
+          (await client.query('SELECT count(*)::int AS n FROM ' + table))
+            .rows[0].n,
+          0,
+          table,
+        );
       assert.equal(
         (
           await client.query(
-            'SELECT count(*)::int AS count FROM schema_migrations',
+            "SELECT to_regclass(current_schema() || '.oauth_states') AS retired",
           )
-        ).rows[0].count,
-        13,
-      );
-      assert.equal(
-        (
-          await client.query(
-            "SELECT to_regclass('wom_competitions') AS table_name",
-          )
-        ).rows[0].table_name,
+        ).rows[0].retired,
         null,
       );
-      await client.query(
-        'UPDATE xp_events SET source_snapshot=$1 WHERE competition_id=98765',
-        [
-          JSON.stringify({
-            startsAt: '2026-10-01T00:00:00Z',
-            endsAt: '2026-10-02T00:00:00Z',
-          }),
-        ],
-      );
-      const recovered = (await client.query('SELECT * FROM xp_events')).rows;
-      await Promise.all([migrate(url), migrate(url)]);
-      assert.equal(
-        (
-          await client.query(
-            "SELECT name FROM schema_migrations WHERE name='014_wom_competitions.sql'",
-          )
-        ).rowCount,
-        1,
-      );
-      assert.deepEqual(
-        (
-          await client.query(
-            'SELECT competition_id,kind,title,skills FROM wom_competitions',
-          )
-        ).rows,
-        [
-          {
-            competition_id: '98765',
-            kind: 'SKILL',
-            title: 'Legacy WOM',
-            skills: ['mining'],
-          },
-        ],
-      );
-      assert.deepEqual(
-        (
-          await client.query(
-            'SELECT competition_id,title,source_url,skills,gains,source_hash,source_snapshot,imported_at FROM xp_events',
-          )
-        ).rows,
-        recovered,
-      );
-      assert.deepEqual(
-        (await client.query('SELECT clan_name,version FROM site_settings'))
-          .rows,
-        [{ clan_name: 'A preserved clan', version: 4 }],
-      );
+      const before = (await client.query('SELECT * FROM site_settings')).rows;
       await migrate(url);
+      assert.deepEqual(
+        (await client.query('SELECT * FROM site_settings')).rows,
+        before,
+      );
     });
   },
 );

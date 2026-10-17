@@ -42,7 +42,7 @@ test('local acceptance isolates concurrent runs and ignores production environme
 
 test('invalid cleanup scopes and unknown arguments fail before touching Docker', async () => {
   for (const id of [
-    'vardorvis-clog',
+    'clan-clog',
     '',
     'clog-checks-',
     'clog-checks-a/../../prod',

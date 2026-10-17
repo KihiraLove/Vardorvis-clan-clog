@@ -15,13 +15,6 @@ backups/
 .DS_Store
 .idea/
 .vscode/
-# Existing GitHub Pages starter ignores
-_site/
-.sass-cache/
-.jekyll-cache/
-.jekyll-metadata
-/vendor
-Gemfile.lock
 
 # Host-run durable uploads must never be committed.
 .data/

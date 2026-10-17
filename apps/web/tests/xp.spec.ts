@@ -131,7 +131,7 @@ test('stored results switch by event changes totals without showing member table
   await expect(attack).toBeVisible();
   await expect(attack).toBeVisible();
   await page
-    .getByRole('button', { name: 'Vardorvis skilling weekend', exact: true })
+    .getByRole('button', { name: 'Clan skilling weekend', exact: true })
     .click();
   await expect(page.getByLabel('Attack: 0 XP', { exact: true })).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);

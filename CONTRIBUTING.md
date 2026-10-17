@@ -1,13 +1,22 @@
 # Contributing
 
-Create a feature branch and PR linked to a development issue. Read [requirements](docs/requirements.md) and [architecture](docs/architecture.md) before implementing business behavior. Keep foundation endpoints honest about unavailable functionality.
+Use a branch and pull request. Describe the problem, resulting behavior and
+the checks you ran. Keep changes focused and document new configuration.
 
-Before pushing, run `npm run test:all` with Node 24 and Docker running. This covers the complete automated suite using isolated Linux databases, Chromium and a production Compose stack; see [local acceptance](docs/local-testing.md). Record the tested commit and local results in the PR. Use focused host tests during iteration. Include visual references for collection-log changes. Hosted CI is manual or release-triggered; ordinary PR updates do not consume runner time.
+Read the [architecture](docs/architecture.md) and relevant [API contracts](docs/contracts.md)
+before changing business behavior. Run checks relevant to your change during
+development; follow [AGENTS.md](AGENTS.md) for agent validation. The maintainer
+runs complete acceptance before release. See [testing](docs/local-testing.md).
 
-Shared item identities belong in the domain/database packages; do not add separate collected flags to individual pages. Catalog changes need provenance, a reviewed import diff and coverage validation. Approval/revocation must be a transaction with an authenticated actor and audit record.
+- Keep shared canonical item IDs stable. Approvals, corrections, revocations
+  and receipts must stay transactional and audited.
+- Add tests for new behavior and realistic failure cases. Use disposable databases.
+- Keep secrets, private proof, database dumps and generated test output out of Git.
+- Use local assets with recorded sources and licenses. Catalog changes need a
+  reviewed provenance and coverage diff.
+- This snapshot has one fresh-install baseline. After the first public release,
+  add migrations instead of modifying SQL already shipped to users.
+- For dependency changes, check supported Node 24, peer compatibility, the
+  lockfile and relevant tests. Keep advisory results with release evidence.
 
-Never commit `.env`, bot/OAuth/session credentials, production database dumps or private proof data. New environment settings must update `.env.example`, environment docs, validation and Compose as appropriate. Browser bundles must never receive backend secrets.
-
-Never modify a migration already applied to a deployed database. Add a new migration, keep old-image compatibility where possible, and describe backup/recovery implications in the PR. Green foundation checks do not replace feature acceptance criteria.
-
-For dependency PRs, follow the [dependency update policy and review notes](docs/dependency-updates.md). Weekly proposals need stable upstream releases, compatible peers and CI that exercises the changed workflow.
+Contributions to project code are under the [MIT license](LICENSE).

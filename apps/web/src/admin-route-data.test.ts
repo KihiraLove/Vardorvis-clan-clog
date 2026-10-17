@@ -2,22 +2,16 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadAdminRoute } from './admin-route-data.ts';
 import { MemoryAdminClient } from '../tests/support/admin.ts';
-import { MemoryXpClient } from '../tests/support/xp.ts';
 import type { AdminSession } from './xp-model.ts';
 
 const signal = () => new AbortController().signal;
 test('route loaders prepare every destination with one shared catalog read and no session or write waterfall', async (t) => {
-  const client = new MemoryAdminClient(),
-    xp = new MemoryXpClient();
+  const client = new MemoryAdminClient();
   const session = (await client.session(signal()))!;
   t.mock.method(client, 'session', async () => {
     throw new Error('session already verified');
   });
   const catalog = t.mock.method(client, 'catalog');
-  for (const method of ['tracker', 'history'] as const)
-    t.mock.method(xp, method, async () => {
-      throw new Error('retired XP screen must not load private XP data');
-    });
   for (const [path, kind] of [
     ['/admin', 'queue'],
     ['/admin/catalog', 'catalog'],
@@ -29,7 +23,7 @@ test('route loaders prepare every destination with one shared catalog read and n
     ['/admin/accounts', 'accounts'],
     ['/admin/account', 'account'],
   ]) {
-    const result = await loadAdminRoute(path!, session, client, xp, signal());
+    const result = await loadAdminRoute(path!, session, client, signal());
     assert.equal(result.kind, kind);
     if (['queue', 'catalog', 'schedules'].includes(kind!))
       assert.ok(result.catalog?.revision);
@@ -46,8 +40,7 @@ test('route loaders prepare every destination with one shared catalog read and n
   assert.equal(catalog.mock.callCount(), 4);
 });
 test('moderator and mandatory-password routes never issue unauthorized reads', async (t) => {
-  const client = new MemoryAdminClient(),
-    xp = new MemoryXpClient();
+  const client = new MemoryAdminClient();
   const session: AdminSession = {
     ...(await client.session(signal()))!,
     role: 'moderator',
@@ -56,32 +49,21 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
     t.mock.method(client, method, async () => {
       throw new Error('unauthorized read');
     });
-  for (const method of ['tracker', 'history'] as const)
-    t.mock.method(xp, method, async () => {
-      throw new Error('retired XP screen must not load private XP data');
-    });
   for (const path of [
     '/admin/settings',
     '/admin/settings/hardcore',
     '/admin/accounts',
   ])
     assert.equal(
-      (await loadAdminRoute(path, session, client, xp, signal())).kind,
+      (await loadAdminRoute(path, session, client, signal())).kind,
       'denied',
     );
-  const legacy = await loadAdminRoute(
-    '/admin/xp',
-    session,
-    client,
-    xp,
-    signal(),
-  );
+  const legacy = await loadAdminRoute('/admin/xp', session, client, signal());
   assert.equal(legacy.kind, 'schedules');
   assert.ok(legacy.schedules);
   assert.ok(legacy.catalog);
   assert.equal(
-    (await loadAdminRoute('/admin/runelite', session, client, xp, signal()))
-      .kind,
+    (await loadAdminRoute('/admin/runelite', session, client, signal())).kind,
     'runelite',
   );
   assert.equal(
@@ -90,7 +72,6 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
         '/admin/settings',
         { ...session, mustChangePassword: true },
         client,
-        xp,
         signal(),
       )
     ).kind,
@@ -98,8 +79,7 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
   );
 });
 test('a canceled loader settles even when a source ignores its signal; late results cannot revive it', async (t) => {
-  const client = new MemoryAdminClient(),
-    xp = new MemoryXpClient();
+  const client = new MemoryAdminClient();
   const session = (await client.session(signal()))!;
   const catalog = await client.catalog(signal());
   let release!: (value: typeof catalog) => void;
@@ -116,7 +96,6 @@ test('a canceled loader settles even when a source ignores its signal; late resu
     '/admin/catalog',
     session,
     client,
-    xp,
     controller.signal,
   );
   controller.abort();
@@ -125,14 +104,13 @@ test('a canceled loader settles even when a source ignores its signal; late resu
   await assert.rejects(loading, { name: 'AbortError' });
 });
 test('multi-read destinations reject incomplete preparations instead of exposing a partial form', async (t) => {
-  const client = new MemoryAdminClient(),
-    xp = new MemoryXpClient();
+  const client = new MemoryAdminClient();
   const session = (await client.session(signal()))!;
   t.mock.method(client, 'branding', async () => {
     throw new Error('branding unavailable');
   });
   await assert.rejects(
-    loadAdminRoute('/admin/settings', session, client, xp, signal()),
+    loadAdminRoute('/admin/settings', session, client, signal()),
     /branding unavailable/,
   );
 });

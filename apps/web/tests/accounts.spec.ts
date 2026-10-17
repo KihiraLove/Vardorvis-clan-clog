@@ -104,7 +104,7 @@ async function mockAccounts(
       return route.fulfill({
         json: {
           revision: 'settings-1',
-          clanName: 'Vardorvis',
+          clanName: 'Example clan',
           hardcoreEnabled: false,
         },
       });

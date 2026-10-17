@@ -1,2 +1,2 @@
 self-hosted-runner:
-  labels: [clog-production]
+  labels: [clan-clog-production]
