@@ -11,18 +11,12 @@ export function runeLiteSettingsRoutes(
     write?: boolean,
   ) => Promise<AdminIdentity & Pick<StaffAccount, 'role'>>,
 ) {
-  const owner = async (request: FastifyRequest, write = false) => {
+  const staff = async (request: FastifyRequest, write = false) => {
     if (!authorize) throw new ApiError(503, 'Staff sign-in is not configured.');
-    const actor = await authorize(request, write);
-    if (actor.role !== 'admin')
-      throw new ApiError(
-        403,
-        'Only the administrator can change RuneLite settings.',
-      );
-    return actor;
+    return authorize(request, write);
   };
   app.get('/api/v1/admin/runelite-settings', async (request) => {
-    await owner(request);
+    await staff(request);
     if (!store) throw new ApiError(503, 'RuneLite settings unavailable.');
     return store.settings();
   });
@@ -30,7 +24,7 @@ export function runeLiteSettingsRoutes(
     '/api/v1/admin/runelite-settings',
     {
       onRequest: async (request) => {
-        await owner(request, true);
+        await staff(request, true);
       },
       schema: {
         body: {
@@ -50,6 +44,19 @@ export function runeLiteSettingsRoutes(
               maxLength: 30,
             },
             matchClanName: { type: 'boolean' },
+            clanKeyRequirement: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['enabled', 'expectedRevision'],
+              properties: {
+                enabled: { type: 'boolean' },
+                expectedRevision: {
+                  type: 'string',
+                  pattern: '^clan-key-[1-9][0-9]*$',
+                  maxLength: 30,
+                },
+              },
+            },
             clanName: { type: 'string', minLength: 1, maxLength: 80 },
             worldPolicies: {
               type: 'object',
@@ -72,7 +79,7 @@ export function runeLiteSettingsRoutes(
       },
     },
     async (request) => {
-      const actor = await owner(request, true);
+      const actor = await staff(request, true);
       if (!store) throw new ApiError(503, 'RuneLite settings unavailable.');
       return store.update(request.body, actor.id);
     },

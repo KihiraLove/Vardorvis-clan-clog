@@ -1,5 +1,7 @@
 # Release deployment and operations
 
+See the maintained [current inventory](current-state.md) and [runtime packaging / 021 schema compatibility](runtime-packaging-and-auth-retirement.md). Local acceptance records built-image inspection in `runtime-image.json` before injecting smoke helpers.
+
 Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migrations `007_site_customization.sql` and `008_default_clan_name.sql` preserve histories and administrator-chosen names. Generated clan keys use 32 hexadecimal characters; custom keys accept any characters with a minimum length of 8 and persist across restarts. Only historical shorter keys rotate once, with an audit and preserved enforcement. Migration `009_runelite_world_types.sql` adds original world flags without changing existing credit modes. New RuneLite clients must send the required worldType field; see the [intake contract](runelite-submissions.md) for excluded modes, HC routing and arbitrary-key header encoding.
 
 > Release preparation (10 October 2026): the former three application images
@@ -10,11 +12,13 @@ Administrator-managed labels, a dedicated site-settings page, moderator disable/
 
 - `app`: a single image/container runs Nginx on 8080, Fastify on internal
   127.0.0.1:3000, and optionally the Discord gateway (`BOT_ENABLED=true`).
-  An exit of any active process stops the others and restarts the container.
-  Only Nginx is reachable from Traefik. Both `/readyz` and the container health
-  check require the database and, when `BOT_ENABLED=true`, the bot readiness
-  probe (Discord gateway plus authenticated intake). Disabled bots are not
-  probed. Checks time out within 3.5 seconds and recover when dependencies recover.
+  API/proxy crashes stop peers and restart the container; bot crashes restart only
+  the bot with bounded backoff. Only Nginx is reachable from Traefik. `/readyz` and
+  container health require the database-backed API, independently of Discord.
+  `/api/v1/discord/status` monitors enabled gateway/intake health separately.
+  Checks time out within 3.5 seconds and recover when dependencies recover.
+  [Shutdown/availability policy and diagnostics](runtime-operations.md) define
+  ordered bot → API → proxy draining within the 70-second Compose stop window.
 - `db`: PostgreSQL 17, privately networked with a persistent named volume.
 - `migrate`: an **exiting**, one-shot bootstrap job using the same `app`
   image. It alone receives the database owner password; the running app uses
@@ -25,43 +29,57 @@ Two long-lived containers plus a short-lived bootstrap job. Running Postgres
 inside the app container would make recovery, permissions and process lifetime
 unnecessarily fragile and is not supported.
 
+Nginx enforces the [browser resource and framing policy](browser-security.md).
+Preserve those headers through the TLS edge and verify them on public HTTPS
+documents, assets and errors during release acceptance. The site denies embedding.
+
 ## Image build and release
 
-GitHub CI validates workspaces, browser tests, a fresh PostgreSQL instance and
-Docker Compose smoke tests. A **successful push to main** publishes one
-`linux/amd64` + `linux/arm64` image:
+Development runs the complete automated suite with `npm run test:all`; see
+[local acceptance and release-only CI](local-testing.md). Pushes and PR updates
+do not run hosted CI or create packages. Manual **CI → Run workflow** remains
+available for an explicitly requested hosted check and never publishes.
 
-`ghcr.io/kihiralove/vardorvis-clan-clog-app:sha-<40-character-commit>`
+Publish a GitHub Release with a version tag such as `v1.2.3` or
+`v1.2.3-rc.1` pointing to a commit on `main`. Release CI verifies the tag/commit,
+runs the same local acceptance command, then publishes ONE
+`linux/amd64` + `linux/arm64` application image with three aliases:
 
-SHA-only images are development builds. The hourly **Clean up development
-images** workflow deletes versions older than 24 hours (measured from the later
-of creation/update), including old `web`, `api` and `bot` images. GitHub scheduling
-can delay deletion past that threshold. Only images tagged exactly `release` or
-with a `release-` prefix are retained indefinitely. Their untagged architecture
-and provenance manifests are retained too, as are dependencies of recent builds.
-The home deployment workflow adds `release-<full SHA>` before deployment, keeping
-the existing `sha-<full SHA>` pull reference usable for deployment and rollback.
-Promote a development build within 24 hours or rebuild it before deployment.
-Release tags must not be removed while that release is needed.
+- `ghcr.io/kihiralove/vardorvis-clan-clog-app:v1.2.3`
+- `ghcr.io/kihiralove/vardorvis-clan-clog-app:release-<40-character-commit>`
+- `ghcr.io/kihiralove/vardorvis-clan-clog-app:sha-<40-character-commit>`
 
-Cleanup runs immediately when its workflow/script changes on main. Manual runs
-default to a dry run; turn off `dry_run` to apply deletion. The workflow needs
-package admin access through the repository's `GITHUB_TOKEN`; packages must be
-linked to this repository. It stops on manifest/API failures and preserves
-dependencies shared with retained images. Publishing, promotion and cleanup
-share one concurrency group. Do not retag packages externally during cleanup.
+A tag push or draft release does not publish. The release workflow needs available
+GitHub Actions budget; ordinary local development does not. Successful runs
+upload no test artifacts; failure evidence expires after one day. Image build
+records and GitHub-hosted build caches are not uploaded.
 
-Pull requests do **not** deploy or publish images. The home deployment workflow
-uses successful main CI provenance and a manual dispatch. It calls
-`/srv/vardorvis-clan-clog/deploy.sh` on a labelled self-hosted runner, backs up
-existing DB and icon data, and only records a release tag after Compose health
-checks pass. Image rollback cannot reverse an incompatible schema automatically.
+**Clean up development images** is manual, with dry-run enabled by default.
+It can remove old development versions (including retired `web`, `api` and
+`bot` images) after 24 hours from the later creation/update timestamp.
+Images tagged exactly `release` or with a `release-` prefix and their
+architecture/provenance dependencies are retained indefinitely, as are recent
+build dependencies. Every newly published release gets its retention alias
+during publishing. Do not remove release aliases while needed for rollback.
 
-Copy reviewed `compose.yaml`, `compose.traefik.yaml`, `.env.example`
-and the `infra/` scripts into your server directory. Do not copy test secrets
-to production. Create `.env` with `chmod 600` and set unique independently
+Cleanup requires package admin access and stops on manifest/API failures.
+Publishing and cleanup share a concurrency group. Review the dry-run plan
+before applying deletion; the policy change does not itself delete old storage.
+
+Home deployment remains a separate manual dispatch with a full commit SHA.
+It requires a successful **release-triggered** CI run, which includes image
+publishing, and no longer promotes or creates package tags. It calls
+`/srv/vardorvis-clan-clog/deploy.sh` on the labelled self-hosted runner after
+verifying its reviewed checksum. The launcher resolves the image digest and
+extracts its checksummed infrastructure bundle; the versioned helper backs up
+existing data and records image/infrastructure/schema evidence after health
+checks pass. See [versioned deployment and isolated recovery](release-recovery.md).
+
+Install the reviewed launcher and its protected checksum as described in that
+guide. Release Compose/helper files then come from the image rather than a mutable
+host checkout. Do not copy test secrets to production. Create `.env` with `chmod 600` and set unique independently
 generated 32-byte hex `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`,
-`SESSION_SECRET` and the published `IMAGE_TAG`.
+`SESSION_SECRET` and retain the approved release SHA for the launcher.
 Use `openssl rand -hex 32` for the three independent hex secrets.
 
 ```bash
@@ -93,8 +111,9 @@ SESSION_SECRET=replace-with-64-random-hex-characters
 
 The override enables `AUTH_ENABLED=true` and configures
 `PUBLIC_ORIGIN=https://<CLOG_HOST>` using the same hostname as the Host label.
-On the first account-enabled startup, sign in with `admin` / `admin` and change
-the password. Subsequent credentials persist in PostgreSQL; see
+For a fresh account-enabled install, set a unique `ADMIN_BOOTSTRAP_PASSWORD`
+before starting, then sign in as `admin` with that secret and change the password.
+Never use a known default password; subsequent credentials persist in PostgreSQL. See
 [staff-account setup and upgrades](environment.md#required-secrets-and-configuration).
 Traefik labels select existing HTTPS entrypoint and certificate resolver; they
 cannot themselves define Traefik's static resolver or issue DNS records.
@@ -133,7 +152,7 @@ docker volume rm vardorvis-clog_postgres-data
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 docker compose -f compose.yaml -f compose.dev.yaml exec -T db \
   psql -U clog -d clog -Atc 'SELECT name FROM schema_migrations'
-# Expected: 001_baseline.sql and 002_manual_submission_requests.sql
+# Expected: contiguous 001_baseline.sql through 023_runelite_chat_proof.sql
 ```
 
 The volume name above assumes the default `vardorvis-clog` Compose
@@ -146,17 +165,165 @@ own isolated test data.
 Never run `down --volumes` on a production deployment. For later releases,
 add new forward-only migration files rather than editing this applied baseline.
 
+### Migration history and image compatibility (REVIEW-02/B05)
+
+The one-shot bootstrap first reads the **complete immutable SQL bundle**, then
+locks the migration transaction and validates the **entire applied ledger**.
+The on-disk manifest must be consecutively numbered (001, 002, ...) without
+missing/duplicate revisions. Applied history must be an exact **checksummed
+prefix** of that ordered bundle. Unknown/future revisions, missing middle
+entries, changed migration contents, reversed recorded timestamps, or
+non-prefix history abort the transaction **before any pending DDL**. Applied
+SQL files and database-ledger checksums must not be rewritten to force a
+release through.
+
+The migration connection must be acquired within 5 seconds. The migration
+transaction bounds advisory-lock/DDL lock waits to 10 seconds, statement
+execution to 120 seconds, and idle transactions to 125 seconds. A lock or
+statement timeout is a failed bootstrap: the application must not be started
+against an uncertain schema. The complete batch is transactional and guarded
+by the same advisory lock used by catalog imports; retries are safe **after
+investigating** the failure and removing the cause.
+
+**Supported image/database combinations:**
+
+- Fresh database + current image: apply all bundled SQL.
+- Older database whose applied history is a verified prefix of the image:
+  apply only missing migrations in one transaction. The 013 → 014 upgrade
+  preserves existing XP events and backfills WOM competition identity.
+- The 015 upgrade adds an independent persisted review note; legacy
+  `review_reason` values stay untouched for past correction/rejection/revocation
+  decisions and existing credits are not rewritten.
+- Restart, redeploy, or image rollback with an **identical applied manifest**:
+  accepted, provided the other application/schema contracts remain compatible.
+- Older image missing any already-applied migration, edited baseline, unknown
+  future history, or historical gap: **rejected**. There is no automatic SQL
+  downgrade or blanket "ignore unknown migrations" override. If restoring
+  an older release needs an older schema, restore the **matching coordinated
+  database, icons and screenshots backup**, including the clan-key encryption
+  root, and verify it on an isolated instance before changing production.
+
+Schema ledger checks run in the `migrate` Compose one-shot job before the app
+service is started; `depends_on: service_completed_successfully` gates startup.
+Do not start the runtime service while skipping a failed bootstrap. A populated
+013 → 014 regression, failure rollback, concurrent migration serialization,
+unknown/reordered/partial ledgers, and advisory-lock timeouts run against
+disposable PostgreSQL locally and in release CI. The complete
+[isolated recovery job](release-recovery.md) adds database/filesystem restore,
+credential rotation, migration failure and compatible rollback evidence.
+
+## Ended competition and schedule archival
+
+Use the owner-operated [lifecycle command](lifecycle-archive.md) to archive one
+selected ended competition or schedule and recover a current capacity slot.
+Dry-run is the default; actor/reason and explicit `--apply` are required for
+changes. Original results, XP contributions, receipts and linked staff windows
+are retained. Archiving never frees an all-time XP slot.
+
+## Abandoned upload maintenance
+
+Use the bounded, dry-run-first [asset maintenance command](asset-maintenance.md)
+to collect abandoned uploads from the shared icon/proof volumes. Migration 016
+guards against late commits; historical references and the clan-key encryption
+root are retained. The command uses the owner-credentialed `migrate` service,
+whose volume mounts now match the application. Coordinate it with backups and
+deployment using `.deploy.lock`; no periodic GitHub job is required.
+
+## Expired XP and competition preview maintenance
+
+Both `xp_previews` and `competition_previews` contain large, short-lived
+import snapshots. They expire for API use after **10 minutes**. A separate
+one-shot database-maintenance command purges rows only after an additional
+**60-minute grace period** (default: expiry older than one hour). This avoids
+competing with valid previews or delayed in-flight apply requests. The purge
+never modifies `xp_import_history`, `competition_import_history`, any audit
+table, or published XP/schedule state. Completed import keys continue to
+return their saved receipts after preview cleanup.
+
+Run the following in the deployment directory **with the database already
+running**, using the exact released `compose.yaml` and `.env`:
+
+```bash
+# Read-only report: counts, oldest expiry, cut-off, and would-be eligible rows.
+docker compose run --rm --no-deps migrate node packages/database/dist/preview-maintenance.js --dry-run
+
+# Explicit mutation: up to 200 rows/table/batch, five batches per table/run.
+docker compose run --rm --no-deps migrate node packages/database/dist/preview-maintenance.js --apply --batch-size=200 --max-batches=5 --grace-minutes=60
+```
+
+Schedule the **apply** command daily, for example at **03:00 local server
+time** with the host scheduler. Do not add a second permanent service or run
+this under an open admin HTTP route. Repeating the job is safe after a crash:
+each small transaction commits or rolls back independently, rows under
+concurrent apply locks are skipped and remain eligible for a subsequent run,
+and a session-scoped advisory lock prevents overlapping maintenance runs.
+A competing invocation reports an error and should be retried at the next
+scheduled run. Each run is bounded to at most
+`batch-size × max-batches` deletions **per table** (default 1,000; maximum
+10,000). Adjust `--batch-size=1..500`, `--max-batches=1..20`, or
+`--grace-minutes=60..10080` only when necessary. Never reduce the grace
+below 60 minutes. Use a scheduler timeout and alert on nonzero exit codes.
+
+The JSON report includes `mode`, a database-clock cutoff, per-table
+`before.total`, `before.eligible`, oldest expiry, actual `deleted`,
+`after.total`, `after.eligible`, and batches executed; it contains **no**
+preview tokens, snapshots, cookies, participant details, or credentials.
+Watch `after.eligible` for an increasing backlog and re-run within the
+configured batch limits if needed. With a dry run, deleted is always zero.
+The provisioned `clog_runtime` role has **SELECT, INSERT and UPDATE,
+but no DELETE** on the two transient preview tables. UPDATE is needed for
+PostgreSQL's `FOR KEY SHARE` read locks in live apply transactions; the
+role cannot delete previews or modify immutable receipt/audit tables. The one-shot `migrate` service is the separately credentialed
+schema-owner job, allowed to delete these preview rows. Do not grant the
+long-lived application role additional DELETE or expose the database-owner
+secret to `app`. These controls are checked in disposable PostgreSQL/Compose
+regressions. A partial run or interrupted transaction requires **no**
+manual receipt repair: inspect the next dry run and retry the normal job.
+
 ## Backups, Discord and release acceptance
+
+Use the [release gate evidence and manual launch checklist](release-acceptance.md)
+for #104. An automated pass does not attest to a live guild, deployed TLS/version,
+physical-device review or operator release approval.
 
 Migration `006_clan_logos.sql` adds administrator-configurable logos and matching
 website icons. Files under `catalog-icons/branding` are already included in
 `icons.tar.gz`; restore that archive together with its database backup. See the
 [clan branding guide](clan-branding.md) for upload and recovery behavior.
 
-`infra/backup.sh /safe/new/backup-directory` stops the `app` writer, captures
-a PostgreSQL custom-format dump and all durable uploaded icons and screenshots, writes
-checksums and a `COMPLETE` marker, then restarts the app. Store an encrypted
-copy off-host and rehearse an isolated restore before production approval.
+`infra/backup.sh /safe/new/backup-directory` holds the deployment lock, checks
+the running-service inventory, and stops the `app` writer before capturing
+PostgreSQL and both uploaded-image volumes. Backups **fail closed** if Docker
+Compose inventory fails, the database is not running, a migration or unknown
+service is running, the app cannot be confirmed stopped, a capture/checksum
+fails, or the originally running app cannot be confirmed restarted. An app that
+was already offline is left offline. A failed attempt leaves an incomplete
+directory **without `COMPLETE`**; do not restore it or mistake its individual
+archives for a valid backup. Inspect the failure and writer restart state,
+then retry with a fresh directory. Never bypass the shared deployment lock
+outside the coordinated deploy helper.
+
+A completed directory contains:
+
+- `database.dump`: PostgreSQL custom-format database, including accounts,
+  collection credits, receipts, settings and audit/history.
+- `icons.tar.gz`: complete `catalog-icons` volume, including uploaded
+  catalog icons and branding/logo files.
+- `screenshots.tar.gz`: complete `submission-images` volume, including
+  proof screenshots **and the hidden `.clan-api-key.secret` encryption root**.
+  The root must match the encrypted key records in the database; restoring
+  the database without it may prevent startup.
+- `SHA256SUMS`: verified checksums for the three captures.
+- `release.txt` when `.current-release` is available, for image provenance.
+- `COMPLETE`: written atomically **only after** capture, checksum validation
+  and writer restart verification succeed.
+
+Check the marker and `(cd BACKUP_DIR && sha256sum --check SHA256SUMS)`
+before copying the backup to encrypted off-host storage. Restore all three
+captures together, preserve file ownership and the encryption root, and
+rehearse an isolated restore before production approval. The automated
+end-to-end recovery drill and versioned backup metadata are documented in the
+[recovery guide](release-recovery.md), implementing #92 and #93.
 
 Migration `004_runelite_submissions.sql` adds the admin-editable clan name,
 private screenshot metadata and RuneLite intake receipts. Preserve the new

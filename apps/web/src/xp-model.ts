@@ -1,31 +1,7 @@
 /** XP wire types, exact arithmetic and parsers; also supplies shared private-response guards. */
-export const skills = [
-  ['attack', 'Attack'],
-  ['hitpoints', 'Hitpoints'],
-  ['mining', 'Mining'],
-  ['strength', 'Strength'],
-  ['agility', 'Agility'],
-  ['smithing', 'Smithing'],
-  ['defence', 'Defence'],
-  ['herblore', 'Herblore'],
-  ['fishing', 'Fishing'],
-  ['ranged', 'Ranged'],
-  ['thieving', 'Thieving'],
-  ['cooking', 'Cooking'],
-  ['prayer', 'Prayer'],
-  ['crafting', 'Crafting'],
-  ['firemaking', 'Firemaking'],
-  ['magic', 'Magic'],
-  ['fletching', 'Fletching'],
-  ['woodcutting', 'Woodcutting'],
-  ['runecrafting', 'Runecraft'],
-  ['slayer', 'Slayer'],
-  ['farming', 'Farming'],
-  ['construction', 'Construction'],
-  ['hunter', 'Hunter'],
-  ['sailing', 'Sailing'],
-] as const;
-export type SkillId = (typeof skills)[number][0];
+import { skills, isSkill, type Skill } from '@clog/domain';
+export { skills, skillName, skillIcon } from '@clog/domain';
+export type SkillId = Skill;
 // Decimal strings survive JSON without Number rounding; null means unavailable, not zero.
 export type Xp = string;
 export type Gains = Partial<Record<SkillId, Xp | null>>;
@@ -86,6 +62,39 @@ export interface ImportEntry {
   outcome: 'applied' | 'unchanged';
   changes: ImportChange[];
 }
+export interface ImportHistoryPage {
+  revision: string;
+  pageCursor: string;
+  nextCursor: string | null;
+  imports: ImportEntry[];
+}
+export function parseImportHistory(input: unknown): ImportHistoryPage {
+  const value = object(input);
+  const imports = list(value.imports).map((entry) => {
+    const row = object(entry),
+      outcome = text(row.outcome);
+    if (!['applied', 'unchanged'].includes(outcome))
+      throw new Error('Invalid import outcome.');
+    return {
+      id: text(row.id),
+      competitionId: identity(row.competitionId),
+      title: text(row.title),
+      actorName: text(row.actorName),
+      importedAt: timestamp(row.importedAt),
+      outcome: outcome as ImportEntry['outcome'],
+      changes: parseChanges(row.changes),
+    };
+  });
+  unique(imports.map((row) => row.id));
+  if (imports.length > 20)
+    throw new Error('XP history page exceeds supported size.');
+  return {
+    revision: text(value.revision),
+    pageCursor: text(value.pageCursor),
+    nextCursor: value.nextCursor === null ? null : text(value.nextCursor),
+    imports,
+  };
+}
 export interface AdminSession {
   csrfToken: string;
   displayName: string;
@@ -134,12 +143,8 @@ export interface XpClient {
     signal: AbortSignal,
     acknowledgeCorrections?: boolean,
   ): Promise<ApplyResult>;
-  history(signal: AbortSignal): Promise<ImportEntry[]>;
+  history(signal: AbortSignal, cursor?: string): Promise<ImportHistoryPage>;
 }
-export const skillName = (id: SkillId) =>
-  skills.find(([key]) => key === id)![1];
-export const skillIcon = (id: SkillId) =>
-  '/skills/' + (id === 'runecrafting' ? 'runecraft' : id) + '.png';
 export const zeroTotals = () =>
   Object.fromEntries(skills.map(([id]) => [id, '0'])) as Record<SkillId, Xp>;
 export const exactXp = (xp: Xp) =>
@@ -228,8 +233,7 @@ export function timestamp(value: unknown): string {
   return result;
 }
 export function skill(value: unknown): SkillId {
-  if (!skills.some(([id]) => id === value))
-    throw new Error('Unknown XP skill.');
+  if (!isSkill(value)) throw new Error('Unknown XP skill.');
   return value as SkillId;
 }
 export function unique(values: readonly unknown[]): void {

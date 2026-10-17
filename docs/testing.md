@@ -1,70 +1,49 @@
-# Validation and completion gates
+# Validation and acceptance
 
-Workspace builds remove their own generated `dist` directories before compiling.
-This prevents deleted test sources (including the removed passwordless admin
-tests) from leaving executable stale files behind during `npm run validate`.
-The cleanup helper refuses unknown workspaces and linked output directories.
-PostgreSQL integration tests require `TEST_DATABASE_URL`; without it they report
-explicit skips. CI provides a disposable database and runs those tests.
+[Frontend loading acceptance](frontend-loading.md) adds a production-build browser
+gate after the ordinary Chromium suite. It verifies entry-byte/module budgets,
+parallel code/data preparation and chunk-failure/cancellation recovery. Reports
+include `web-bundle.json`, `loading.log` and per-test loading measurements.
 
-Page-management acceptance tests exercise authenticated moderator writes,
-CSRF/role checks, idempotent creation, stale catalog/page versions, full page
-permutations, rollback on audit failure, shared-item preservation, historical
-credits, empty catalogs and startup preservation. Chromium checks create/reorder/
-confirm-delete flows, mobile layout, selection recovery, navigation order,
-separate RuneLite settings and caption position/typography.
+[CSP/framing acceptance](browser-security.md) also uses the production image's
+Nginx and built assets, checking ordinary flows and actual blocked behavior.
 
-Settings navigation regressions hold private responses pending and compare form,
-panel, navigation and footer geometry before/after loading at desktop and
-320-pixel widths. They also compare background pixels across catalog, XP,
-submission, moderator and account navigation, and verify that unloaded controls
-cannot be edited.
+The maintained [current inventory](current-state.md#automated-inventory-and-evidence)
+explains test coverage and its limits. Run `node scripts/check-local.mjs` for
+complete local acceptance; [local testing](local-testing.md) describes prerequisites,
+artifacts, isolation and release-only hosted CI. Test totals come from that run's
+reports and exact revision rather than fixed counts in documentation.
 
-## Foundation checks
+The full gate runs script regressions, format/lint/build/catalog/type/link checks,
+workspace Node tests with disposable PostgreSQL 17, Chromium, workload measurements,
+production image inspection, proxy/API/SQL smoke, runtime failure/drain acceptance
+and isolated coordinated restore/deployment scenarios. Skipped/TODO workspace
+checks fail the gate. The checks image retains test fixtures; the production image
+is independently inspected before smoke injection.
 
-```bash
-npm ci
-npm run validate
-docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
-curl --fail http://127.0.0.1:8088/api/v1/status
-```
+For focused host development, `npm run validate`, `npm run test:tools` and
+`npm run test:e2e -w @clog/web` require installed dependencies. Workspace builds
+clean `dist` before compiling. Database tests explicitly skip if
+`TEST_DATABASE_URL` is missing, so validation alone is not full acceptance.
+Build shared workspaces before standalone typechecks.
 
-Unit tests cover cross-page collection identity, uncollected defaults, pending/rejected/revoked exclusion, multiple collector credits, canonical mapping validation, proof-host spoofing, calendar dates and Discord command structure. API tests distinguish liveness from migrated-database readiness. The PostgreSQL test applies migrations twice and verifies two pages show one shared item's pending/approved/revoked state consistently.
+Use only a disposable PostgreSQL cluster. Runtime-role acceptance needs its
+bootstrap/superuser login, CREATEDB and CREATEROLE, creates/removes temporary
+objects and rotates cluster-level runtime credentials. Do not point it at a live
+stack or run independent suites against the same cluster.
 
-The integration test explicitly skips without `TEST_DATABASE_URL`; GitHub CI always provisions it. Never use the live database for tests. `npm run typecheck` assumes shared workspaces have been built; `npm run validate` performs builds in dependency order.
+Migration coverage includes fresh/repeated startup, populated prefix upgrades,
+checksummed-ledger drift rejection, concurrent serialization and transactional
+failure. The 020 → 021 fixture preserves every business table and existing staff
+session, rejects unexpected dependencies and verifies old-manifest rejection.
+[Recovery acceptance](release-recovery.md) uses complete database/file fingerprints,
+restored logins/assets/private proof/encryption, incompatible-image rejection,
+credential rotation and compatible controlled-image rollback.
 
-Container CI checks all Docker targets, production routing, migrations and health. Images are published only after validation and container smoke tests pass on main. ARM images are built by QEMU; hardware deployment/health on the actual home server still needs a release acceptance check.
-
-## First frontend checks
-
-The web workspace adds seven Node tests for public payload validation, uncollected defaults, shared-item totals, mixed hardcore credits/revocation, exact dates, conditional reads and preserving caches on partial failures. They run in `npm run validate`.
-
-```bash
-npx playwright install chromium
-npm run test:e2e -w @clog/web
-```
-
-Five Chromium browser scenarios cover native 500 × 314 geometry, the five tabs and keyboard navigation, all sample page icons, search/reopening, shared ordinary/hardcore state, exact menu text, Escape, mobile tap/outside dismissal and viewport bounds, plus mocked public read failure/approval/revocation. The dedicated `frontend-browser` CI job installs Chromium and uploads traces/screenshots on failure. It joins `validate` and `docker-smoke` as a prerequisite for main image publishing.
-
-These checks verify the frontend slice against stored/mock public responses, not a real Discord/admin approval pipeline. Screenshots in the [frontend review guide](frontend-review.md) are review captures, not approved pixel comparison baselines. Full catalog/reference sign-off remains in #1/#3 and live end-to-end verification in #7/#9/#12.
-
-## XP and admin frontend checks
-
-The XP frontend adds eleven Node tests and six Chromium scenarios, described in the [XP review guide](xp-frontend-review.md). They cover exact integer/million formatting, all 24 skill icons, zero/unavailable gains, sample initial/unchanged/incremental/multi-skill imports, CSRF/idempotency request shapes, access denial, correction acknowledgment, stale previews, conditional caches, mixed revisions, failure recovery and preview/live isolation. CI saves desktop/mobile/admin captures with the existing review artifact. These are mock/preview frontend checks; backend reconciliation and authenticated live end-to-end acceptance remain pending.
-
-The submission/catalog frontend adds sixteen Node tests and nine Chromium scenarios, described in the [admin review guide](admin-frontend-review.md). They verify typed private payloads, exact matching, proof validation, reason/version/CSRF requirements, shared approved-only credits, manual multi-page item identity, icon validation, full permutations, drag/keyboard/touch ordering, stale conflicts, uncertain creation retries and private access/logout. Desktop and 320-pixel mobile captures use the same CI review artifact. Frontend totals are 34 Node tests and 20 Chromium scenarios. Real backend transactions, OAuth, durable assets, source updates and restore checks remain pending.
-
-## Feature checks to add with backend implementation
-
-- Catalog: source-revision coverage, categories/pages/slots, deterministic import, icon existence, duplicates and variants, safe additive updates with existing credits.
-- Admin catalog: required icon/name/pages with no game-ID prerequisite; malformed/oversized icons and unavailable storage; one canonical item on multiple pages; uncollected/non-hardcore defaults; new item visible in public/bot/manual matching; full permutation checks, collision-safe atomic swaps, keyboard/drag controls, stale edits and concurrent item creation; reordering preserves other pages and collection/hardcore credits; source refresh/reconciliation preserves manual items/icons/order/identity; database plus icon-volume restore and image upgrades retain the catalog.
-- Public UI: reference-client screenshot comparisons at the native reference size, tab/page selection, original dim/collected treatment, per-page and global counters, mobile navigation, tooltip viewport handling and keyboard/touch access.
-- Intake: invalid evidence, wrong guild/credential, optional-name fallback, exact/ambiguous item matching, idempotent interaction retry, concurrent retries and API timeouts without false success receipts.
-- Review: anonymous/non-admin denial, session/CSRF checks, missing item prevents approval, stale versions, double approval races, correction/rejection/revocation audit transactions and final-credit revocation.
-- End to end: Discord adapter submission → pending review → approval → public item highlighted on every relevant page with collector/date → revocation removes only that credit.
-- Hardcore: default-false claims, approved-only canonical flags on shared pages, red item/menu borders, in-menu skull and exact suffix, mixed credit lines, flag correction and final-hardcore revocation while normal collection remains.
-- XP: first competition adds all competitor skill gains to existing totals; repeated unchanged imports add zero; ongoing refreshes apply only differences; new competitions accumulate by skill; name changes retain WOM identity; zero/unavailable rows, multi-skill/overall expansion, exact large totals, concurrent/retried imports, corrected source data and failed refreshes preserve/reconcile correctly.
-- XP UI/admin: separate site tab preserves the original log tabs; every competitor is visible; public read/admin-only preview/apply and contribution history work on desktop, keyboard and mobile.
-- Operations: cold install, image/configuration updates, health failure, durable database restart, backup/restore rehearsal, compatible image rollback and tested ARM/AMD64 targets.
-
-The visual and end-to-end checks require the actual assets/features; a green foundation CI run alone does not mean the website or bot is complete.
+The [browser support and acceptance policy](browser-acceptance.md) adds real HTTPS
+login, private proof, note/correction/approve/public-credit/revoke, role/access
+loss, delayed reads, geometry and uploads in Chromium/Firefox/WebKit. Fixture
+suites retain targeted failure/layout coverage. JSON report validation rejects
+skips, expected failures and retries, and requires all ten original audit cases.
+Real Discord guild, deployed host TLS/load, physical devices and published
+prior-release verification remain #104 release gates.

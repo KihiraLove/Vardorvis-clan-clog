@@ -8,8 +8,9 @@ import {
 } from '@clog/domain';
 import type { AdminClient, AdminCatalog } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 import {
   localScheduleInput,
   localScheduleToUtc,
@@ -28,8 +29,13 @@ export function AdminScheduling({
   onAccessLost: () => void;
   competitionClient: CompetitionClient;
 }) {
-  const [state, setState] = useState<SchedulingState>();
-  const [catalog, setCatalog] = useState<AdminCatalog>();
+  const initial = usePreparedAdminData();
+  const [state, setState] = useState<SchedulingState | undefined>(
+    initial?.schedules,
+  );
+  const [catalog, setCatalog] = useState<AdminCatalog | undefined>(
+    initial?.catalog,
+  );
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [editingId, setEditingId] = useState<string>();
@@ -42,6 +48,17 @@ export function AdminScheduling({
   const deleteDialog = useRef<HTMLDialogElement>(null);
   const [now, setNow] = useState(() => new Date().toISOString());
   const action = useAdminAction(onAccessLost);
+  const edited = state?.schedules.find((schedule) => schedule.id === editingId);
+  useAdminDraft(
+    edited
+      ? title !== edited.title ||
+          startLocal !== localScheduleInput(edited.startsAt) ||
+          endLocal !== localScheduleInput(edited.endsAt) ||
+          JSON.stringify(pageIds.slice().sort()) !==
+            JSON.stringify(edited.pageIds.slice().sort())
+      : !!(title || startLocal || endLocal || pageIds.length),
+    action.busy,
+  );
   useEffect(() => {
     if (removing && !deleteDialog.current?.open)
       deleteDialog.current?.showModal();
@@ -61,6 +78,7 @@ export function AdminScheduling({
   }, []);
   useEffect(() => {
     let active = true;
+    if (initial?.schedules && initial.catalog && refresh === 0) return;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     setState(undefined);
@@ -77,11 +95,7 @@ export function AdminScheduling({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else setError('Scheduling could not be loaded.');
       })
       .finally(() => clearTimeout(timeout));
@@ -122,319 +136,341 @@ export function AdminScheduling({
     document.getElementById('schedule-title')?.focus();
   };
   return (
-    <section className="admin-panel scheduling-panel">
-      <h2>Collection log scheduling</h2>
-      <CompetitionImport
-        client={competitionClient}
-        session={session}
-        onApplied={() => setRefresh((n) => n + 1)}
-      />
-      <p>
-        Open one or more pages during each window. Overlapping schedules combine
-        their open pages. A shared item is accepted when any associated page is
-        open. World, clan and review rules still apply.
-      </p>
-      <p>
-        Times use your local timezone: <strong>{timezone}</strong>. Review the
-        UTC times before saving. During a repeated daylight saving hour, the
-        earlier occurrence is used.
-      </p>
-      {error && (
-        <p role="alert">
-          {error}{' '}
-          <button type="button" onClick={() => setRefresh((n) => n + 1)}>
-            Retry scheduling
-          </button>
-        </p>
-      )}
-      {session.role === 'admin' ? (
-        <label className="admin-checkbox">
-          <input
-            type="checkbox"
-            checked={state?.enabled ?? false}
-            disabled={busy}
-            onChange={(event) => {
-              if (!state) return;
-              const enabled = event.target.checked;
-              void action.execute(async (signal) => {
-                const saved = await client.setSchedulingEnabled(
-                  enabled,
-                  state.revision,
-                  session.csrfToken,
-                  signal,
-                );
-                if (!signal.aborted) {
-                  setState(saved);
-                  action.setMessage(
-                    enabled ? 'Scheduling enabled.' : 'Scheduling disabled.',
-                  );
-                }
-              }, reload);
-            }}
-          />
-          Enable collection log scheduling
-        </label>
-      ) : (
-        <p>
-          Scheduling is{' '}
-          <strong>{state?.enabled ? 'enabled' : 'disabled'}</strong>. Only the
-          administrator can change this.
-        </p>
-      )}
-      <p className="admin-note">
-        {state?.enabled
-          ? 'Pages are closed outside their scheduled windows. No active windows means submissions are closed.'
-          : 'Scheduling is disabled. Submissions follow the usual rules; you can prepare windows here.'}
-      </p>
-      <form
-        aria-busy={!state && !error}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!state) return;
-          void action.execute(async (signal) => {
-            const input = parseCollectionScheduleInput({
-              title,
-              startsAt: localScheduleToUtc(startLocal),
-              endsAt: localScheduleToUtc(endLocal),
-              pageIds,
-            });
-            const saved = await client.saveSchedule(
-              input,
-              state.revision,
-              session.csrfToken,
-              signal,
-              editingId,
-            );
-            if (!signal.aborted) {
-              setState(saved);
-              reset();
-              action.setMessage(
-                editingId ? 'Schedule updated.' : 'Schedule created.',
-              );
-            }
-          }, reload);
-        }}
-      >
-        <h3>{editingId ? 'Edit schedule' : 'New schedule'}</h3>
-        <fieldset className="admin-fieldset" disabled={busy}>
-          <label htmlFor="schedule-title">
-            Schedule name
-            <input
-              id="schedule-title"
-              value={title}
-              maxLength={100}
-              required
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </label>
-          <label htmlFor="schedule-start">
-            Start date and time (local)
-            <input
-              id="schedule-start"
-              type="datetime-local"
-              step={1}
-              required
-              value={startLocal}
-              onChange={(event) => setStartLocal(event.target.value)}
-            />
-          </label>
-          <p className="schedule-utc" aria-live="polite">
-            Start UTC:{' '}
-            {startLocal ? previewUtc(startLocal) : 'Choose a start time.'}
-          </p>
-          <label htmlFor="schedule-end">
-            End date and time (local)
-            <input
-              id="schedule-end"
-              type="datetime-local"
-              step={1}
-              required
-              value={endLocal}
-              onChange={(event) => setEndLocal(event.target.value)}
-            />
-          </label>
-          <p className="schedule-utc" aria-live="polite">
-            End UTC: {endLocal ? previewUtc(endLocal) : 'Choose an end time.'}
-          </p>
-          <label htmlFor="schedule-pages-search">
-            Find collection log pages
-            <input
-              id="schedule-pages-search"
-              type="search"
-              value={pageSearch}
-              onChange={(event) => setPageSearch(event.target.value)}
-            />
-          </label>
-          <fieldset className="schedule-page-list">
-            <legend>Collection log pages</legend>
-            {!catalog && <p>Loading pages…</p>}
-            {catalog?.pages
-              .filter((p) =>
-                (p.name + ' ' + p.category)
-                  .toLowerCase()
-                  .includes(pageSearch.toLowerCase()),
-              )
-              .map((page) => (
-                <label className="admin-checkbox" key={page.id}>
-                  <input
-                    type="checkbox"
-                    checked={pageIds.includes(page.id)}
-                    onChange={(event) =>
-                      setPageIds(
-                        event.target.checked
-                          ? [...pageIds, page.id]
-                          : pageIds.filter((id) => id !== page.id),
-                      )
-                    }
-                  />
-                  {page.name} ({page.category})
-                </label>
-              ))}
-            {pageIds
-              .filter((id) => !catalog?.pages.some((p) => p.id === id))
-              .map((id) => (
-                <label className="admin-checkbox" key={id}>
-                  <input
-                    type="checkbox"
-                    checked
-                    onChange={() =>
-                      setPageIds(pageIds.filter((value) => value !== id))
-                    }
-                  />
-                  Unavailable page: {id} (remove before saving)
-                </label>
-              ))}
-          </fieldset>
-          <p className="admin-note">
-            {pageIds.length} pages selected. All selected pages share this
-            window.
-          </p>
-          <div className="admin-actions">
-            <button
-              className="site-button"
-              disabled={
-                !title.trim() || !startLocal || !endLocal || !pageIds.length
-              }
-            >
-              {editingId ? 'Save schedule' : 'Create schedule'}
+    <>
+      <section className="admin-panel scheduling-panel">
+        <h2>Scheduling</h2>
+        {error && (
+          <p role="alert">
+            {error}{' '}
+            <button type="button" onClick={() => setRefresh((n) => n + 1)}>
+              Retry scheduling
             </button>
-            {editingId && (
-              <button type="button" className="site-button" onClick={reset}>
-                Cancel edit
-              </button>
-            )}
-          </div>
-        </fieldset>
-      </form>
-      <h3>Saved schedules</h3>
-      {state?.schedules.length === 0 && <p>No schedules yet.</p>}
-      <div className="schedule-list">
-        {state?.schedules.map((schedule) => (
-          <article className="schedule-card" key={schedule.id}>
-            <h4>{schedule.title}</h4>
-            <p>
-              {!state.enabled
-                ? 'Inactive while scheduling is disabled'
-                : now < schedule.startsAt
-                  ? 'Upcoming'
-                  : now < schedule.endsAt
-                    ? 'Open now'
-                    : 'Ended'}
-            </p>
-            <p>
-              Start: {localScheduleLabel(schedule.startsAt)}
-              <br />
-              <span className="schedule-utc">
-                {utcScheduleLabel(schedule.startsAt)}
-              </span>
-            </p>
-            <p>
-              End: {localScheduleLabel(schedule.endsAt)}
-              <br />
-              <span className="schedule-utc">
-                {utcScheduleLabel(schedule.endsAt)}
-              </span>
-            </p>
-            <p>
-              Pages:{' '}
-              {schedule.pageIds
-                .map(
-                  (id) =>
-                    catalog?.pages.find((p) => p.id === id)?.name ??
-                    'Unavailable page: ' + id,
-                )
-                .join(', ')}
-            </p>
-            <div className="admin-actions">
-              <button
-                type="button"
-                className="site-button"
-                disabled={busy}
-                onClick={() => edit(schedule)}
-              >
-                Edit {schedule.title}
-              </button>
-              <button
-                type="button"
-                className="site-button"
-                disabled={busy}
-                onClick={() => setRemoving(schedule)}
-              >
-                Delete {schedule.title}
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-      {removing && (
-        <dialog
-          ref={deleteDialog}
-          aria-label="Delete schedule"
-          className="schedule-delete-confirm"
-          onCancel={() => setRemoving(undefined)}
-        >
-          <p>
-            Delete “{removing.title}”? Pages will follow the remaining
-            schedules.
           </p>
-          <div className="admin-actions">
+        )}
+        {session.role === 'admin' ? (
+          <div className="scheduling-toggle">
+            <h3 id="scheduling-toggle-title">
+              Enable scheduled opening windows for log pages (submissions to
+              closed pages are automatically rejected)
+            </h3>
             <button
               type="button"
-              className="site-button"
+              className="site-button admin-toggle"
+              role="switch"
+              aria-labelledby="scheduling-toggle-title"
+              aria-checked={state?.enabled ?? false}
               disabled={busy}
               onClick={() => {
                 if (!state) return;
+                const enabled = !state.enabled;
                 void action.execute(async (signal) => {
-                  const saved = await client.deleteSchedule(
-                    removing.id,
+                  const saved = await client.setSchedulingEnabled(
+                    enabled,
                     state.revision,
                     session.csrfToken,
                     signal,
                   );
                   if (!signal.aborted) {
                     setState(saved);
-                    if (editingId === removing.id) reset();
-                    setRemoving(undefined);
-                    action.setMessage('Schedule deleted.');
+                    action.setMessage(
+                      enabled ? 'Scheduling enabled.' : 'Scheduling disabled.',
+                    );
                   }
                 }, reload);
               }}
             >
-              Confirm delete schedule
-            </button>
-            <button
-              type="button"
-              className="site-button"
-              disabled={busy}
-              onClick={() => setRemoving(undefined)}
-            >
-              Keep schedule
+              {state?.enabled ? 'On' : 'Off'}
             </button>
           </div>
-        </dialog>
-      )}
-      {action.error && <p role="alert">{action.error}</p>}
-      {action.message && <p role="status">{action.message}</p>}
-    </section>
+        ) : (
+          <p>
+            Scheduling is{' '}
+            <strong>{state?.enabled ? 'enabled' : 'disabled'}</strong>. Only the
+            administrator can change this.
+          </p>
+        )}
+        {state?.enabled && (
+          <p className="admin-note">
+            Pages are closed outside their scheduled windows. No active windows
+            means submissions are closed.
+          </p>
+        )}
+      </section>
+      <section className="admin-panel scheduling-panel">
+        <h2>Schedule management</h2>
+        <CompetitionImport
+          client={competitionClient}
+          session={session}
+          onAccessLost={onAccessLost}
+          onApplied={() => setRefresh((n) => n + 1)}
+        />
+        <p>
+          Times use your local timezone: <strong>{timezone}</strong>. Review the
+          UTC times before saving.
+        </p>
+        <form
+          aria-busy={!state && !error}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!state) return;
+            void action.execute(async (signal) => {
+              const input = parseCollectionScheduleInput({
+                title,
+                startsAt: localScheduleToUtc(startLocal),
+                endsAt: localScheduleToUtc(endLocal),
+                pageIds,
+              });
+              const saved = await client.saveSchedule(
+                input,
+                state.revision,
+                session.csrfToken,
+                signal,
+                editingId,
+              );
+              if (!signal.aborted) {
+                setState(saved);
+                reset();
+                action.setMessage(
+                  editingId ? 'Schedule updated.' : 'Schedule created.',
+                );
+              }
+            }, reload);
+          }}
+        >
+          <h3>{editingId ? 'Edit schedule' : 'New schedule'}</h3>
+          <fieldset className="admin-fieldset" disabled={busy}>
+            <label htmlFor="schedule-title">
+              Schedule name
+              <input
+                id="schedule-title"
+                value={title}
+                maxLength={100}
+                required
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <div className="schedule-datetime-field">
+              <label htmlFor="schedule-start">
+                Start date and time (local)
+              </label>
+              <div className="schedule-datetime-row">
+                <input
+                  id="schedule-start"
+                  type="datetime-local"
+                  step={1}
+                  required
+                  value={startLocal}
+                  onChange={(event) => setStartLocal(event.target.value)}
+                />
+                <span className="schedule-utc" aria-live="polite">
+                  Start UTC:{' '}
+                  {startLocal ? previewUtc(startLocal) : 'Choose a start time.'}
+                </span>
+              </div>
+            </div>
+            <div className="schedule-datetime-field">
+              <label htmlFor="schedule-end">End date and time (local)</label>
+              <div className="schedule-datetime-row">
+                <input
+                  id="schedule-end"
+                  type="datetime-local"
+                  step={1}
+                  required
+                  value={endLocal}
+                  onChange={(event) => setEndLocal(event.target.value)}
+                />
+                <span className="schedule-utc" aria-live="polite">
+                  End UTC:{' '}
+                  {endLocal ? previewUtc(endLocal) : 'Choose an end time.'}
+                </span>
+              </div>
+            </div>
+            <label htmlFor="schedule-pages-search">
+              Find collection log pages
+              <input
+                id="schedule-pages-search"
+                type="search"
+                value={pageSearch}
+                onChange={(event) => setPageSearch(event.target.value)}
+              />
+            </label>
+            <fieldset className="schedule-page-list catalog-picker">
+              <legend>Collection log pages</legend>
+              <div className="catalog-choice-list">
+                {!catalog && <p>Loading pages…</p>}
+                {catalog?.pages
+                  .filter((p) =>
+                    (p.name + ' ' + p.category)
+                      .toLowerCase()
+                      .includes(pageSearch.toLowerCase()),
+                  )
+                  .map((page) => (
+                    <label className="admin-checkbox" key={page.id}>
+                      <input
+                        type="checkbox"
+                        checked={pageIds.includes(page.id)}
+                        onChange={(event) =>
+                          setPageIds(
+                            event.target.checked
+                              ? [...pageIds, page.id]
+                              : pageIds.filter((id) => id !== page.id),
+                          )
+                        }
+                      />
+                      {page.name} ({page.category})
+                    </label>
+                  ))}
+                {pageIds
+                  .filter((id) => !catalog?.pages.some((p) => p.id === id))
+                  .map((id) => (
+                    <label className="admin-checkbox" key={id}>
+                      <input
+                        type="checkbox"
+                        checked
+                        onChange={() =>
+                          setPageIds(pageIds.filter((value) => value !== id))
+                        }
+                      />
+                      Unavailable page: {id} (remove before saving)
+                    </label>
+                  ))}
+              </div>
+            </fieldset>
+            <p className="admin-note">
+              {pageIds.length} pages selected. All selected pages share this
+              window.
+            </p>
+            <div className="admin-actions">
+              <button
+                className="site-button"
+                disabled={
+                  !title.trim() || !startLocal || !endLocal || !pageIds.length
+                }
+              >
+                {editingId ? 'Save schedule' : 'Create schedule'}
+              </button>
+              {editingId && (
+                <button type="button" className="site-button" onClick={reset}>
+                  Cancel edit
+                </button>
+              )}
+            </div>
+          </fieldset>
+        </form>
+        <h3>Saved schedules</h3>
+        {state?.schedules.length === 0 && <p>No schedules yet.</p>}
+        <div className="schedule-list">
+          {state?.schedules.map((schedule) => (
+            <article className="schedule-card" key={schedule.id}>
+              <div className="schedule-card__heading">
+                <h4>{schedule.title}</h4>
+                <span className="admin-badge">
+                  {!state.enabled
+                    ? 'Inactive while scheduling is disabled'
+                    : now < schedule.startsAt
+                      ? 'Upcoming'
+                      : now < schedule.endsAt
+                        ? 'Open now'
+                        : 'Ended'}
+                </span>
+              </div>
+              <div className="schedule-card__times">
+                <p>
+                  Start: {localScheduleLabel(schedule.startsAt)}
+                  <br />
+                  <span className="schedule-utc">
+                    {utcScheduleLabel(schedule.startsAt)}
+                  </span>
+                </p>
+                <p>
+                  End: {localScheduleLabel(schedule.endsAt)}
+                  <br />
+                  <span className="schedule-utc">
+                    {utcScheduleLabel(schedule.endsAt)}
+                  </span>
+                </p>
+              </div>
+              <p>
+                Pages:{' '}
+                {schedule.pageIds
+                  .map(
+                    (id) =>
+                      catalog?.pages.find((p) => p.id === id)?.name ??
+                      'Unavailable page: ' + id,
+                  )
+                  .join(', ')}
+              </p>
+              <div className="admin-actions">
+                <button
+                  type="button"
+                  className="site-button"
+                  disabled={busy}
+                  onClick={() => edit(schedule)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="site-button site-button--danger"
+                  disabled={busy}
+                  onClick={() => setRemoving(schedule)}
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+        {removing && (
+          <dialog
+            ref={deleteDialog}
+            aria-label="Delete schedule"
+            className="schedule-delete-confirm"
+            onCancel={() => setRemoving(undefined)}
+          >
+            <p>
+              Delete “{removing.title}”? Pages will follow the remaining
+              schedules.
+            </p>
+            <div className="admin-actions">
+              <button
+                type="button"
+                className="site-button site-button--danger"
+                disabled={busy}
+                onClick={() => {
+                  if (!state) return;
+                  void action.execute(async (signal) => {
+                    const saved = await client.deleteSchedule(
+                      removing.id,
+                      state.revision,
+                      session.csrfToken,
+                      signal,
+                    );
+                    if (!signal.aborted) {
+                      setState(saved);
+                      if (editingId === removing.id) reset();
+                      setRemoving(undefined);
+                      action.setMessage('Schedule deleted.');
+                    }
+                  }, reload);
+                }}
+              >
+                Confirm delete schedule
+              </button>
+              <button
+                type="button"
+                className="site-button"
+                disabled={busy}
+                onClick={() => setRemoving(undefined)}
+              >
+                Keep schedule
+              </button>
+            </div>
+          </dialog>
+        )}
+        {action.error && <p role="alert">{action.error}</p>}
+        {action.message && <p role="status">{action.message}</p>}
+      </section>
+    </>
   );
 }

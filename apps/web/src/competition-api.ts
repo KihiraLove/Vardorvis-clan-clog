@@ -1,5 +1,6 @@
 import {
-  competitionLifecycle,
+  competitionScope,
+  type CompetitionImportAction,
   type CompetitionKind,
   type CompetitionLifecycle,
   type WomCompetition,
@@ -15,10 +16,7 @@ import {
   timestamp,
   unique,
   type ImportChange,
-  type XpClient,
-  type ImportPreview,
 } from './xp-model.ts';
-import type { AdminClient } from './admin-model.ts';
 export interface CompetitionImportPreview {
   previewToken: string;
   expectedRevision: string;
@@ -26,11 +24,7 @@ export interface CompetitionImportPreview {
   expiresAt: string;
   competition: WomCompetition;
   lifecycle: CompetitionLifecycle;
-  action:
-    | 'create-schedule'
-    | 'preserve-schedule'
-    | 'preserve-deletion'
-    | 'import-results';
+  action: CompetitionImportAction;
   scheduleStartsAt: string | null;
   pageIds: string[];
   pages: { id: string; name: string }[];
@@ -44,7 +38,6 @@ export interface CompetitionClient {
   ): Promise<{ serverNow: string; competitions: WomCompetition[] }>;
   preview(
     url: string,
-    kind: CompetitionKind,
     csrf: string,
     signal: AbortSignal,
     pageIds?: string[],
@@ -69,6 +62,8 @@ export function parseWomCompetition(value: unknown): WomCompetition {
   if (Date.parse(endsAt) <= Date.parse(startsAt) || !metrics.length)
     throw new Error('Invalid competition period or metrics.');
   unique(metrics);
+  if (competitionScope(metrics).kind !== c.kind)
+    throw new Error('Competition kind does not match its WOM metric scope.');
   return {
     id,
     kind: c.kind as CompetitionKind,
@@ -80,14 +75,19 @@ export function parseWomCompetition(value: unknown): WomCompetition {
   };
 }
 export class CompetitionRequestError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
+  readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
 export class LiveCompetitionClient implements CompetitionClient {
+  private activityCache:
+    | {
+        etag: string | null;
+        data: { serverNow: string; competitions: WomCompetition[] };
+      }
+    | undefined;
   private async json(
     path: string,
     signal: AbortSignal,
@@ -99,7 +99,19 @@ export class LiveCompetitionClient implements CompetitionClient {
       credentials: 'same-origin',
       cache: 'no-store',
     });
-    const value: unknown = await response.json();
+    // Authentication status is authoritative even when a proxy returns HTML
+    // or an empty body, so expiry cannot be hidden by JSON parse failure.
+    let value: unknown;
+    try {
+      value = await response.json();
+    } catch {
+      if (!response.ok)
+        throw new CompetitionRequestError(
+          response.status,
+          'Competition request failed.',
+        );
+      throw new Error('Invalid competition response.');
+    }
     if (!response.ok)
       throw new CompetitionRequestError(
         response.status,
@@ -110,18 +122,48 @@ export class LiveCompetitionClient implements CompetitionClient {
     return value;
   }
   async activities(signal: AbortSignal) {
-    const value = object(
-      await this.json('/api/v1/competitions/activities', signal),
-    );
+    const response = await fetch('/api/v1/competitions/activities', {
+      signal,
+      cache: 'no-cache',
+      credentials: 'same-origin',
+      headers: this.activityCache?.etag
+        ? { 'If-None-Match': this.activityCache.etag }
+        : {},
+    });
+    const clock = response.headers.get('X-Server-Now');
+    if (
+      this.activityCache &&
+      (response.status === 304 ||
+        (response.ok &&
+          clock &&
+          this.activityCache.etag &&
+          response.headers.get('ETag') === this.activityCache.etag))
+    ) {
+      signal.throwIfAborted();
+      if (!clock) throw new Error('Missing current competition clock.');
+      void response.body?.cancel();
+      return { ...this.activityCache.data, serverNow: timestamp(clock) };
+    }
+    if (!response.ok)
+      throw new CompetitionRequestError(
+        response.status,
+        'Competitions could not be refreshed.',
+      );
+    const value = object(await response.json());
     const competitions = list(value.competitions).map(parseWomCompetition);
     if (competitions.some((c) => c.kind !== 'ACTIVITY'))
       throw new Error('Invalid activity listing.');
     unique(competitions.map((c) => c.id));
-    return { serverNow: timestamp(value.serverNow), competitions };
+    const data = {
+      serverNow: timestamp(clock ?? value.serverNow),
+      competitions,
+    };
+    signal.throwIfAborted();
+    this.activityCache = { etag: response.headers.get('ETag'), data };
+    return data;
   }
   async preview(
     url: string,
-    kind: CompetitionKind,
     csrf: string,
     signal: AbortSignal,
     pageIds?: string[],
@@ -132,11 +174,15 @@ export class LiveCompetitionClient implements CompetitionClient {
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
         body: JSON.stringify({
           competitionUrl: competitionUrl(url).url,
-          kind,
           ...(pageIds ? { pageIds } : {}),
         }),
       }),
     );
+    const competition = parseWomCompetition(p.competition);
+    if (competition.id !== competitionUrl(url).id)
+      throw new Error(
+        'Competition preview identity does not match the requested WOM link.',
+      );
     if (
       !['future', 'running', 'finished'].includes(String(p.lifecycle)) ||
       ![
@@ -144,6 +190,7 @@ export class LiveCompetitionClient implements CompetitionClient {
         'preserve-schedule',
         'preserve-deletion',
         'import-results',
+        'import-metadata',
       ].includes(String(p.action))
     )
       throw new Error('Invalid import action.');
@@ -163,12 +210,23 @@ export class LiveCompetitionClient implements CompetitionClient {
     unique(participants.map((r) => r.playerId));
     if (p.lifecycle !== 'finished' && participants.length)
       throw new Error('Live imports must contain metadata only.');
+    const metadataOnly =
+      competition.kind === 'SKILL' && p.lifecycle !== 'finished';
+    if (
+      metadataOnly !== (p.action === 'import-metadata') ||
+      (metadataOnly &&
+        (list(p.pageIds).length ||
+          list(p.pages).length ||
+          list(p.changes).length ||
+          p.scheduleStartsAt !== null))
+    )
+      throw new Error('Invalid metadata-only SKILL preview.');
     return {
       previewToken: text(p.previewToken),
       expectedRevision: text(p.expectedRevision),
       scheduleRevision: text(p.scheduleRevision),
       expiresAt: timestamp(p.expiresAt),
-      competition: parseWomCompetition(p.competition),
+      competition,
       lifecycle: p.lifecycle as CompetitionLifecycle,
       action: p.action as CompetitionImportPreview['action'],
       scheduleStartsAt:
@@ -209,254 +267,5 @@ export class LiveCompetitionClient implements CompetitionClient {
     if (!['applied', 'unchanged'].includes(String(r.outcome)))
       throw new Error('Invalid import receipt.');
     return { outcome: r.outcome as 'applied' | 'unchanged' };
-  }
-}
-/** Controlled preview fixtures mirror the live lifecycle and never fetch WOM. */
-export class PreviewCompetitionClient implements CompetitionClient {
-  constructor(
-    private readonly scheduleClient?: AdminClient,
-    private readonly xpClient?: XpClient,
-  ) {}
-  private readonly fixtureNow = Date.now();
-  private stored = new Map<number, WomCompetition>();
-  private schedules = new Map<number, string>();
-  private version = 1;
-  private previews = new Map<string, CompetitionImportPreview>();
-  private xpPreviews = new Map<string, ImportPreview>();
-  private receipts = new Map<
-    string,
-    { token: string; outcome: 'applied' | 'unchanged' }
-  >();
-  async activities(signal: AbortSignal) {
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const day = 86400000,
-      now = this.fixtureNow;
-    const samples = [
-      ['Past boss week', now - 3 * day, now - day],
-      ['Running boss week', now - day, now + day],
-      ['Future boss week', now + day, now + 3 * day],
-    ] as const;
-    const rows = new Map<number, WomCompetition>(
-      samples.map(([title, start, end], i) => [
-        3001 + i,
-        {
-          id: 3001 + i,
-          kind: 'ACTIVITY',
-          title,
-          sourceUrl: 'https://wiseoldman.net/competitions/' + (3001 + i),
-          metrics: ['vardorvis'],
-          startsAt: new Date(start).toISOString(),
-          endsAt: new Date(end).toISOString(),
-        },
-      ]),
-    );
-    for (const c of this.stored.values())
-      if (c.kind === 'ACTIVITY') rows.set(c.id, c);
-    return {
-      serverNow: new Date().toISOString(),
-      competitions: [...rows.values()].sort(
-        (a, b) => Date.parse(b.endsAt) - Date.parse(a.endsAt) || b.id - a.id,
-      ),
-    };
-  }
-  async preview(
-    url: string,
-    kind: CompetitionKind,
-    csrf: string,
-    signal: AbortSignal,
-    pageIds?: string[],
-  ) {
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const { id } = competitionUrl(url),
-      now = this.fixtureNow,
-      day = 86400000,
-      stage = id % 3;
-    const prior = this.stored.get(id);
-    if (prior && prior.kind !== kind)
-      throw new Error('This competition already has a different kind.');
-    const sampleSkill = kind === 'SKILL' && [1001, 1002].includes(id);
-    const xpPreview =
-      sampleSkill && this.xpClient
-        ? await this.xpClient.preview(url, csrf, signal)
-        : undefined;
-    const startsAt =
-        xpPreview?.competition.startsAt ??
-        new Date(now + (stage === 0 ? day : -2 * day)).toISOString(),
-      endsAt =
-        xpPreview?.competition.endsAt ??
-        new Date(now + (stage === 2 ? -day : 3 * day)).toISOString();
-    const competition: WomCompetition = {
-      id,
-      kind,
-      title:
-        xpPreview?.competition.title ??
-        (kind === 'SKILL'
-          ? 'Sample skill competition'
-          : 'Sample boss competition'),
-      sourceUrl: competitionUrl(url).url,
-      metrics: xpPreview?.competition.skills ?? [
-        kind === 'SKILL' ? 'attack' : 'vardorvis',
-      ],
-      startsAt,
-      endsAt,
-    };
-    const lifecycle = competitionLifecycle(competition, Date.now());
-    const catalog = this.scheduleClient
-      ? await this.scheduleClient.catalog(signal)
-      : undefined;
-    const scheduleState = this.scheduleClient
-      ? await this.scheduleClient.scheduling(signal)
-      : undefined;
-    const linked = scheduleState?.schedules.find(
-      (s) => s.id === this.schedules.get(id),
-    );
-    const pages = catalog?.pages.map((p) => ({ id: p.id, name: p.name })) ?? [
-      { id: 'vardorvis', name: 'Vardorvis' },
-      { id: 'the-whisperer', name: 'The Whisperer' },
-    ];
-    const action =
-      lifecycle === 'finished'
-        ? 'import-results'
-        : this.schedules.has(id)
-          ? linked
-            ? 'preserve-schedule'
-            : 'preserve-deletion'
-          : 'create-schedule';
-    const preview: CompetitionImportPreview = {
-      previewToken: crypto.randomUUID(),
-      expectedRevision: 'preview-' + this.version,
-      scheduleRevision: scheduleState?.revision ?? 'preview-1',
-      expiresAt: new Date(Date.now() + 600000).toISOString(),
-      competition,
-      lifecycle,
-      action,
-      scheduleStartsAt:
-        lifecycle === 'finished'
-          ? null
-          : (linked?.startsAt ??
-            (lifecycle === 'running' ? new Date().toISOString() : startsAt)),
-      pageIds:
-        linked?.pageIds ??
-        pageIds ??
-        (kind === 'ACTIVITY' ? ['vardorvis'] : []),
-      pages,
-      participants:
-        lifecycle === 'finished'
-          ? xpPreview
-            ? xpPreview.participants
-                .filter(
-                  (p) =>
-                    Object.values(p.gains).every((n) => n !== null) &&
-                    Object.values(p.gains).some((n) => BigInt(n!) > 0n),
-                )
-                .map((p) => ({
-                  playerId: p.playerId,
-                  displayName: p.displayName,
-                  gained: Object.values(p.gains)
-                    .reduce((sum, n) => sum + BigInt(n!), 0n)
-                    .toString(),
-                }))
-            : [{ playerId: 1, displayName: 'KihiraVD', gained: '12345678' }]
-          : [],
-      changes:
-        xpPreview?.changes ??
-        (kind === 'SKILL' && lifecycle === 'finished'
-          ? [
-              {
-                skill: 'attack',
-                before: '0',
-                after: '12345678',
-                change: '12345678',
-              },
-            ]
-          : []),
-      warnings: [
-        'Preview mode only. No server data is changed.',
-        ...(scheduleState && !scheduleState.enabled && lifecycle !== 'finished'
-          ? ['Scheduling is disabled. This import will not enable enforcement.']
-          : []),
-      ],
-    };
-    if (xpPreview) this.xpPreviews.set(preview.previewToken, xpPreview);
-    this.previews.set(preview.previewToken, preview);
-    return structuredClone(preview);
-  }
-  async apply(
-    p: CompetitionImportPreview,
-    csrf: string,
-    key: string,
-    ack: boolean,
-    signal: AbortSignal,
-  ) {
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const replay = this.receipts.get(key);
-    if (replay) {
-      if (replay.token !== p.previewToken) throw new Error('Key reused.');
-      return { outcome: replay.outcome };
-    }
-    if (
-      !this.previews.has(p.previewToken) ||
-      p.expectedRevision !== 'preview-' + this.version ||
-      Date.now() >= Date.parse(p.expiresAt)
-    )
-      throw new CompetitionRequestError(409, 'Preview changed. Preview again.');
-    const lifecycle = competitionLifecycle(p.competition, Date.now());
-    if ((lifecycle === 'finished') !== (p.lifecycle === 'finished'))
-      throw new CompetitionRequestError(
-        409,
-        'Competition finished. Preview again.',
-      );
-    if (this.scheduleClient) {
-      const session = await this.scheduleClient.session(signal);
-      if (!session)
-        throw new CompetitionRequestError(401, 'Sign in to continue.');
-      if (
-        session.role !== 'admin' &&
-        p.competition.kind === 'SKILL' &&
-        lifecycle === 'finished'
-      )
-        throw new CompetitionRequestError(
-          403,
-          'Only the administrator can import XP results.',
-        );
-    }
-    if (p.action === 'create-schedule') {
-      if (!p.pageIds.length) throw new Error('Choose at least one page.');
-      if (this.scheduleClient) {
-        const state = await this.scheduleClient.saveSchedule(
-          {
-            title: p.competition.title,
-            startsAt:
-              lifecycle === 'running'
-                ? new Date().toISOString()
-                : p.competition.startsAt,
-            endsAt: p.competition.endsAt,
-            pageIds: p.pageIds,
-          },
-          p.scheduleRevision,
-          csrf,
-          signal,
-        );
-        const saved = state.schedules.find(
-          (s) =>
-            !this.schedules.has(p.competition.id) &&
-            s.title === p.competition.title &&
-            s.endsAt === p.competition.endsAt,
-        );
-        if (saved) this.schedules.set(p.competition.id, saved.id);
-      }
-    }
-    const xpPreview = this.xpPreviews.get(p.previewToken);
-    const outcome =
-      xpPreview && this.xpClient
-        ? (await this.xpClient.apply(xpPreview, csrf, key, signal, ack)).outcome
-        : JSON.stringify(this.stored.get(p.competition.id)) ===
-            JSON.stringify(p.competition)
-          ? 'unchanged'
-          : 'applied';
-    this.stored.set(p.competition.id, p.competition);
-    if (outcome === 'applied') this.version++;
-    this.receipts.set(key, { token: p.previewToken, outcome });
-    return { outcome };
   }
 }

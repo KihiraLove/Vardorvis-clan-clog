@@ -17,12 +17,20 @@ deltas without counting the aggregate total. Zero-sum participants are discarded
 unavailable data rejects the import. Overlapping competitions count independent
 reported contributions, rather than deduplicated lifetime gains.
 
-The shared preview/apply form is available from Scheduling and XP imports.
-Only administrators import finished XP results. Legacy
+The shared preview/apply form is available under **Scheduling and Competitions**
+at `/admin/schedules`; the legacy `/admin/xp` URL opens the same page.
+Future/running SKILL imports use `import-metadata`, persist their original dates
+without a schedule, and appear publicly with unavailable gains and an empty
+podium. Moderators can apply these imports. Crossing the source end requires a
+fresh finished-results preview; future-to-running apply stays metadata-only.
+Existing linked staff windows are preserved for reviewed management in Scheduling.
+Administrators and moderators can import finished XP results and view history. Legacy
 `/api/v1/admin/xp/imports/preview` and `/api/v1/admin/xp/imports` remain available
 for finished SKILL imports, with the existing session, Origin, CSRF, optimistic
 revision, correction acknowledgement and UUID request-key contracts. Legacy
-preview payloads must include `kind: "SKILL"`. Private history is available at
+preview payloads need only `competitionUrl`; an optional `kind: "SKILL"` hint
+remains compatible with older clients, while WOM scope validation and the
+staff authorization stay authoritative. Private history is available at
 `GET /api/v1/admin/xp/imports`.
 
 Migration 014 backfills all existing XP identities as SKILL and preserves the

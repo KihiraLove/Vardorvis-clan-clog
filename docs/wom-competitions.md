@@ -1,32 +1,51 @@
 # Wise Old Man competition imports
 
 Import a `https://wiseoldman.net/competitions/<id>` link from **Scheduling** or
-**XP imports**. Staff must choose **SKILL** or **ACTIVITY**; WOM does not provide
-this application flag. Each WOM ID has one persisted identity, and its kind and
+**XP imports**. The server derives **SKILL** or **ACTIVITY** from canonical WOM
+metric metadata and returns the detected kind in the preview. Both forms need
+only the competition link; neither has a kind selector. Each WOM ID has one persisted identity, and its kind and
 supported metric scope cannot be changed by importing a duplicate. A mismatched
 kind or changed scope requires staff reconciliation instead of silently changing
-the ledger. Both roles can import ACTIVITY competitions and prepare SKILL
-schedules. Only administrators can import finished SKILL results.
+the ledger. Administrators and moderators have the same import permissions:
+ACTIVITY competitions, future/running SKILL metadata and finished SKILL results.
 
 The [official competition API](https://docs.wiseoldman.net/api/competitions/competition-endpoints)
 returns all participants in the details response. Its bulk metrics override
 provides individual skill deltas for overall competitions. The supported integer
 boss/activity metrics follow the
 [official metric definitions](https://docs.wiseoldman.net/api/global-type-definitions).
-Computed EHP/EHB and mixed or weighted activity scopes are unsupported. SKILL
-supports any nonempty subset of the supported skills; overall expands to all
-skills, without adding the aggregate/weighted total again.
+Computed EHP/EHB, unknown metrics, mixed skill/activity or aggregate-overlap
+scopes, multiple activities and weighted activity scopes are explicitly rejected.
+SKILL supports any nonempty subset of the 24 skills in
+[the shared domain registry](../packages/domain/src/skills.ts); `overall` and
+`total` expand to all skills. Classification precedes result validation, so a
+missing result never changes a SKILL event into ACTIVITY. Finished skill imports
+fetch one complete per-skill batch, preserving exact integer contributions
+without adding the aggregate/weighted total again. The registry supplies display
+order, names and icon filenames to API/web, including `runecrafting` → `runecraft.png`.
+
+Previews share [account/global admission and response-byte budgets](workload-budgets.md).
+The 8 MiB streaming ceiling and 6.5-second operation deadline cover both upstream
+responses. Overload returns 429 with `Retry-After`; importing/replaying an existing
+receipt remains available independently of preview admission.
 
 ## Lifecycle and schedules
 
 PostgreSQL's clock is authoritative. A competition is future before its start,
 running from its start until its end, and finished at or after its end.
 
-| Source state | Persisted import                                       | Opening schedule                  |
-| ------------ | ------------------------------------------------------ | --------------------------------- |
-| Future       | Link, title, explicit kind, metrics and original dates | Source start to source end        |
-| Running      | The same minimal metadata                              | Database apply time to source end |
-| Finished     | Metadata plus validated, filtered final results        | None created                      |
+| Kind     | Source state   | Persisted import                                       | Opening schedule                       |
+| -------- | -------------- | ------------------------------------------------------ | -------------------------------------- |
+| SKILL    | Future/running | Link, title, detected kind, metrics and original dates | None created; `import-metadata` action |
+| ACTIVITY | Future         | The same minimal metadata                              | Source start to source end             |
+| ACTIVITY | Running        | The same minimal metadata                              | Database apply time to source end      |
+| Either   | Finished       | Metadata plus validated, filtered final results        | None created                           |
+
+SKILL previews contain no opening time, selectable pages, page links, participants
+or XP changes. Apply persists a new SKILL identity with `scheduleId=null` and
+does not change scheduling state, its revision or enforcement. Both import
+screens hide page selection for SKILL. Supplying nonempty SKILL `pageIds` is
+rejected with 422; older stored page-opening previews require a fresh preview.
 
 Future/running responses may contain live participant rows, but the importer
 discards those fields immediately. No live roster, gains, upstream update
@@ -37,10 +56,11 @@ effective opening start. Imports never enable the scheduling switch.
 Boss/activity mappings use current page IDs, including shared Wilderness boss
 pages, Dagannoth Kings, raid variants and the corrected clue taxonomy. Proposed
 pages are validated against active catalog pages and visible in the preview.
-Staff can correct them; changing pages requires an updated preview. Skills and
-ambiguous metrics such as collections logged require explicit page selections.
+Staff can correct them; changing pages requires an updated preview. Ambiguous
+ACTIVITY metrics such as collections logged require explicit page selections.
 No import silently opens all pages. Existing overlapping windows and the
 **any associated active page open** rule remain in force.
+These windows affect only the regular log; hardcore pages remain fully open.
 
 Re-importing a linked competition preserves the existing window and any staff
 edits. Deleting it leaves a persistent marker: importing again preserves the
@@ -48,7 +68,17 @@ deletion. Staff can create a manual replacement through Scheduling. Final
 results can be imported after the competition ends without recreating a window.
 If a metadata-only preview reaches the end before apply, the API returns 409;
 fetch a fresh preview containing final results. A future preview that becomes
-running can apply with an immediate opening start.
+running remains metadata-only for SKILL; ACTIVITY can apply with an immediate
+opening start. Successful receipt replay remains valid after expiry or the end
+boundary and never creates another window or credits XP twice.
+
+Older SKILL imports may already link to staff-edited opening windows. Metadata
+and finished-results refreshes preserve those windows and deletion markers;
+the preview warns staff to manage an existing window through Scheduling.
+Do not automatically unlink or delete them. Review the linked window and its
+audit history with staff before any intentional removal. This change needs no
+database migration: migration 014 already allows null schedule links and remains
+immutable.
 
 ## Finished results and public display
 
@@ -63,7 +93,7 @@ contribution. Negative XP corrections require acknowledgement.
 The homepage keeps its five collection-log tabs. The ACTIVITY viewer on the
 left lists stored metadata in descending source end order, with source ID
 descending as a stable tie-break. Smaller local start/end labels are red for
-finished, green for running and yellow for future, with a text status. UTC times
+finished, green for running and yellow for future. UTC times
 are available on each time label. Links open the canonical WOM page. The viewer
 advances status locally using the server clock offset and polls for new metadata.
 On narrow screens it sits above the log with a horizontally scrollable list.
@@ -82,11 +112,17 @@ Distinct overlapping competitions still count their reported XP independently.
 
 ## API and transactions
 
+Both import protocols use one reconciliation service. See
+[import reconciliation](import-reconciliation.md) for caller compatibility,
+locking, durable replay and private activity before/after evidence retention.
+
 `GET /api/v1/competitions/activities` returns `{serverNow,competitions}` with
 ACTIVITY metadata only. `GET /api/v1/xp/tracker` retains its single repeatable-read
 snapshot, revision and ETag, adding a Total `podium` and an event `podium`.
 
-`POST /api/v1/admin/competitions/preview` takes `{competitionUrl,kind,pageIds?}`.
+`POST /api/v1/admin/competitions/preview` takes `{competitionUrl,pageIds?}`.
+An optional legacy `kind` is checked against WOM metadata and a mismatch is
+rejected. Finished SKILL previews and applies are available to both staff roles.
 It returns a ten-minute actor-bound token, XP and schedule revisions, original
 dates, lifecycle, proposed/selected pages, effective start, exact action and
 filtered finished results when applicable.
@@ -98,8 +134,8 @@ and CSRF token. Apply checks the current role, clock, preview expiry and both
 revisions. Receipt retries survive expiry/restarts; changing a request under the
 same key returns 409. Every import is audited, including unchanged imports.
 
-The established legacy XP routes remain administrator-only, require an explicit
-`kind: "SKILL"` preview field, accept finished results only and write the same
+The established legacy XP routes are also available to both staff roles, accept an optional
+checked `kind: "SKILL"` preview hint, accept finished results only and write the same
 registry identity. The shared form uses the new routes. Schedule enforcement
 and audit lock ordering are unchanged: scheduling settings precede XP state,
 competition identity and page locks. Results, metadata, schedules, revisions,

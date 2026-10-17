@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "baselineRevision": "22db88c9cb7c42beac66e750ce5b0abbe5f7c3fb",
+  "candidate": "REVIEW-03/R10 #101; exact final gate revision is recorded in result.json",
+  "environment": "Linux Node 24 / Playwright 1.62.1 Chromium; built Vite frontend with fixture API responses",
+  "samplesPerCase": 1,
+  "notes": [
+    "Same harness and independent fresh browser context for each run.",
+    "Session and catalog responses each delayed by 400ms; script responses are local.",
+    "Timings are observations, not pass/fail latency budgets.",
+    "Code/data overlap and cancellation/failure behavior are separate deterministic browser assertions."
+  ],
+  "before": {
+    "publicScripts": [
+      {
+        "path": "/assets/index-Bsn7FFZF.js",
+        "bytes": 437533,
+        "gzip": 129733
+      }
+    ],
+    "publicBytes": 437533,
+    "publicGzipBytes": 129733,
+    "publicReadyMs": 594,
+    "coldAdminReadyMs": 1148,
+    "warmAccountReadyMs": 111,
+    "warmCatalogReadyMs": 903,
+    "controlledDelayMs": {
+      "session": 400,
+      "catalog": 400
+    }
+  },
+  "after": {
+    "publicScripts": [
+      {
+        "path": "/assets/index-LGxglcHC.js",
+        "bytes": 301993,
+        "gzip": 93982
+      }
+    ],
+    "publicBytes": 301993,
+    "publicGzipBytes": 93982,
+    "publicReadyMs": 562,
+    "coldAdminReadyMs": 1166,
+    "warmAccountReadyMs": 104,
+    "warmCatalogReadyMs": 934,
+    "controlledDelayMs": {
+      "session": 400,
+      "catalog": 400
+    }
+  },
+  "reductionPercent": {
+    "publicBytes": 30.98,
+    "publicGzipBytes": 27.56
+  }
+}

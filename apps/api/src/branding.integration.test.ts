@@ -33,6 +33,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const app = createApp(undefined, undefined, {
       store: backend,
@@ -70,7 +71,7 @@ test(
           'x-csrf-token': result.json().csrfToken as string,
         };
       };
-      const setup = await login('admin', 'admin');
+      const setup = await login('admin', auth.bootstrapPassword);
       const admin = (await backend.accountByUsername('admin'))!;
       const svg = Buffer.from(
         '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="20"><rect width="10" height="20" fill="red"/></svg>',
@@ -176,7 +177,9 @@ test(
       assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 409]);
       const saved = results.find((r) => r.statusCode === 200)!.json();
       assert.deepEqual((await app.inject('/api/v1/branding')).json(), saved);
-      assert.equal((await readdir(directory)).length, 2);
+      // Both uploads retain their logo/favicon files; only one is committed.
+      // Reference-checked maintenance handles the losing upload later.
+      assert.equal((await readdir(directory)).length, 4);
       const logo = await app.inject(saved.logoPath),
         icon = await app.inject(saved.faviconPath);
       assert.equal(logo.statusCode, 200);

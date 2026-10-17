@@ -1,6 +1,6 @@
 # Complete catalog import (CAT-01)
 
-CAT-01 supplies the first production catalog: **1,717 canonical items, 124 pages, 1,864 ordered slots and five categories**, captured on 8 October 2026. It imports no collection credits. The 260-item frontend preview remains an explicitly labelled fixture with unrelated IDs.
+CAT-01 supplies the first production catalog: **1,717 canonical items, 124 pages, 1,864 ordered slots and five categories**, captured on 8 October 2026. It imports no collection credits. The 260-item browser test catalog has unrelated fixture IDs and is excluded from the public site.
 
 ## Source and coverage
 

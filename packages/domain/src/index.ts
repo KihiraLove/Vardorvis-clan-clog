@@ -1,5 +1,6 @@
 /** Pure collection-log rules shared by the browser and future service handlers. */
 export * from './competitions.js';
+export * from './skills.js';
 export interface CatalogItem {
   id: number;
   name: string;
@@ -168,3 +169,16 @@ export {
   type CollectionSchedule,
   type SchedulingState,
 } from './scheduling.js';
+export { WorkBudget, WorkloadError, type WorkLimit } from './work-budget.js';
+export {
+  parseSubmissionFilters,
+  type SubmissionFilters,
+} from './submission-filters.js';
+export {
+  OperationalDiagnostics,
+  WorkDrain,
+  withinDeadline,
+  safeFailure,
+  safeCorrelation,
+  type ErrorCategory,
+} from './operations.js';

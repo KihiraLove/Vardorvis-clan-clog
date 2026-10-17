@@ -2,8 +2,10 @@
 import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError, type AdminIdentity } from './types.js';
-import { assetIdPattern, IconStorage, MAX_ICON_BYTES } from './icon-storage.js';
-import { PgCatalogStore, type NewItem, type NewPage } from './catalog-store.js';
+import { assetIdPattern, MAX_ICON_BYTES } from './icon-storage.js';
+import type { NewItem, NewPage } from './catalog-store.js';
+import type { CatalogRouteStore, IconFiles } from './route-services.js';
+import { catalogEditorRoutes } from './catalog-editor-routes.js';
 export type RequireAdmin = (
   request: FastifyRequest,
   write?: boolean,
@@ -22,18 +24,20 @@ const revision = {
 };
 const category = {
   type: 'string',
-  enum: ['bosses', 'raids', 'clues', 'minigames', 'other'],
+  minLength: 1,
+  maxLength: 200,
 };
 export function catalogRoutes(
   app: FastifyInstance,
-  store: PgCatalogStore,
-  icons: IconStorage,
+  store: CatalogRouteStore,
+  icons: IconFiles,
   authorize?: RequireAdmin,
 ) {
   const admin = async (request: FastifyRequest, write = false) => {
     if (!authorize) throw new ApiError(503, 'Admin sign-in is not configured.');
     return authorize(request, write);
   };
+  catalogEditorRoutes(app, store, icons, admin);
   app.get<{ Params: { id: string } }>(
     '/api/v1/catalog/icons/:id.png',
     async (request, reply) => {
@@ -89,12 +93,9 @@ export function catalogRoutes(
         }
         if (!input) throw new ApiError(400, 'Choose an icon.');
         const record = await icons.save(input, mime);
-        try {
-          return reply.code(201).send(await store.stage(record, actor.id));
-        } catch (error) {
-          await icons.remove(record.id);
-          throw error;
-        }
+        // A lost commit acknowledgement is not proof of non-persistence.
+        // Offline, reference-checked maintenance reclaims abandoned files.
+        return reply.code(201).send(await store.stage(record, actor.id));
       },
     );
   });
@@ -227,8 +228,9 @@ export function catalogRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['name', 'iconAssetId', 'pageIds'],
+          required: ['name', 'iconAssetId', 'pageIds', 'gameItemIds'],
           properties: {
+            gameItemIds: { ...ids, minItems: 1, maxItems: 100 },
             name: { type: 'string', minLength: 1, maxLength: 200 },
             iconAssetId: uuid,
             pageIds: {

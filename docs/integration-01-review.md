@@ -1,3 +1,7 @@
+> **16 October 2026:** Frontend demo mode and its public assets have been removed. Any demo URLs or controls documented below are historical; current pages require the API. See [frontend loading](frontend-loading.md).
+
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 > **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](site-customization.md). Earlier visual notes below are historical.
 
 # INTEGRATION-01 implementation and review log

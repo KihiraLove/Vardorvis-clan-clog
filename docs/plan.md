@@ -1,3 +1,7 @@
+> **16 October 2026:** Frontend demo mode and its public assets have been removed. Any demo URLs or controls documented below are historical; current pages require the API. See [frontend loading](frontend-loading.md).
+
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 # Development plan
 
 The repository foundation is delivered first: workspace/build scaffolds, initial schema/migrations, shared invariants, docs, PR validation, private image publishing and an opt-in deployment workflow. The finished website and live bot are the implementation work below.

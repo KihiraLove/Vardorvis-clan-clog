@@ -136,7 +136,7 @@ test(
       assert.equal(
         (await app.inject({ url: '/api/v1/admin/clan-api-key', headers }))
           .statusCode,
-        403,
+        503, // Moderators may read it, but this fixture has no key storage.
       );
       const concurrent = await Promise.all([create(fields), create(fields)]);
       assert.ok(
@@ -228,16 +228,16 @@ test(
       await pool.query('DROP TRIGGER fail_page_audit ON catalog_audit');
       const removed = await remove('a');
       assert.equal(removed.statusCode, 200, removed.body);
-      assert.deepEqual(removed.json().retiredItemIds, [1]);
+      assert.deepEqual(removed.json().retiredItemIds, []);
       assert.deepEqual(
         (await current()).items.map((item) => item.id),
-        [2],
+        [1, 2],
       );
       const publicCatalog = await store.catalog();
       assert.ok(!publicCatalog.pages.some((page) => page.id === 'a'));
       assert.deepEqual(
         publicCatalog.items.map((item) => item.id),
-        [2],
+        [1, 2],
       );
       assert.equal(
         (
@@ -260,13 +260,16 @@ test(
       assert.deepEqual((await create(fields)).json(), receipt);
       assert.deepEqual(
         (await current()).items.map((item) => item.id),
-        [2],
+        [1, 2],
       );
       await remove('b');
       await remove('c');
       assert.deepEqual((await current()).pages, []);
       assert.deepEqual((await store.catalog()).pages, []);
-      assert.deepEqual((await store.catalog()).items, []);
+      assert.deepEqual(
+        (await store.catalog()).items.map((item) => item.id),
+        [1, 2],
+      );
       const empty = await create(
         {
           name: 'Empty page',
@@ -278,6 +281,126 @@ test(
       );
       assert.equal(empty.statusCode, 201, empty.body);
       assert.deepEqual(empty.json().page.itemIds, []);
+      // Staff-managed sections are durable, ordered taxonomy shared with the public log.
+      const beforeSections = await app.inject('/api/v1/catalog');
+      const createSection = async (
+        name: string,
+        key = 'section-create-request',
+      ) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/v1/admin/catalog/sections',
+          headers: { ...headers, 'idempotency-key': key },
+          payload: { name, expectedRevision: (await current()).revision },
+        });
+      const sectionResults = await Promise.all([
+        createSection('Clan trophies'),
+        createSection('Clan trophies'),
+      ]);
+      assert.ok(
+        sectionResults.every((result) => result.statusCode === 201),
+        sectionResults.map((result) => result.body).join('\n'),
+      );
+      assert.deepEqual(sectionResults[0]!.json(), sectionResults[1]!.json());
+      const section = sectionResults[0]!.json().section as {
+        id: string;
+        name: string;
+      };
+      const sectionWrite = async (method: 'PATCH' | 'DELETE', name?: string) =>
+        app.inject({
+          method,
+          url: '/api/v1/admin/catalog/sections/' + section.id,
+          headers,
+          payload: {
+            expectedRevision: (await current()).revision,
+            ...(name ? { name } : {}),
+          },
+        });
+      const renamed = await sectionWrite('PATCH', 'Clan events');
+      assert.equal(renamed.statusCode, 200, renamed.body);
+      const projected = await app.inject({
+        url: '/api/v1/catalog',
+        headers: { 'if-none-match': beforeSections.headers.etag! },
+      });
+      assert.equal(projected.statusCode, 200);
+      assert.ok(
+        projected
+          .json()
+          .sections.some(
+            (s: { id: string; name: string }) =>
+              s.id === section.id && s.name === 'Clan events',
+          ),
+      );
+      const pageAdded = await create(
+        {
+          name: 'Event drops',
+          category: section.id,
+          itemIds: [],
+          expectedRevision: (await current()).revision,
+        },
+        'section-page-request',
+      );
+      assert.equal(pageAdded.statusCode, 201, pageAdded.body);
+      const newPage = pageAdded.json().page as AdminCatalog['pages'][number];
+      assert.equal((await sectionWrite('DELETE')).statusCode, 409);
+      const renamePage = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/admin/catalog/pages/' + newPage.id,
+        headers,
+        payload: {
+          name: 'Event loot',
+          expectedRevision: (await current()).revision,
+        },
+      });
+      assert.equal(renamePage.statusCode, 200, renamePage.body);
+      assert.equal(
+        (await current()).pages.find((page) => page.id === newPage.id)!.name,
+        'Event loot',
+      );
+      const attach = await app.inject({
+        method: 'PUT',
+        url: `/api/v1/admin/catalog/pages/${newPage.id}/items/1`,
+        headers,
+        payload: { expectedRevision: (await current()).revision },
+      });
+      assert.equal(attach.statusCode, 200, attach.body);
+      assert.deepEqual(
+        (await current()).pages.find((page) => page.id === newPage.id)!.itemIds,
+        [1],
+      );
+      const snapshot = await current(),
+        ids = snapshot.sections.map((s) => s.id).reverse();
+      const reorderSections = async (
+        orderedSectionIds: string[],
+        expectedRevision = snapshot.revision,
+      ) =>
+        app.inject({
+          method: 'PUT',
+          url: '/api/v1/admin/catalog/sections/order',
+          headers,
+          payload: { orderedSectionIds, expectedRevision },
+        });
+      assert.equal((await reorderSections(ids.slice(1))).statusCode, 400);
+      const competingOrders = await Promise.all([
+        reorderSections(ids),
+        reorderSections(ids),
+      ]);
+      assert.deepEqual(
+        competingOrders.map((result) => result.statusCode).sort(),
+        [200, 409],
+      );
+      assert.deepEqual(
+        (await current()).sections.map((s) => s.id),
+        ids,
+      );
+      await remove(newPage.id);
+      assert.ok((await current()).items.some((item) => item.id === 1));
+      assert.equal((await sectionWrite('DELETE')).statusCode, 200);
+      assert.ok(!(await current()).sections.some((s) => s.id === section.id));
+      assert.equal(
+        (await createSection('Clan trophies')).json().section.id,
+        section.id,
+      );
       assert.ok(
         (
           await pool.query('SELECT actor_discord_id FROM catalog_audit')

@@ -96,12 +96,17 @@ test('private reads use same-origin/no-store, native fetch receiver and encoded 
   await client.catalog(signal());
   await client.queue('unmatched', 'cursor/:?one', signal());
   await client.detail('opaque/id?one', signal());
+  await client.detail('opaque/id?one', signal(), 'audit/:?cursor');
   const params = new URL('https://example.test' + paths[1]).searchParams;
   assert.equal(params.get('status'), 'pending');
   assert.equal(params.get('unmatched'), 'true');
   assert.equal(params.get('cursor'), 'cursor/:?one');
   assert.equal(params.get('limit'), '20');
   assert.ok(paths[2]!.endsWith('/opaque%2Fid%3Fone'));
+  assert.equal(
+    new URL('https://example.test' + paths[3]).searchParams.get('cursor'),
+    'audit/:?cursor',
+  );
 });
 
 test('correction and review writes carry CSRF/versions and never caller-provided actors or credits', async () => {
@@ -180,6 +185,7 @@ test('icon staging uses multipart, and item retries retain the same idempotency 
   const asset = await client.upload(file, 'csrf', signal());
   const fields = {
     name: 'Future drop',
+    gameItemIds: [900001],
     iconAssetId: asset.assetId,
     pageIds: [fixture.catalog.pages[0]!.id],
   };
@@ -475,4 +481,49 @@ test('manual PNG uploads use multipart with CSRF and a stable retry key', async 
     file,
   );
   assert.equal(result.screenshotPath, path);
+});
+
+test('note-only PATCH has its own versioned CSRF contract and validates the saved note receipt', async () => {
+  const f = await adminFixtures();
+  const original = f.detail.submission;
+  let attempts = 0;
+  const client = new LiveAdminClient(async (url, options) => {
+    attempts++;
+    assert.equal(
+      url,
+      '/api/v1/admin/submissions/' + encodeURIComponent(original.id) + '/note',
+    );
+    assert.equal(options?.method, 'PATCH');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      expectedVersion: original.version,
+      note: '  A saved note  ',
+    });
+    return Response.json({
+      ...original,
+      version: attempts === 1 ? original.version + 1 : original.version,
+      reviewNote: attempts === 1 ? 'A saved note' : 'different',
+    });
+  });
+  const result = await client.saveReviewNote(
+    original.id,
+    original.version,
+    '  A saved note  ',
+    'csrf',
+    signal(),
+  );
+  assert.equal(result.reviewNote, 'A saved note');
+  await assert.rejects(
+    client.saveReviewNote(
+      original.id,
+      original.version,
+      '  A saved note  ',
+      'csrf',
+      signal(),
+    ),
+    /Unexpected review note receipt/u,
+  );
 });

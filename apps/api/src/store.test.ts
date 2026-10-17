@@ -9,7 +9,7 @@ import { PgStore } from './store.js';
 import { createApp } from './app.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 test(
-  'PostgreSQL public projections, atomic settings/audit and durable auth state',
+  'PostgreSQL public projections, atomic settings/audit and durable password sessions',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const connectionString = process.env.TEST_DATABASE_URL!;
@@ -122,19 +122,6 @@ test(
       assert.deepEqual(await store.settings(), saved);
       const restarted = new PgStore(pool);
       assert.deepEqual(await restarted.settings(), saved);
-      const state = hash('state');
-      await store.createState(state, new Date(Date.now() + 60000));
-      assert.deepEqual(
-        (
-          await Promise.all([
-            store.consumeState(state),
-            store.consumeState(state),
-          ])
-        ).sort(),
-        [false, true],
-      );
-      await store.createState(hash('expired'), new Date(0));
-      assert.equal(await store.consumeState(hash('expired')), false);
       await store.ensureDefaultAdmin('test-only-verifier');
       const account = (await store.accountByUsername('admin'))!;
       const identity = {

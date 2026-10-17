@@ -13,16 +13,62 @@ receives only its own database URL. Neither database secret is built into web
 assets. The role provisioning is idempotent and runs **after** migrations and
 source/taxonomy import; it revalidates permissions after future migrations.
 
-The role has schema USAGE (not CREATE), SELECT on public views, DML only on
-application tables, and necessary sequence usage. It may **read**
-`catalog_versions` for the authenticated catalog view but cannot change it;
-`schema_migrations` and `catalog_taxonomy_updates` remain owner-only.
-Audit tables (`audit_events`, `site_settings_audit`, `catalog_audit`,
-`xp_import_history`) receive **SELECT and INSERT only**. No UPDATE, DELETE,
-TRUNCATE, ALTER or role-creation grants are given. Future audit tables must
-be added to the reviewed allowlist before grant reconciliation; new tables
-have no automatic default grants. SQL owner/migration access must never be
-exposed to the API service or publicly through Traefik.
+The application requires a **dedicated database**. Provisioning removes PUBLIC
+access to its public schema, tables, sequences and routines, and PUBLIC database
+CREATE/TEMPORARY rights. It also clears global/public-schema default grants from
+the bootstrap owner and existing default-ACL grantors. These changes affect
+other logins using PUBLIC privileges; do not run this bootstrap in a shared
+database. The bootstrap owner must have authority to reconcile those grants
+and runtime role memberships.
+
+[The runtime policy](../packages/database/src/runtime-role.ts) names every
+permitted public table, view and sequence. Unknown objects receive no access.
+Only `collection_credits` and `item_collection_state` are readable views;
+`catalog_versions` and `item_aliases` are read-only tables. Migration and
+taxonomy ledgers remain owner-only. Mutable tables receive only the operations
+their API paths need, rather than blanket DML. Append-only audit/history and
+request receipts, including `catalog_requests`, permit **SELECT and INSERT**
+but reject UPDATE, DELETE and TRUNCATE. Audit sequences cannot be reset; the
+canonical item sequence retains UPDATE for catalog allocation's `setval`.
+
+Reconciliation removes direct grants, column grants and inherited role access,
+then verifies the complete effective privilege matrix before committing.
+The runtime cannot create schemas, public objects, temporary tables or roles,
+delegate grants, bypass row security, or directly call public routines. Trigger
+writes still run with the intended table permissions. New objects must have
+an explicit reviewed policy before the API uses them; missing or incompatible
+required objects abort provisioning. Existing checksummed SQL migrations stay
+unchanged.
+
+If `clog_runtime` owns the database or a public schema object, provisioning
+fails: ownership rights cannot be removed by REVOKE. Repair ownership with the
+migration owner under the normal backup/deployment procedure, then retry.
+Any reconciliation failure rolls back the password and privilege changes.
+SQL owner/migration access must never be exposed to the API service or publicly
+through Traefik.
+
+## Database connection failures (#66 / REVIEW-02 B04)
+
+The production API consumes PostgreSQL's asynchronous idle-client `error`
+events instead of allowing Node to terminate. These errors are categorized
+using a fixed allowlist of connection/termination codes and logged without
+driver error objects, connection strings, SQL statements or parameters.
+
+`GET /healthz` reports process liveness independently of PostgreSQL.
+`GET /readyz` performs fresh database checks on every request and responds
+with 503 when connections, reads or dependencies fail; when the database
+recovers, the pool establishes fresh connections and readiness recovers
+without an API restart. In-flight queries may fail with a sanitized 503.
+**No failed database write is automatically replayed**: a lost connection
+around a commit can leave the outcome uncertain. Clients must use the
+operation's original idempotency key/receipt reconciliation flow rather
+than issuing a new write blindly.
+
+Hosted integration coverage terminates both idle and blocked active
+PostgreSQL backends against the real API entry point, verifies readiness
+and clean signal shutdown, and restarts the Compose PostgreSQL service
+to confirm 503 → 200 recovery with the same API process. Database restart
+testing is isolated from production data.
 
 ## First deployment / migration
 
@@ -72,9 +118,10 @@ secrets from logs, source control, CI artifacts and command history.
 - Guild/endpoint rate budgets and WOM import throttling, with safe
   per-source error behavior.
 - Production hostname/TLS, ARM/AMD64 host, session/cookie and restart drills.
-- Coordinated isolated recovery test including XP/audit tables and durable
-  uploaded icon assets. The existing backup script includes the whole DB
-  and icon volume; restoring and verifying them is a separate gate.
+- The [automated isolated recovery job](release-recovery.md) now restores the
+  complete database, uploaded icons/logos, private screenshots and encryption root,
+  and checks state, role grants, credentials, schema failure and compatible rollback.
+  Off-host transport, production cutover and actual host recovery remain separate gates.
 
 Do not close #11 solely from CI; Docker smoke tests cover container security
 and grants, not a running home-host deployment.

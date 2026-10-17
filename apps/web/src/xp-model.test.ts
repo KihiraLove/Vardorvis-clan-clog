@@ -8,15 +8,103 @@ import {
   exactXp,
   millionXp,
   parseChanges,
+  parseImportHistory,
   parseCompetition,
   parseParticipants,
   skills,
   timestamp,
 } from './xp-model.ts';
-import { PreviewXpClient } from './preview/xp.ts';
+import { MemoryXpClient } from '../tests/support/xp.ts';
 
 const signal = () => new AbortController().signal;
 const url = (id: number) => 'https://wiseoldman.net/competitions/' + id;
+
+test('fixture XP history pages include unchanged receipts, bind appends and preserve exact validated evidence', async () => {
+  const client = new MemoryXpClient();
+  for (let n = 0; n < 25; n++) {
+    const preview = await client.preview(url(1001), 'test-only', signal());
+    await client.apply(preview, 'test-only', 'history-' + n, signal());
+  }
+  const first = parseImportHistory(await client.history(signal()));
+  const second = parseImportHistory(
+    await client.history(signal(), first.nextCursor!),
+  );
+  assert.equal(first.imports.length, 20);
+  assert.equal(second.imports.length, 5);
+  assert.equal(second.nextCursor, null);
+  assert.equal(
+    new Set([...first.imports, ...second.imports].map((row) => row.id)).size,
+    25,
+  );
+  assert.ok(first.imports.every((row) => row.outcome === 'unchanged'));
+  assert.equal(second.imports.at(-1)!.outcome, 'applied');
+  assert.deepEqual(await client.history(signal(), first.pageCursor), first);
+  const preview = await client.preview(url(1001), 'test-only', signal());
+  await client.apply(preview, 'test-only', 'history-new', signal());
+  await assert.rejects(client.history(signal(), first.pageCursor), {
+    status: 409,
+  });
+  const value = {
+    ...first,
+    imports: [
+      {
+        ...first.imports[0]!,
+        changes: [
+          {
+            skill: 'attack',
+            before: '9007199254740993',
+            after: '9007199254740994',
+            change: '1',
+          },
+        ],
+      },
+    ],
+  };
+  assert.equal(
+    parseImportHistory(value).imports[0]!.changes[0]!.before,
+    '9007199254740993',
+  );
+  assert.throws(
+    () =>
+      parseImportHistory({
+        ...value,
+        imports: [...value.imports, ...value.imports],
+      }),
+    /Duplicate/,
+  );
+  assert.throws(
+    () =>
+      parseImportHistory({
+        ...first,
+        imports: [...first.imports, ...second.imports],
+      }),
+    /size/,
+  );
+  assert.throws(
+    () => parseImportHistory({ ...value, nextCursor: undefined }),
+    /text/,
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(client.history(controller.signal), {
+    name: 'AbortError',
+  });
+  await assert.rejects(new MemoryXpClient(async () => null).history(signal()), {
+    status: 401,
+  });
+  assert.deepEqual(
+    (
+      await new MemoryXpClient(async () => ({
+        csrfToken: 'test',
+        displayName: 'Staff',
+        username: 'staff',
+        role: 'moderator',
+        mustChangePassword: false,
+      })).history(signal())
+    ).imports,
+    [],
+  );
+});
 
 test('million labels never round above recorded XP, and hover values retain integer precision', () => {
   assert.equal(millionXp('0'), '0.00m');
@@ -107,36 +195,36 @@ test('payloads reject fractional/negative XP, impossible dates, duplicate identi
 });
 
 test('preview imports add each contribution once; unchanged and incremental refreshes reconcile the same competition', async () => {
-  const client = new PreviewXpClient();
+  const client = new MemoryXpClient();
   assert.ok(
     Object.values(
       (await client.load('attack', undefined, signal())).overview.totals,
     ).every((xp) => xp === '0'),
   );
-  const first = await client.preview(url(1001), 'preview-only', signal());
+  const first = await client.preview(url(1001), 'test-only', signal());
   assert.equal(first.participants.length, 4);
   assert.equal(first.participants[2]!.gains.attack, '0');
   assert.equal(first.participants[3]!.gains.attack, null);
   const applied = await client.apply(
     first,
-    'preview-only',
+    'test-only',
     'request-one',
     signal(),
   );
   assert.equal(applied.outcome, 'applied');
   assert.deepEqual(
-    await client.apply(first, 'preview-only', 'request-one', signal()),
+    await client.apply(first, 'test-only', 'request-one', signal()),
     applied,
   );
-  const unchanged = await client.preview(url(1001), 'preview-only', signal());
+  const unchanged = await client.preview(url(1001), 'test-only', signal());
   assert.equal(unchanged.changes[0]!.change, '0');
   assert.equal(
-    (await client.apply(unchanged, 'preview-only', 'request-two', signal()))
+    (await client.apply(unchanged, 'test-only', 'request-two', signal()))
       .outcome,
     'unchanged',
   );
   client.advance();
-  const next = await client.preview(url(1001), 'preview-only', signal());
+  const next = await client.preview(url(1001), 'test-only', signal());
   assert.deepEqual(next.changes[0], {
     skill: 'attack',
     before: '18345678',
@@ -148,21 +236,21 @@ test('preview imports add each contribution once; unchanged and incremental refr
     '18345678',
     'previewing never grants credit',
   );
-  await client.apply(next, 'preview-only', 'request-three', signal());
+  await client.apply(next, 'test-only', 'request-three', signal());
   const result = await client.load('attack', 1001, signal());
   assert.equal(result.overview.totals.attack, '19595678');
   assert.equal(result.members.find((m) => m.playerId === 1)!.xp, '13595678');
   assert.equal(result.members.find((m) => m.playerId === 3)!.xp, '0');
   assert.equal(result.members.find((m) => m.playerId === 4)!.xp, null);
   assert.equal(
-    (await client.history()).length,
+    (await client.history()).imports.length,
     3,
     'idempotent retry adds no second history entry',
   );
 });
 
 test('multi-skill imports accumulate independently, and repeat sample setup adds no duplicate XP', async () => {
-  const client = new PreviewXpClient();
+  const client = new MemoryXpClient();
   await client.samples();
   await client.samples();
   const snapshot = await client.load('sailing', undefined, signal());
@@ -182,25 +270,25 @@ test('multi-skill imports accumulate independently, and repeat sample setup adds
   assert.equal(snapshot.overview.totals.mining, '0');
 });
 
-test('stale/expired previews and conflicting request retries cannot write the preview ledger', async () => {
-  const client = new PreviewXpClient();
-  const stale = await client.preview(url(1001), 'preview-only', signal());
-  const current = await client.preview(url(1002), 'preview-only', signal());
-  await client.apply(current, 'preview-only', 'request-one', signal());
+test('stale/expired previews and conflicting request retries cannot write the fixture ledger', async () => {
+  const client = new MemoryXpClient();
+  const stale = await client.preview(url(1001), 'test-only', signal());
+  const current = await client.preview(url(1002), 'test-only', signal());
+  await client.apply(current, 'test-only', 'request-one', signal());
   await assert.rejects(
-    client.apply(stale, 'preview-only', 'request-two', signal()),
+    client.apply(stale, 'test-only', 'request-two', signal()),
     { status: 409 },
   );
   await assert.rejects(
-    client.apply(stale, 'preview-only', 'request-one', signal()),
+    client.apply(stale, 'test-only', 'request-one', signal()),
     { status: 409 },
   );
-  const fresh = await client.preview(url(1001), 'preview-only', signal());
+  const fresh = await client.preview(url(1001), 'test-only', signal());
   const originalNow = Date.now;
   try {
     Date.now = () => originalNow() + 600000;
     await assert.rejects(
-      client.apply(fresh, 'preview-only', 'expired', signal()),
+      client.apply(fresh, 'test-only', 'expired', signal()),
       { status: 409 },
     );
   } finally {

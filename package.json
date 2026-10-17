@@ -16,6 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
+    "test:all": "node scripts/check-local.mjs",
+    "test:tools": "node --test scripts/*.test.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "validate": "npm run format:check && npm run lint && npm run build && npm run catalog:check && npm run typecheck && npm test && npm run check:docs",
     "db:migrate": "npm run migrate -w @clog/database",
@@ -25,7 +27,8 @@
     "catalog:check": "node packages/database/dist/catalog-build.js --check",
     "catalog:import": "node packages/database/dist/catalog-import.js",
     "catalog:correct-clues": "node packages/database/dist/clue-taxonomy.js",
-    "catalog:assets": "node scripts/catalog-assets.mjs"
+    "catalog:assets": "node scripts/catalog-assets.mjs",
+    "build:runtime": "npm run build:runtime -w @clog/domain && npm run build:runtime -w @clog/database && npm run build:runtime -w @clog/api && npm run build:runtime -w @clog/bot && npm run build -w @clog/web"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,14 @@
+# Recovery clones have private networks/volumes, no ports and no Discord login.
+services:
+  db:
+    restart: 'no'
+  migrate:
+    restart: 'no'
+  app:
+    restart: 'no'
+    ports: !reset []
+    environment:
+      BOT_ENABLED: 'false'
+      BOT_API_TOKEN: ''
+      DISCORD_BOT_TOKEN: ''
+      DISCORD_GUILD_ID: ''

@@ -1,11 +1,10 @@
 /** Coordinate one catalog snapshot shared by item creation and per-page order editing. */
 import { useEffect, useState } from 'react';
-import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { ItemCreator } from './ItemCreator.tsx';
-import { PageOrderEditor } from './PageOrderEditor.tsx';
-import { PageManagement } from './PageManagement.tsx';
+import { CatalogLogEditor } from './CatalogLogEditor.tsx';
+import { usePreparedAdminData } from './admin-route-data.ts';
 
 export function AdminCatalogPage({
   client,
@@ -16,11 +15,13 @@ export function AdminCatalogPage({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [catalog, setCatalog] = useState<AdminCatalog>(),
+  const initial = usePreparedAdminData()?.catalog;
+  const [catalog, setCatalog] = useState<AdminCatalog | undefined>(initial),
     [readError, setReadError] = useState<string>();
-  const [loading, setLoading] = useState(true),
+  const [loading, setLoading] = useState(!initial),
     [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {
+    if (initial && refreshKey === 0) return;
     let active = true;
     const controller = new AbortController(),
       timer = window.setTimeout(() => controller.abort(), 10000);
@@ -33,11 +34,7 @@ export function AdminCatalogPage({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setReadError(
             'Catalog could not be loaded. The last successful snapshot is preserved.',
@@ -76,29 +73,13 @@ export function AdminCatalogPage({
         </section>
       )}
       {catalog && (
-        <div className="catalog-editor-layout">
-          <ItemCreator
-            client={client}
-            catalog={catalog}
-            session={session}
-            onAccessLost={onAccessLost}
-            refresh={refresh}
-          />
-          <PageOrderEditor
-            client={client}
-            catalog={catalog}
-            session={session}
-            onAccessLost={onAccessLost}
-            refresh={refresh}
-          />
-          <PageManagement
-            client={client}
-            catalog={catalog}
-            session={session}
-            onAccessLost={onAccessLost}
-            refresh={refresh}
-          />
-        </div>
+        <CatalogLogEditor
+          client={client}
+          catalog={catalog}
+          session={session}
+          onAccessLost={onAccessLost}
+          refresh={refresh}
+        />
       )}
     </>
   );

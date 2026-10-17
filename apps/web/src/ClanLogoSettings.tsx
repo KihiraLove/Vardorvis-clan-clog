@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import {
   defaultBranding,
   validateLogoFile,
@@ -8,6 +8,7 @@ import {
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 export function ClanLogoSettings({
   client,
   session,
@@ -21,13 +22,16 @@ export function ClanLogoSettings({
   onSaved: (branding: Branding) => void;
   hardcore?: boolean;
 }) {
-  const [saved, setSaved] = useState<Branding>();
+  const initial = usePreparedAdminData()?.branding;
+  const [saved, setSaved] = useState<Branding | undefined>(initial);
   const [file, setFile] = useState<File>();
   const [readError, setReadError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [inputVersion, setInputVersion] = useState(0);
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(!!file, action.busy);
   useEffect(() => {
+    if (initial && refresh === 0) return;
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
@@ -40,11 +44,7 @@ export function ClanLogoSettings({
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else setReadError(true);
       })
       .finally(() => clearTimeout(timeout));
@@ -89,10 +89,8 @@ export function ClanLogoSettings({
     <div className="clan-logo-settings">
       <h3>Clan logo</h3>
       <p>
-        Upload a JPEG, PNG, GIF, WebP, SVG, AVIF or TIFF image up to 10 MiB. GIF
-        and animated WebP logos animate; the website icon uses the first frame.
-        Large images are resized to fit. Source images must be at most 8192
-        pixels per side, 300 frames and 64 megapixels across all frames.
+        JPEG, PNG, GIF, WebP, SVG, AVIF or TIFF up to 10MiB, maximum 8192x8193
+        pixels
       </p>
       {readError && (
         <p role="alert">

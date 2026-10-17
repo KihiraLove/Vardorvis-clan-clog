@@ -1,4 +1,4 @@
-/** Real staff permissions and scheduling gates across RuneLite, Discord and manual intake. */
+/** Public intake obeys schedules; authorized staff can record manual claims afterward. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
@@ -19,7 +19,7 @@ import { PgRuneLiteSettingsStore } from './runelite-settings.js';
 import { hashPassword } from './passwords.js';
 
 test(
-  'scheduling is admin-enabled, staff-managed, overlapping and enforced atomically on every new intake',
+  'scheduling gates public intake atomically while staff manual claims can record closed-page achievements',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const connectionString = process.env.TEST_DATABASE_URL!;
@@ -42,6 +42,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const bot = { token: 'b'.repeat(64), guildId: '100000000000000001' };
     const app = createApp(
@@ -234,6 +235,7 @@ test(
         itemId = 1,
         key = randomUUID(),
         username = 'Collector',
+        hardcore = false,
       ) => {
         const boundary = 'schedule-boundary';
         return app.inject({
@@ -250,7 +252,8 @@ test(
               username,
               clanName: 'Clan name',
               itemId: String(900000 + itemId),
-              worldType: 'MEMBERS',
+              worldType: hardcore ? 'HARDCORE_MAIN' : 'MEMBERS',
+              chatMessage: `${username} received a collection log item.`,
             }).map(([name, value]) =>
               Buffer.from(
                 `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
@@ -265,7 +268,12 @@ test(
         });
       };
       const today = new Date(clock).toISOString().slice(0, 10);
-      const manual = (itemId = 1, key = randomUUID(), collectedOn = today) =>
+      const manual = (
+        itemId = 1,
+        key = randomUUID(),
+        collectedOn = today,
+        approve = false,
+      ) =>
         app.inject({
           method: 'POST',
           url: '/api/v1/admin/submissions',
@@ -275,12 +283,13 @@ test(
             collectorName: 'Staff Player',
             collectedOn,
             hardcore: false,
-            approve: false,
+            approve,
           },
         });
       const discord = (
         itemId: number | undefined = 1,
         id = String(interaction++),
+        hardcore = false,
       ) =>
         app.inject({
           method: 'POST',
@@ -294,7 +303,7 @@ test(
             ...(itemId ? { itemId } : {}),
             collectorName: 'Bot Player',
             proofUrl: 'https://imgur.com/proof',
-            hardcore: false,
+            hardcore,
           },
         });
       const runeKey = randomUUID(),
@@ -317,13 +326,21 @@ test(
         name.endsWith('.png'),
       ).length;
       for (const response of [
-        await runelite(),
-        await manual(),
-        await discord(),
-        await manual(1, randomUUID(), '2000-01-01'),
-        await runelite(4),
-        await discord(0),
-      ])
+        await runelite(1, randomUUID(), 'Closed Collector'),
+        await runelite(4, randomUUID(), 'Closed Unpaged Collector'),
+      ]) {
+        assert.equal(response.statusCode, 201, response.body);
+        assert.equal(response.json().status, 'rejected');
+        const detail = (
+          await app.inject({
+            url: '/api/v1/admin/submissions/' + response.json().submissionId,
+            headers: moderator,
+          })
+        ).json();
+        assert.match(detail.submission.reviewReason, /closed/u);
+        assert.equal(detail.audit[0].action, 'reject');
+      }
+      for (const response of [await discord(), await discord(0)])
         assert.equal(response.statusCode, 403, response.body);
       assert.deepEqual(
         (
@@ -331,12 +348,52 @@ test(
             'SELECT (SELECT count(*)::int FROM submissions) submissions,(SELECT count(*)::int FROM submission_images) images',
           )
         ).rows[0],
-        beforeCounts,
+        {
+          submissions: beforeCounts.submissions + 2,
+          images: beforeCounts.images + 2,
+        },
       );
       assert.equal(
         (await readdir(directory)).filter((name) => name.endsWith('.png'))
           .length,
-        filesBefore,
+        filesBefore + 2, // Rejected RuneLite submissions retain their proof.
+      );
+      // Closed regular pages and unpaged items stay open for hardcore intake.
+      for (const id of [1, 4]) {
+        const hcRune = await runelite(
+          id,
+          randomUUID(),
+          'HC Collector ' + id,
+          true,
+        );
+        assert.equal(hcRune.statusCode, 201, hcRune.body);
+        assert.equal(hcRune.json().hardcore, true);
+        const hcDiscord = await discord(id, String(interaction++), true);
+        assert.equal(hcDiscord.statusCode, 201, hcDiscord.body);
+        assert.equal(hcDiscord.json().hardcore, true);
+      }
+      assert.equal(
+        (await runelite(999, randomUUID(), 'HC Unknown', true)).statusCode,
+        422,
+      );
+      const unmatchedHC = await discord(0, String(interaction++), true);
+      assert.equal(unmatchedHC.statusCode, 201, unmatchedHC.body);
+      assert.equal(unmatchedHC.json().resolution, 'needs_match');
+      // Staff can backfill both current and historical achievements on closed pages.
+      const closedManual = await manual(1, randomUUID(), '2000-01-01');
+      assert.equal(closedManual.statusCode, 201, closedManual.body);
+      assert.equal((await manual()).statusCode, 201);
+      const approvedKey = randomUUID();
+      const closedApproval = await manual(2, approvedKey, '2000-01-01', true);
+      assert.equal(closedApproval.statusCode, 201, closedApproval.body);
+      assert.equal(closedApproval.json().status, 'approved');
+      assert.deepEqual(
+        (await manual(2, approvedKey, '2000-01-01', true)).json(),
+        closedApproval.json(),
+      );
+      assert.equal(
+        (await manual(2, randomUUID(), '2000-01-01', true)).statusCode,
+        409,
       );
       assert.deepEqual((await runelite(1, runeKey)).json(), initialRune.json());
       assert.deepEqual(
@@ -351,7 +408,8 @@ test(
         pageIds: ['page-a'],
       });
       const rl = await runeLiteSettings.settings();
-      const { revision, ...rules } = rl;
+      const { revision, clanKeyRequirement, ...rules } = rl;
+      assert.equal(clanKeyRequirement, undefined);
       await runeLiteSettings.update(
         {
           ...rules,
@@ -361,16 +419,15 @@ test(
         },
         admin.id,
       );
-      assert.equal(
-        (await runelite(2, randomUUID(), 'Trusted Player')).statusCode,
-        403,
-      );
+      const closedTrusted = await runelite(2, randomUUID(), 'Trusted Player');
+      assert.equal(closedTrusted.statusCode, 201, closedTrusted.body);
+      assert.equal(closedTrusted.json().status, 'rejected');
       assert.equal(
         (await runelite(1, randomUUID(), 'Trusted Player')).json().status,
         'approved',
       );
       assert.equal((await discord(3)).statusCode, 201); // Shared with a closed page, but A is open.
-      assert.equal((await manual(2)).statusCode, 403);
+      assert.equal((await manual(2)).statusCode, 201);
       const both = await create({
         title: 'Both pages',
         startsAt: ago,
@@ -404,7 +461,7 @@ test(
       assert.equal(restore.statusCode, 200, restore.body);
       state = restore.json();
       await pool.query("UPDATE pages SET active=false WHERE id='page-b'");
-      assert.equal((await manual(2)).statusCode, 403); // Inactive pages never open submissions.
+      assert.equal((await manual(2)).statusCode, 201); // Staff backfill requires an active item, independent of page windows.
       assert.equal(
         (
           await write('POST', path, {
@@ -416,7 +473,9 @@ test(
         422,
       );
       await pool.query("UPDATE pages SET active=true WHERE id='page-b'");
-      assert.equal((await runelite(4)).statusCode, 403);
+      const closedUnpaged = await runelite(4, randomUUID(), 'Still Closed');
+      assert.equal(closedUnpaged.statusCode, 201, closedUnpaged.body);
+      assert.equal(closedUnpaged.json().status, 'rejected');
       const stale = state.revision;
       const races = await Promise.all([
         write('POST', path, {

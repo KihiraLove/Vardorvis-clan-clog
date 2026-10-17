@@ -3,41 +3,62 @@ import { proofRoutes } from './proof-routes.js';
 import { runeLiteSettingsRoutes } from './runelite-settings-routes.js';
 import { schedulingRoutes } from './scheduling-routes.js';
 import { competitionRoutes } from './competition-routes.js';
+import { lifecycleRoutes } from './lifecycle-routes.js';
 import { brandingRoutes } from './branding-routes.js';
-import type { BrandingStorage } from './branding-storage.js';
 import type { BrandingStore } from './branding-store.js';
-import type { ProofStorage } from './proof-storage.js';
 import type { ProofStore } from './proof-store.js';
 import { checkReadiness } from './readiness.js';
-import { createHash } from 'node:crypto';
-import Fastify from 'fastify';
+import { createHash, randomUUID } from 'node:crypto';
+import Fastify, { LogController } from 'fastify';
 import { catalogRoutes } from './catalog-routes.js';
-import type { PgCatalogStore } from './catalog-store.js';
-import type { IconStorage } from './icon-storage.js';
+import type {
+  ApplicationStore,
+  CatalogService,
+  CompetitionService,
+  LifecycleReader,
+  IconFiles,
+  ProofFiles,
+  BrandingFiles,
+} from './route-services.js';
 import type { AuthConfig, BotConfig } from './config.js';
 import { botRoutes } from './intake.js';
 import { authRoutes } from './auth.js';
 import { xpPublicRoutes } from './xp-routes.js';
 import type { ReviewStore } from './review-types.js';
 import { fetchWomCompetition } from './wom.js';
+import { PreviewWork } from './preview-work.js';
+import { PasswordHasher } from './passwords.js';
+import {
+  WorkloadError,
+  WorkDrain,
+  OperationalDiagnostics,
+  safeFailure,
+} from '@clog/domain';
+import { trackHttpWork } from './runtime-work.js';
+import { matchesEtag } from './projection-cache.js';
 import type { XpStore } from './xp-types.js';
-import { ApiError, type BackendStore, type Settings } from './types.js';
+import { ApiError, type Settings } from './types.js';
 interface Options {
-  competitions?:
-    import('./competition-store.js').PgCompetitionStore | undefined;
+  work?: WorkDrain;
+  diagnostics?: OperationalDiagnostics;
+  poolMetrics?: () => { total: number; idle: number; waiting: number };
+  passwords?: PasswordHasher;
+  previews?: PreviewWork;
+  lifecycle?: LifecycleReader | undefined;
+  competitions?: CompetitionService | undefined;
   fetchCompetition?: typeof import('./competition-wom.js').fetchCompetition;
   scheduling?: import('./scheduling-store.js').SchedulingStore | undefined;
   runeLiteSettings?:
     import('./runelite-settings.js').RuneLiteSettingsStore | undefined;
   branding?: BrandingStore | undefined;
-  logos?: BrandingStorage | undefined;
+  logos?: BrandingFiles | undefined;
   clanKeys?: import('./clan-api-key.js').ClanKeyStore | undefined;
-  proofs?: ProofStorage | undefined;
+  proofs?: ProofFiles | undefined;
   proofStore?: ProofStore | undefined;
   checkBotReady?: (() => Promise<void>) | undefined;
-  catalog?: PgCatalogStore | undefined;
-  icons?: IconStorage | undefined;
-  store?: BackendStore | undefined;
+  catalog?: CatalogService | undefined;
+  icons?: IconFiles | undefined;
+  store?: ApplicationStore | undefined;
   auth?: AuthConfig | undefined;
   bot?: BotConfig | undefined;
   xp?: XpStore | undefined;
@@ -57,7 +78,11 @@ export function createApp(
   }),
   options: Options = {},
 ) {
+  const previews = options.previews ?? new PreviewWork();
+  const passwords = options.passwords ?? new PasswordHasher();
   const app = Fastify({
+    genReqId: () => randomUUID(),
+    logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 16 * 1024,
     requestTimeout: 15000,
     trustProxy: options.trustProxy ?? false,
@@ -73,14 +98,29 @@ export function createApp(
               'req.headers.cookie',
               'res.headers.set-cookie',
             ],
-            // OAuth code/state are in the query string; never use Fastify's default URL serializer.
+            // Query strings may contain private data; log operation/correlation only.
             serializers: {
-              req: (req: { method: string; url: string }) => ({
-                method: req.method,
-                path: req.url.split('?')[0],
+              req: () => ({ operation: 'http' }),
+              err: (error: unknown) => ({
+                type: 'OperationError',
+                message: 'Operation failed',
+                stack: '',
+                ...safeFailure(error),
               }),
             },
           },
+  });
+  const work = options.work ?? new WorkDrain();
+  const diagnostics =
+    options.diagnostics ??
+    new OperationalDiagnostics('api', (record) =>
+      app.log.info(record, 'Operation'),
+    );
+  trackHttpWork(app, work, diagnostics);
+  app.addHook('onClose', async () => {
+    await work.stop();
+    previews.budget.close();
+    await passwords.close();
   });
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Referrer-Policy', 'no-referrer');
@@ -95,27 +135,47 @@ export function createApp(
   });
   app.setErrorHandler((error, request, reply) => {
     const status =
-      error instanceof ApiError
-        ? error.status
-        : error instanceof Error && 'validation' in error
-          ? 400
-          : error instanceof Error &&
-              'statusCode' in error &&
-              typeof error.statusCode === 'number' &&
-              error.statusCode >= 400 &&
-              error.statusCode < 500
-            ? error.statusCode
-            : 503;
-    // Do not log driver/provider errors: they may contain SQL parameters or OAuth secrets.
-    if (status >= 500)
-      request.log.error(
-        { status, path: request.url.split('?')[0] },
-        'API operation failed',
+      error instanceof WorkloadError
+        ? 429
+        : error instanceof ApiError
+          ? error.status
+          : error instanceof Error && 'validation' in error
+            ? 400
+            : error instanceof Error &&
+                'statusCode' in error &&
+                typeof error.statusCode === 'number' &&
+                error.statusCode >= 400 &&
+                error.statusCode < 500
+              ? error.statusCode
+              : 503;
+    // Driver/provider errors may contain SQL parameters or credentials.
+    const fault = safeFailure(
+      error,
+      error instanceof ApiError ||
+        error instanceof WorkloadError ||
+        status < 500
+        ? status
+        : undefined,
+    );
+    diagnostics.record('failure', {
+      operation: 'http',
+      ...fault,
+      status,
+      correlation: request.id,
+    });
+    reply.header('X-Error-Category', fault.category);
+    if (status === 429)
+      reply.header(
+        'Retry-After',
+        String(
+          error instanceof WorkloadError || error instanceof ApiError
+            ? (error.retryAfterSeconds ?? 60)
+            : 60,
+        ),
       );
-    if (status === 429) reply.header('Retry-After', '60');
     return reply.code(status).send({
       error:
-        error instanceof ApiError
+        error instanceof ApiError || error instanceof WorkloadError
           ? error.message
           : status === 400
             ? 'Invalid request fields.'
@@ -128,17 +188,47 @@ export function createApp(
     reply.code(404).send({ error: 'Not found.' }),
   );
   app.get('/healthz', async () => ({ status: 'ok', service: 'api' }));
+  let wasReady: boolean | undefined;
   app.get('/readyz', async (_request, reply) => {
     try {
-      await checkReadiness(checkDatabase, options.checkBotReady);
+      if (work.snapshot().stopping) throw new Error('Draining');
+      await checkReadiness(checkDatabase);
+      if (wasReady !== true)
+        diagnostics.record('readiness', {
+          operation: 'readiness',
+          code: 'READY',
+        });
+      wasReady = true;
       return { status: 'ready' };
     } catch {
+      if (wasReady !== false)
+        diagnostics.record('readiness', {
+          operation: 'readiness',
+          code: 'NOT_READY',
+        });
+      wasReady = false;
       return reply.code(503).send({ status: 'not-ready' });
     }
   });
-  app.get('/api/v1/settings', async (_request, reply) => {
+  app.get('/api/v1/discord/status', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    return readSettings();
+    if (!options.checkBotReady) return { enabled: false, ready: false };
+    try {
+      await checkReadiness(options.checkBotReady);
+      return { enabled: true, ready: true };
+    } catch {
+      return reply.code(503).send({ enabled: true, ready: false });
+    }
+  });
+  app.get('/api/v1/settings', async (request, reply) => {
+    const value = await readSettings(),
+      etag = '"' + value.revision + '"';
+    reply
+      .header('Cache-Control', 'public, max-age=0, must-revalidate')
+      .header('ETag', etag);
+    if (matchesEtag(request.headers['if-none-match'], etag))
+      return reply.code(304).send();
+    return value;
   });
   const store = options.store;
   if (options.xp) xpPublicRoutes(app, options.xp);
@@ -146,6 +236,16 @@ export function createApp(
     app.get('/api/v1/' + resource, async (request, reply) => {
       if (!store)
         throw new ApiError(503, 'The catalog service is not configured.');
+      if (store.publicSnapshot) {
+        const snapshot = await store.publicSnapshot(resource),
+          etag = '"' + snapshot.revision + '"';
+        reply
+          .header('ETag', etag)
+          .header('Cache-Control', 'public, max-age=0, must-revalidate');
+        if (matchesEtag(request.headers['if-none-match'], etag))
+          return reply.code(304).send();
+        return reply.type('application/json').send(snapshot.body);
+      }
       const data =
         resource === 'catalog'
           ? await store.catalog()
@@ -194,6 +294,8 @@ export function createApp(
           options.review,
           options.fetchWom ?? fetchWomCompetition,
           options.clanKeys,
+          previews,
+          passwords,
         )
       : undefined;
   if (!requireAdmin) {
@@ -202,14 +304,43 @@ export function createApp(
       throw new ApiError(503, 'Admin password sign-in is not configured.');
     });
   }
+  app.get(
+    '/api/v1/admin/diagnostics',
+    {
+      onRequest: async (request) => {
+        if (!requireAdmin)
+          throw new ApiError(503, 'Admin sign-in is not configured.');
+        const identity = await requireAdmin(request);
+        if (identity.role !== 'admin')
+          throw new ApiError(
+            403,
+            'Only the administrator can read diagnostics.',
+          );
+      },
+    },
+    async () => ({
+      counters: diagnostics.snapshot(),
+      work: {
+        active: work.snapshot().active,
+        stopping: work.snapshot().stopping,
+      },
+      queues: {
+        passwords: passwords.snapshot(),
+        previews: previews.budget.snapshot(),
+        pool: options.poolMetrics?.() ?? null,
+      },
+    }),
+  );
   brandingRoutes(app, options.branding, options.logos, requireAdmin);
   runeLiteSettingsRoutes(app, options.runeLiteSettings, requireAdmin);
   schedulingRoutes(app, options.scheduling, requireAdmin);
+  lifecycleRoutes(app, options.lifecycle, requireAdmin);
   competitionRoutes(
     app,
     options.competitions,
     requireAdmin,
     options.fetchCompetition,
+    previews,
   );
   // Review and catalog editing share one private catalog projection and auth boundary.
   if (options.catalog || options.review)

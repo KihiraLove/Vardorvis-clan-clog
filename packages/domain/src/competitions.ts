@@ -1,6 +1,61 @@
-/** Staff chooses the application kind; WOM metrics never choose it implicitly. */
+import { isSkill, skillIds, type Skill } from './skills.js';
+/** Kind is derived from canonical WOM metadata, never from a caller's selection. */
 export type CompetitionKind = 'SKILL' | 'ACTIVITY';
+export interface CompetitionPreviewInput {
+  competitionUrl: string;
+  pageIds?: string[];
+  /** Compatibility hint only; the server rejects any mismatch with WOM metadata. */
+  kind?: CompetitionKind;
+}
+/** Classify scope independently of result availability or supported activity data. */
+export function competitionScope(metrics: readonly string[]): {
+  kind: CompetitionKind;
+  skills: Skill[];
+} {
+  if (
+    !metrics.length ||
+    metrics.some((metric) => !metric) ||
+    new Set(metrics).size !== metrics.length
+  )
+    throw new Error('Invalid or duplicate WOM metric scope.');
+  const aggregate = (metric: string) =>
+    metric === 'overall' || metric === 'total';
+  if (metrics.length === 1 && aggregate(metrics[0]!))
+    return { kind: 'SKILL', skills: [...skillIds] };
+  if (metrics.every(isSkill))
+    return {
+      kind: 'SKILL',
+      skills: skillIds.filter((skill) => metrics.includes(skill)),
+    };
+  if (metrics.some((metric) => isSkill(metric) || aggregate(metric)))
+    throw new Error(
+      'Mixed skill, aggregate or activity scopes are unsupported.',
+    );
+  if (metrics.length !== 1)
+    throw new Error('Multiple activity metrics are unsupported.');
+  return { kind: 'ACTIVITY', skills: [] };
+}
 export type CompetitionLifecycle = 'future' | 'running' | 'finished';
+export type CompetitionImportAction =
+  | 'import-metadata'
+  | 'create-schedule'
+  | 'preserve-schedule'
+  | 'preserve-deletion'
+  | 'import-results';
+export function competitionImportAction(
+  kind: CompetitionKind,
+  lifecycle: CompetitionLifecycle,
+  scheduleCreated = false,
+  scheduleExists = false,
+): CompetitionImportAction {
+  if (lifecycle === 'finished') return 'import-results';
+  if (kind === 'SKILL') return 'import-metadata';
+  return scheduleCreated
+    ? scheduleExists
+      ? 'preserve-schedule'
+      : 'preserve-deletion'
+    : 'create-schedule';
+}
 export interface WomCompetition {
   id: number;
   kind: CompetitionKind;

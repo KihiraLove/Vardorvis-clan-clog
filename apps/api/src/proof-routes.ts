@@ -3,19 +3,21 @@ import { randomUUID } from 'node:crypto';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { RequireAdmin } from './catalog-routes.js';
-import { assetIdPattern, type IconRecord } from './icon-storage.js';
-import {
-  runeLiteWorld,
-  screenshotPath,
-  uuidPattern,
-  type ProofStore,
-} from './proof-store.js';
-import { MAX_SCREENSHOT_BYTES, type ProofStorage } from './proof-storage.js';
-import type { ManualSubmissionInput, ReviewStore } from './review-types.js';
+import { assetIdPattern } from './icon-storage.js';
+import { runeLiteWorld, uuidPattern, type ProofStore } from './proof-store.js';
+import { MAX_SCREENSHOT_BYTES } from './proof-storage.js';
+import type { ManualSubmissionInput } from './review-types.js';
+import type { ManualReviewStore, ProofFiles } from './route-services.js';
 import { ApiError } from './types.js';
 import { suppliedClanKey } from './clan-api-key.js';
+import { runeLiteCors } from './runelite-cors.js';
 
-async function parts(request: FastifyRequest, allowed: string[]) {
+async function parts(
+  request: FastifyRequest,
+  required: string[],
+  optional: string[] = [],
+  requireFile = true,
+) {
   if (!request.isMultipart())
     throw new ApiError(400, 'Use multipart/form-data.');
   const fields: Record<string, string> = {};
@@ -30,7 +32,7 @@ async function parts(request: FastifyRequest, allowed: string[]) {
       file = { bytes, mime: part.mimetype };
     } else {
       if (
-        !allowed.includes(part.fieldname) ||
+        ![...required, ...optional].includes(part.fieldname) ||
         Object.hasOwn(fields, part.fieldname) ||
         typeof part.value !== 'string' ||
         part.valueTruncated
@@ -39,7 +41,10 @@ async function parts(request: FastifyRequest, allowed: string[]) {
       fields[part.fieldname] = part.value;
     }
   }
-  if (!file || allowed.some((key) => !Object.hasOwn(fields, key)))
+  if (
+    (requireFile && !file) ||
+    required.some((key) => !Object.hasOwn(fields, key))
+  )
     throw new ApiError(400, 'Missing submission fields or screenshot.');
   return { fields, file };
 }
@@ -94,8 +99,8 @@ function manualFields(json: string): ManualSubmissionInput {
 export function proofRoutes(
   app: FastifyInstance,
   store: ProofStore,
-  storage: ProofStorage,
-  review?: ReviewStore,
+  storage: ProofFiles,
+  review?: ManualReviewStore,
   authorize?: RequireAdmin,
 ) {
   const staff = async (request: FastifyRequest, write = false) => {
@@ -103,13 +108,8 @@ export function proofRoutes(
     return authorize(request, write);
   };
   // If commit acknowledgement was lost, retain the file unless absence is confirmed.
-  const discardUnreferenced = async (image: IconRecord) => {
-    try {
-      if (!(await store.image(image.id))) await storage.remove(image.id);
-    } catch {
-      /* A later maintenance pass can remove unreferenced files. */
-    }
-  };
+  // Never unlink a saved file based on an uncertain database receipt.
+  // Offline, reference-checked maintenance reclaims orphaned uploads.
   app.get<{ Params: { id: string } }>(
     '/api/v1/admin/submission-images/:id.png',
     {
@@ -130,13 +130,14 @@ export function proofRoutes(
     },
   );
   void app.register(async (scope) => {
+    runeLiteCors(scope);
     await scope.register(multipart, {
       limits: {
         fileSize: MAX_SCREENSHOT_BYTES,
         files: 1,
-        fields: 4,
-        parts: 5,
-        fieldSize: 8192,
+        fields: 5,
+        parts: 6,
+        fieldSize: 8193,
       },
     });
     scope.post(
@@ -153,12 +154,12 @@ export function proofRoutes(
       },
       async (req, reply) => {
         const key = requestKey(req, false);
-        const { fields, file } = await parts(req, [
-          'username',
-          'clanName',
-          'itemId',
-          'worldType',
-        ]);
+        const { fields, file } = await parts(
+          req,
+          ['username', 'clanName', 'itemId', 'worldType'],
+          ['chatMessage'],
+          false,
+        );
         if (
           !fields.username!.trim() ||
           fields.username!.length > 80 ||
@@ -177,22 +178,26 @@ export function proofRoutes(
           clanName: fields.clanName!,
           itemId: Number(fields.itemId),
           worldTypes: world.worldTypes,
+          ...(fields.chatMessage === undefined
+            ? {}
+            : { chatMessage: fields.chatMessage }),
         };
-        await store.validateSubmission(submission);
-        const image = await storage.save(file.bytes, file.mime);
-        try {
-          const result = await store.createRuneLite(
-            submission,
-            image,
-            key,
-            suppliedClanKey(req.headers),
-          );
-          if (result.imageId !== image.id) await discardUnreferenced(image);
-          return reply.code(201).send(result.receipt);
-        } catch (error) {
-          await discardUnreferenced(image);
-          throw error;
-        }
+        await store.validateSubmission(submission, key);
+        const image = file
+          ? await storage.save(file.bytes, file.mime)
+          : undefined;
+        // Commit outcome may be uncertain: preserve the file for maintenance.
+        const result = await store.createRuneLite(
+          submission,
+          image,
+          key,
+          suppliedClanKey(req.headers),
+        );
+        // A committed duplicate receipt confirms this new file is unreferenced.
+        // Uncertain commits still retain evidence for reference-checked maintenance.
+        if (image && result.receipt.duplicate && result.imageId !== image.id)
+          await storage.remove?.(image.id).catch(() => {});
+        return reply.code(201).send(result.receipt);
       },
     );
     if (review)
@@ -208,22 +213,18 @@ export function proofRoutes(
           const key = requestKey(req, true);
           const { fields, file } = await parts(req, ['submission']);
           const input = manualFields(fields.submission!);
+          if (!file) throw new ApiError(400, 'Supply one screenshot file.');
           const image = await storage.save(file.bytes, file.mime);
-          try {
-            const result = await review.createManual(
-              input,
-              actor.id,
-              actor.displayName,
-              key,
-              image,
-            );
-            if (result.screenshotPath !== screenshotPath(image.id))
-              await discardUnreferenced(image);
-            return reply.code(201).send(result);
-          } catch (error) {
-            await discardUnreferenced(image);
-            throw error;
-          }
+          // Commit outcome may be uncertain: preserve the file for maintenance.
+          const result = await review.createManual(
+            input,
+            actor.id,
+            actor.displayName,
+            key,
+            image,
+          );
+          // A replay may leave an orphan; maintenance reclaims it later.
+          return reply.code(201).send(result);
         },
       );
   });

@@ -180,6 +180,7 @@ test(
       );
       const fields = {
         name: 'Manual trophy',
+        gameItemIds: [39999],
         iconAssetId: staged.assetId,
         pageIds: ['a', 'b'],
       };
@@ -196,6 +197,9 @@ test(
         { ...fields, pageIds: ['a', 'a'] },
         { ...fields, pageIds: ['unknown'] },
         { ...fields, iconAssetId: 'not-an-asset' },
+        { ...fields, gameItemIds: [] },
+        { ...fields, gameItemIds: [40000, 40000] },
+        { ...fields, gameItemIds: [0] },
         { name: 'Missing fields' },
       ])
         assert.equal((await create(invalid)).statusCode, 400);
@@ -224,7 +228,7 @@ test(
             [created.item.id],
           )
         ).rows[0].n,
-        0,
+        1,
       );
       const first = await adminCatalog();
       assert.deepEqual(first.pages[0]!.itemIds, [
@@ -337,7 +341,7 @@ test(
       assert.equal((await aliases([40000], first.revision)).statusCode, 409);
       const reconciled = await aliases([40000], after.revision);
       assert.equal(reconciled.statusCode, 200, reconciled.body);
-      assert.deepEqual(reconciled.json().gameItemIds, [40000]);
+      assert.deepEqual(reconciled.json().gameItemIds, [39999, 40000]);
       assert.equal(
         (
           await pool.query(
@@ -363,7 +367,7 @@ test(
       // Same-name items stay distinct; appending membership invalidates an open order editor.
       const next = await upload();
       const duplicate = await create(
-        { ...fields, iconAssetId: next.assetId },
+        { ...fields, gameItemIds: [40001], iconAssetId: next.assetId },
         'same-name-fixture',
       );
       assert.equal(duplicate.statusCode, 201, duplicate.body);
@@ -380,7 +384,7 @@ test(
       assert.equal(
         (
           await create(
-            { ...fields, iconAssetId: expired.assetId },
+            { ...fields, gameItemIds: [40002], iconAssetId: expired.assetId },
             'expired-fixture',
           )
         ).statusCode,
@@ -398,7 +402,7 @@ test(
       assert.equal(
         (
           await create(
-            { ...fields, iconAssetId: missing.assetId },
+            { ...fields, gameItemIds: [40002], iconAssetId: missing.assetId },
             'missing-fixture',
           )
         ).statusCode,
@@ -407,6 +411,58 @@ test(
       assert.equal(
         (await pool.query('SELECT count(*)::int AS n FROM items')).rows[0].n,
         count,
+      );
+      // Editing keeps canonical identity and credits while replacing RuneLite mappings and icons.
+      const edit = async (fields: object, expectedRevision?: string) =>
+        app.inject({
+          method: 'PATCH',
+          url: `/api/v1/admin/catalog/items/${created.item.id}`,
+          headers,
+          payload: {
+            ...fields,
+            expectedRevision:
+              expectedRevision ?? (await adminCatalog()).revision,
+          },
+        });
+      const editBefore = await adminCatalog();
+      assert.equal(
+        (await edit({ name: 'Renamed trophy', gameItemIds: [1249] }))
+          .statusCode,
+        409,
+      );
+      assert.deepEqual(await adminCatalog(), editBefore);
+      const replacement = await upload();
+      const edited = await edit({
+        name: 'Renamed trophy',
+        gameItemIds: [40003, 40004],
+        iconAssetId: replacement.assetId,
+      });
+      assert.equal(edited.statusCode, 200, edited.body);
+      const editedItem = (await adminCatalog()).items.find(
+        (item) => item.id === created.item.id,
+      )!;
+      assert.equal(editedItem.name, 'Renamed trophy');
+      assert.equal(editedItem.iconPath, replacement.iconPath);
+      assert.deepEqual(editedItem.gameItemIds, [40003, 40004]);
+      assert.equal((await app.inject(created.item.iconPath)).statusCode, 200);
+      assert.equal((await app.inject(replacement.iconPath)).statusCode, 200);
+      assert.equal(
+        (
+          await edit(
+            { name: 'Stale', gameItemIds: [40003] },
+            editBefore.revision,
+          )
+        ).statusCode,
+        409,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            'SELECT count(*)::int AS n FROM collection_credits WHERE item_id=$1',
+            [created.item.id],
+          )
+        ).rows[0].n,
+        2,
       );
       assert.equal(
         (

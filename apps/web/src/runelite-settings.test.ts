@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { defaultRuneLiteRules, parseRuneLiteSettings } from '@clog/domain';
 import { LiveAdminClient } from './admin-api.ts';
-import { PreviewAdminClient } from './preview/admin.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
 const signal = () => new AbortController().signal;
 test('private RuneLite adapter sends revisions and CSRF and validates canonical receipts', async () => {
   const rules = defaultRuneLiteRules('In-game Clan');
@@ -11,6 +11,7 @@ test('private RuneLite adapter sends revisions and CSRF and validates canonical 
     revision: 'runelite-2',
     ...rules,
     playerWhitelist: ['player one'],
+    clanKeyRequirement: { enabled: false, revision: 'clan-key-2' },
   };
   const client = new LiveAdminClient(async (path, options) => {
     assert.equal(path, '/api/v1/admin/runelite-settings');
@@ -25,12 +26,17 @@ test('private RuneLite adapter sends revisions and CSRF and validates canonical 
       expectedRevision: 'runelite-1',
       ...rules,
       playerWhitelist: ['player one'],
+      clanKeyRequirement: { enabled: false, expectedRevision: 'clan-key-1' },
     });
     return Response.json(receipt);
   });
   assert.deepEqual(
     await client.saveRuneLiteSettings(
-      { expectedRevision: 'runelite-1', ...rules },
+      {
+        expectedRevision: 'runelite-1',
+        ...rules,
+        clanKeyRequirement: { enabled: false, expectedRevision: 'clan-key-1' },
+      },
       'csrf',
       signal(),
     ),
@@ -39,6 +45,10 @@ test('private RuneLite adapter sends revisions and CSRF and validates canonical 
   for (const bad of [
     { ...receipt, revision: 'bad' },
     { ...receipt, matchClanName: 1 },
+    {
+      ...receipt,
+      clanKeyRequirement: { enabled: false, revision: 'runelite-1' },
+    },
   ])
     assert.throws(() => parseRuneLiteSettings(bad));
   await assert.rejects(
@@ -53,9 +63,10 @@ test('private RuneLite adapter sends revisions and CSRF and validates canonical 
   );
 });
 test('preview RuneLite settings persist independently of display names, isolate returned arrays and reject stale writes', async () => {
-  const client = new PreviewAdminClient();
+  const client = new MemoryAdminClient();
   const initial = await client.runeLiteSettings(signal());
-  const { revision, ...rules } = initial;
+  const { revision, clanKeyRequirement, ...rules } = initial;
+  assert.equal(clanKeyRequirement, undefined);
   const changed = await client.saveRuneLiteSettings(
     {
       expectedRevision: revision,

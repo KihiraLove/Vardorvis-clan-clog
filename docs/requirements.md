@@ -2,13 +2,18 @@
 
 [Collection log scheduling](collection-log-scheduling.md) lets the administrator
 enable enforcement and both staff roles manage overlapping windows for one or
-more pages. Closed pages reject new submissions, with shared items accepted
+more regular collection log pages. Hardcore pages remain fully open. Closed regular pages reject new submissions, with shared items accepted
 when any associated page is open. Disabled mode preserves normal intake. Local
 date/time entry includes UTC previews.
 
-Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migration `007_site_customization.sql` preserves existing histories; `008_default_clan_name.sql` sets the generic Clan name default while preserving administrator-chosen names. Generated clan keys use exactly 32 hexadecimal characters; custom keys accept any characters with a minimum length of 8. [RuneLite intake](runelite-submissions.md) rejects irregular world flags and supports private admin world policies, independent in-game clan matching, API-key-only intake and a player whitelist. Both HC placeholder spellings use separate hardcore credit.
+Administrator-managed labels, a dedicated site-settings page, moderator disable/delete and page-scoped item management are described in [site customization](site-customization.md). Migration `007_site_customization.sql` preserves existing histories; `008_default_clan_name.sql` sets the generic Clan name default while preserving administrator-chosen names. Generated clan keys use exactly 32 hexadecimal characters; custom keys accept any characters with a minimum length of 8. [RuneLite intake](runelite-submissions.md) rejects irregular world flags and supports private staff world policies, independent in-game clan matching, API-key-only intake and a player whitelist. `HARDCORE_MAIN` uses separate hardcore credit. A fixed one-minute event window discards independent duplicate observations, and the administrator can additionally reject already-collected items through a setting visible to both staff roles.
 
 > **9 October 2026 DEC-01 review:** [ADR 002](decisions/002-command-date-display.md) records the approved one-credit-per-mode policy, actual password auth and command/date defaults. The sole `/cc-clog submit` command and API receipt-date policy are confirmed. The owner confirmed Traefik/Let's Encrypt using Docker networks `web` and `socknet` and visually approved the frontend on 9 October 2026. Actual domain/DNS, deployed TLS routing/certificate and live login checks remain unverified.
+
+RuneLite clients must send the complete `chatMessage` as private proof for new
+submissions. A screenshot is optional. Both staff roles can read the original
+message during review and approve chat-only evidence; proof text is never public.
+Exact retries bind the message and screenshot presence to the request key.
 
 ## Public collection log
 
@@ -42,8 +47,9 @@ for supported image formats, limits and the API contract.
 ## XP gained tracker below the collection log
 
 [WOM competition imports](wom-competitions.md) share one persisted identity with
-an explicit staff-selected SKILL/ACTIVITY kind. Future/running imports store
-metadata and an opening schedule only. Finished imports discard zero-gain
+a server-detected SKILL/ACTIVITY kind from authoritative WOM metrics. Future/running
+SKILL imports store page-free metadata only; ACTIVITY can create a bounded opening
+schedule. Neither path credits live results. Finished imports discard zero-gain
 participants and reconcile final results. Only SKILL competitions contribute XP;
 the selected competition and Total each show a top-three podium. The public
 ACTIVITY list sits to the left of the collection log, sorted by end descending,
@@ -67,19 +73,26 @@ with local start/end times, status labels and red/green/yellow date colors.
 - Save order independently per page. Reordering must preserve item identity, other page orders, collector/date history and hardcore state. Stale or conflicting edits return a visible conflict rather than overwriting another admin's changes.
 - New items become available on public pages, in Discord autocomplete and in manual submission matching after the catalog refresh, without rebuilding the website.
 - Preserve manual items, icons, memberships and saved order through catalog source updates. If a source later contains an admin-created item, explicitly reconcile it to the existing canonical identity; never merge automatically by name or discard existing credits.
-- Authenticate and audit creation/order writes. Backup/restore must include the uploaded icons as well as the database. Creating new pages is outside this addition.
+- Authenticate and audit creation/order writes. Backup/restore must include the uploaded icons as well as the database. Staff can also create, reorder and explicitly delete pages with preserved shared-item identities and history; see [page management](site-customization.md).
 
-These features are planned in #26, #27, #28, #30 and #31; detailed data rules and arithmetic examples are in [planned features](planned-features.md).
+These features are implemented; current contracts are in [WOM imports](wom-competitions.md), [XP imports](xp-import.md) and [catalog maintenance](admin-catalog-backend.md). [Planned features](planned-features.md) preserves the historical design.
 
 ## Submission and review
 
+Review notes have explicit independent Save/Discard controls and version-checked
+note-only persistence, even for unresolved submissions. Claim edits and decisions
+do not implicitly save drafts. Access loss clears private state and cancels
+outstanding work. Queues, audits and XP history support complete bounded traversal
+with revision-bound cursors and explicit stale-page recovery; see
+[contracts](contracts.md).
+
 Every submission records raw item input, resolved canonical item when known, collector display name, collection date, hardcore claim, submission timestamp, actor Discord ID, guild ID, proof URL, review state and audit history. Unmatched free text may enter the review queue, but **cannot be approved until linked to one existing item**.
 
-The admin page uses individual staff accounts and server-side session/CSRF checks; Discord OAuth is not used for site administration. One administrator starts with username `admin` and password `admin`; no moderators exist by default. The administrator creates moderator accounts. Every new account must change its password on first login before using staff tools. Both roles can change their own username and password, confirming the current password. Passwords use unique salts and one-way scrypt hashes. Usernames are case-insensitively unique. Moderators have review, submission, catalog and scheduling tools, including metadata-only SKILL schedules and ACTIVITY imports. Finished XP imports, the hardcore release flag and account creator are administrator-only.
+The admin page uses individual staff accounts and server-side session/CSRF checks; Discord OAuth is not used for site administration. A fresh authenticated installation requires an independently generated `ADMIN_BOOTSTRAP_PASSWORD` to create one administrator with username `admin`; no default password or moderators are supplied. Missing bootstrap credentials must prevent authenticated startup on an uninitialized database. Existing administrator accounts survive renaming/restarts and cannot be reset by supplying another bootstrap value. The administrator creates moderator accounts. Every new account must change its password on first login before using staff tools; remove the bootstrap environment value after administrator setup. Both roles can change their own username and password, confirming the current password. Passwords use unique salts and one-way scrypt hashes. Usernames are case-insensitively unique. Moderators have review, submission, catalog and scheduling tools, all supported WOM imports including finished SKILL results, and RuneLite review settings. They can view the shared API key and duplicate-filter state. Key replacement, duplicate-filter changes, site settings, the hardcore release flag and account creator are administrator-only.
 
 The page lists pending submissions with item/match state, collector, date, external proof link and submission time. Staff can resolve an item, correct collector/date, approve, reject with a reason, or revoke an incorrect approval with a reason. All changes are audited with permanent account identities; a public anonymous request cannot perform them.
 
-Proof links must use HTTPS on the allowed Imgur/Gyazo hosts. Link validity is separate from evidence validity: an admin still inspects the evidence. V1 stores links, without server-side image downloading or permanent archival. A missing external image must be visible as a review limitation; it does not grant automatic approval.
+Proof links must use HTTPS on the allowed Imgur/Gyazo hosts. Link validity is separate from evidence validity: an admin still inspects the evidence. Discord evidence remains an external link without server-side downloading. RuneLite and supported manual uploads instead retain private validated screenshots in durable proof storage; authenticated review is required to read them. A missing external image must be visible as a review limitation; it does not grant automatic approval.
 
 ## Discord
 
@@ -89,7 +102,7 @@ The implemented command is `/cc-clog submit item:<item/name> proof:<imgur-or-gya
 - Item autocomplete searches the complete canonical catalog and returns up to 25 ranked candidates. Selection submits a canonical ID. Free text is accepted; an unambiguous normalized exact name/alias resolves, while fuzzy/ambiguous matches remain suggestions for manual review.
 - Restrict submissions to the configured clan guild; do not accept DMs or other guilds. No privileged message-content intent is needed for slash commands.
 - Acknowledge/defer promptly and send an ephemeral receipt only after durable persistence. Retry the same Discord interaction ID without creating duplicate submissions. Report API failures accurately.
-- Do not overwrite all application commands on every container restart. Provide a separate, explicit guild-command registration script when the bot feature is implemented.
+- Do not overwrite all application commands on every container restart. Use the separate, explicit guild-command registration script; the gateway and durable API intake are implemented.
 
 The owner confirmed **exactly one command**, `/cc-clog submit`. The earlier second-command reference was residual ideation; no additional command should be registered.
 
@@ -101,4 +114,4 @@ The command defines `item`, `proof`, optional `submitter-name` and optional `har
 
 ## Deployment scope
 
-Self-host one web, API and bot container with PostgreSQL. CI produces separate private GHCR images for `linux/amd64` and `linux/arm64`. PRs validate without publish/deployment credentials. Home deployment is opt-in and chooses an already validated main commit. Bot, admin credentials, complete catalog and feature implementation remain required before a public V1 launch.
+Self-host one unified web/API/optional-bot image with a separate PostgreSQL container and owner bootstrap job. Run complete acceptance locally for development; pushes/PRs consume no hosted CI. Published GitHub Releases run acceptance and publish the unified multi-architecture GHCR image. Deployment is explicit and selects a validated release. See [current inventory](current-state.md) for startup credentials, schema/rollback policy, maintenance, readiness, recovery and remaining external launch gates.

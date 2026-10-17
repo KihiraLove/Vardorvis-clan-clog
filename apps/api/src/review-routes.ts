@@ -1,21 +1,21 @@
 /** Allowlisted, CSRF-protected review API with versioned queue and private audit. */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError } from './types.js';
+import type { ReviewRouteStore } from './route-services.js';
 import type {
   ReviewAction,
   ManualSubmissionInput,
   ReviewCorrection,
-  ReviewStore,
 } from './review-types.js';
 type Authorize = (
   request: FastifyRequest,
   write?: boolean,
-) => Promise<{ id: string; displayName: string }>;
+) => Promise<{ id: string; displayName: string; role?: 'admin' | 'moderator' }>;
 const version = { type: 'integer', minimum: 1, maximum: 2147483647 } as const;
 const reason = { type: 'string', maxLength: 1000 } as const;
 export function reviewRoutes(
   app: FastifyInstance,
-  store: ReviewStore,
+  store: ReviewRouteStore,
   authorize: Authorize,
 ) {
   const guard =
@@ -23,6 +23,57 @@ export function reviewRoutes(
     async (req: FastifyRequest) => {
       await authorize(req, write);
     };
+  const filterOwner = async (request: FastifyRequest) => {
+    const actor = await authorize(request, true);
+    if (actor.role !== 'admin')
+      throw new ApiError(
+        403,
+        'Only the administrator can change submission filters.',
+      );
+    return actor;
+  };
+  app.get(
+    '/api/v1/admin/submission-filters',
+    { onRequest: guard() },
+    async () => {
+      if (!store.submissionFilters)
+        throw new ApiError(503, 'Submission filters are unavailable.');
+      return store.submissionFilters();
+    },
+  );
+  app.put<{ Body: { filterCollected: boolean; expectedRevision: string } }>(
+    '/api/v1/admin/submission-filters',
+    {
+      onRequest: async (request) => {
+        await filterOwner(request);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['filterCollected', 'expectedRevision'],
+          properties: {
+            filterCollected: { type: 'boolean' },
+            expectedRevision: {
+              type: 'string',
+              pattern: '^submission-filters-[1-9][0-9]*$',
+              maxLength: 40,
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const actor = await filterOwner(req);
+      if (!store.saveSubmissionFilters)
+        throw new ApiError(503, 'Submission filters are unavailable.');
+      return store.saveSubmissionFilters(
+        req.body.filterCollected,
+        req.body.expectedRevision,
+        actor.id,
+      );
+    },
+  );
   app.post<{ Body: ManualSubmissionInput }>(
     '/api/v1/admin/submissions',
     {
@@ -104,13 +155,30 @@ export function reviewRoutes(
       );
     },
   );
-  app.get<{ Params: { id: string } }>(
+  app.get<{
+    Params: { id: string };
+    Querystring: { cursor?: string; limit?: string };
+  }>(
     '/api/v1/admin/submissions/:id',
     {
       onRequest: guard(),
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            cursor: { type: 'string', maxLength: 1024 },
+            limit: { type: 'string', pattern: '^([1-9]|1[0-9]|20)$' },
+          },
+        },
+      },
     },
     async (req) => {
-      const result = await store.detail(req.params.id);
+      const result = await store.detail(
+        req.params.id,
+        req.query.cursor,
+        Number(req.query.limit ?? '20'),
+      );
       if (!result) throw new ApiError(404, 'Submission not found.');
       return result;
     },
@@ -158,6 +226,38 @@ export function reviewRoutes(
           hardcore: req.body.hardcore,
           reason: req.body.reason,
         },
+        actor.id,
+        actor.displayName,
+      );
+    },
+  );
+  // Note-only writes have a distinct contract: they do not require a
+  // resolved canonical item and cannot change an approved collection credit.
+  app.patch<{
+    Params: { id: string };
+    Body: { expectedVersion: number; note: string };
+  }>(
+    '/api/v1/admin/submissions/:id/note',
+    {
+      onRequest: guard(true),
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['expectedVersion', 'note'],
+          properties: {
+            expectedVersion: version,
+            note: { type: 'string', maxLength: 1000 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const actor = await authorize(req, true);
+      return store.mutate(
+        req.params.id,
+        req.body.expectedVersion,
+        { note: req.body.note },
         actor.id,
         actor.displayName,
       );

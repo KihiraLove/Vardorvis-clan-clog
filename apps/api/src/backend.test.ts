@@ -19,6 +19,7 @@ import type {
 } from './types.js';
 const admin = '00000000-0000-4000-8000-000000000001';
 const password = 'test-password-not-for-production';
+const bootstrapPassword = 'b'.repeat(64);
 const testPasswordHash = await hashPassword(password);
 const config: AuthConfig = {
   origin: 'https://clog.example.com',
@@ -39,16 +40,19 @@ export class MemoryStore implements BackendStore {
       },
     ],
   ]);
-  async ensureDefaultAdmin(passwordHash: string) {
-    if (![...this.staff.values()].some((account) => account.role === 'admin'))
-      this.staff.set(admin, {
-        id: admin,
-        username: 'admin',
-        role: 'admin',
-        passwordHash,
-        credentialVersion: 1,
-        mustChangePassword: true,
-      });
+  async ensureDefaultAdmin(passwordHash?: string) {
+    if ([...this.staff.values()].some((account) => account.role === 'admin'))
+      return;
+    if (!passwordHash)
+      throw new Error('No administrator exists. Set ADMIN_BOOTSTRAP_PASSWORD.');
+    this.staff.set(admin, {
+      id: admin,
+      username: 'admin',
+      role: 'admin',
+      passwordHash,
+      credentialVersion: 1,
+      mustChangePassword: true,
+    });
   }
   async accountByUsername(username: string) {
     return (
@@ -112,7 +116,6 @@ export class MemoryStore implements BackendStore {
       if (session.id === id) this.sessions.delete(key);
     return next;
   }
-  state = new Map<string, Date>();
   sessions = new Map<string, StoredSession>();
   attempts = 0;
   setting: Settings = {
@@ -154,15 +157,6 @@ export class MemoryStore implements BackendStore {
     };
     this.audits.push({ actor, enabled });
     return this.settings();
-  }
-  async createState(hash: string, date: Date) {
-    this.state.set(hash, date);
-  }
-  async consumeState(hash: string) {
-    const d = this.state.get(hash);
-    if (!d || d.getTime() <= Date.now()) return false;
-    this.state.delete(hash);
-    return true;
   }
   async createSession(
     hash: string,
@@ -216,6 +210,37 @@ async function login(app: FastifyInstance) {
     'x-csrf-token': session.json().csrfToken as string,
   };
 }
+
+test('operational counters and queue gauges require owner access and expose no credential or session data', async () => {
+  const { app, store } = fixture();
+  try {
+    assert.equal(
+      (await app.inject('/api/v1/admin/diagnostics')).statusCode,
+      401,
+    );
+    const headers = await login(app);
+    const response = await app.inject({
+      url: '/api/v1/admin/diagnostics',
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
+    assert.equal(response.json().queues.passwords.active, 0);
+    assert.equal(typeof response.json().counters, 'object');
+    assert.doesNotMatch(
+      response.body,
+      /passwordHash|csrf|cookie|scrypt\$|postgresql:/iu,
+    );
+    store.staff.get(admin)!.role = 'moderator';
+    assert.equal(
+      (await app.inject({ url: '/api/v1/admin/diagnostics', headers }))
+        .statusCode,
+      403,
+    );
+  } finally {
+    await app.close();
+  }
+});
 test('public snapshots have stable ETags, isolated world credits and automatic content invalidation', async () => {
   const { app, store } = fixture();
   try {
@@ -465,10 +490,24 @@ test('login rate limits and config fail closed without valid session configurati
   for (const patch of [
     { PUBLIC_ORIGIN: 'http://clog.example.com' },
     { SESSION_SECRET: 'weak' },
+    { ADMIN_BOOTSTRAP_PASSWORD: 'admin' },
+    { ADMIN_BOOTSTRAP_PASSWORD: 'a'.repeat(63) },
+    { ADMIN_BOOTSTRAP_PASSWORD: 'a'.repeat(257) },
+    { ADMIN_BOOTSTRAP_PASSWORD: ' ' + bootstrapPassword },
     { AUTH_ENABLED: 'maybe' },
     { TRUSTED_PROXY_CIDRS: 'true' },
   ])
     assert.throws(() => readConfig({ ...env, ...patch }));
+  assert.equal(
+    readConfig({ ...env, ADMIN_BOOTSTRAP_PASSWORD: bootstrapPassword }).auth
+      ?.bootstrapPassword,
+    bootstrapPassword,
+  );
+  assert.equal(
+    readConfig({ ...env, ADMIN_BOOTSTRAP_PASSWORD: '' }).auth
+      ?.bootstrapPassword,
+    undefined,
+  );
   assert.deepEqual(
     readConfig({ ...env, TRUSTED_PROXY_CIDRS: '127.0.0.1,172.18.0.0/16' })
       .trustProxy,
@@ -512,6 +551,7 @@ test('localhost requires password login and first-login setup even with the reti
     AUTH_ENABLED: 'true',
     PUBLIC_ORIGIN: 'http://127.0.0.1:8088',
     SESSION_SECRET: config.secret,
+    ADMIN_BOOTSTRAP_PASSWORD: bootstrapPassword,
   }).auth!;
   const store = new MemoryStore();
   store.staff.clear();
@@ -529,7 +569,7 @@ test('localhost requires password login and first-login setup even with the reti
       method: 'POST',
       url: '/api/v1/auth/login',
       headers: { origin: auth.origin },
-      payload: { username: 'admin', password: 'admin' },
+      payload: { username: 'admin', password: bootstrapPassword },
     });
     assert.equal(signedIn.statusCode, 200);
     assert.equal(signedIn.json().mustChangePassword, true);
@@ -636,13 +676,18 @@ test('proxy login buckets distinguish clients and ignore spoofed forwarding pref
   }
 });
 
-test('default admin setup, moderator permissions and self-service credentials are enforced server-side', async () => {
+test('explicit admin bootstrap, moderator permissions and self-service credentials are enforced server-side', async () => {
   const store = new MemoryStore();
   store.staff.clear();
   const actors: string[] = [];
   const review = {
     async queue() {
-      return { revision: 'queue-1', submissions: [], nextCursor: null };
+      return {
+        revision: 'queue-1',
+        submissions: [],
+        nextCursor: null,
+        pageCursor: 'first',
+      };
     },
     async adminCatalog() {
       return { items: [], pages: [] };
@@ -663,12 +708,17 @@ test('default admin setup, moderator permissions and self-service credentials ar
   } as unknown as ReviewStore;
   const xp = {
     async history() {
-      return { imports: [] };
+      return {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'first',
+        nextCursor: null,
+      };
     },
   } as unknown as XpStore;
   const app = createApp(undefined, undefined, {
     store,
-    auth: config,
+    auth: { ...config, bootstrapPassword },
     review,
     xp,
     logger: false,
@@ -701,7 +751,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
       payload,
     });
   try {
-    const first = await credentials('admin', 'admin');
+    const first = await credentials('admin', bootstrapPassword);
     assert.equal(first.response.json().mustChangePassword, true);
     assert.deepEqual(await store.accounts(), [
       { id: admin, username: 'admin', role: 'admin', mustChangePassword: true },
@@ -720,7 +770,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
     assert.equal(
       (
         await change(first.headers, {
-          currentPassword: 'admin',
+          currentPassword: bootstrapPassword,
           username: 'owner',
         })
       ).statusCode,
@@ -739,7 +789,7 @@ test('default admin setup, moderator permissions and self-service credentials ar
       (
         await change(
           { cookie: first.headers.cookie },
-          { currentPassword: 'admin', newPassword: password },
+          { currentPassword: bootstrapPassword, newPassword: password },
         )
       ).statusCode,
       403,
@@ -747,14 +797,14 @@ test('default admin setup, moderator permissions and self-service credentials ar
     assert.equal(
       (
         await change(first.headers, {
-          currentPassword: 'admin',
+          currentPassword: bootstrapPassword,
           newPassword: 'short',
         })
       ).statusCode,
       400,
     );
     const saved = await change(first.headers, {
-      currentPassword: 'admin',
+      currentPassword: bootstrapPassword,
       newPassword: password,
       username: 'owner',
     });
@@ -848,17 +898,17 @@ test('default admin setup, moderator permissions and self-service credentials ar
       origin: config.origin,
       'x-csrf-token': modSaved.json().csrfToken as string,
     };
-    for (const url of ['/api/v1/admin/submissions', '/api/v1/admin/catalog'])
+    for (const url of [
+      '/api/v1/admin/submissions',
+      '/api/v1/admin/catalog',
+      '/api/v1/admin/xp/imports',
+    ])
       assert.equal(
         (await app.inject({ url, headers: moderator })).statusCode,
         200,
         url,
       );
-    for (const url of [
-      '/api/v1/admin/settings',
-      '/api/v1/admin/accounts',
-      '/api/v1/admin/xp/imports',
-    ])
+    for (const url of ['/api/v1/admin/settings', '/api/v1/admin/accounts'])
       assert.equal(
         (await app.inject({ url, headers: moderator })).statusCode,
         403,

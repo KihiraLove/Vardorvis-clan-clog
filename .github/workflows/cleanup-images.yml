@@ -1,18 +1,11 @@
 name: Clean up development images
 on:
-  schedule:
-    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
         description: Preview deletions without changing packages
         type: boolean
         default: true
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/cleanup-images.yml
-      - scripts/cleanup-images.mjs
 permissions:
   contents: read
   packages: write
@@ -32,7 +25,7 @@ jobs:
       - name: Remove expired development images
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           if [ "$DRY_RUN" = true ]; then
             node scripts/cleanup-images.mjs

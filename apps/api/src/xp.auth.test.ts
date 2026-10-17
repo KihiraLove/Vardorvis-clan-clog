@@ -43,12 +43,12 @@ const source = {
   ],
 };
 test('XP preview/apply/history require allowlisted browser session and CSRF; public tracker is isolated', async () => {
-  const states = new Map<string, Date>(),
-    sessions = new Map<string, StoredSession>();
+  const sessions = new Map<string, StoredSession>();
   let fetched = 0,
     previewed = 0,
     applied = 0,
     history = 0;
+  const historyArguments: [string | undefined, number | undefined][] = [];
   const store = {
     async ensureDefaultAdmin() {},
     async accountByUsername() {
@@ -56,14 +56,6 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     },
     async accountById(id: string) {
       return id === account.id ? account : null;
-    },
-    async createState(k: string, d: Date) {
-      states.set(k, d);
-    },
-    async consumeState(k: string) {
-      const d = states.get(k);
-      states.delete(k);
-      return !!d && d.getTime() > Date.now();
     },
     async createSession(k: string, u: AccountSessionIdentity, d: Date) {
       sessions.set(k, { ...u, expiresAt: d });
@@ -122,9 +114,15 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
       applied++;
       return { outcome: 'applied', revision: 'xp-2' } as const;
     },
-    async history() {
+    async history(cursor?: string, limit?: number) {
       history++;
-      return { imports: [] };
+      historyArguments.push([cursor, limit]);
+      return {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'first',
+        nextCursor: null,
+      };
     },
   } satisfies XpStore;
   const app = createApp(undefined, undefined, {
@@ -204,6 +202,23 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     assert.equal(p.statusCode, 200);
     assert.equal(previewed, 1);
     assert.equal(fetched, 1);
+    assert.equal(
+      (
+        await preview(headers, {
+          competitionUrl: 'https://wiseoldman.net/competitions/9001',
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal(
+      (
+        await preview(headers, {
+          competitionUrl: 'https://wiseoldman.net/competitions/9001',
+          kind: 'ACTIVITY',
+        })
+      ).statusCode,
+      400,
+    );
     const apply = await app.inject({
       url: '/api/v1/admin/xp/imports',
       method: 'POST',
@@ -226,6 +241,34 @@ test('XP preview/apply/history require allowlisted browser session and CSRF; pub
     assert.equal(h.statusCode, 200);
     assert.equal(history, 1);
     assert.equal(h.headers['cache-control'], 'no-store');
+    assert.deepEqual(historyArguments, [[undefined, 20]]);
+    assert.equal(
+      (
+        await app.inject({
+          url: '/api/v1/admin/xp/imports?limit=1&cursor=opaque-cursor',
+          headers: { cookie: sessionCookie },
+        })
+      ).statusCode,
+      200,
+    );
+    assert.deepEqual(historyArguments.at(-1), ['opaque-cursor', 1]);
+    const reads = history;
+    for (const query of ['limit=21', 'limit=0', 'cursor=' + 'x'.repeat(1025)])
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/admin/xp/imports?' + query,
+            headers: { cookie: sessionCookie },
+          })
+        ).statusCode,
+        400,
+      );
+    assert.equal(history, reads);
+    assert.equal(
+      (await app.inject('/api/v1/admin/xp/imports?cursor=opaque-cursor'))
+        .statusCode,
+      401,
+    );
     const bad = await app.inject({
       url: '/api/v1/admin/xp/imports',
       method: 'POST',

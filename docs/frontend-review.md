@@ -1,3 +1,7 @@
+> **16 October 2026:** Frontend demo mode and its public assets have been removed. Any demo URLs or controls documented below are historical; current pages require the API. See [frontend loading](frontend-loading.md).
+
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 # Collection-log frontend review
 
 > **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
@@ -32,7 +36,7 @@ The [OSRS Wiki interface screenshot](https://oldschool.runescape.wiki/w/File:Col
 
 ## Source assets
 
-Sample page definitions/icons were captured from [Collection log revision 15356324](https://oldschool.runescape.wiki/w/Collection_log?oldid=15356324). The [asset manifest](../apps/web/public/preview/provenance.json) records source URLs and SHA-256 values. Identical known shared drops in this curated fixture use one internal ID. This fixture builder is not a production name-merging rule or full catalog importer.
+Sample page definitions/icons were captured from [Collection log revision 15356324](https://oldschool.runescape.wiki/w/Collection_log?oldid=15356324). The [asset manifest](../apps/web/tests/support/item-provenance.json) records source URLs and SHA-256 values. Identical known shared drops in this curated fixture use one internal ID. This fixture builder is not a production name-merging rule or full catalog importer.
 
 Item images/reference capture are OSRS game media, copyright Jagex. The RuneScape font was obtained from [evansloan/collectionlog.net](https://github.com/evansloan/collectionlog.net/blob/master/assets/fonts/runescape.ttf), source blob `9d5c4f2140ff91c33f67c5ed0ca7712f84acbcab`; the distributed [MIT notice](../apps/web/public/fonts/LICENSE.txt) is retained. The panel texture and mini-menu skull are local SVG/CSS work. Runtime rendering does not fetch Wiki assets or use a CDN.
 

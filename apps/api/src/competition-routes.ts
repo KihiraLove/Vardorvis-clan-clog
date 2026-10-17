@@ -1,17 +1,20 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { CompetitionKind } from '@clog/domain';
+import type { CompetitionPreviewInput } from '@clog/domain';
 import { ApiError, type AdminIdentity, type StaffAccount } from './types.js';
-import type { PgCompetitionStore } from './competition-store.js';
+import type { CompetitionService } from './route-services.js';
 import { fetchCompetition } from './competition-wom.js';
+import { PreviewWork } from './preview-work.js';
+import { matchesEtag } from './projection-cache.js';
 type Authorize = (
   request: FastifyRequest,
   write?: boolean,
 ) => Promise<AdminIdentity & Pick<StaffAccount, 'role'>>;
 export function competitionRoutes(
   app: FastifyInstance,
-  store?: PgCompetitionStore,
+  store?: CompetitionService,
   authorize?: Authorize,
   fetchSource = fetchCompetition,
+  previews = new PreviewWork(),
 ) {
   const available = () => {
     if (!store) throw new ApiError(503, 'Competition service unavailable.');
@@ -21,12 +24,24 @@ export function competitionRoutes(
     if (!authorize) throw new ApiError(503, 'Staff sign-in is not configured.');
     return authorize(request, write);
   };
-  app.get('/api/v1/competitions/activities', async (_req, reply) => {
+  app.get('/api/v1/competitions/activities', async (request, reply) => {
+    const service = available();
+    if (typeof service.activitySnapshot === 'function') {
+      const snapshot = await service.activitySnapshot(),
+        etag = 'W/"' + snapshot.revision + '"';
+      reply
+        .header('Cache-Control', 'public, max-age=0, must-revalidate')
+        .header('ETag', etag)
+        .header('X-Server-Now', snapshot.serverNow);
+      if (matchesEtag(request.headers['if-none-match'], etag))
+        return reply.code(304).send();
+      return reply.type('application/json').send(snapshot.body);
+    }
     reply.header('Cache-Control', 'no-store');
-    return available().activities();
+    return service.activities();
   });
   app.post<{
-    Body: { competitionUrl: string; kind: CompetitionKind; pageIds?: string[] };
+    Body: CompetitionPreviewInput;
   }>(
     '/api/v1/admin/competitions/preview',
     {
@@ -37,7 +52,7 @@ export function competitionRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['competitionUrl', 'kind'],
+          required: ['competitionUrl'],
           properties: {
             competitionUrl: { type: 'string', minLength: 1, maxLength: 2048 },
             kind: { enum: ['SKILL', 'ACTIVITY'] },
@@ -51,24 +66,29 @@ export function competitionRoutes(
         },
       },
     },
-    async (r) => {
+    async (r, reply) => {
       const actor = await staff(r, true),
         service = available();
-      const snapshot = await fetchSource(
-        r.body.competitionUrl,
-        r.body.kind,
-        await service.clock(),
-      );
-      if (
-        snapshot.competition.kind === 'SKILL' &&
-        snapshot.lifecycle === 'finished' &&
-        actor.role !== 'admin'
-      )
-        throw new ApiError(
-          403,
-          'Only the administrator can import XP results.',
+      return previews.run(r, reply, actor.id, async (signal) => {
+        const snapshot = await fetchSource(
+          r.body.competitionUrl,
+          await service.clock(),
+          fetch,
+          signal,
         );
-      return service.preview(snapshot, actor.id, r.body.pageIds);
+        signal.throwIfAborted();
+        if (
+          r.body.kind !== undefined &&
+          r.body.kind !== snapshot.competition.kind
+        )
+          throw new ApiError(
+            422,
+            'The legacy kind hint does not match WOM metadata. Detected kind: ' +
+              snapshot.competition.kind +
+              '.',
+          );
+        return service.preview(snapshot, actor.id, r.body.pageIds);
+      });
     },
   );
   app.post<{

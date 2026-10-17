@@ -1,31 +1,6 @@
 /** XP aggregates and private preview data have no Discord-auth or browser dependencies. */
-export const skillIds = [
-  'attack',
-  'hitpoints',
-  'mining',
-  'strength',
-  'agility',
-  'smithing',
-  'defence',
-  'herblore',
-  'fishing',
-  'ranged',
-  'thieving',
-  'cooking',
-  'prayer',
-  'crafting',
-  'firemaking',
-  'magic',
-  'fletching',
-  'woodcutting',
-  'runecrafting',
-  'slayer',
-  'farming',
-  'construction',
-  'hunter',
-  'sailing',
-] as const;
-export type Skill = (typeof skillIds)[number];
+import { skillIds, type Skill } from '@clog/domain';
+export { skillIds, type Skill } from '@clog/domain';
 export type Gains = Partial<Record<Skill, string>>;
 export interface XpParticipant {
   playerId: number;
@@ -80,6 +55,7 @@ export interface XpApply {
   revision: string;
 }
 export interface XpStore {
+  trackerSnapshot?(): Promise<{ revision: string; body: string }>;
   tracker(): Promise<{
     revision: string;
     totals: Record<Skill, string>;
@@ -98,7 +74,13 @@ export interface XpStore {
     actorName: string,
     acknowledgeCorrections: boolean,
   ): Promise<XpApply>;
-  history(): Promise<{
+  history(
+    cursor?: string,
+    limit?: number,
+  ): Promise<{
+    revision: string;
+    pageCursor: string;
+    nextCursor: string | null;
     imports: {
       id: string;
       competitionId: number;

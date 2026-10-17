@@ -1,10 +1,172 @@
-import { expect, test } from '@playwright/test';
-import catalog from '../src/preview/catalog.json' with { type: 'json' };
+import { mockApi } from './mock-api.ts';
+import { expect, test } from './test.ts';
+import catalog from './support/catalog.json' with { type: 'json' };
+
+test('additional catalog sections remain scrollable and keyboard accessible in the public log', async ({
+  page,
+}) => {
+  const sections = Array.from({ length: 9 }, (_, i) => ({
+    id: 'section-' + i,
+    name: 'Section ' + i,
+  }));
+  const items = catalog.items.slice(0, 1);
+  await page.route('**/api/v1/catalog', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'sections',
+        sections,
+        items,
+        pages: sections.map((section) => ({
+          id: section.id,
+          name: 'Page ' + section.id,
+          category: section.id,
+          itemIds: [items[0]!.id],
+        })),
+      },
+    }),
+  );
+  await page.route('**/api/v1/collections', (route) =>
+    route.fulfill({ json: { revision: 'sections', credits: [] } }),
+  );
+  await page.goto('/');
+  const tabs = page
+    .getByRole('tablist', { name: 'Collection log categories' })
+    .getByRole('tab');
+  await expect(tabs).toHaveCount(9);
+  await tabs.first().focus();
+  await page.keyboard.press('End');
+  await expect(tabs.last()).toBeFocused();
+  await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.page-heading h3')).toHaveText('Page section-8');
+  expect((await tabs.last().boundingBox())!.height).toBeGreaterThan(15);
+});
+
+test('page names distinguish zero, partial and complete collections in the current world mode', async ({
+  page,
+}) => {
+  const items = catalog.items.slice(0, 2);
+  await page.route('**/api/v1/settings', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'color-settings',
+        clanName: 'Colours',
+        hardcoreEnabled: true,
+      },
+    }),
+  );
+  const pages = [
+    {
+      id: 'empty',
+      name: 'No collections',
+      category: 'bosses',
+      itemIds: [items[1]!.id],
+    },
+    {
+      id: 'partial',
+      name: 'Partial collections',
+      category: 'bosses',
+      itemIds: items.map((item) => item.id),
+    },
+    {
+      id: 'complete',
+      name: 'Full collections',
+      category: 'bosses',
+      itemIds: [items[0]!.id],
+    },
+  ];
+  await page.route('**/api/v1/catalog', (route) =>
+    route.fulfill({ json: { revision: 'color-catalog', items, pages } }),
+  );
+  await page.route('**/api/v1/collections', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'color-collections',
+        credits: [
+          {
+            submissionId: 'credit',
+            itemId: items[0]!.id,
+            collectorName: 'Collector',
+            collectedOn: '2026-10-01',
+            hardcore: false,
+            status: 'approved',
+          },
+          {
+            submissionId: 'hc-credit',
+            itemId: items[1]!.id,
+            collectorName: 'Hardcore collector',
+            collectedOn: '2026-10-01',
+            hardcore: true,
+            status: 'approved',
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto('/');
+  const list = page.locator('.page-list');
+  await expect(
+    list.getByRole('button', { name: 'No collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(255, 152, 31)');
+  await expect(
+    list.getByRole('button', { name: 'Partial collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(255, 152, 31)');
+  await expect(
+    list.getByRole('button', { name: 'Full collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(13, 193, 13)');
+  for (const [name, color] of [
+    ['No collections', 'rgb(255, 0, 0)'],
+    ['Partial collections', 'rgb(255, 255, 0)'],
+    ['Full collections', 'rgb(13, 193, 13)'],
+  ]) {
+    await list.getByRole('button', { name: name!, exact: true }).click();
+    await expect(page.locator('.page-heading h3')).toHaveCSS(
+      'color',
+      'rgb(255, 152, 31)',
+    );
+    await expect(page.locator('.page-heading p span')).toHaveCSS(
+      'color',
+      color!,
+    );
+  }
+  await expect(list.getByRole('button').nth(0)).toHaveCSS(
+    'background-color',
+    'rgb(87, 78, 67)',
+  );
+  await expect(list.getByRole('button').nth(1)).toHaveCSS(
+    'background-color',
+    'rgb(71, 61, 50)',
+  );
+  await expect(page.locator('.game-sidebar')).toHaveCSS(
+    'border-right-color',
+    'rgb(88, 80, 64)',
+  );
+  await expect(page.locator('.page-heading')).toHaveCSS(
+    'border-bottom-color',
+    'rgb(88, 80, 64)',
+  );
+  await page
+    .getByRole('button', { name: 'Hardcore worlds', exact: true })
+    .click();
+  await expect(
+    list.getByRole('button', { name: 'No collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(13, 193, 13)');
+  await expect(
+    list.getByRole('button', { name: 'Full collections', exact: true }),
+  ).toHaveCSS('color', 'rgb(255, 152, 31)');
+  await list
+    .getByRole('button', { name: 'No collections', exact: true })
+    .click();
+  await expect(page.locator('.page-heading p span')).toHaveCSS(
+    'color',
+    'rgb(13, 193, 13)',
+  );
+});
 
 test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({
   page,
 }) => {
-  await page.goto('/?preview=1');
+  await mockApi(page);
+  await page.goto('/');
   await expect(page.locator('.clan-logo')).toHaveAttribute(
     'src',
     '/brand/clan-logo.png',
@@ -38,7 +200,8 @@ test('homepage uses the supplied default branding, 2x log and inline XP without 
 test('uncollected items never open menus on hover focus or click; icons and page navigation work', async ({
   page,
 }) => {
-  await page.goto('/?preview=1');
+  await mockApi(page);
+  await page.goto('/');
   const item = page.getByRole('button', {
     name: 'Virtus mask: not collected',
     exact: true,
@@ -88,16 +251,17 @@ test('uncollected items never open menus on hover focus or click; icons and page
 test('admin release switch reveals skull; normal and hardcore menus and contours stay independent', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page, { scenario: 'hardcore' });
+  await page.goto('/admin');
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.locator('header a.clan-brand').click();
-  await page.locator('.preview-options').first().locator('summary').click();
-  await page.getByLabel('Review scenario').selectOption('hardcore');
+
   await page
     .getByRole('button', { name: 'Virtus mask: collected', exact: true })
     .hover();
@@ -109,6 +273,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#xp-tracker')).toHaveCount(0);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   const item = page.getByRole('button', {
     name: 'Virtus mask: collected, hardcore',
@@ -139,9 +304,10 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).uncheck();
-  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).not.toBeChecked();
   await page.locator('header a.clan-brand').click();
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
@@ -155,9 +321,9 @@ test('320px viewport contains log scrolling and touch menus', async ({
     hasTouch: true,
   });
   const page = await context.newPage();
-  await page.goto('/?preview=1');
-  await page.locator('.preview-options').first().locator('summary').click();
-  await page.getByLabel('Review scenario').selectOption('collected');
+  await mockApi(page, { scenario: 'collected' });
+  await page.goto('/');
+
   await page
     .getByRole('button', { name: 'Virtus mask: collected', exact: true })
     .tap();

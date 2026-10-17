@@ -39,6 +39,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const app = createApp(
       () => backend.ready(),
@@ -113,7 +114,7 @@ test(
       assert.equal((await app.inject(path)).statusCode, 401);
       assert.equal(
         (await app.inject({ url: path, headers: moderator })).statusCode,
-        403,
+        200,
       );
       const update = (payload: unknown, headers = owner) =>
         app.inject({
@@ -126,7 +127,9 @@ test(
         const { revision, ...rest } = rules;
         return { expectedRevision: revision, ...rest };
       };
-      assert.equal((await update(fields(), moderator)).statusCode, 403);
+      const moderatorSave = await update(fields(), moderator);
+      assert.equal(moderatorSave.statusCode, 200, moderatorSave.body);
+      rules = moderatorSave.json();
       assert.equal(
         (await update(fields(), { ...owner, 'x-csrf-token': 'bad' }))
           .statusCode,
@@ -180,7 +183,8 @@ test(
         username = 'Collector',
         clanName = 'Clan name',
         key = randomUUID(),
-        credential: string | undefined = apiKey,
+        credential: string | null = apiKey,
+        screenshot = true,
       ) => {
         const boundary = 'auto-review-boundary';
         return app.inject({
@@ -190,13 +194,12 @@ test(
           headers: {
             'content-type': 'multipart/form-data; boundary=' + boundary,
             'idempotency-key': key,
-            ...(credential === undefined
-              ? {}
-              : { 'x-clan-api-key': credential }),
+            ...(credential === null ? {} : { 'x-clan-api-key': credential }),
           },
           payload: Buffer.concat([
             ...Object.entries({
               worldType,
+              chatMessage: `${username} received a collection log item.`,
               username,
               clanName,
               itemId: String(900000 + itemId),
@@ -205,11 +208,16 @@ test(
                 `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
               ),
             ),
-            Buffer.from(
-              `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="proof.png"\r\nContent-Type: image/png\r\n\r\n`,
-            ),
-            png,
-            Buffer.from(`\r\n--${boundary}--\r\n`),
+            ...(screenshot
+              ? [
+                  Buffer.from(
+                    `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="proof.png"\r\nContent-Type: image/png\r\n\r\n`,
+                  ),
+                  png,
+                  Buffer.from('\r\n'),
+                ]
+              : []),
+            Buffer.from(`--${boundary}--\r\n`),
           ]),
         });
       };
@@ -256,7 +264,15 @@ test(
         (await pool.query('SELECT count(*)::int n FROM submissions')).rows[0].n,
         blockedCount,
       );
-      const trusted = await submit('MEMBERS', 2, 'TRUSTED_PLAYER', 'Game Clan');
+      const trusted = await submit(
+        'MEMBERS',
+        2,
+        'TRUSTED_PLAYER',
+        'Game Clan',
+        randomUUID(),
+        apiKey,
+        false,
+      );
       assert.equal(trusted.statusCode, 201, trusted.body);
       assert.equal(trusted.json().status, 'approved');
       const detail = (
@@ -266,6 +282,15 @@ test(
         })
       ).json();
       assert.equal(detail.submission.status, 'approved');
+      assert.equal(detail.submission.screenshotPath, null);
+      assert.equal(
+        detail.submission.chatMessage,
+        'TRUSTED_PLAYER received a collection log item.',
+      );
+      assert.equal(
+        detail.audit[0].before.chatMessage,
+        detail.submission.chatMessage,
+      );
       assert.equal(detail.audit[0].actorName, 'RuneLite auto review');
       assert.equal(detail.audit[0].action, 'approve');
       assert.equal(detail.audit[0].before.status, 'pending');
@@ -279,18 +304,28 @@ test(
           hardcore: 'review',
         },
       });
-      for (const flag of ['F2P', 'PVP'])
-        assert.equal(
-          (
-            await submit(
-              JSON.stringify(['MEMBERS', flag]),
-              3,
-              'trusted player',
-              'Game Clan',
-            )
-          ).statusCode,
-          403,
+      for (const flag of ['F2P', 'PVP']) {
+        const denied = await submit(
+          JSON.stringify(['MEMBERS', flag]),
+          flag === 'F2P' ? 3 : 30,
+          'trusted player',
+          'Game Clan',
         );
+        assert.equal(denied.statusCode, 201, denied.body);
+        assert.equal(denied.json().status, 'rejected');
+        const saved = (
+          await app.inject({
+            url: '/api/v1/admin/submissions/' + denied.json().submissionId,
+            headers: moderator,
+          })
+        ).json();
+        assert.equal(saved.submission.status, 'rejected');
+        assert.match(saved.submission.reviewReason, new RegExp(flag));
+        assert.equal(saved.audit[0].action, 'reject');
+        assert.equal(saved.audit[0].before.status, 'pending');
+        assert.equal(saved.audit[0].after.status, 'rejected');
+        assert.equal(saved.audit[0].after.version, 2);
+      }
       assert.equal(
         (await submit('MEMBERS', 3, 'Collector', 'Game Clan')).json().status,
         'approved',
@@ -298,7 +333,7 @@ test(
       assert.equal(
         (
           await submit(
-            '["MEMBERS","HC_WORLDS_PLACEHOLDER"]',
+            '["MEMBERS","HARDCORE_MAIN"]',
             3,
             'Collector',
             'Game Clan',
@@ -342,16 +377,12 @@ test(
         'pending',
       );
       assert.equal(
-        (await submit('PVP', 6, 'Collector', 'Game Clan')).json().status,
+        (await submit('PVP', 6, 'Another Collector', 'Game Clan')).json()
+          .status,
         'approved',
       );
-      for (const flag of ['HC_WORLD_PLACEHOLDER', 'HC_WORLDS_PLACEHOLDER']) {
-        const result = await submit(
-          flag,
-          flag === 'HC_WORLD_PLACEHOLDER' ? 7 : 8,
-          'Collector',
-          'Game Clan',
-        );
+      for (const flag of ['HARDCORE_MAIN']) {
+        const result = await submit(flag, 7, 'Collector', 'Game Clan');
         assert.equal(result.json().status, 'approved', result.body);
         assert.equal(result.json().hardcore, true);
       }
@@ -360,7 +391,12 @@ test(
         'pending',
       );
       await save({ matchClanName: false });
-      const keyOnly = await submit('MEMBERS', 9, 'Collector', 'Different Clan');
+      const keyOnly = await submit(
+        'MEMBERS',
+        9,
+        'Key Collector',
+        'Different Clan',
+      );
       assert.equal(keyOnly.json().status, 'approved', keyOnly.body);
       const keySettings = await clanKeys.settings();
       await clanKeys.update(
@@ -386,8 +422,8 @@ test(
       );
       await save({ matchClanName: true });
       const concurrent = await Promise.all(
-        Array.from({ length: 3 }, () =>
-          submit('MEMBERS', 11, 'Collector', 'Game Clan'),
+        Array.from({ length: 3 }, (_, index) =>
+          submit('MEMBERS', 11, 'Collector ' + index, 'Game Clan'),
         ),
       );
       assert.deepEqual(concurrent.map((r) => r.json().status).sort(), [
@@ -484,14 +520,118 @@ test(
           )
         ).rows[0].n > 0,
       );
+      const matching = async (matchClanName: boolean, enabled: boolean) => {
+        const key = await clanKeys.settings();
+        const response = await update({
+          ...fields(),
+          matchClanName,
+          clanKeyRequirement: { enabled, expectedRevision: key.revision },
+        });
+        assert.equal(response.statusCode, 200, response.body);
+        const savedKey = await clanKeys.settings();
+        assert.equal(savedKey.enabled, enabled);
+        assert.equal(savedKey.key, key.key);
+        assert.deepEqual(response.json().clanKeyRequirement, {
+          enabled,
+          revision: savedKey.revision,
+        });
+        rules = await settings.settings();
+      };
+      await matching(true, false);
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            15,
+            'Collector',
+            'Game Clan',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        201,
+      );
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            16,
+            'Collector',
+            'Clan name',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        403,
+      );
+      await matching(true, true);
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            16,
+            'Collector',
+            'Game Clan',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (await submit('MEMBERS', 16, 'Collector', 'Clan name')).statusCode,
+        403,
+      );
+      assert.equal(
+        (await submit('MEMBERS', 16, 'Collector', 'Game Clan')).statusCode,
+        201,
+      );
+      await matching(false, true);
+      assert.equal(
+        (
+          await submit(
+            'MEMBERS',
+            17,
+            'Collector',
+            'Any clan',
+            randomUUID(),
+            null,
+          )
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (await submit('MEMBERS', 17, 'Collector', 'Any clan')).statusCode,
+        201,
+      );
+      const keyBeforeConflict = await clanKeys.settings();
+      const staleKey = await update({
+        ...fields(),
+        matchClanName: true,
+        clanKeyRequirement: { enabled: false, expectedRevision: 'clan-key-1' },
+      });
+      assert.equal(staleKey.statusCode, 409);
+      assert.deepEqual(await settings.settings(), rules);
+      assert.deepEqual(await clanKeys.settings(), keyBeforeConflict);
       await pool.query(
         "CREATE FUNCTION fail_settings_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$; CREATE TRIGGER fail_settings_audit BEFORE INSERT ON runelite_settings_audit FOR EACH ROW EXECUTE FUNCTION fail_settings_audit()",
       );
       assert.equal(
-        (await update({ ...fields(), clanName: 'Unsaved' })).statusCode,
+        (
+          await update({
+            ...fields(),
+            clanName: 'Unsaved',
+            matchClanName: true,
+            clanKeyRequirement: {
+              enabled: false,
+              expectedRevision: keyBeforeConflict.revision,
+            },
+          })
+        ).statusCode,
         503,
       );
       assert.deepEqual(await settings.settings(), rules);
+      assert.deepEqual(await clanKeys.settings(), keyBeforeConflict);
     } finally {
       await app.close();
       await pool.end();

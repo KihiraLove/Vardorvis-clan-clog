@@ -18,7 +18,7 @@ import { hashPassword } from './passwords.js';
 test(
   'RuneLite clan validation, canonical IDs, retries, optional manual PNGs, private reads and moderator review',
   { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
+  async (t) => {
     const root = new pg.Pool({
       connectionString: process.env.TEST_DATABASE_URL!,
     });
@@ -39,6 +39,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const app = createApp(
       () => backend.ready(),
@@ -116,18 +117,21 @@ test(
         .toBuffer();
       const multipart = (
         fields: [string, string][],
-        bytes = png,
+        bytes: Buffer | null = png,
         mime = 'image/png',
         fileFirst = false,
       ) => {
         const boundary = 'proof-boundary';
-        const file = Buffer.concat([
-          Buffer.from(
-            `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="../../untrusted.png"\r\nContent-Type: ${mime}\r\n\r\n`,
-          ),
-          bytes,
-          Buffer.from('\r\n'),
-        ]);
+        const file =
+          bytes === null
+            ? null
+            : Buffer.concat([
+                Buffer.from(
+                  `--${boundary}\r\nContent-Disposition: form-data; name="screenshot"; filename="../../untrusted.png"\r\nContent-Type: ${mime}\r\n\r\n`,
+                ),
+                bytes,
+                Buffer.from('\r\n'),
+              ]);
         const texts = fields.map(([name, value]) =>
           Buffer.from(
             `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
@@ -138,7 +142,11 @@ test(
             'content-type': `multipart/form-data; boundary=${boundary}`,
           },
           payload: Buffer.concat([
-            ...(fileFirst ? [file, ...texts] : [...texts, file]),
+            ...(file
+              ? fileFirst
+                ? [file, ...texts]
+                : [...texts, file]
+              : texts),
             Buffer.from(`--${boundary}--\r\n`),
           ]),
         };
@@ -146,7 +154,7 @@ test(
       let address = 1;
       const runelite = (
         fields: [string, string][],
-        bytes = png,
+        bytes: Buffer | null = png,
         key?: string,
         mime = 'image/png',
         first = false,
@@ -167,6 +175,7 @@ test(
         ['clanName', ' clan name '],
         ['itemId', '900001'],
         ['worldType', 'MEMBERS'],
+        ['chatMessage', 'Collector received a drop: Test item'],
       ];
       const generated = apiKey!;
       assert.match(generated, /^[a-f0-9]{32}$/u);
@@ -186,7 +195,7 @@ test(
             headers: moderator,
           })
         ).statusCode,
-        403,
+        200,
       );
       const initialKey = await app.inject({
         url: '/api/v1/admin/clan-api-key',
@@ -199,6 +208,26 @@ test(
         key: generated,
       });
       assert.equal(initialKey.headers['cache-control'], 'no-store');
+      const filtersUrl = '/api/v1/admin/submission-filters';
+      const modFilters = await app.inject({
+        url: filtersUrl,
+        headers: moderator,
+      });
+      assert.equal(modFilters.statusCode, 200, modFilters.body);
+      const modToggle = await app.inject({
+        method: 'PUT',
+        url: filtersUrl,
+        headers: moderator,
+        payload: {
+          filterCollected: true,
+          expectedRevision: modFilters.json().revision,
+        },
+      });
+      assert.equal(modToggle.statusCode, 403, modToggle.body);
+      assert.deepEqual(
+        (await app.inject({ url: filtersUrl, headers: owner })).json(),
+        modFilters.json(),
+      );
       const publicSettings = (await app.inject('/api/v1/settings')).body;
       assert.ok(
         !publicSettings.includes(generated) &&
@@ -251,6 +280,11 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
+        1, // The rejected clan write leaves an unreferenced file for maintenance.
+      );
+      assert.equal(
+        (await pool.query('SELECT count(*)::int AS n FROM submission_images'))
+          .rows[0].n,
         0,
       );
       const key = randomUUID();
@@ -271,7 +305,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        1,
+        3, // Both concurrent uploads survive; the durable receipt is still unique.
       );
       assert.equal(
         (
@@ -290,6 +324,10 @@ test(
         })
       ).json();
       assert.equal(detail.submission.source, 'runelite');
+      assert.equal(
+        detail.submission.chatMessage,
+        fields.find(([name]) => name === 'chatMessage')![1],
+      );
       const imagePath = detail.submission.screenshotPath as string;
       assert.equal((await app.inject(imagePath)).statusCode, 401);
       const image = await app.inject({ url: imagePath, headers: moderator });
@@ -363,7 +401,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        2,
+        7, // Replay/conflict uploads are retained until reference-checked maintenance.
       );
       const noImage = await app.inject({
         method: 'POST',
@@ -452,7 +490,11 @@ test(
       assert.equal((await runelite(fields, png, key)).statusCode, 401);
       apiKey = enabledKey.json().key;
       assert.deepEqual((await runelite(fields, png, key)).json(), receipt);
-      // Rotate after the onRequest check but before transaction validation: no claim or file commits.
+      // Rotate after onRequest but before transaction validation: no claim/image
+      // metadata commits, while the file remains for reference-checked maintenance.
+      const filesBeforeRotation = (await readdir(directory)).filter((file) =>
+        file.endsWith('.png'),
+      ).length;
       const createRuneLite = store.createRuneLite.bind(store);
       store.createRuneLite = async (...args) => {
         await clanKeys.update(
@@ -487,6 +529,11 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
+        filesBeforeRotation + 1,
+      );
+      assert.equal(
+        (await pool.query('SELECT count(*)::int AS n FROM submission_images'))
+          .rows[0].n,
         2,
       );
       const rename = {
@@ -533,6 +580,277 @@ test(
           )
         ).rows,
         [{ old_clan_name: 'Clan name', new_clan_name: 'New Clan' }],
+      );
+      await t.test(
+        'chat proof is exact, private, reviewable and replay-bound without an image',
+        async () => {
+          await pool.query(
+            "INSERT INTO items(id,name) VALUES(43,'Chat proof item'); INSERT INTO game_item_ids(game_item_id,item_id) VALUES(990043,43)",
+          );
+          const message =
+            '  Clan: Chat Collector received <item=990043>: Test item & 100 coins.\n符号 😀  ';
+          const chatFields: [string, string][] = [
+            ['username', 'Chat Collector'],
+            ['clanName', 'Clan name'],
+            ['itemId', '990043'],
+            ['worldType', 'MEMBERS'],
+            ['chatMessage', message],
+          ];
+          const chatKey = randomUUID();
+          const imagesBefore = (
+            await pool.query('SELECT count(*)::int n FROM submission_images')
+          ).rows[0].n;
+          const filesBefore = await readdir(directory);
+          const created = await runelite(chatFields, null, chatKey);
+          assert.equal(created.statusCode, 201, created.body);
+          const chatReceipt = created.json();
+          assert.deepEqual(
+            (await runelite(chatFields, null, chatKey)).json(),
+            chatReceipt,
+          );
+          const modified = chatFields.map(([k, v]): [string, string] => [
+            k,
+            k === 'chatMessage' ? v + ' changed' : v,
+          ]);
+          assert.equal(
+            (await runelite(modified, null, chatKey)).statusCode,
+            409,
+          );
+          assert.equal(
+            (await runelite(chatFields, png, chatKey)).statusCode,
+            409,
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submission_images'))
+              .rows[0].n,
+            imagesBefore,
+          );
+          // A conflicting optional upload is retained for reference-checked maintenance.
+          assert.equal(
+            (await readdir(directory)).length,
+            filesBefore.length + 1,
+          );
+          const stored = await app.inject({
+            url: '/api/v1/admin/submissions/' + chatReceipt.submissionId,
+            headers: moderator,
+          });
+          assert.equal(stored.statusCode, 200, stored.body);
+          assert.equal(stored.json().submission.chatMessage, message);
+          assert.equal(stored.json().submission.screenshotPath, null);
+          assert.equal(
+            (
+              await app.inject(
+                '/api/v1/admin/submissions/' + chatReceipt.submissionId,
+              )
+            ).statusCode,
+            401,
+          );
+          const duplicate = await runelite(modified, null, randomUUID());
+          assert.equal(duplicate.statusCode, 201, duplicate.body);
+          assert.equal(duplicate.json().duplicate, true);
+          assert.equal(duplicate.json().submissionId, chatReceipt.submissionId);
+          const filesBeforeDuplicate = await readdir(directory);
+          const withImage = await runelite(chatFields, png, randomUUID());
+          assert.equal(withImage.json().duplicate, true, withImage.body);
+          assert.deepEqual(await readdir(directory), filesBeforeDuplicate);
+          const accepted = await app.inject({
+            method: 'POST',
+            url:
+              '/api/v1/admin/submissions/' +
+              chatReceipt.submissionId +
+              '/approve',
+            headers: moderator,
+            payload: { expectedVersion: 1 },
+          });
+          assert.equal(accepted.statusCode, 200, accepted.body);
+          assert.equal(accepted.json().chatMessage, message);
+          const history = (
+            await app.inject({
+              url: '/api/v1/admin/submissions/' + chatReceipt.submissionId,
+              headers: owner,
+            })
+          ).json();
+          assert.equal(history.audit[0].before.chatMessage, message);
+          assert.equal(history.audit[0].after.chatMessage, message);
+          for (const url of [
+            '/api/v1/catalog',
+            '/api/v1/collections',
+            '/api/v1/xp/tracker',
+          ]) {
+            const publicResponse = await app.inject(url);
+            assert.ok(
+              !publicResponse.body.includes(message) &&
+                !publicResponse.body.includes('chatMessage'),
+              url,
+            );
+          }
+          assert.deepEqual(
+            (await runelite(chatFields, null, chatKey)).json(),
+            chatReceipt,
+          );
+        },
+      );
+      await t.test(
+        'new claims require bounded nonempty chat proof even with a screenshot',
+        async () => {
+          const noChat = fields.filter(([name]) => name !== 'chatMessage');
+          const before = await readdir(directory);
+          assert.equal((await runelite(noChat, null)).statusCode, 422);
+          assert.equal((await runelite(noChat, png)).statusCode, 422);
+          for (const value of [' \n\t ', '\0bad'])
+            assert.equal(
+              (await runelite([...noChat, ['chatMessage', value]], null))
+                .statusCode,
+              422,
+            );
+          const oversized = await runelite(
+            [...noChat, ['chatMessage', 'é'.repeat(4097)]],
+            null,
+          );
+          assert.equal(oversized.statusCode, 400, oversized.body);
+          const maximum = await runelite(
+            [
+              ...noChat.map(([k, v]): [string, string] => [
+                k,
+                k === 'username' ? 'Boundary Collector' : v,
+              ]),
+              ['chatMessage', 'a'.repeat(8192)],
+            ],
+            null,
+          );
+          assert.equal(maximum.statusCode, 201, maximum.body);
+          assert.deepEqual(await readdir(directory), before);
+        },
+      );
+      await t.test(
+        'duplicate-filtered claims return 201 with saved rejection, proof and durable retry receipts',
+        async () => {
+          let filters = await review.submissionFilters();
+          filters = await review.saveSubmissionFilters(
+            true,
+            filters.revision,
+            admin.id,
+          );
+          const input: [string, string][] = [
+            ['username', 'Filtered Collector'],
+            ['clanName', 'Clan name'],
+            ['itemId', '990043'],
+            ['worldType', 'MEMBERS'],
+            ['chatMessage', 'Filtered Collector received Chat proof item.'],
+          ];
+          const rejectedKey = randomUUID();
+          const rejected = await runelite(input, png, rejectedKey);
+          assert.equal(rejected.statusCode, 201, rejected.body);
+          assert.equal(rejected.json().status, 'rejected');
+          const rejectedId = rejected.json().submissionId;
+          const stored = (
+            await app.inject({
+              url: '/api/v1/admin/submissions/' + rejectedId,
+              headers: moderator,
+            })
+          ).json();
+          assert.equal(stored.submission.status, 'rejected');
+          assert.equal(stored.submission.version, 2);
+          assert.match(
+            stored.submission.reviewReason,
+            /Filter out duplicates is on/u,
+          );
+          assert.equal(stored.submission.chatMessage, input[4]![1]);
+          assert.equal(stored.audit[0].action, 'reject');
+          assert.equal(stored.audit[0].reason, stored.submission.reviewReason);
+          assert.equal(stored.audit[0].before.status, 'pending');
+          assert.equal(stored.audit[0].after.status, 'rejected');
+          assert.equal(
+            (
+              await app.inject({
+                url: stored.submission.screenshotPath,
+                headers: moderator,
+              })
+            ).statusCode,
+            200,
+          );
+          const queueResponse = await app.inject({
+            url: '/api/v1/admin/submissions?status=reviewed',
+            headers: moderator,
+          });
+          assert.equal(queueResponse.statusCode, 200, queueResponse.body);
+          const queue = queueResponse.json();
+          assert.ok(
+            queue.submissions.some(
+              (row: { id: string; status: string }) =>
+                row.id === rejectedId && row.status === 'rejected',
+            ),
+          );
+          const chatOnly = await runelite(
+            input.map(([name, value]) => [
+              name,
+              name === 'username' ? 'Filtered Chat' : value,
+            ]),
+            null,
+            randomUUID(),
+          );
+          assert.equal(chatOnly.statusCode, 201, chatOnly.body);
+          assert.equal(chatOnly.json().status, 'rejected');
+          const rollbackKey = randomUUID();
+          const rollbackInput = input.map(([name, value]): [string, string] => [
+            name,
+            name === 'username' ? 'Rollback Filter' : value,
+          ]);
+          const beforeRollback = (
+            await pool.query('SELECT count(*)::int n FROM submissions')
+          ).rows[0].n;
+          await pool.query(
+            "CREATE FUNCTION fail_rejection_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='reject' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_rejection_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_rejection_audit()",
+          );
+          assert.equal(
+            (await runelite(rollbackInput, null, rollbackKey)).statusCode,
+            503,
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submissions'))
+              .rows[0].n,
+            beforeRollback,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                'SELECT count(*)::int n FROM runelite_submission_requests WHERE request_key=$1',
+                [rollbackKey],
+              )
+            ).rows[0].n,
+            0,
+          );
+          await pool.query('DROP TRIGGER fail_rejection_audit ON audit_events');
+          const retried = await runelite(rollbackInput, null, rollbackKey);
+          assert.equal(retried.statusCode, 201, retried.body);
+          assert.equal(retried.json().status, 'rejected');
+          const count = (
+            await pool.query('SELECT count(*)::int n FROM submissions')
+          ).rows[0].n;
+          const observer = await runelite(input, png, randomUUID());
+          assert.deepEqual(observer.json(), {
+            ...rejected.json(),
+            duplicate: true,
+          });
+          await review.saveSubmissionFilters(false, filters.revision, admin.id);
+          assert.deepEqual(
+            (await runelite(input, png, rejectedKey)).json(),
+            rejected.json(),
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submissions'))
+              .rows[0].n,
+            count,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int n FROM submissions WHERE item_id=43 AND status='approved'",
+              )
+            ).rows[0].n,
+            1,
+          );
+        },
       );
       for (let i = 0; i < 10; i++)
         assert.equal(await store.allowIntake('192.0.2.200'), true);

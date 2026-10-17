@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PreviewAdminClient } from './preview/admin.ts';
-import { PreviewXpClient } from './preview/xp.ts';
+import { MemoryAdminClient } from '../tests/support/admin.ts';
+import { MemoryXpClient } from '../tests/support/xp.ts';
 import { LiveXpClient } from './xp-api.ts';
 import { LiveAdminClient } from './admin-api.ts';
 import { parseSettings } from './site-settings.ts';
@@ -9,7 +9,7 @@ import { parseTracker, eventTotals, sumXp } from './xp-tracker.ts';
 import { skills, zeroTotals } from './xp-model.ts';
 const signal = () => new AbortController().signal;
 test('hardcore release flag defaults off, is versioned, preserves credits and rejects stale saves', async () => {
-  const client = new PreviewAdminClient();
+  const client = new MemoryAdminClient();
   const initial = await client.settings(signal());
   assert.equal(initial.hardcoreEnabled, false);
   await client.decide('sample-hardcore', 1, 'approve', '', 'preview', signal());
@@ -40,7 +40,7 @@ test('hardcore release flag defaults off, is versioned, preserves credits and re
   );
 });
 test('duplicate approval and moving an approved credit into an occupied mode are rejected', async () => {
-  const client = new PreviewAdminClient();
+  const client = new MemoryAdminClient();
   const first = await client.decide(
     'sample-ordinary',
     1,
@@ -116,7 +116,7 @@ test('duplicate approval and moving an approved credit into an occupied mode are
   assert.equal(client.publicLog().collections.credits.length, 2);
 });
 test('tracker exposes only aggregate event gains, supports single/all skills and repeat refreshes', async () => {
-  const client = new PreviewXpClient();
+  const client = new MemoryXpClient();
   assert.equal((await client.tracker(signal())).events.length, 0);
   await client.samples();
   const first = parseTracker(await client.tracker(signal()));
@@ -142,7 +142,7 @@ test('tracker exposes only aggregate event gains, supports single/all skills and
   assert.equal(sumXp({ ...zeroTotals(), attack: null }), null);
 });
 test('aggregate tracker ETag commits only a validated complete payload', async () => {
-  const preview = new PreviewXpClient();
+  const preview = new MemoryXpClient();
   await preview.samples();
   const data = await preview.tracker(signal());
   let phase = 0;

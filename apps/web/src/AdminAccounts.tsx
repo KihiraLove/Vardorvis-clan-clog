@@ -1,9 +1,10 @@
 /** Administrator-only moderator management; temporary passwords are never redisplayed. */
 import { useEffect, useState } from 'react';
-import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient, StaffAccount } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
 
 export function AdminAccounts({
   client,
@@ -14,14 +15,17 @@ export function AdminAccounts({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [accounts, setAccounts] = useState<StaffAccount[]>();
+  const initial = usePreparedAdminData()?.accounts;
+  const [accounts, setAccounts] = useState<StaffAccount[] | undefined>(initial);
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState<StaffAccount>();
   const action = useAdminAction(onAccessLost);
+  useAdminDraft(!!(username || password), action.busy);
   useEffect(() => {
+    if (initial && refresh === 0) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     setError(undefined);
@@ -32,11 +36,7 @@ export function AdminAccounts({
       })
       .catch((failure: unknown) => {
         if (controller.signal.aborted) return;
-        if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setError('Accounts could not be loaded. Retry to refresh the list.');
       })
@@ -83,11 +83,6 @@ export function AdminAccounts({
   return (
     <section className="admin-panel">
       <h2>Moderator accounts</h2>
-      <p>
-        Moderators can review submissions and use the submission, catalog and XP
-        tools. Each moderator must change their temporary password on first
-        login.
-      </p>
       <form
         className="admin-credential-form"
         onSubmit={(event) => {

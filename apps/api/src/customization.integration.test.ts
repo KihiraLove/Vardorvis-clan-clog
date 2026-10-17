@@ -35,6 +35,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const app = createApp(
       () => backend.ready(),
@@ -234,7 +235,15 @@ test(
         shared.pages[1]!.version,
       );
       assert.equal(deleted.statusCode, 200, deleted.body);
-      assert.equal(deleted.json().retired, true);
+      assert.equal(deleted.json().retired, false);
+      assert.ok((await catalog.catalog()).items.some((item) => item.id === 42));
+      const deletion = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/admin/catalog/items/42',
+        headers: moderator,
+        payload: { expectedRevision: (await catalog.catalog()).revision },
+      });
+      assert.equal(deletion.statusCode, 200, deletion.body);
       const after = await catalog.catalog();
       assert.deepEqual(
         after.items.map((item) => item.id),
@@ -279,7 +288,7 @@ test(
         ['custom-a', 'custom-b'],
       );
       assert.equal(audits[0].after_value.active, true);
-      assert.equal(audits[1].after_value.active, false);
+      assert.equal(audits[1].after_value.active, true);
       const itemAudit = audits[1];
       assert.equal(itemAudit.actor_discord_id, mod.id);
       assert.equal(itemAudit.item_id, 42);

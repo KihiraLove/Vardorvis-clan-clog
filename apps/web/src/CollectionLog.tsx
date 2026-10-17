@@ -5,9 +5,12 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
+  type CSSProperties,
 } from 'react';
 import {
-  categories,
+  catalogSections,
+  progressClass,
   itemState,
   progress,
   modeCredits,
@@ -88,17 +91,16 @@ export function CollectionLog({
   error,
   retry,
   hardcore = false,
-  onPreview,
   copy = defaultSiteCopy,
+  activity,
 }: {
   data?: LogData | undefined;
   loading?: boolean;
   error?: string | undefined;
   retry?: (() => void) | undefined;
-  preview?: boolean;
   hardcore?: boolean;
-  onPreview?: (() => void) | undefined;
   copy?: SiteCopy;
+  activity: ReactNode;
 }) {
   const requestedPage = new URLSearchParams(window.location.search).get('page');
   const firstPage =
@@ -119,6 +121,11 @@ export function CollectionLog({
   const gridRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | undefined>(undefined);
   const catalog = data?.catalog;
+  const categories = catalogSections(catalog);
+  useEffect(() => {
+    if (catalog && !categories.some((section) => section.id === category))
+      setCategory(categories[0]?.id ?? '');
+  }, [catalog, categories, category]);
   // Resolve deep links once asynchronous live data arrives without resetting later choices.
   const initialized = useRef(Boolean(catalog));
   useEffect(() => {
@@ -143,7 +150,7 @@ export function CollectionLog({
   );
   const items = new Map(catalog?.items.map((item) => [item.id, item]));
   const globalProgress = progress(
-    catalog?.items.map((item) => item.id) ?? [],
+    catalog?.pages.flatMap((page) => page.itemIds) ?? [],
     credits,
   );
   const pageProgress = progress(page?.itemIds ?? [], credits);
@@ -192,17 +199,19 @@ export function CollectionLog({
   };
 
   return (
-    <section className="collection-section" aria-label="Clan collection log">
+    <section
+      className="collection-section public-log-layout"
+      aria-label="Clan collection log"
+      style={{ '--log-scale': scale } as CSSProperties}
+    >
       <h1 className="log-help">
         {copy.collectionCaption}
-        {hardcore && ' · Hardcore worlds'}
+        {hardcore && ' Hardcore worlds'}
       </h1>
+      {activity}
       <div className="log-viewport">
-        <div
-          className="log-sizing"
-          style={{ width: 500 * scale, height: 314 * scale }}
-        >
-          <div className="game-window" style={{ transform: `scale(${scale})` }}>
+        <div className="log-sizing">
+          <div className="game-window">
             <header className="game-titlebar">
               <h2>
                 Collection Log
@@ -266,7 +275,7 @@ export function CollectionLog({
             >
               <aside
                 className="game-sidebar"
-                aria-label={`${categories.find((tab) => tab.id === category)!.name} pages`}
+                aria-label={`${categories.find((tab) => tab.id === category)?.name ?? 'Collection log'} pages`}
               >
                 {searching && (
                   <label className="page-search" id="page-search">
@@ -298,7 +307,9 @@ export function CollectionLog({
                         className={
                           count.total > 0 && count.collected === count.total
                             ? 'complete'
-                            : ''
+                            : count.collected === 0
+                              ? 'uncollected'
+                              : ''
                         }
                         onClick={() => {
                           close();
@@ -330,12 +341,10 @@ export function CollectionLog({
                       <p>
                         Obtained:{' '}
                         <span
-                          className={
-                            pageProgress.collected === pageProgress.total &&
-                            pageProgress.total > 0
-                              ? 'complete'
-                              : 'count'
-                          }
+                          className={progressClass(
+                            pageProgress.collected,
+                            pageProgress.total,
+                          )}
                         >
                           {pageProgress.collected}/{pageProgress.total}
                         </span>
@@ -385,15 +394,6 @@ export function CollectionLog({
                         onClick={retry}
                       >
                         Try again
-                      </button>
-                    )}
-                    {onPreview && !loading && (
-                      <button
-                        className="game-button"
-                        type="button"
-                        onClick={onPreview}
-                      >
-                        View frontend preview
                       </button>
                     )}
                   </div>

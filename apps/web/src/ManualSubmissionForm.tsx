@@ -10,15 +10,18 @@ import {
   type Submission,
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 export function ManualSubmissionForm({
   catalog,
+  hardcoreEnabled,
   client,
   session,
   onAccessLost,
   onCreated,
 }: {
   catalog: AdminCatalog;
+  hardcoreEnabled: boolean;
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
@@ -34,6 +37,7 @@ export function ManualSubmissionForm({
   const [hardcore, setHardcore] = useState(false);
   const [proofUrl, setProofUrl] = useState('');
   const [screenshot, setScreenshot] = useState<File>();
+  const [formVersion, setFormVersion] = useState(0);
   const [approve, setApprove] = useState(true);
   const [reason, setReason] = useState('');
   const action = useAdminAction(onAccessLost);
@@ -43,6 +47,17 @@ export function ManualSubmissionForm({
     key: string;
     screenshot?: File | undefined;
   }>();
+  useAdminDraft(
+    !!(
+      (open && itemId) ||
+      collectorName ||
+      proofUrl ||
+      screenshot ||
+      reason ||
+      pending
+    ),
+    busy,
+  );
   const options = catalog.items.filter(
     (item) =>
       item.name.toLowerCase().includes(search.toLowerCase().trim()) ||
@@ -78,7 +93,7 @@ export function ManualSubmissionForm({
           itemId: chosen.id,
           collectorName: collectorName.trim(),
           collectedOn,
-          hardcore,
+          hardcore: hardcoreEnabled && hardcore,
           proofUrl: proofUrl.trim(),
           approve,
           reason: reason.trim(),
@@ -119,11 +134,17 @@ export function ManualSubmissionForm({
       }
       if (signal.aborted) return;
       setPending(undefined);
-      setOpen(false);
+      setSearch('');
+      setItemId('');
       setCollectorName('');
+      setCollectedOn('');
+      setHardcore(false);
       setProofUrl('');
       setScreenshot(undefined);
+      setFormVersion((value) => value + 1);
+      setApprove(true);
       setReason('');
+      action.setMessage('Manual submission created successfully.');
       onCreated(result);
     });
   };
@@ -133,10 +154,6 @@ export function ManualSubmissionForm({
       <div className="admin-section-heading">
         <div>
           <h2>Manual submission</h2>
-          <p>
-            Add a drop directly from the admin panel, without a Discord bot
-            claim.
-          </p>
         </div>
         <button
           className="site-button"
@@ -147,107 +164,115 @@ export function ManualSubmissionForm({
           {open ? 'Cancel manual entry' : 'Add manual submission'}
         </button>
       </div>
+      {action.message && (
+        <p role="status" className="admin-success">
+          {action.message}
+        </p>
+      )}
       {open && (
-        <form onSubmit={(event) => void submit(event)}>
+        <form key={formVersion} onSubmit={(event) => void submit(event)}>
           <fieldset
             className="admin-fieldset"
             disabled={busy || Boolean(pending)}
           >
-            <div className="admin-form-grid">
-              <label>
-                Search catalog items
+            <div className="admin-form-grid manual-submission-columns">
+              <div>
+                <label>
+                  Collector name
+                  <input
+                    required
+                    maxLength={80}
+                    value={collectorName}
+                    onChange={(event) => setCollectorName(event.target.value)}
+                  />
+                </label>
+                <label>
+                  PNG screenshot (optional)
+                  <input
+                    type="file"
+                    accept="image/png,.png"
+                    onChange={(event) => setScreenshot(event.target.files?.[0])}
+                  />
+                  <span className="admin-note">Up to 10 MiB.</span>
+                </label>
+                <label>
+                  Proof URL (optional)
+                  <input
+                    type="url"
+                    value={proofUrl}
+                    placeholder="https://imgur.com/…"
+                    onChange={(event) => setProofUrl(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Reason or note (optional)
+                  <textarea
+                    maxLength={1000}
+                    rows={2}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  Search catalog items
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Canonical item
+                  <select
+                    aria-label="Canonical item"
+                    className="catalog-choice-list"
+                    required
+                    size={5}
+                    value={itemId}
+                    onChange={(event) => setItemId(event.target.value)}
+                  >
+                    <option value="">Choose the exact item…</option>
+                    {visible.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} · #{item.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Collection date
+                  <input
+                    type="date"
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={collectedOn}
+                    onChange={(event) => setCollectedOn(event.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="manual-submission-options">
+              {hardcoreEnabled && (
+                <label className="admin-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={hardcore}
+                    onChange={(event) => setHardcore(event.target.checked)}
+                  />
+                  Collected on hardcore worlds
+                </label>
+              )}
+              <label className="admin-checkbox">
                 <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  type="checkbox"
+                  checked={approve}
+                  onChange={(event) => setApprove(event.target.checked)}
                 />
-              </label>
-              <label>
-                Canonical item
-                <select
-                  aria-label="Canonical item"
-                  required
-                  size={5}
-                  value={itemId}
-                  onChange={(event) => setItemId(event.target.value)}
-                >
-                  <option value="">Choose the exact item…</option>
-                  {visible.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} · #{item.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Collector name
-                <input
-                  required
-                  maxLength={80}
-                  value={collectorName}
-                  onChange={(event) => setCollectorName(event.target.value)}
-                />
-              </label>
-              <label>
-                Collection date
-                <input
-                  type="date"
-                  required
-                  max={new Date().toISOString().slice(0, 10)}
-                  value={collectedOn}
-                  onChange={(event) => setCollectedOn(event.target.value)}
-                />
-              </label>
-              <label>
-                PNG screenshot (optional)
-                <input
-                  type="file"
-                  accept="image/png,.png"
-                  onChange={(event) => setScreenshot(event.target.files?.[0])}
-                />
-                <span className="admin-note">
-                  Up to 10 MiB. Stored privately for staff review.
-                </span>
-              </label>
-              <label>
-                Proof URL (optional)
-                <input
-                  type="url"
-                  value={proofUrl}
-                  placeholder="https://imgur.com/…"
-                  onChange={(event) => setProofUrl(event.target.value)}
-                />
-              </label>
-              <label>
-                Reason or note (optional)
-                <textarea
-                  maxLength={1000}
-                  rows={2}
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                />
+                Approve immediately
               </label>
             </div>
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                checked={hardcore}
-                onChange={(event) => setHardcore(event.target.checked)}
-              />
-              Collected on hardcore worlds
-            </label>
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                checked={approve}
-                onChange={(event) => setApprove(event.target.checked)}
-              />
-              Approve immediately and show in the collection log
-            </label>
-            <p className="admin-note">
-              Uncheck immediate approval to add to the pending review queue.
-              Each item can only have one approved credit per world.
-            </p>
           </fieldset>
           {pending && (
             <p className="admin-note">

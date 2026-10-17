@@ -48,6 +48,7 @@ try {
     },
     body: JSON.stringify({
       name: 'CI manual trophy',
+      gameItemIds: [1900000001],
       iconAssetId: asset.assetId,
       pageIds: ['abyssal_sire', 'general_graardor'],
     }),
@@ -129,6 +130,63 @@ try {
   assert.equal(search.items[0].id, created.item.id);
   const credits = await request('/api/v1/collections');
   assert.deepEqual(credits.credits, []);
+  // Exercise new catalog operations with the actual least-privilege service account.
+  const mutate = async (path, method, fields = {}) =>
+    request('/api/v1/admin/catalog/' + path, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(method === 'POST'
+          ? { 'Idempotency-Key': 'ci-section-editor' }
+          : {}),
+      },
+      body: JSON.stringify({
+        ...fields,
+        expectedRevision: (await request('/api/v1/admin/catalog')).revision,
+      }),
+    });
+  const section = await mutate('sections', 'POST', {
+    name: 'CI temporary section',
+  });
+  await mutate('sections/' + section.section.id, 'PATCH', {
+    name: 'CI renamed section',
+  });
+  const temporaryPage = await mutate('pages', 'POST', {
+    name: 'CI temporary page',
+    category: section.section.id,
+    itemIds: [],
+  });
+  await mutate('pages/' + temporaryPage.page.id, 'PATCH', {
+    name: 'CI renamed page',
+  });
+  await mutate(
+    'pages/' + temporaryPage.page.id + '/items/' + created.item.id,
+    'PUT',
+  );
+  const afterSections = await request('/api/v1/admin/catalog');
+  await mutate('sections/order', 'PUT', {
+    orderedSectionIds: afterSections.sections.map((s) => s.id).reverse(),
+  });
+  await mutate('items/' + created.item.id, 'PATCH', {
+    name: created.item.name,
+    gameItemIds: [1900000001, 1900000002],
+  });
+  const editedCatalog = await request('/api/v1/admin/catalog');
+  assert.deepEqual(
+    editedCatalog.items.find((item) => item.id === created.item.id).gameItemIds,
+    [1900000001, 1900000002],
+  );
+  const temporaryVersion = editedCatalog.pages.find(
+    (page) => page.id === temporaryPage.page.id,
+  ).version;
+  await mutate('pages/' + temporaryPage.page.id, 'DELETE', {
+    expectedVersion: temporaryVersion,
+  });
+  await mutate('sections/' + section.section.id, 'DELETE');
+  const restoredSections = await request('/api/v1/admin/catalog');
+  await mutate('sections/order', 'PUT', {
+    orderedSectionIds: restoredSections.sections.map((s) => s.id).reverse(),
+  });
   console.log(
     JSON.stringify({
       iconPath: created.item.iconPath,

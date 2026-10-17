@@ -36,7 +36,7 @@ export class PgRuneLiteSettingsStore implements RuneLiteSettingsStore {
     return readRuneLiteSettings(this.pool);
   }
   async update(fields: RuneLiteSettingsUpdate, actorId: string) {
-    const { expectedRevision, ...input } = fields;
+    const { expectedRevision, clanKeyRequirement, ...input } = fields;
     let rules: RuneLiteRules;
     try {
       rules = parseRuneLiteRules(input);
@@ -60,6 +60,36 @@ export class PgRuneLiteSettingsStore implements RuneLiteSettingsStore {
           409,
           'RuneLite settings changed. Reload before saving again.',
         );
+      let requirement: RuneLiteSettings['clanKeyRequirement'];
+      if (clanKeyRequirement) {
+        const key = (
+          await client.query<{ enabled: boolean; version: number }>(
+            'SELECT enabled,version FROM clan_api_keys WHERE singleton=true FOR UPDATE',
+          )
+        ).rows[0];
+        if (!key)
+          throw new ApiError(503, 'Clan API key storage is unavailable.');
+        if (clanKeyRequirement.expectedRevision !== 'clan-key-' + key.version)
+          throw new ApiError(
+            409,
+            'API key settings changed. Reload before saving again.',
+          );
+        const enabled = clanKeyRequirement.enabled;
+        if (!rules.matchClanName && !enabled)
+          throw new ApiError(
+            422,
+            'API key matching requires the clan API key.',
+          );
+        await client.query(
+          'UPDATE clan_api_keys SET enabled=$1,version=$2 WHERE singleton=true',
+          [enabled, key.version + 1],
+        );
+        await client.query(
+          'INSERT INTO clan_api_key_audit(actor_id,old_enabled,new_enabled,key_rotated,version) VALUES($1,$2,$3,false,$4)',
+          [actorId, key.enabled, enabled, key.version + 1],
+        );
+        requirement = { enabled, revision: 'clan-key-' + (key.version + 1) };
+      }
       const version = old.version + 1;
       await client.query(
         'UPDATE runelite_settings SET rules=$1,version=$2 WHERE singleton=true',
@@ -70,7 +100,11 @@ export class PgRuneLiteSettingsStore implements RuneLiteSettingsStore {
         [actorId, version, JSON.stringify(old.rules), JSON.stringify(rules)],
       );
       await client.query('COMMIT');
-      return { revision: 'runelite-' + version, ...rules };
+      return {
+        revision: 'runelite-' + version,
+        ...rules,
+        ...(requirement ? { clanKeyRequirement: requirement } : {}),
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

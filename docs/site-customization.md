@@ -1,23 +1,22 @@
 # Site customization and account/catalog management
 
 [Collection log scheduling](collection-log-scheduling.md) is available to both
-staff roles from **Scheduling**. The administrator controls enforcement; both
+staff roles from **Scheduling and Competitions**. The administrator controls enforcement; both
 roles can create, edit and delete overlapping page windows. Local date/time
 entry shows UTC previews, and disabled mode retains ordinary submission behavior.
 
-Visual references from the passing Chromium preview tests: [desktop homepage](site-customization/homepage-desktop.png)
+Visual references from the Chromium fixture tests: [desktop homepage](site-customization/homepage-desktop.png)
 and [320-pixel Site settings](site-customization/settings-mobile.png), plus
-[mobile item management](site-customization/item-management-mobile.png). The account
-shown in the mobile capture is a disposable preview fixture.
-The [mobile Page management panel](site-customization/page-management-mobile.png)
-shows page creation and category ordering.
+[historical mobile item management](site-customization/item-management-mobile.png). The account
+shown in the mobile capture is a disposable test fixture.
+The former [mobile Page management panel](site-customization/page-management-mobile.png) is superseded by the collection-log catalog editor.
 Additional references show [independent hardcore branding](site-customization/hardcore-desktop.png)
 and [hardcore settings while disabled](site-customization/hardcore-settings-mobile.png).
-The [mobile XP imports page](site-customization/admin-xp-mobile.png) keeps the
-import form below admin navigation without the public heading and spacing.
+The [historical mobile XP imports page](site-customization/admin-xp-mobile.png)
+has been replaced by the import form under **Scheduling and Competitions**.
 
 The administrator's **Site settings** navigation entry opens `/admin/settings`.
-The clan logo is the first setting, followed by the regular clan name (default
+The clan logo is the first setting, followed by **Displayed clan name** (default
 **Clan name**) and text. The shared API key controls have their own
 **RuneLite submissions** page at `/admin/runelite`. Three labels are editable:
 
@@ -44,9 +43,11 @@ using the official GitHub mark and Ko-fi button. README badges show support, Git
 main CI workflow status; release downloads do not count container pulls.
 
 The **Hardcore worlds** navigation entry opens `/admin/settings/hardcore` even
-when hardcore visibility is disabled. **Enable hardcore worlds** is the first
-setting, followed by its own logo/favicon, displayed clan name and the same
-three text labels.
+when hardcore visibility is disabled. **Enable hardcore worlds** has its own
+section above **Hardcore worlds settings**, with an On/Off toggle that saves
+immediately without saving or discarding draft appearance edits. The appearance
+section contains its own logo/favicon, displayed clan name and the same three
+text labels.
 The regular and hardcore appearances start identical and save independently.
 The public skull switches the name, logo, browser title/icon and text together.
 Disabling the release flag hides the public switch while retaining all appearance
@@ -57,8 +58,8 @@ does not change RuneLite validation. XP totals and event data remain shared.
 RuneLite settings now provide a separate in-game clan name, an API-key-only
 matching option, world-policy dropdowns and a player whitelist. Displayed clan
 names do not change submission matching. See [automatic review rules](runelite-submissions.md).
-The public XP heading is omitted from the admin import page. The total caption
-and its setting have been removed; selected events still show their source link.
+The public XP section is hidden in Hardcore worlds until hardcore WOM
+competitions are implemented. Selected regular-world events retain their source link.
 
 ## Shared API key form
 
@@ -74,48 +75,24 @@ for existing clients. See [RuneLite submissions](runelite-submissions.md).
 Disabling the key requirement applies to clan-name matching mode. API-key-only
 matching always requires a valid key.
 
-## Item management
+## Items catalog and navigation
 
-The catalog page lets staff add items to existing pages and manage each page's
-items. The Add item page search is inside the page selector. Each Item management
-row has reorder buttons and a Delete button. Saved changes appear immediately
-on the public page; the former Catalog maintenance refresh section has been
-removed. A source update remains a separate reviewed import workflow.
+The catalog settings page is an editable collection log. Section tabs, pages and item grids use six-dot drag handles; Alt + arrow keys and contextual Move earlier/later buttons also arrange the local draft. **Save changes** publishes the pending order. Small gear buttons open the right-hand editor, which stacks below the log on mobile.
 
-Deleting requires confirmation in a dialog and removes only the selected page's
-membership. The API checks the catalog revision and selected page's version,
-uses the import/catalog lock, compacts that page's remaining slots while
-preserving order/origin, and records an audit event in one transaction. Other
-pages and collection credits remain intact. If this was the item's last page,
-its stable record is deactivated and removed from staff selectors, bot matching
-and the public catalog/credits. Existing claims and credits remain in storage
-for history; an inactive item cannot receive
-new approved credit. Intake and approval hold item locks so a concurrent deletion
-cannot slip past the active-item check. Normal bootstrap does not reactivate
-deleted items. Staff can still open these historical claims to reject, revoke or
-correct them to an active item.
+Add section asks for a name. Section settings can rename or delete an empty section; sections containing pages cannot be deleted. Add page asks for a name within the selected section. Page settings can rename or delete the page. Deleting pages removes memberships while preserving items on other pages or as active pageless entries.
 
-`DELETE /api/v1/admin/catalog/pages/:pageId/items/:id` accepts JSON
-`{ "expectedRevision": "catalog-N", "expectedVersion": "page-N" }`
-with the staff session, exact Origin and CSRF token. Both staff
-roles can use it. Stale revisions return 409; an unauthenticated caller cannot
-reach the write.
+Add item offers **Add new item** and **Add existing item**. New items require a name, PNG/WebP icon and in-game item ID and use the current page. Existing items are searchable by name or ID, including pageless items. Item settings edit names, game IDs and icons and list all current pages with membership removal controls. Explicit item deletion requires confirmation and retains submission and collection history. Catalog changes are revision checked, audited and shared by regular and hardcore logs. See the [API and persistence contracts](admin-catalog-backend.md).
 
-## Page management and navigation
+Page names and the open page title use orange `#ff981f`; completed page names use `#0dc10d`. Obtained counts use red `#ff0000` at zero, yellow `#ffff00` when partial and green `#0dc10d` when complete. Page rows alternate `#574e43` and `#473d32`, with `#585040` borders. Both world modes retain independent collection counts.
 
-**Items catalog** also contains **Page management**, available to administrators
-and moderators. Choose a category, name a page and optionally select existing
-catalog items. Empty pages are supported; the Add item form can populate them.
-Move buttons save page order within that category immediately. Deleting a page
-requires confirmation and removes it from both world modes. Shared items remain
-on their other pages; items losing their last page are deactivated. Review
-history, approved credits and immutable creation receipts remain in storage.
-Startup preserves page deletions and custom ordering.
-
-Administrator navigation is ordered **Submissions, Items catalog, XP imports,
+Administrator navigation is ordered **Submissions, Items catalog, Scheduling and Competitions,
 RuneLite submissions, Site settings, Hardcore worlds, Moderator accounts, Your
-account**. Moderators see Submissions, Items catalog, XP imports and Your account.
-Owner settings and API keys remain inaccessible to moderators.
+account**. Moderators see Submissions, Items catalog, Scheduling and Competitions,
+RuneLite submissions and Your account. Owner settings remain inaccessible to
+moderators. The RuneLite page exposes the shared key for viewing and copying,
+with key replacement restricted to the administrator.
+On Submissions, moderators see the duplicate-filter status and a message that
+only the administrator can change it, instead of an interactive toggle.
 
 ## Moderator accounts
 

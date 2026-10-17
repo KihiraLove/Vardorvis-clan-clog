@@ -1,5 +1,6 @@
 /** Fetch only the fixed official WOM API and reject incomplete, unsafe source rows. */
 import { createHash } from 'node:crypto';
+import { competitionScope } from '@clog/domain';
 import { ApiError } from './types.js';
 import {
   skillIds,
@@ -68,16 +69,16 @@ function metricNames(value: unknown): string[] {
   return names as string[];
 }
 export function strictScope(names: string[]): Skill[] {
-  if (names.length === 1 && skillIds.some((s) => s === names[0]))
-    return [names[0] as Skill];
-  if (names.length === 1 && ['overall', 'total'].includes(names[0]!))
-    return [...skillIds];
-  if (
-    names.length > 0 &&
-    names.every((name) => skillIds.includes(name as Skill))
-  )
-    return skillIds.filter((skill) => names.includes(skill));
-  throw new ApiError(422, 'SKILL competitions must track supported XP skills.');
+  try {
+    const scope = competitionScope(names);
+    if (scope.kind === 'SKILL') return scope.skills;
+  } catch (error) {
+    throw new ApiError(422, (error as Error).message);
+  }
+  throw new ApiError(
+    422,
+    'SKILL competitions must track supported XP skills; computed metrics are unsupported.',
+  );
 }
 function metadata(source: unknown, requestedId: number) {
   if (
@@ -215,45 +216,123 @@ export function parseWomSnapshot(
     sourceHash,
   };
 }
+export const womResponseBytes = 8 * 1024 * 1024;
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error('WOM request canceled'));
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+    void promise
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', abort));
+  });
+}
 export async function getWom(
   url: string,
   request: typeof fetch = fetch,
+  cancellation?: AbortSignal,
 ): Promise<unknown> {
+  const target = new URL(url);
+  if (
+    target.origin !== 'https://api.wiseoldman.net' ||
+    target.username ||
+    target.password ||
+    !/^\/v2\/competitions\/[1-9]\d*$/u.test(target.pathname)
+  )
+    throw new ApiError(422, 'Invalid WOM upstream address.');
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(6500),
+    ...(cancellation ? [cancellation] : []),
+  ]);
   let response: Response;
   try {
-    response = await request(url, {
-      redirect: 'error',
-      signal: AbortSignal.timeout(6500),
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Vardorvis-clan-clog/1.0',
-      },
-    });
+    response = await abortable(
+      request(url, {
+        redirect: 'error',
+        signal,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'Vardorvis-clan-clog/1.0',
+        },
+      }),
+      signal,
+    );
   } catch {
     throw new ApiError(
       503,
       'WOM is temporarily unavailable; no data was changed.',
     );
   }
-  if (response.status === 429)
-    throw new ApiError(429, 'WOM rate limit reached; no data was changed.');
-  if (!response.ok)
+  if (!response.ok || response.redirected) {
+    void response.body?.cancel().catch(() => undefined);
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get('retry-after'));
+      throw new ApiError(
+        429,
+        'WOM rate limit reached; no data was changed.',
+        Number.isInteger(seconds) && seconds > 0 ? Math.min(seconds, 300) : 60,
+      );
+    }
     throw new ApiError(
       response.status === 404 ? 422 : 503,
       'WOM competition could not be fetched.',
     );
+  }
+  const tooLarge = () =>
+    new ApiError(
+      422,
+      'WOM response exceeds the 8 MiB limit. No results were imported.',
+    );
+  if (Number(response.headers.get('content-length')) > womResponseBytes) {
+    void response.body?.cancel().catch(() => undefined);
+    throw tooLarge();
+  }
+  if (!response.body) throw new ApiError(422, 'WOM returned invalid JSON.');
+  const reader = response.body.getReader(),
+    chunks: Buffer[] = [];
+  let bytes = 0;
   try {
-    return (await response.json()) as unknown;
-  } catch {
-    throw new ApiError(422, 'WOM returned invalid JSON.');
+    while (true) {
+      const chunk = await abortable(reader.read(), signal);
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > womResponseBytes) throw tooLarge();
+      chunks.push(
+        Buffer.from(
+          chunk.value.buffer,
+          chunk.value.byteOffset,
+          chunk.value.byteLength,
+        ),
+      );
+    }
+    signal.throwIfAborted();
+    try {
+      return JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(
+          Buffer.concat(chunks, bytes),
+        ),
+      ) as unknown;
+    } catch {
+      throw new ApiError(422, 'WOM returned invalid JSON.');
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      503,
+      'WOM is temporarily unavailable; no data was changed.',
+    );
+  } finally {
+    void reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 }
 export async function fetchWomCompetition(
   input: string,
   request: typeof fetch = fetch,
+  cancellation: AbortSignal = AbortSignal.timeout(6500),
 ): Promise<XpSnapshot> {
   const { id } = parseCompetitionUrl(input);
-  const get = (url: string) => getWom(url, request);
+  const get = (url: string) => getWom(url, request, cancellation);
   const base = 'https://api.wiseoldman.net/v2/competitions/' + id;
   const original = await get(base);
   if (!record(original))

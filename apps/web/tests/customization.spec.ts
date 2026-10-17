@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
-import { previewCatalog } from '../src/preview/scenarios.ts';
+import { mockApi } from './mock-api.ts';
+import { expect, test, pngFile } from './test.ts';
+import { fixtureCatalog } from './support/scenarios.ts';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
@@ -7,7 +8,8 @@ import { defaultBranding } from '../src/branding.ts';
 test('site settings lives on its own page and edited labels appear across the public site', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await expect(
     page.getByRole('heading', { name: 'Site settings', exact: true }),
   ).toHaveCount(0);
@@ -19,8 +21,7 @@ test('site settings lives on its own page and edited labels appear across the pu
   ).toHaveText([
     'Submissions',
     'Items catalog',
-    'XP imports',
-    'Scheduling',
+    'Scheduling and Competitions',
     'RuneLite submissions',
     'Site settings',
     'Hardcore worlds',
@@ -105,7 +106,7 @@ test('site settings lives on its own page and edited labels appear across the pu
       .evaluate((node) => getComputedStyle(node).backgroundColor),
   ).toBe('rgb(255, 255, 255)');
   await expect(
-    page.getByRole('link', { name: 'Support me on Ko-fi' }),
+    page.getByRole('link', { name: 'Support this project' }),
   ).toHaveAttribute('href', 'https://ko-fi.com/kihiralove');
   const search = await page.locator('.game-search').boundingBox(),
     window = await page.locator('.game-window').boundingBox();
@@ -123,12 +124,13 @@ test('site settings lives on its own page and edited labels appear across the pu
 test('hardcore appearance can be configured while disabled and switches independently on the public site', async ({
   page,
 }) => {
-  await page.goto('/admin/settings?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/settings');
   const logo = await page
     .getByRole('heading', { name: 'Clan logo', exact: true })
     .boundingBox();
   const name = await page
-    .getByLabel('Clan name', { exact: true })
+    .getByLabel('Displayed clan name', { exact: true })
     .boundingBox();
   expect(logo!.y).toBeLessThan(name!.y);
   await expect(
@@ -144,6 +146,20 @@ test('hardcore appearance can be configured while disabled and switches independ
     .boundingBox();
   expect(flag!.y).toBeLessThan(hardcoreLogo!.y);
   await page.getByLabel('Displayed clan name').fill('Hardcore clan');
+  const release = page.getByRole('switch', {
+    name: 'Enable hardcore worlds',
+    exact: true,
+  });
+  await release.click();
+  await expect(release).toBeChecked();
+  await expect(page.getByLabel('Displayed clan name')).toHaveValue(
+    'Hardcore clan',
+  );
+  await release.click();
+  await expect(release).not.toBeChecked();
+  await expect(page.getByLabel('Displayed clan name')).toHaveValue(
+    'Hardcore clan',
+  );
   await page
     .getByLabel('Collection log title', { exact: true })
     .fill('Hardcore collection');
@@ -155,7 +171,7 @@ test('hardcore appearance can be configured while disabled and switches independ
     .fill('Hardcore training');
   await page
     .getByLabel('Logo image')
-    .setInputFiles(resolve('public/skills/sailing.png'));
+    .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
   await page
     .getByRole('button', { name: 'Save clan logo', exact: true })
     .click();
@@ -179,11 +195,10 @@ test('hardcore appearance can be configured while disabled and switches independ
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveCount(0);
   await page.goBack();
-  await page.getByLabel('Enable hardcore worlds').check();
-  await page
-    .getByRole('button', { name: 'Save hardcore settings', exact: true })
-    .click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds').click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.locator('header a.clan-brand').click();
   await page
     .getByRole('button', { name: 'Hardcore worlds', exact: true })
@@ -195,12 +210,13 @@ test('hardcore appearance can be configured while disabled and switches independ
   );
   await expect(
     page.getByRole('heading', { name: 'Hardcore training', exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.locator('#xp-tracker')).toHaveCount(0);
   await expect(page).toHaveTitle('Hardcore clan · Hardcore collection');
   await expect(page.locator('.log-help')).toContainText('Hardcore drops');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
     'href',
-    /^blob:/,
+    /\/api\/v1\/branding\//,
   );
   await page.screenshot({
     path: test.info().outputPath('hardcore-customized-desktop.png'),
@@ -215,11 +231,10 @@ test('hardcore appearance can be configured while disabled and switches independ
     defaultBranding.logoPath,
   );
   await page.goBack();
-  await page.getByLabel('Enable hardcore worlds').uncheck();
-  await page
-    .getByRole('button', { name: 'Save hardcore settings', exact: true })
-    .click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds').click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).not.toBeChecked();
   await expect(page.getByLabel('Displayed clan name')).toHaveValue(
     'Hardcore clan',
   );
@@ -241,13 +256,15 @@ test('hardcore appearance can be configured while disabled and switches independ
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole('link', { name: 'XP imports', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Scheduling and Competitions', exact: true })
+    .click();
   await expect(page.locator('.event-tracker > h1')).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Import competition', exact: true }),
+    page.getByRole('heading', { name: 'Schedule management', exact: true }),
   ).toBeVisible();
   await page.screenshot({
-    path: test.info().outputPath('admin-xp-mobile.png'),
+    path: test.info().outputPath('admin-scheduling-mobile.png'),
     fullPage: true,
   });
 });
@@ -319,7 +336,8 @@ test('empty submission filters preserve panel and pagination geometry while load
 test('administrator can disable, re-enable and delete moderator accounts without administrator controls', async ({
   page,
 }) => {
-  await page.goto('/admin/accounts?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/accounts');
   await page.getByLabel('Moderator username').fill('reviewer');
   await page
     .getByLabel('Temporary password')
@@ -362,120 +380,64 @@ test('administrator can disable, re-enable and delete moderator accounts without
     page.getByRole('button', { name: 'Delete reviewer', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Delete preview-admin', exact: true }),
+    page.getByRole('button', { name: 'Delete test-admin', exact: true }),
   ).toHaveCount(0);
 });
-test('item management confirms page-only deletion, retires the last membership and preserves reviews', async ({
+
+test('item settings preserve a pageless item until explicit deletion, including review history', async ({
   page,
 }) => {
-  await page.goto('/admin/catalog?preview=1');
-  await expect(
-    page.getByRole('heading', { name: 'Item management', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Catalog maintenance', exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole('heading', { name: 'Delete catalog item', exact: true }),
-  ).toHaveCount(0);
-  const picker = page.getByRole('group', {
-    name: 'Collection-log pages (required)',
-  });
-  const search = picker.getByRole('searchbox', {
-    name: 'Search collection-log pages',
-  });
-  await expect(search).toHaveAttribute('placeholder', 'Search');
-  await expect(
-    page.getByText('Find collection-log pages', { exact: true }),
-  ).toHaveCount(0);
-  await search.fill('Duke');
-  await expect(picker.getByRole('checkbox')).toHaveCount(1);
-  await expect(
-    picker.getByRole('checkbox', { name: 'Duke Sucellus', exact: true }),
-  ).toBeVisible();
-  await search.fill('');
-  const mask = previewCatalog.items.find(
+  await mockApi(page);
+  await page.goto('/admin/catalog');
+  await page
+    .getByRole('button', { name: 'Item settings for Virtus mask', exact: true })
+    .click();
+  const mask = fixtureCatalog.items.find(
     (item) => item.name === 'Virtus mask',
   )!;
-  const pages = previewCatalog.pages.filter((row) =>
-    row.itemIds.includes(mask.id),
-  );
-  const initial = pages.find((row) => row.id === 'vardorvis')!;
-  const confirm = async (name: string, accept: boolean, last = false) => {
-    await Promise.all([
-      page.waitForEvent('dialog').then(async (dialog) => {
-        expect(dialog.type()).toBe('confirm');
-        expect(dialog.message()).toContain('Are you sure');
-        expect(dialog.message()).toContain('Virtus mask from ' + name);
-        expect(dialog.message()).toContain(last ? 'last page' : 'other pages');
-        if (accept) await dialog.accept();
-        else await dialog.dismiss();
-      }),
-      page
-        .getByRole('button', {
-          name: 'Delete Virtus mask from ' + name,
-          exact: true,
-        })
-        .click(),
-    ]);
-  };
-  await confirm(initial.name, false);
-  await expect(
-    page
-      .locator('.page-order-editor .page-order-list li')
-      .filter({ hasText: 'Virtus mask' }),
-  ).toHaveCount(1);
-  await confirm(initial.name, true);
-  await expect(
-    page
-      .locator('.page-order-editor .page-order-list li')
-      .filter({ hasText: 'Virtus mask' }),
-  ).toHaveCount(0);
-  await page.locator('header a.clan-brand').click();
-  await expect(
-    page.locator('.item-slot[aria-label^="Virtus mask:"]'),
-  ).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Duke Sucellus', exact: true })
-    .click();
-  await expect(
-    page.locator('.item-slot[aria-label^="Virtus mask:"]'),
-  ).toHaveCount(1);
-  await page.goBack();
-  await expect(
-    page.getByRole('heading', { name: 'Item management', exact: true }),
-  ).toBeVisible();
-  const remaining = pages.filter((row) => row.id !== initial.id);
-  for (const [index, row] of remaining.entries()) {
+  for (const entry of fixtureCatalog.pages.filter((p) =>
+    p.itemIds.includes(mask.id),
+  )) {
     await page
-      .getByLabel('Collection-log page', { exact: true })
-      .selectOption(row.id);
-    await confirm(row.name, true, index === remaining.length - 1);
+      .getByRole('button', {
+        name: 'Remove Virtus mask from ' + entry.name,
+        exact: true,
+      })
+      .click();
     await expect(
-      page
-        .locator('.page-order-editor .page-order-list li')
-        .filter({ hasText: 'Virtus mask' }),
-    ).toHaveCount(0);
+      page.getByText('Removed from ' + entry.name + '.', { exact: true }),
+    ).toBeVisible();
   }
   await expect(
-    page.getByText('Virtus mask deleted from its last page and the catalog.', {
-      exact: true,
-    }),
+    page.getByText('This item is pageless.', { exact: true }),
   ).toBeVisible();
-  await page.setViewportSize({ width: 320, height: 850 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.evaluate(() => {
-    (document.activeElement as HTMLElement)?.blur();
-    window.scrollTo(0, 0);
-  });
-  await page.screenshot({
-    path: test.info().outputPath('item-management-mobile.png'),
-    fullPage: true,
-  });
+  await page.getByRole('button', { name: 'Close editor', exact: true }).click();
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add existing item', exact: true })
+    .click();
+  await page
+    .getByRole('searchbox', { name: 'Search items', exact: true })
+    .fill('Virtus mask');
+  await expect(
+    page.getByRole('button', { name: 'Add Virtus mask to page', exact: true }),
+  ).toContainText('Pageless');
+  await page
+    .getByRole('button', { name: 'Add Virtus mask to page', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Item settings for Virtus mask', exact: true })
+    .click();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'Delete item', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Edit item Virtus mask', exact: true }),
+  ).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete item', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Edit item Virtus mask', exact: true }),
+  ).toHaveCount(0);
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('button', { name: /^Review KihiraVD/ }).click();
   await expect(

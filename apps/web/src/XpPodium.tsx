@@ -3,14 +3,15 @@ import { exactXp } from './xp-model.ts';
 export function XpPodium({
   players,
   title,
+  sourceUrl,
 }: {
   players: PodiumPlayer[];
   title: string;
+  sourceUrl?: string | undefined;
 }) {
   return (
     <aside className="xp-podium" aria-label={'XP podium for ' + title}>
       <h2>Top players</h2>
-      <p>{title}</p>
       {!players.length ? (
         <p>No finished results yet.</p>
       ) : (
@@ -33,6 +34,13 @@ export function XpPodium({
             </li>
           ))}
         </ol>
+      )}
+      {sourceUrl && (
+        <div className="event-source">
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+            View event on Wise Old Man ↗
+          </a>
+        </div>
       )}
     </aside>
   );

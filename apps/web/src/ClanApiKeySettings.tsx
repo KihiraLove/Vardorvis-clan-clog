@@ -2,70 +2,44 @@
 import { useEffect, useState } from 'react';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { AdminRequestError } from './admin-api.ts';
 import { validClanKey, type ClanKeySettings } from './clan-api-key.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { clanKeyBytes, clanKeyMinLength } from '@clog/domain';
+import { useAdminDraft } from './admin-route-data.ts';
 
 export function ClanApiKeySettings({
   client,
   session,
   onAccessLost,
+  settings: saved,
+  onSaved,
+  busy = false,
 }: {
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
+  settings: ClanKeySettings | undefined;
+  onSaved: (value: ClanKeySettings) => void;
+  busy?: boolean;
 }) {
-  const [saved, setSaved] = useState<ClanKeySettings>();
-  const [enabled, setEnabled] = useState(true);
-  const [key, setKey] = useState('');
-  const [error, setError] = useState<string>();
-  const [refresh, setRefresh] = useState(0);
+  const [key, setKey] = useState(saved?.key ?? '');
   const action = useAdminAction(onAccessLost);
+  const locked = busy || action.busy;
+  const editable = session.role === 'admin';
+  useAdminDraft(editable && !!saved && key !== saved.key, action.busy);
   const accept = (value: ClanKeySettings) => {
-    setSaved(value);
-    setEnabled(value.enabled);
+    onSaved(value);
     setKey(value.key);
   };
   useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    setError(undefined);
-    setSaved(undefined);
-    void client
-      .clanApiKey(controller.signal)
-      .then((value) => {
-        if (active && !controller.signal.aborted) {
-          setSaved(value);
-          setEnabled(value.enabled);
-          setKey(value.key);
-        }
-      })
-      .catch((failure: unknown) => {
-        if (!active) return;
-        if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
-        ) {
-          onAccessLost();
-          return;
-        }
-        setError('API key settings are unavailable.');
-      })
-      .finally(() => clearTimeout(timeout));
-    return () => {
-      active = false;
-      controller.abort();
-      clearTimeout(timeout);
-    };
-  }, [client, onAccessLost, refresh]);
+    setKey(saved?.key ?? '');
+  }, [saved?.key]);
   const save = () => {
-    if (!saved) return;
+    if (!saved || !editable) return;
     void action.execute(
       async (signal) => {
         const value = await client.saveClanApiKey(
-          { key, enabled, expectedRevision: saved.revision },
+          { key, expectedRevision: saved.revision },
           session.csrfToken,
           signal,
         );
@@ -83,89 +57,61 @@ export function ClanApiKeySettings({
   return (
     <div className="clan-api-key-settings">
       <h3>RuneLite shared API key</h3>
-      <p>
-        When required, RuneLite submissions must include this key. Clan matching
-        and automatic review are configured below. API key only mode always
-        requires the key. Turning this requirement off applies only when clan
-        name matching is enabled.
-      </p>
-      {error && (
-        <p role="alert">
-          {error}{' '}
-          <button type="button" onClick={() => setRefresh((n) => n + 1)}>
-            Retry API key settings
-          </button>
-        </p>
-      )}
       <form
-        aria-busy={!saved && !error}
+        aria-busy={!saved}
         onSubmit={(event) => {
           event.preventDefault();
           save();
         }}
       >
-        <label className="admin-checkbox">
-          <input
-            type="checkbox"
-            checked={enabled}
-            disabled={action.busy || !saved}
-            onChange={(event) => setEnabled(event.target.checked)}
-          />
-          Require clan API key
-        </label>
         <label htmlFor="clan-api-key-value">Current shared API key</label>
         <textarea
           id="clan-api-key-value"
           className="clan-api-key-value"
           value={key}
+          readOnly={!editable}
           required
           minLength={clanKeyMinLength}
           rows={2}
           autoComplete="off"
           spellCheck={false}
-          disabled={action.busy || !saved}
+          disabled={locked || !saved}
           placeholder={saved ? undefined : 'Loading API key…'}
           onChange={(event) => {
             setKey(event.target.value);
             action.setMessage(undefined);
           }}
         />
-        <p className="admin-note">
-          Generated keys contain 32 hexadecimal characters. Custom keys can use
-          any characters and must contain at least 8. Save to apply the key and
-          requirement together.
-        </p>
-        <div className="admin-actions">
-          <button
-            type="button"
-            className="site-button"
-            disabled={action.busy || !saved}
-            onClick={() => {
-              const bytes = crypto.getRandomValues(
-                new Uint8Array(clanKeyBytes),
-              );
-              setKey(
-                Array.from(bytes, (byte) =>
-                  byte.toString(16).padStart(2, '0'),
-                ).join(''),
-              );
-              action.setMessage('New key generated. Save to apply it.');
-            }}
-          >
-            Generate new key
-          </button>
-          <button
-            className="site-button"
-            disabled={
-              action.busy ||
-              !saved ||
-              !validClanKey(key) ||
-              (enabled === saved.enabled && key === saved.key)
-            }
-          >
-            Save API key settings
-          </button>
-        </div>
+        {editable && (
+          <div className="admin-actions">
+            <button
+              type="button"
+              className="site-button"
+              disabled={locked || !saved}
+              onClick={() => {
+                const bytes = crypto.getRandomValues(
+                  new Uint8Array(clanKeyBytes),
+                );
+                setKey(
+                  Array.from(bytes, (byte) =>
+                    byte.toString(16).padStart(2, '0'),
+                  ).join(''),
+                );
+                action.setMessage('New key generated. Save to apply it.');
+              }}
+            >
+              Generate new key
+            </button>
+            <button
+              className="site-button"
+              disabled={
+                locked || !saved || !validClanKey(key) || key === saved.key
+              }
+            >
+              Save API key settings
+            </button>
+          </div>
+        )}
       </form>
       {action.error && <p role="alert">{action.error}</p>}
       {action.message && <p role="status">{action.message}</p>}

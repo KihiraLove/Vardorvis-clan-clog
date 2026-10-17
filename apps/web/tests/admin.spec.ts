@@ -1,5 +1,6 @@
-/** Preview/mocked browser review flows; these do not verify real backend authorization. */
-import { expect, test, type Page } from '@playwright/test';
+import { mockApi } from './mock-api.ts';
+/** Mocked HTTP browser review flows; these do not verify real backend authorization. */
+import { expect, test, pngFile, type Page } from './test.ts';
 import { resolve } from 'node:path';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
@@ -11,6 +12,41 @@ const proofCheck = (page: Page) =>
 const review = (page: Page, collector: string) =>
   page.getByRole('button', { name: new RegExp('^Review ' + collector + ' ·') });
 const itemIcon = resolve('public/skills/sailing.png');
+async function closeReviewIfOpen(page: Page) {
+  if (await page.getByRole('dialog', { name: 'Submission review' }).count())
+    await page
+      .getByRole('button', { name: 'Close review', exact: true })
+      .click();
+}
+
+test('collected-item filtering sits between manual entry and the queue and survives navigation', async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto('/admin/submissions');
+  const filter = page.getByRole('switch', {
+    name: 'Filter out duplicates',
+    exact: true,
+  });
+  await expect(filter).toBeEnabled();
+  await expect(filter).not.toBeChecked();
+  const manual = await page
+    .getByRole('heading', { name: 'Manual submission', exact: true })
+    .boundingBox();
+  const toggle = await filter.boundingBox();
+  const submissions = await page
+    .getByRole('heading', { name: 'Submissions', exact: true })
+    .boundingBox();
+  expect(toggle!.y).toBeGreaterThan(manual!.y);
+  expect(toggle!.y).toBeLessThan(submissions!.y);
+  await filter.click();
+  await expect(filter).toBeChecked();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
+  await page.getByRole('link', { name: 'Submissions', exact: true }).click();
+  await expect(filter).toBeChecked();
+  await filter.click();
+  await expect(filter).not.toBeChecked();
+});
 
 async function approve(page: Page, collector: string) {
   await review(page, collector).click();
@@ -21,6 +57,7 @@ async function approve(page: Page, collector: string) {
   await expect(
     page.getByText('Saved submission state: approved.', { exact: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Close review', exact: true }).click();
 }
 async function capture(page: Page, name: string) {
   await page.evaluate(() => document.fonts.ready);
@@ -34,11 +71,13 @@ async function mockAdmin(page: Page) {
     detail: SubmissionDetail;
     authenticated: boolean;
     privateReads: number;
+    catalogReads: number;
   } = {
     catalog: structuredClone(f.catalog),
     detail: structuredClone(f.detail),
     authenticated: true,
     privateReads: 0,
+    catalogReads: 0,
   };
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
@@ -66,8 +105,10 @@ async function mockAdmin(page: Page) {
         },
       });
     if (path.startsWith('/api/v1/admin/')) state.privateReads++;
-    if (path === '/api/v1/admin/catalog')
+    if (path === '/api/v1/admin/catalog') {
+      state.catalogReads++;
       return route.fulfill({ json: state.catalog });
+    }
     if (path === '/api/v1/admin/submissions') {
       const row = state.detail.submission;
       const visible =
@@ -80,6 +121,7 @@ async function mockAdmin(page: Page) {
         json: {
           revision: 'queue-' + row.version,
           submissions: visible ? [row] : [],
+          pageCursor: 'first-page',
           nextCursor: null,
         },
       });
@@ -94,18 +136,54 @@ async function mockAdmin(page: Page) {
   return state;
 }
 
+test('review filters reuse the authorized catalog until an explicit refresh', async ({
+  page,
+}) => {
+  const state = await mockAdmin(page);
+  await page.goto('/admin');
+  await expect(page.locator('.submission-results')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+  const initial = state.catalogReads;
+  expect(initial).toBeGreaterThan(0);
+  for (const name of ['Reviewed', 'Unmatched', 'Pending']) {
+    await page
+      .getByRole('group', { name: 'Submission views' })
+      .getByRole('button', { name, exact: true })
+      .click();
+    await expect(page.locator('.submission-results')).toHaveAttribute(
+      'aria-busy',
+      'false',
+    );
+    expect(state.catalogReads).toBe(initial);
+  }
+  await page
+    .getByRole('button', { name: 'Refresh submissions', exact: true })
+    .click();
+  await expect.poll(() => state.catalogReads).toBe(initial + 1);
+  await expect(page.locator('.submission-results')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+});
+
 test('paged unmatched review saves a specific shared item, approves hardcore credit and revokes it with an audit reason', async ({
   page,
 }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   const f = await adminFixtures(),
     maskId = f.detail.submission.itemId!;
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
@@ -153,8 +231,9 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
     .getByText(/^Audit history/)
     .click();
   await expect(
-    editor(page).getByText('approve · Preview admin', { exact: true }),
+    editor(page).getByText('approve · Test admin', { exact: true }),
   ).toBeVisible();
+  await closeReviewIfOpen(page);
   await page.locator('header a.clan-brand').click();
   await page
     .getByRole('button', { name: 'Hardcore worlds', exact: true })
@@ -199,25 +278,30 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     }),
   ).toBeVisible();
+  await closeReviewIfOpen(page);
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot--collected')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
 
 test('approved corrections require a reason and move the single credit into a free normal slot', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await approve(page, 'KihiraVD');
   await review(page, 'KihiraVD').click();
   await editor(page)
     .getByLabel('Collected on hardcore worlds', { exact: true })
     .uncheck();
-  await editor(page)
-    .getByRole('button', { name: 'Save corrections', exact: true })
-    .click();
-  await expect(editor(page).getByRole('alert')).toContainText(
-    'Enter a reason for correcting an approved credit.',
-  );
+  await expect(
+    editor(page).getByRole('button', { name: 'Save corrections', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    editor(page).getByText(
+      'Enter an audit reason before changing an approved credit.',
+    ),
+  ).toBeVisible();
   await editor(page)
     .getByLabel('Review reason')
     .fill('Proof was from ordinary worlds');
@@ -238,6 +322,7 @@ test('approved corrections require a reason and move the single credit into a fr
       exact: true,
     }),
   ).toBeVisible();
+  await closeReviewIfOpen(page);
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot--hardcore')).toHaveCount(0);
   await page
@@ -252,41 +337,64 @@ test('approved corrections require a reason and move the single credit into a fr
 test('manual item creation shares one identity, keyboard and drag order affect one page, and later review credits every occurrence', async ({
   page,
 }) => {
-  await page.goto('/admin/catalog?preview=1');
+  await mockApi(page);
+  await page.goto('/admin/catalog');
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles(itemIcon);
+    .setInputFiles(await pngFile(itemIcon));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByLabel('Item name', { exact: true }).fill('New clan drop');
-  for (const name of ['Vardorvis', 'Duke Sucellus'])
-    await page
-      .locator('.page-picker')
-      .getByLabel(name, { exact: true })
-      .check();
+  await page
+    .getByLabel('In-game item ID (required)', { exact: true })
+    .fill('900001');
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(page.locator('.item-creator').getByRole('status')).toContainText(
-    'created. Every selected page starts uncollected.',
+    'created.',
   );
-  const rows = page.locator('.page-order-editor .page-order-list li');
-  await expect(rows.last()).toContainText('New clan drop');
+  const rows = page.locator('.catalog-item');
   const id = Number(await rows.last().getAttribute('data-item-id'));
-  const count = await rows.count();
-  const added = page.locator(
-    `.page-order-editor .page-order-list li[data-item-id="${id}"]`,
-  );
-  await added.focus();
-  for (let i = 1; i < count; i++) await added.press('Alt+ArrowUp');
-  await expect(rows.first()).toHaveAttribute('data-item-id', String(id));
-  await rows.first().dragTo(rows.nth(1));
-  await expect(rows.nth(1)).toHaveAttribute('data-item-id', String(id));
   await page
-    .getByRole('button', { name: 'Move New clan drop up', exact: true })
-    .focus();
-  await page.keyboard.press('Enter');
+    .getByRole('button', { name: 'Duke Sucellus', exact: true })
+    .click();
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add existing item', exact: true })
+    .click();
+  await page
+    .getByRole('searchbox', { name: 'Search items', exact: true })
+    .fill('New clan drop');
+  await page
+    .getByRole('button', { name: 'Add New clan drop to page', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Vardorvis', exact: true }).click();
+  const count = await rows.count();
+  const added = page.locator('.catalog-item[data-item-id="' + id + '"]');
+  for (let i = count - 1; i > 0; i--) {
+    await added
+      .getByRole('button', { name: 'Reorder item New clan drop', exact: true })
+      .press('Alt+ArrowUp');
+    await expect(rows.nth(i - 1)).toHaveAttribute('data-item-id', String(id));
+  }
+  await rows
+    .first()
+    .getByRole('button', { name: /^Reorder item / })
+    .dragTo(rows.nth(1));
+  await expect(rows.nth(1)).toHaveAttribute('data-item-id', String(id));
+  await added
+    .getByRole('button', { name: 'Reorder item New clan drop', exact: true })
+    .press('Alt+ArrowUp');
   await expect(rows.first()).toHaveAttribute('data-item-id', String(id));
-  await page.getByRole('button', { name: 'Save order', exact: true }).click();
-  await expect(page.getByText(/Page order saved\./)).toBeVisible();
+  await page
+    .locator('.catalog-order-save')
+    .getByRole('button', { name: 'Save changes', exact: true })
+    .click();
+  await expect(
+    page.getByText('Item order saved.', { exact: true }),
+  ).toBeVisible();
   await capture(page, 'admin-catalog-desktop.png');
+  await closeReviewIfOpen(page);
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('.item-slot').first()).toHaveAttribute(
     'aria-label',
@@ -323,6 +431,7 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await expect(
     page.getByText('Saved submission state: approved.', { exact: true }),
   ).toBeVisible();
+  await closeReviewIfOpen(page);
   await page.locator('header a.clan-brand').click();
   await expect(
     page.getByRole('button', { name: 'New clan drop: collected', exact: true }),
@@ -350,7 +459,8 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
     hasTouch: true,
   });
   const page = await context.newPage();
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await review(page, 'KihiraVD').tap();
   await editor(page)
     .getByLabel('Collector name', { exact: true })
@@ -365,15 +475,23 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
   await capture(page, 'admin-review-mobile.png');
+  await page.getByRole('button', { name: 'Close review', exact: true }).tap();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).tap();
-  const first = page.locator('.page-order-editor .page-order-list li').first();
+  const first = page.locator('.catalog-item').first();
   const id = await first.getAttribute('data-item-id');
-  await first.getByRole('button', { name: / down$/ }).tap();
+  await first.getByRole('button', { name: /^Item settings for / }).tap();
+  await page.getByRole('button', { name: 'Move later', exact: true }).tap();
+  await expect(page.locator('.catalog-item').nth(1)).toHaveAttribute(
+    'data-item-id',
+    id!,
+  );
+  await page
+    .locator('.catalog-order-save')
+    .getByRole('button', { name: 'Save changes', exact: true })
+    .click();
   await expect(
-    page.locator('.page-order-editor .page-order-list li').nth(1),
-  ).toHaveAttribute('data-item-id', id!);
-  await page.getByRole('button', { name: 'Save order', exact: true }).tap();
-  await expect(page.getByText(/Page order saved\./)).toBeVisible();
+    page.getByText('Item order saved.', { exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
@@ -381,7 +499,7 @@ test('320-pixel touch review and order controls fit without horizontal overflow'
   await context.close();
 });
 
-test('anonymous access makes no private reads and forbidden review clears private records', async ({
+test('anonymous access makes no private reads while forbidden review preserves a valid login', async ({
   page,
 }) => {
   const state = await mockAdmin(page);
@@ -410,10 +528,15 @@ test('anonymous access makes no private reads and forbidden review clears privat
   await editor(page)
     .getByRole('button', { name: 'Approve submission', exact: true })
     .click();
-  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+  // This is a role/business-rule denial, not proof that authentication
+  // expired: keep the valid shell session and show only a safe error.
   await expect(
-    page.locator('.submission-editor, .submission-card'),
-  ).toHaveCount(0);
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText('Your account is not allowed to administer the clan.'),
+  ).toBeVisible();
   await expect(page.getByText('private details must not render')).toHaveCount(
     0,
   );
@@ -596,11 +719,12 @@ test('invalid icons do not upload; an uncertain create retries identical payload
     return route.fulfill({ status: 409, json: {} });
   });
   await page.goto('/admin/catalog');
-  await page.getByLabel('Item name', { exact: true }).fill('New live drop');
+  await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await page
-    .locator('.page-picker')
-    .getByLabel('Vardorvis', { exact: true })
-    .check();
+    .getByLabel('In-game item ID (required)', { exact: true })
+    .fill('900001');
+  await page.getByLabel('Item name', { exact: true }).fill('New live drop');
   await page.getByLabel('Item icon (required)', { exact: true }).setInputFiles({
     name: 'spoof.png',
     mimeType: 'image/png',
@@ -615,7 +739,7 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   expect(creates).toBe(0);
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles(itemIcon);
+    .setInputFiles(await pngFile(itemIcon));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(
@@ -628,48 +752,64 @@ test('invalid icons do not upload; an uncertain create retries identical payload
   await expect(page.locator('.admin-created')).toContainText(
     'New live drop · #50001',
   );
-  await expect(
-    page.locator('.page-order-editor .page-order-list li').last(),
-  ).toHaveAttribute('data-item-id', '50001');
+  await expect(page.locator('.catalog-item').last()).toHaveAttribute(
+    'data-item-id',
+    '50001',
+  );
   expect(uploads).toBe(1);
   expect(creates).toBe(2);
   await page
-    .locator('.page-order-editor .page-order-list li')
+    .locator('.catalog-item')
     .first()
-    .getByRole('button', { name: / down$/ })
+    .getByRole('button', { name: /^Reorder item / })
+    .press('Alt+ArrowDown');
+  await page
+    .locator('.catalog-order-save')
+    .getByRole('button', { name: 'Save changes', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Save order', exact: true }).click();
   await expect(
-    page.locator('.page-order-editor').getByRole('alert'),
+    page.locator('.catalog-log-wrap').getByRole('alert'),
   ).toContainText('The latest data is loaded');
+  await expect(page.locator('.catalog-item[data-item-id="50001"]')).toHaveCount(
+    1,
+  );
   await expect(
-    page.locator('.page-order-editor .page-order-list li').first(),
-  ).toHaveAttribute('data-item-id', '50001');
-  await expect(
-    page.getByRole('button', { name: 'Save order', exact: true }),
-  ).toBeDisabled();
+    page
+      .locator('.catalog-order-save')
+      .getByRole('button', { name: 'Save changes', exact: true }),
+  ).toBeEnabled();
   expect(orders).toBe(1);
 });
 
-test('preview logout clears reviews and also denies the XP import form in the same SPA session', async ({
+test('logout clears reviews and also denies the XP import form in the same SPA session', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(page.locator('.submission-card')).toHaveCount(0);
-  await page.getByRole('link', { name: 'XP imports', exact: true }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
+  // Change routes in the same SPA instance: reinstalling fixtures would create a
+  // new fixture session and fail to test the original logout.
+  await page.evaluate(() => {
+    window.history.pushState(null, '', '/admin/xp');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
   await expect(
     page.getByRole('heading', { name: 'Admin sign-in required' }),
   ).toBeVisible();
   await expect(page.getByLabel('Wise Old Man competition link')).toHaveCount(0);
 });
 
-test('admin preview can add a manual credit without a Discord claim', async ({
+test('staff can add a manual credit without a Discord claim', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   await page.getByRole('button', { name: 'Add manual submission' }).click();
   await page.getByLabel('Search catalog items').fill('Virtus mask');
   const catalog = await adminFixtures();
@@ -690,6 +830,25 @@ test('admin preview can add a manual credit without a Discord claim', async ({
   await expect(
     page.getByText('Manual tester', { exact: true }).first(),
   ).toBeVisible();
+  const form = page.locator('section.admin-panel').filter({
+    has: page.getByRole('heading', {
+      name: 'Manual submission',
+      exact: true,
+    }),
+  });
+  await expect(form.getByRole('status')).toHaveText(
+    'Manual submission created successfully.',
+  );
+  await expect(form.getByLabel('Canonical item', { exact: true })).toHaveValue(
+    '',
+  );
+  await expect(form.getByLabel('Search catalog items')).toHaveValue('');
+  await expect(form.getByLabel('Collector name', { exact: true })).toHaveValue(
+    '',
+  );
+  await expect(form.getByLabel('Collection date', { exact: true })).toHaveValue(
+    '',
+  );
 });
 
 test('live admin shows a password form and submits a password without Discord OAuth', async ({
@@ -752,7 +911,8 @@ test('live admin shows a password form and submits a password without Discord OA
 test('manual entry reports duplicate item and world rather than a stale-version error', async ({
   page,
 }) => {
-  await page.goto('/admin?preview=1');
+  await mockApi(page);
+  await page.goto('/admin');
   const add = page.getByRole('button', { name: 'Add manual submission' });
   await add.click();
   await page.getByLabel('Search catalog items').fill('Virtus mask');
@@ -771,7 +931,10 @@ test('manual entry reports duplicate item and world rather than a stale-version 
   await expect(
     page.getByText('Manual submission created: approved.'),
   ).toBeVisible();
-  await add.click();
+  await page
+    .getByLabel('Canonical item', { exact: true })
+    .selectOption(String(item.id));
+  await page.getByLabel('Collection date', { exact: true }).fill('2026-10-06');
   await page
     .locator('section.admin-panel')
     .filter({ has: page.getByRole('heading', { name: 'Manual submission' }) })
@@ -812,11 +975,11 @@ test('ADMIN-01 live HTTP view shows claim date provenance and permits verified p
   );
   await page.goto('/admin');
   const card = page.locator('.submission-card');
-  await expect(card).toContainText('Admin correction');
-  await expect(card).toContainText('Admin entry');
-  await expect(card).toContainText('No proof supplied (manual entry)');
+  await expect(card).toContainText('Virtus mask');
+  await expect(card.locator('.submission-facts')).toHaveCount(0);
   await expect(card).not.toContainText('Invalid proof link');
   await review(page, 'KihiraVD').click();
+  await expect(editor(page)).toContainText('Admin correction');
   await expect(editor(page)).toContainText('No proof supplied (manual entry)');
   await expect(editor(page)).not.toContainText('Invalid proof link');
   const check = editor(page).getByLabel(/^I verified this manual claim/);
@@ -948,6 +1111,7 @@ test('stalled login times out, ignores a late reply, and cancels on navigation',
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-login-calls', '1');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await closeReviewIfOpen(page);
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('html')).toHaveAttribute('data-login-aborts', '2');
 });
@@ -996,7 +1160,7 @@ for (const approveImmediately of [false, true]) {
         .getByLabel('Collection date', { exact: true })
         .fill('2026-10-06');
       await page
-        .getByLabel('Approve immediately and show in the collection log')
+        .getByLabel('Approve immediately')
         .setChecked(approveImmediately);
       await page
         .getByRole('button', { name: 'Create manual submission' })
@@ -1025,8 +1189,13 @@ for (const approveImmediately of [false, true]) {
   );
 }
 
-test('leaving the manual form aborts its pending request', async ({ page }) => {
+test('navigation preserves a pending manual write; logout aborts and removes the private form', async ({
+  page,
+}) => {
   await mockAdmin(page);
+  await page.route('**/api/v1/auth/logout', (route) =>
+    route.fulfill({ status: 204 }),
+  );
   await page.addInitScript(() => {
     const original = window.fetch.bind(window);
     window.fetch = (input, options) => {
@@ -1060,8 +1229,19 @@ test('leaving the manual form aborts its pending request', async ({ page }) => {
     page.getByRole('button', { name: 'Saving…', exact: true }),
   ).toBeDisabled();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Wait for the current staff operation',
+  );
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-manual-aborted',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-manual-aborted',
     'true',
   );
+  await expect(
+    page.getByRole('navigation', { name: 'Admin navigation' }),
+  ).toHaveCount(0);
 });

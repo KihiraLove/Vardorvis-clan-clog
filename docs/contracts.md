@@ -1,310 +1,106 @@
-# API and Discord contracts
+# HTTP and Discord contracts
 
-> **8 October 2026 CAT-02 update:** [Admin catalog backend](admin-catalog-backend.md) implements authenticated creation, durable PNG icons, revision-checked ordering and explicit alias reconciliation. Compose now includes an icon volume, and backups include both database and icons. Earlier descriptions of those features as pending are superseded.
-> **8 October 2026 XP-01 update:** [XP event import](xp-import.md) implements the aggregate `GET /api/v1/xp/tracker` and secured admin preview/apply/history. Earlier per-member XP routes below are superseded by the revised event-only requirement; use the new document for active endpoints.
+This indexes implemented contracts. The [current inventory](current-state.md)
+records configuration, architecture and remaining acceptance. Detailed linked
+feature guides own their request/response shapes; historical proposed member XP
+routes and OAuth administration are superseded.
 
-> **8 October 2026 intake update:** [Bot intake](bot-intake.md) now implements credential-scoped catalog autocomplete and durable pending submissions, including mode, dates, matching candidates and idempotent receipts. Discord gateway handling and admin review remain separate work.
+## Health and public reads
 
-> **8 October 2026 backend update:** [Backend phase 1](backend-phase-one.md) now implements public catalog/collection reads, password sessions and authenticated persistent settings. Statements below describing those services as pending are historical; intake/review, WOM and catalog import remain pending.
+| Method/path                                      | Contract                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `GET /healthz`                                   | Nginx liveness publicly; API liveness on its internal port.                                             |
+| `GET /readyz`                                    | API accepting work and bounded database probe; 503 on outage/drain. Optional Discord does not block it. |
+| `GET /api/v1/status`                             | Configured feature/catalog status, not a fixed foundation response.                                     |
+| `GET /api/v1/discord/status`                     | Only enabled/ready booleans; enabled unavailable gateway/intake returns 503.                            |
+| `GET /api/v1/catalog`, `GET /api/v1/collections` | Versioned canonical catalog and approved mode-specific credits, ETag/304.                               |
+| `GET /api/v1/xp/tracker`                         | Stored event/skill XP projection, exact integer values; public reads never fetch WOM.                   |
 
-> **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
+Public projections omit private actor/proof/settings data. See
+[cache/polling contracts](public-performance.md), [WOM public display](wom-competitions.md)
+and [availability](runtime-operations.md).
 
-The routes marked as implemented in [backend phase one](backend-phase-one.md) and [bot intake](bot-intake.md) are active when their services and credentials are configured. Other routes remain planned.
+## Sessions, private data and writes
 
-## Shipped foundation
+- `POST /api/v1/auth/login` requires exact configured Origin and username/password;
+  successful login replaces the presented session and sets an eight-hour HttpOnly,
+  SameSite=Lax cookie (Secure in production). Password work and attempts are bounded.
+- `GET /api/v1/auth/session` returns authenticated identity/role/first-change state
+  and session-derived CSRF token, or `{authenticated:false}`.
+- `POST /api/v1/auth/logout` requires session, Origin and `X-CSRF-Token`, deletes
+  that session and clears the cookie with 204. Account updates confirm the current
+  password. Disabled accounts, expired sessions and credential-version mismatch
+  cannot authorize staff actions. Required first password change restricts tools.
+- Private routes/responses use `Cache-Control: no-store`. Clients use same-origin
+  credentials. One client session owner cancels outstanding private reads and
+  clears caches/drafts on logout, expiry or access loss; stale completions cannot
+  restore them. Destination data is prepared before committing staff navigation.
+- Each write repeats authorization, strict schema validation, Origin and CSRF
+  checks. Bot/RuneLite credentials authorize only their intake scope, not staff UI.
+  Moderators can use RuneLite review settings and all supported WOM imports,
+  including finished SKILL results. Shared-key replacement, duplicate-filter
+  changes, site settings and account management remain administrator-only.
 
-| Method/path          | Behavior                                                                |
-| -------------------- | ----------------------------------------------------------------------- |
-| `GET /healthz`       | API liveness; 200 with service status                                   |
-| `GET /readyz`        | 200 if database and any enabled bot are ready; otherwise 503            |
-| `GET /api/v1/status` | `stage: foundation`, `catalogReady: false`, `submissionsEnabled: false` |
+See [staff auth and configuration](backend-phase-one.md),
+[prepared navigation](admin-navigation.md), [settings/accounts](site-customization.md)
+and [workload budgets](workload-budgets.md). Retired OAuth paths return 404;
+[migration 021](runtime-packaging-and-auth-retirement.md) removes only unused state.
 
-## Planned routes
+## Review and bounded histories
 
-| Method/path                                    | Authorization                           | Purpose                                                         |
-| ---------------------------------------------- | --------------------------------------- | --------------------------------------------------------------- |
-| `GET /api/v1/catalog`                          | Public                                  | Versioned items, tabs/pages, ordered slot IDs; ETag             |
-| `GET /api/v1/collections`                      | Public                                  | Approved item credits and revision; excludes evidence/actor IDs |
-| `GET /api/v1/bot/items?q=...`                  | Bot credential                          | Ranked canonical autocomplete candidates                        |
-| `POST /api/v1/bot/submissions`                 | Bot credential + configured guild       | Idempotent intake and resolution suggestions                    |
-| `POST /api/v1/auth/login`                      | Username/password + matching Origin     | Create an expiring staff session                                |
-| `GET /api/v1/auth/session`                     | Browser session                         | Report admin access and a session-bound CSRF token              |
-| `POST /api/v1/auth/logout`                     | Session + CSRF                          | Destroy session                                                 |
-| `PATCH /api/v1/auth/account`                   | Staff session + CSRF + current password | Change own username/password and rotate sessions                |
-| `GET /api/v1/admin/accounts`                   | Administrator session                   | List account usernames, roles and first-login status            |
-| `POST /api/v1/admin/accounts`                  | Administrator session + CSRF            | Create a moderator requiring first-login password setup         |
-| `POST /api/v1/admin/submissions`               | Admin session + CSRF                    | Insert manual pending or immediately approved claim             |
-| `GET /api/v1/admin/submissions?status=pending` | Admin session                           | Paginated queue including unmatched submissions                 |
-| `GET /api/v1/admin/submissions/:id`            | Admin session                           | Current claim and private before/after audit history            |
-| `PATCH /api/v1/admin/submissions/:id`          | Admin session + CSRF                    | Resolve/edit item, collector or date with expected version      |
-| `POST /api/v1/admin/submissions/:id/approve`   | Admin session + CSRF                    | Atomic approval and audit event                                 |
-| `POST /api/v1/admin/submissions/:id/reject`    | Admin session + CSRF                    | Reject with reason                                              |
-| `POST /api/v1/admin/submissions/:id/revoke`    | Admin session + CSRF                    | Revoke approved credit with reason                              |
+[Review queues/detail](review-pagination.md) return revision-bound keyset pages
+(default/max 20) and opaque current/next cursors. Detail audit pages are complete
+through traversal. Stale/incompatible cursors return 409: discard the cursor stack
+and explicitly reload, preserving independent drafts until discard/access loss.
+[XP history](xp-history-pagination.md) uses its own transactional history revision.
+No silent 100/2,000-row history truncation remains.
 
-Bot writes contain `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, optional `itemId`, `collectorName` and `proofUrl`, plus optional `hardcore` (default false). The bot-only endpoint rejects any `collectedOn` field. The API assigns the UTC receipt timestamp/date; exact retries retain the original. The bot cannot send approval state or reviewer identity.
+Claim corrections and approve/reject/revoke carry `expectedVersion`; approval
+requires a resolved item and unique credit per mode. Note-only
+`PATCH /api/v1/admin/submissions/:id/note` accepts `expectedVersion` and
+`note` (max 1,000 characters, empty clears). It saves/audits the note independently
+of item resolution, claim changes or a decision. The UI explicitly saves or
+discards a note draft; navigation/decision does not silently save it. Stale saves
+conflict; writes cannot overwrite another reviewer's version.
 
-Intake returns 201 for a new durable pending submission, or 200 with the same receipt for an exact interaction retry. A reused interaction ID with a different payload is a 409 conflict. Return `resolution: resolved|needs_match` and canonical candidates. No fuzzy suggestion grants credit.
+Manual submission creation requires a UUID `Idempotency-Key`. Exact retries
+return the durable original receipt; changed payload/key reuse conflicts.
+Review, catalog, competition and import writes keep their own documented revision,
+preview and replay rules; there is no blanket retry for uncertain COMMIT outcomes.
 
-Review writes carry `expectedVersion`; conflicts return 409. Standard errors are `{ "error": { "code": "...", "message": "..." } }`. Use 400/422 for invalid fields, 401 for missing credentials, 403 for forbidden actors/guilds, 404 for absent resources and 429 for rate limits. Never include secrets or raw server errors.
+RuneLite multipart intake requires the full `chatMessage` for new submissions
+and accepts an optional PNG. Chat proof is visible only in staff review and
+audit data; public credits and receipts omit it. Same-key changes to the message
+or screenshot presence conflict. Historical screenshot-only requests can replay
+their original payload without a message. See [the intake contract](runelite-submissions.md).
 
-## Frontend admin review payloads
+## Imports, catalog and intake
 
-The #8/#31 frontend and [review guide](admin-frontend-review.md) use these proposed shapes. The live REVIEW-01 API implements submissions and decisions; catalog CRUD remains separate work. All private reads use `Cache-Control: no-store`; enforce an allowlisted session on every route. Browser requests use same-origin cookies and no-store caching. Writes additionally send `X-CSRF-Token`; the server repeats all validation and derives actor identity from the session.
+| Feature            | Current authoritative contract                                                                                                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WOM previews/apply | [Competition imports](wom-competitions.md): server metric metadata determines SKILL/ACTIVITY. Future/running SKILL has no pages/schedule/results; nonempty pageIds is rejected. ACTIVITY page windows and finished results follow lifecycle/role rules. |
+| XP                 | [Import reconciliation](xp-import.md): exact per-skill contributions, immutable receipts and history; unchanged refresh adds no duplicate XP.                                                                                                           |
+| Catalog            | [Manual items/icons/order](admin-catalog-backend.md), [page management](site-customization.md), [source reconciliation](import-reconciliation.md); complete revision-checked permutations and retained canonical identity.                              |
+| RuneLite           | [Intake](runelite-submissions.md): scoped clan key, private screenshots, immutable normalized-world receipts and configured auto-review policies.                                                                                                       |
+| Discord            | [Intake](bot-intake.md): bearer service credential, configured guild and interaction ID; durable 201 new / 200 exact retry, changed retry 409.                                                                                                          |
 
-```ts
-interface Submission {
-  id: string; // opaque stable identity, encoded as a URL segment
-  version: number; // positive safe integer, advances on every mutation
-  source: 'discord' | 'manual'; // provenance of the claim
-  itemId: number | null; // canonical ID; null means unmatched
-  rawItemText: string;
-  collectorName: string; // 1–80 characters after trimming
-  collectedOn: string; // real YYYY-MM-DD calendar date
-  dateSource: 'submission' | 'claim' | 'admin';
-  submittedAt: string; // UTC ISO timestamp, ending in Z
-  proofUrl: string;
-  hardcore: boolean;
-  status: 'pending' | 'approved' | 'rejected' | 'revoked';
-}
-interface ReviewAudit {
-  id: string;
-  actorName: string;
-  at: string; // UTC ISO timestamp
-  action: 'create' | 'edit' | 'approve' | 'reject' | 'revoke';
-  reason: string | null;
-  before: Submission;
-  after: Submission;
-}
-```
+The sole slash command is
+`/cc-clog submit item:<item/name> proof:<imgur-or-gyazo-https-link> [submitter-name:<collector>] [hardcore:<boolean>]`.
+The API assigns the UTC receipt date; callers cannot supply collectedOn.
+Autocomplete suggestions never grant credit. Registration is an explicit owner
+operation, not an automatic restart action. A receipt is acknowledged only after
+API persistence; acknowledgement failure preserves known receipt identity.
 
-Manual creation POST requires a UUID `Idempotency-Key` alongside CSRF.
-The server records the normalized payload hash, submission, audit and original
-receipt in one transaction, scoped to the authenticated actor. Identical
-retries return that same 201 receipt, even after subsequent review changes or
-an API restart. Reusing a key with different fields returns 409. Missing or
-invalid keys return 400. The form preserves its key and fields after uncertain
-failures; retry before editing or creating another entry. Login and manual
-writes time out after 15 seconds and cancel when their views unmount.
+## Maintenance and failures
 
-Queue GET accepts `status=pending|reviewed`, `limit=20`, optional opaque `cursor` and optional `unmatched=true` with pending. Pending includes matched and unmatched claims; Reviewed includes approved/rejected/revoked. Return `{ revision, submissions: Submission[], nextCursor: string | null }`, ordered deterministically without duplicate rows. A stale cursor returns 409; reload from the first page. Detail GET returns `{ submission: Submission, audit: ReviewAudit[] }`, newest audit events first. Reject inconsistent canonical references; expose no private fields through public collections.
+Owner-only [preview expiry](deployment.md#expired-xp-and-competition-preview-maintenance)
+and [abandoned assets](asset-maintenance.md) are explicit bounded, dry-run-first
+operations. [Lifecycle archival](lifecycle-archive.md) applies only to ended
+records and preserves receipts/audit/results; it does not revoke XP or delete
+staff-created windows. These are not public cleanup endpoints or hosted schedules.
 
-Correction PATCH carries `{ expectedVersion, itemId, collectorName, collectedOn, hardcore, reason }`; `itemId` must be a specific existing canonical item, and `reason` is trimmed and at most 1,000 characters. Only pending/approved claims can be edited. Approved corrections require a reason. Preserve the raw evidence/receipt timestamp; changing the collection date sets `dateSource: admin`.
-
-Approve POST carries `{ expectedVersion }`; reject/revoke carry `{ expectedVersion, reason }` with a nonblank reason. Bot-submitted claims require a validated HTTPS Imgur/Gyazo proof link before approval; authenticated manual claims may be approved without an external proof link; reject permits pending unmatched/invalid-evidence claims; revoke requires approved state. These actions return the complete saved `Submission` with a higher version. Store state and audit atomically. Stale/double decisions return 409. Public credit is derived only from current approvals, so corrections/revocations update every shared occurrence. The proof checkbox is a UI acknowledgment, not an authorization field or a substitute for real inspection.
-
-The browser blocks unsafe proof URLs but can display/reject a stored malformed claim. It never fetches or embeds submitted proof automatically. A write receipt is acknowledged even if a following audit read fails; another mutation waits for a usable current record. Conflicts reload and require explicit review/retry, never an automatic overwrite.
-
-## Frontend public-read payload
-
-The first frontend consumes this proposed JSON shape for #2; the foundation API does not serve it yet. Both responses have independent opaque ETags. A conditional unchanged response is 304; otherwise send a complete 200 snapshot. The client polls every 25 seconds while visible, refreshes on returning to the tab, and keeps the last successful data if a request fails. Catalog and collections must reference mutually valid canonical IDs; an inconsistent pair is rejected and neither local cache advances.
-
-```json
-{
-  "revision": "catalog-42",
-  "items": [
-    {
-      "id": 1,
-      "name": "Virtus mask",
-      "iconPath": "/api/v1/catalog/icons/asset-1"
-    }
-  ],
-  "pages": [
-    {
-      "id": "vardorvis",
-      "name": "Vardorvis",
-      "category": "bosses",
-      "itemIds": [1]
-    }
-  ]
-}
-```
-
-```json
-{
-  "revision": "collections-42",
-  "credits": [
-    {
-      "submissionId": "approved-submission-id",
-      "itemId": 1,
-      "collectorName": "KihiraVD",
-      "collectedOn": "2026-10-05",
-      "hardcore": true
-    }
-  ]
-}
-```
-
-Categories are `bosses`, `raids`, `clues`, `minigames`, `other`. Array order defines page and slot order; do not sort it in the browser. Icons use same-origin absolute paths. External game IDs are not required for frontend/manual item identity. Public credit rows represent approvals only; optional `status` must be `approved` to be displayed, and absent `hardcore` defaults false. The endpoint must omit proof URLs, Discord actors, pending/rejected/revoked claims and private audit data. The browser validates IDs, relationships, dates and flags before rendering, but server authorization/projection remains authoritative.
-
-## Discord definition
-
-The checked-in [command builder](../apps/bot/src/command.ts), the
-[guild handler](../apps/bot/src/handler.ts), and the
-[registration guide](bot-operations.md) implement the following single
-guild-only subcommand. Registration is an explicit operation, never automatic
-on startup.
-
-| Field            | Required | Resolution                                                                       |
-| ---------------- | -------- | -------------------------------------------------------------------------------- |
-| `item`           | Yes      | Autocomplete canonical ID or raw text, with manual review for ambiguity          |
-| `proof`          | Yes      | Validated HTTPS Imgur/Gyazo URL; human admin inspects proof                      |
-| `submitter-name` | No       | Snapshot of collector display name; defaults to guild display name then username |
-| `hardcore`       | No       | Boolean claim, default false, verified/corrected by admin                        |
-
-The bot defers and responds ephemerally, restricts handling to the configured
-guild, and confirms a pending claim only after a durable, idempotent API
-receipt. It cannot approve submissions. The owner confirmed **no**
-`collected-on` slash option or bot-only API field. The API always assigns
-its UTC receipt calendar date (`dateSource: submission_default`).
-Authenticated, versioned admin review corrections remain separate and
-set `dateSource: admin` without changing `submittedAt`.
-
-Each canonical item can have one **current** approval in normal mode and one
-in hardcore mode. Public `/api/v1/collections` returns only those approved
-credits for the selected mode; revoked/rejected/pending claims and the complete
-audit trail remain private. The public collection UI never lists multiple
-collectors for one item within a mode.
-
-The owner confirmed **only `/cc-clog submit` exists**. The earlier
-second-command reference was residual ideation; do not register a lookup
-or any additional command. See [ADR 002](decisions/002-command-date-display.md).
-
-## Planned hardcore extension
-
-Bot intake and admin review accept `hardcore: boolean`, default false. Public approved credits include that value, and the canonical item projection exposes `hardcoreCollected` derived from approved hardcore credits only. Include the flag in idempotency comparisons, optimistic version checks and audit before/after values. It never grants credit by itself.
-
-The checked-in command **already supports** optional `[hardcore:<true|false>]`. The public client selects an independent hardcore view only when its admin-controlled release flag is enabled; see [mockup revision](mockup-revision.md).
-
-## Planned competition XP API
-
-| Method/path                             | Authorization        | Purpose                                                                                    |
-| --------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------ |
-| `GET /api/v1/xp/skills`                 | Public               | Exact cumulative site XP totals per skill and projection revision                          |
-| `GET /api/v1/xp/skills/:skill/members`  | Public               | Per-member cumulative gained XP, keyed by WOM player ID                                    |
-| `GET /api/v1/xp/competitions`           | Public               | Imported competition metadata, skills, source links and last successful refresh            |
-| `GET /api/v1/xp/competitions/:id`       | Public               | Every imported competitor's gains by skill; includes zero/unavailable rows                 |
-| `POST /api/v1/admin/xp/imports/preview` | Admin session + CSRF | Fetch/validate a supplied competition link and show skill/participant/contribution changes |
-| `POST /api/v1/admin/xp/imports`         | Admin session + CSRF | Apply the validated preview with request idempotency and expected stored revision          |
-| `GET /api/v1/admin/xp/imports`          | Admin session        | Import history, reconciliation decisions and errors                                        |
-
-Preview input is `competitionUrl`. Extract a canonical WOM competition ID; ignore URL fragments/query variants for identity and use the fixed official API origin. The response includes a short-lived preview/snapshot token, expected import revision, competition/skill details, complete competitor rows, and per-skill before/after/change values. Applying a preview records the authenticated actor, reconciles the unique stored competition/player/skill contributions atomically, and returns unchanged/applied with the resulting revision. An unchanged refresh has zero XP change. Reused request keys with different payloads or stale revisions return 409.
-
-Use integer decimal strings for XP totals/contributions in the public/admin JSON contract to preserve exact accumulation. Missing source XP is `null` with an explicit availability state; zero is a valid gain. Client rendering distinguishes competition gained XP, member cumulative gained XP and site cumulative skill XP. No endpoint treats weighted scores, boss kills, activity points, EHP/EHB or aggregate overall values as skill XP.
-
-## Frontend XP payloads
-
-The XP frontend in #28 consumes the following proposed shapes; the backend in #27/#4 must still implement them. [xp-model.ts](../apps/web/src/xp-model.ts) defines the decoded view types and [xp-api.ts](../apps/web/src/xp-api.ts) implements the transport validation.
-
-```ts
-type SkillId =
-  | 'attack'
-  | 'hitpoints'
-  | 'mining'
-  | 'strength'
-  | 'agility'
-  | 'smithing'
-  | 'defence'
-  | 'herblore'
-  | 'fishing'
-  | 'ranged'
-  | 'thieving'
-  | 'cooking'
-  | 'prayer'
-  | 'crafting'
-  | 'firemaking'
-  | 'magic'
-  | 'fletching'
-  | 'woodcutting'
-  | 'runecrafting'
-  | 'slayer'
-  | 'farming'
-  | 'construction'
-  | 'hunter'
-  | 'sailing';
-type Xp = string; // unsigned canonical decimal integer, at most 100 digits
-type Revision = string; // nonempty opaque global XP projection revision
-interface Competition {
-  id: number; // positive safe integer WOM competition ID
-  title: string;
-  sourceUrl: string; // canonical https://wiseoldman.net/competitions/<id>
-  skills: SkillId[]; // nonempty, unique; overall must be expanded by the backend
-  startsAt: string; // ISO timestamp in UTC, ending in Z
-  endsAt: string; // later than startsAt
-  importedAt: string; // last successful refresh in UTC
-}
-interface Participant {
-  playerId: number; // positive safe integer stable WOM player ID, unique in rows
-  displayName: string;
-  gains: Partial<Record<SkillId, Xp | null>>; // exactly every competition skill
-}
-interface Change {
-  skill: SkillId;
-  before: Xp;
-  after: Xp;
-  change: string; // signed canonical integer: after - before; no leading "+"
-}
-```
-
-| Endpoint                                | Complete 200 payload                                                                                                                                     |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/xp/skills`                 | `{ revision, updatedAt: string \| null, skills: Array<{ skill: SkillId, xp: Xp }> }`; exactly all 24 skills, zeros before imports                        |
-| `GET /api/v1/xp/skills/:skill/members`  | `{ revision, skill: SkillId, members: Array<{ playerId, displayName, xp: Xp \| null }> }`; all members with contributions for this skill                 |
-| `GET /api/v1/xp/competitions`           | `{ revision, competitions: Competition[] }`; all imported competitions                                                                                   |
-| `GET /api/v1/xp/competitions/:id`       | `{ revision, competition: Competition, participants: Participant[] }`; metadata identical to the list entry, all competitors                             |
-| `POST /api/v1/admin/xp/imports/preview` | `{ previewToken, expectedRevision, expiresAt, competition, participants, changes: Change[], warnings: string[] }`; exactly one change per selected skill |
-| `POST /api/v1/admin/xp/imports`         | `{ outcome: "applied" \| "unchanged", revision }`                                                                                                        |
-| `GET /api/v1/admin/xp/imports`          | `{ imports: Array<{ id, competitionId, title, actorName, importedAt, outcome, changes: Change[] }> }`; newest first, IDs unique                          |
-
-All public wrappers use the same global projection revision, and each route has its own opaque ETag. Send complete snapshots or 304 to conditional GETs. The frontend advances its caches only when totals, list, selected members and selected competition agree. Serving one revision-consistent transaction/projection per refresh is required; concurrent updates may produce a rejected mixed read which is retried. Public responses must exclude session/Discord identities, CSRF tokens and private import audit entries. Member names remain display values; identity is the WOM player ID.
-
-Missing gains use `null` as their explicit unavailable state; never coerce them to valid zero XP. Member cumulative amounts sum known stored contributions, with `null` when none are usable. Total skill XP sums known contributions and remains an unsigned exact integer. No fractional values, negative source sentinel values, duplicate skill/player IDs, missing selected metrics or unknown metrics are accepted. UTC timestamps include seconds and optional 1–3 fractional digits. Display dates are UTC; labels truncate to two million decimals and tooltips show the original exact amount.
-
-`GET /api/v1/auth/session` returns `{ authenticated: true, displayName, username, role, mustChangePassword, csrfToken }` for a staff account, or `{ authenticated: false }`/401 for no usable session. `role` is `admin` or `moderator`. A session with `mustChangePassword: true` may only update its account or sign out. Both roles can use review, submission, catalog and XP routes after setup; `/api/v1/admin/settings` and `/api/v1/admin/accounts` require the administrator. The browser retains the CSRF token in component memory only and sends cookies with `credentials: same-origin`. Keep session cookies HttpOnly/Secure/SameSite and enforce authorization/CSRF on the server.
-
-Login accepts `{ username, password }`. Account updates accept `{ currentPassword, username?, newPassword? }`, requiring at least one changed field. New passwords contain 12–256 characters and must differ from the current password. Usernames match `[A-Za-z0-9_.-]{3,32}` and are case-insensitively unique. Moderator creation accepts only `{ username, password }`; callers cannot assign roles. Account reads and receipts never include hashes. Credential changes revoke existing sessions and return a replacement cookie and updated session receipt.
-
-Preview body: `{ "competitionUrl": "https://wiseoldman.net/competitions/1001" }`. The browser strips queries/fragments, rejects non-HTTPS/spoofed/credentialed URLs and verifies returned source ID equals the requested ID. The server must repeat input validation, use its fixed WOM API origin, and bind the short-lived token to the authorized actor, validated source snapshot and expected projection revision.
-
-Apply body: `{ "previewToken": "...", "expectedRevision": "..." }`. Both POSTs send `Content-Type: application/json` and `X-CSRF-Token`; apply also sends `Idempotency-Key`. Do not accept caller-supplied gains or actor names. Retry the identical token/key after an uncertain network result; conflicting keys/stale tokens return 409. An unchanged refresh adds no XP and still records its refresh outcome. Corrections may have a negative change while before/after totals remain unsigned; the UI requires acknowledgment before applying those previews. Server reconciliation, transaction safety, authorization and source validation remain authoritative.
-
-## Planned admin catalog API
-
-| Method/path                                     | Authorization        | Purpose                                                                            |
-| ----------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| `GET /api/v1/admin/catalog`                     | Admin session        | Complete canonical items/pages, provenance, override metadata and page versions    |
-| `POST /api/v1/admin/catalog/icons`              | Admin session + CSRF | Validate a multipart raster upload; return a staged generated asset ID and preview |
-| `POST /api/v1/admin/catalog/items`              | Admin session + CSRF | Create one canonical item and its selected page memberships                        |
-| `PUT /api/v1/admin/catalog/pages/:pageId/order` | Admin session + CSRF | Save an exact membership permutation with expected page revision                   |
-| `GET /api/v1/catalog/icons/:assetId`            | Public               | Serve published referenced icon content through same-origin URLs                   |
-
-Item creation requires `name`, `iconAssetId` from a validated upload, and a nonempty unique `pageIds` list of existing pages. External game IDs are optional. Allocate the canonical ID server-side; record the actor from the session. Verify the staged icon is usable, create the item and all memberships atomically, append to each page, advance affected page/catalog revisions and publish the icon reference only after success. Invalid/unknown fields or pages fail the entire operation. Item creation cannot accept collection credits, review status or an effective hardcore flag.
-
-The #31 frontend reads the complete private catalog rather than a separate per-page items route. It returns the public catalog shape plus `sourceRevision: string | null`, item `origin: source|manual` and unique `overrides: Array<name|icon|pages>`, and page `version: string` and `orderOrigin: source|manual`. The source revision and all revisions are opaque nonempty strings. Public snapshots omit private provenance/version fields; runtime UI preserves supplied slot order.
-
-Upload POST is multipart with one `icon` file, and returns `{ assetId, iconPath, expiresAt }`. Accept decoded PNG/WebP only, nonempty and at most 2 MiB, each dimension 1–512 pixels; independently verify MIME/signature, bound decoder resources, retain transparency and generate asset identities instead of using file names as paths. Return a same-origin absolute preview path and UTC expiry, bound to the admin session. Preview uses a 15-minute staging expiry. Never accept arbitrary icon URLs or browser-only blob paths on the live API.
-
-Creation POST sends `{ name, iconAssetId, pageIds }`, with `X-CSRF-Token` and `Idempotency-Key`. Name is trimmed and 1–200 characters; page IDs are unique existing memberships. Return 201 for creation or 200 for an exact retry with `{ item, pageIds, catalogRevision }`; `item` includes manual provenance and override metadata. Save the request fingerprint/receipt atomically so retrying the same key cannot allocate another identity or duplicate memberships, even if its staged asset was already promoted. A reused key with different fields returns 409. Preview keeps uncertain requests and keys in form memory until a receipt is received.
-
-Reorder input is `orderedItemIds` plus `expectedVersion` for that page. Require every current member exactly once, with no missing, duplicate or foreign item. Membership changes and competing reorder saves invalidate the expected revision and return 409. Apply slots atomically without transient unique-slot collisions. Return the resulting order/version; preserve canonical IDs, other pages and approved credits. Unauthorized writes are rejected using the same session/CSRF rules as review.
-
-The order receipt is `{ page, catalogRevision }`; `page` has complete public page fields plus its new `version` and `orderOrigin: manual`, and exactly the requested ordered IDs. `expectedVersion` is the saved opaque page version. A conflict reloads the complete private catalog; clients must review the latest membership/order before saving another permutation. Failed saves must not publish a partial order.
-
-Creation/order writes invalidate the public catalog revision and bot autocomplete cache. Reads include manual items without game IDs. Uploaded assets live outside the Docker image and survive restarts/upgrades. Catalog action auditing and manual override/source reconciliation are distinct from submission review auditing.
-
-Only the foundation endpoints listed at the top are implemented. Frontend consumers are in #8/#28/#31; live routes and persistence remain #4/#7/#26/#27/#30.
-
-## Sources checked for platform constraints
-
-- [Discord application command structures, choice limits and autocomplete](https://docs.discord.com/developers/interactions/application-commands)
-- [Discord interaction delivery and responses](https://docs.discord.com/developers/interactions/receiving-and-responding)
-- [GitHub Container Registry authentication and package visibility](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
-- [Docker multi-platform GitHub Actions builds](https://docs.docker.com/build/ci/github-actions/multi-platform/)
-
-- [Wise Old Man competition endpoint and metrics preview](https://docs.wiseoldman.net/api/competitions/competition-endpoints)
-- [Wise Old Man metrics and per-participant delta entities](https://docs.wiseoldman.net/api/competitions/competition-type-definitions)
-- [Wise Old Man supported skill/metric definitions](https://docs.wiseoldman.net/api/global-type-definitions)
-
-The XP tracker supports at most 2,000 distinct events. Preview and apply
-reject new events at capacity with 409; existing events can still be refreshed
-and receipt replays remain valid. Capacity rejection leaves totals, revision
-and import history unchanged.
+Invalid fields return 400/422, missing authentication 401, forbidden scope 403,
+missing resources 404, version/cursor/replay conflicts 409 and overload 429 (with
+Retry-After where documented). Internal failures are sanitized. Never infer a
+failed commit solely from a missing HTTP response: replay/reconcile using the
+original durable identity. See [runtime uncertainty](runtime-operations.md).

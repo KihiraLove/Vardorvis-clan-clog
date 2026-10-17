@@ -11,12 +11,10 @@ import {
 
 function ExactTooltip({
   anchor,
-  label,
   xp,
   id,
 }: {
   anchor: HTMLElement;
-  label: string;
   xp: Xp;
   id: string;
 }) {
@@ -54,9 +52,7 @@ function ExactTooltip({
       ref={ref}
       style={position}
     >
-      <strong>{label}</strong>
       <span>{exactXp(xp)} XP</span>
-      <small>Recorded competition gains</small>
     </div>,
     document.body,
   );
@@ -146,12 +142,7 @@ export function XpAmount({
         </span>
       )}
       {open && xp !== null && anchor.current && (
-        <ExactTooltip
-          anchor={anchor.current}
-          label={label}
-          xp={xp}
-          id={tooltipId}
-        />
+        <ExactTooltip anchor={anchor.current} xp={xp} id={tooltipId} />
       )}
     </>
   );

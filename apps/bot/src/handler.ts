@@ -1,12 +1,23 @@
 /** Discord is an adapter; only an API 200/201 may produce a saved receipt. */
-import { validateProofUrl } from '@clog/domain';
+import {
+  validateProofUrl,
+  WorkloadError,
+  type OperationalDiagnostics,
+} from '@clog/domain';
+import { type BotWorkloads, searchRetryChoice } from './workloads.js';
 import {
   MessageFlags,
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type Interaction,
 } from 'discord.js';
-import { BotApiError, type BotApi, type Receipt } from './api.js';
+import {
+  BotApiError,
+  UnconfirmedSubmissionError,
+  botFailure,
+  type BotApi,
+  type Receipt,
+} from './api.js';
 import { closedCollectionPageMessage } from '@clog/domain';
 
 export function validProof(value: string): boolean {
@@ -60,7 +71,28 @@ export function receiptMessage(receipt: Receipt): string {
     receipt.submissionId
   );
 }
-export function failureMessage(error: unknown): string {
+/** Discord snowflakes are safe operator correlation IDs, not bearer credentials. */
+function interactionReference(id: string | undefined): string {
+  return id && /^\d{17,20}$/u.test(id)
+    ? '\nDiscord interaction ID: ' + id + '.'
+    : '';
+}
+
+function unconfirmedMessage(interactionId?: string): string {
+  return (
+    'Submission could not be confirmed. It might have reached the server ' +
+    'and been saved for review, but no valid receipt was received.' +
+    interactionReference(interactionId) +
+    '\nAsk a clan admin to check this interaction ID in the submission history. ' +
+    'Do not repeat /cc-clog submit as a new command until checked: Discord ' +
+    'assigns a new interaction ID, which can create another submission. ' +
+    'No approval or collection credit is implied.'
+  );
+}
+
+export function failureMessage(error: unknown, interactionId?: string): string {
+  if (error instanceof UnconfirmedSubmissionError)
+    return unconfirmedMessage(error.interactionId);
   if (error instanceof BotApiError) {
     if (error.status === 403 && error.message === closedCollectionPageMessage)
       return closedCollectionPageMessage;
@@ -73,12 +105,14 @@ export function failureMessage(error: unknown): string {
     if (error.status === 429)
       return 'The submission service is temporarily rate-limited. No receipt could be confirmed; retry later.';
   }
-  return 'Submission could not be confirmed. It might have reached the server; please retry only with the same interaction details or ask an admin to check. No approval is implied.';
+  return unconfirmedMessage(interactionId);
 }
 export async function handleAutocomplete(
   interaction: AutocompleteInteraction,
   api: BotApi,
   guildId: string,
+  workloads?: BotWorkloads,
+  diagnostics?: OperationalDiagnostics,
 ): Promise<void> {
   if (
     interaction.guildId !== guildId ||
@@ -89,7 +123,12 @@ export async function handleAutocomplete(
     await interaction.respond([]);
     return;
   }
+  let release: (() => void) | undefined;
   try {
+    release = workloads?.search.acquire([
+      guildId,
+      guildId + ':' + interaction.user.id,
+    ]);
     const search = interaction.options.getFocused();
     const items = await api.search(String(search).slice(0, 200));
     await interaction.respond(
@@ -98,16 +137,43 @@ export async function handleAutocomplete(
         value: 'item:' + item.id,
       })),
     );
-  } catch {
+  } catch (error) {
+    diagnostics?.record('failure', {
+      operation: 'autocomplete',
+      ...botFailure(error),
+      correlation: interaction.id,
+    });
     // Search failure cannot imply a successful match; free-text remains available.
     if (!interaction.responded)
-      await interaction.respond([]).catch(() => undefined);
+      await interaction
+        .respond(
+          error instanceof WorkloadError
+            ? [
+                {
+                  name: `Search busy: wait ${error.retryAfterSeconds}s or type an item name`,
+                  value: searchRetryChoice,
+                },
+              ]
+            : [],
+        )
+        .catch(() =>
+          diagnostics?.record('failure', {
+            operation: 'autocomplete',
+            category: 'acknowledgement',
+            code: 'ACK_FAILED',
+            correlation: interaction.id,
+          }),
+        );
+  } finally {
+    release?.();
   }
 }
 export async function handleSubmission(
   interaction: ChatInputCommandInteraction,
   api: BotApi,
   guildId: string,
+  workloads?: BotWorkloads,
+  diagnostics?: OperationalDiagnostics,
 ): Promise<void> {
   // Defer before doing any network I/O, including catalog lookups.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -117,8 +183,20 @@ export async function handleSubmission(
     );
     return;
   }
+  let release: (() => void) | undefined;
+  let saved: Receipt | undefined;
   try {
+    release = workloads?.intake.acquire([
+      guildId,
+      guildId + ':' + interaction.user.id,
+    ]);
     const rawItemText = interaction.options.getString('item', true);
+    if (rawItemText === searchRetryChoice) {
+      await interaction.editReply(
+        'Item search was busy. Wait a few seconds, then search again or type the item name manually. This delivery was not sent to the submission service.',
+      );
+      return;
+    }
     const proofUrl = interaction.options.getString('proof', true);
     const collectorName = collectorSnapshot(
       interaction.member,
@@ -159,23 +237,70 @@ export async function handleSubmission(
       proofUrl,
       hardcore,
     });
+    saved = receipt;
+    diagnostics?.record('receipt', {
+      operation: 'submission',
+      code: 'RECEIPT_KNOWN',
+      correlation: interaction.id,
+      receipt: receipt.submissionId,
+    });
     await interaction.editReply(receiptMessage(receipt));
   } catch (error) {
-    await interaction.editReply(failureMessage(error)).catch(() => undefined);
+    diagnostics?.record(
+      'failure',
+      saved
+        ? {
+            operation: 'submission',
+            category: 'acknowledgement',
+            code: 'ACK_FAILED',
+            correlation: interaction.id,
+            receipt: saved.submissionId,
+          }
+        : {
+            operation: 'submission',
+            ...(error instanceof WorkloadError
+              ? { category: 'overload' as const, code: 'OVERLOADED' as const }
+              : botFailure(error)),
+            correlation: interaction.id,
+          },
+    );
+    await interaction
+      .editReply(
+        saved
+          ? receiptMessage(saved)
+          : error instanceof WorkloadError
+            ? `Submission busy. Wait ${error.retryAfterSeconds} seconds and try again. This delivery was not sent to the submission service.` +
+              interactionReference(interaction.id) +
+              '\nIf this interaction was attempted earlier or had an unconfirmed reply, ask an admin to check its receipt before starting a new command.'
+            : failureMessage(error, interaction.id),
+      )
+      .catch(() =>
+        diagnostics?.record('failure', {
+          operation: 'submission',
+          category: 'acknowledgement',
+          code: 'ACK_FAILED',
+          correlation: interaction.id,
+          receipt: saved?.submissionId,
+        }),
+      );
+  } finally {
+    release?.();
   }
 }
 export async function handleInteraction(
   interaction: Interaction,
   api: BotApi,
   guildId: string,
+  workloads?: BotWorkloads,
+  diagnostics?: OperationalDiagnostics,
 ): Promise<void> {
   if (interaction.isAutocomplete()) {
-    await handleAutocomplete(interaction, api, guildId);
+    await handleAutocomplete(interaction, api, guildId, workloads, diagnostics);
   } else if (
     interaction.isChatInputCommand() &&
     interaction.commandName === 'cc-clog' &&
     interaction.options.getSubcommand(false) === 'submit'
   ) {
-    await handleSubmission(interaction, api, guildId);
+    await handleSubmission(interaction, api, guildId, workloads, diagnostics);
   }
 }

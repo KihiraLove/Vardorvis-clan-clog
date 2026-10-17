@@ -1,3 +1,7 @@
+> **16 October 2026:** Frontend demo mode and its public assets have been removed. Any demo URLs or controls documented below are historical; current pages require the API. See [frontend loading](frontend-loading.md).
+
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 # Admin frontend review
 
 > **7 October 2026 revision:** [Mockup revision](mockup-revision.md) supersedes earlier combined HC styling, multi-collector, separate XP/member-table and public Admin-link requirements. It documents current preview behavior and outstanding live API work.
@@ -31,7 +35,7 @@ Live routes check `/api/v1/auth/session` before reading private data. They show 
 4. Approve Oakheart's ordinary claim. Both credits remain visible. Under Reviewed, correct KihiraVD's hardcore flag with a required reason. The item remains collected with ordinary styling. Revoke individual credits with a reason; only revoking the final approved credit makes it uncollected.
 5. Open Iron Fern's unmatched claim. Search by item name or ID and select the exact canonical item. Correct collector/date/hardcore if needed and **save corrections before approval**. The selector includes source/manual provenance and all relevant pages. An unknown item can first be created in Items catalog, then matched on returning to Submissions.
 6. Reject a pending claim with a reason, even when unmatched or its proof link is invalid. Missing matches and invalid proof links prevent approval. Reviewed rejected/revoked claims are read-only.
-7. Expand Audit history to inspect actor, timestamp, action, reason and before/after values. Collection dates remain calendar dates; timestamps are shown in UTC. Date source distinguishes receipt-date defaults, submitted claims and admin corrections.
+7. Expand Audit history to inspect actor, timestamp, action, reason and before/after values. Use Older/Newer events to browse the complete paged history while keeping unsaved fields. Collection dates remain calendar dates; timestamps are shown in UTC. Date source distinguishes receipt-date defaults, submitted claims and admin corrections. See the [pagination contract, concurrency policy and measurements](review-pagination.md).
 
 Only pending/approved records can be corrected. Corrections to approved credits, rejection and revocation require a reason. Changes use the saved version and session-bound CSRF token. Conflicts reload the current record, discard stale corrections and clear proof acknowledgment; they never auto-submit another decision. Failed reads preserve the last usable queue, disable decisions and offer reload. A known successful write followed by an audit read failure is reported as saved with a refresh problem. Missing/forbidden sessions immediately remove private records and controls.
 

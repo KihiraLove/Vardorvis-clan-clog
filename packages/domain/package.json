@@ -12,6 +12,7 @@
   "scripts": {
     "build": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test dist/*.test.js"
+    "test": "node --test dist/*.test.js",
+    "build:runtime": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.runtime.json"
   }
 }

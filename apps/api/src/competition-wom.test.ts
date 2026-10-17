@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { competitionLifecycle } from '@clog/domain';
+import { competitionLifecycle, skillIds } from '@clog/domain';
 import { fetchCompetition, mappedPages } from './competition-wom.js';
 import { rankPodium } from './xp-store.js';
 import { fetchWomCompetition } from './wom.js';
@@ -57,7 +57,6 @@ test('future/running fetch discards live roster, gains, snapshots and unnecessar
       let calls = 0;
       const snapshot = await fetchCompetition(
         'https://wiseoldman.net/competitions/123',
-        kind,
         now,
         async () => {
           calls++;
@@ -65,6 +64,7 @@ test('future/running fetch discards live roster, gains, snapshots and unnecessar
         },
       );
       assert.equal(calls, 1);
+      assert.equal(snapshot.competition.kind, kind);
       assert.deepEqual(Object.keys(snapshot).sort(), [
         'competition',
         'lifecycle',
@@ -81,7 +81,6 @@ test('finished activity results discard zeros, preserve integer precision and re
   const source = fixture('vardorvis', now - 2000, now);
   const snapshot = await fetchCompetition(
     'https://wiseoldman.net/competitions/123',
-    'ACTIVITY',
     now,
     request(source),
   );
@@ -92,7 +91,6 @@ test('finished activity results discard zeros, preserve integer precision and re
     await assert.rejects(
       fetchCompetition(
         'https://wiseoldman.net/competitions/123',
-        'ACTIVITY',
         now,
         request({
           ...source,
@@ -110,42 +108,109 @@ test('finished activity results discard zeros, preserve integer precision and re
   await assert.rejects(
     fetchCompetition(
       'https://wiseoldman.net/competitions/123',
-      'ACTIVITY',
       now,
       request({ ...source, participantCount: 3 }),
     ),
     { status: 422 },
   );
 });
-test('explicit kinds validate their metrics; they are never inferred from source', async () => {
-  await assert.rejects(
-    fetchCompetition(
+test('all supported single skills are inferred from metadata and preserve exact finished XP', async () => {
+  for (const skill of skillIds) {
+    const snapshot = await fetchCompetition(
       'https://wiseoldman.net/competitions/123',
-      'SKILL',
       now,
-      request(fixture()),
-    ),
-    { status: 422 },
-  );
-  await assert.rejects(
-    fetchCompetition(
-      'https://wiseoldman.net/competitions/123',
-      'ACTIVITY',
-      now,
-      request(fixture('attack')),
-    ),
-    { status: 422 },
-  );
-  for (const m of ['ehb', 'unknown_metric'])
+      request(fixture(skill, now - 2000, now)),
+    );
+    assert.equal(snapshot.competition.kind, 'SKILL');
+    assert.deepEqual(snapshot.skills, [skill]);
+    assert.equal(snapshot.results?.xp?.event.gains[skill], '9007199254740993');
+    assert.equal(snapshot.results?.participants[0]?.gained, '9007199254740993');
+  }
+});
+test('unsupported computed, mixed, aggregate-overlap and weighted activity scopes fail explicitly', async () => {
+  for (const metrics of [
+    ['ehp'],
+    ['ehb'],
+    ['unknown_metric'],
+    ['attack', 'vardorvis'],
+    ['overall', 'attack'],
+    ['total', 'ehp'],
+    ['vardorvis', 'zulrah'],
+  ])
     await assert.rejects(
       fetchCompetition(
         'https://wiseoldman.net/competitions/123',
-        'ACTIVITY',
         now,
-        request(fixture(m)),
+        request({
+          ...fixture(),
+          metrics: metrics.map((metric) => ({ metric })),
+        }),
       ),
       { status: 422 },
     );
+  for (const weight of [0, -1, 0.5, 2, '1'])
+    await assert.rejects(
+      fetchCompetition(
+        'https://wiseoldman.net/competitions/123',
+        now,
+        request({ ...fixture(), metrics: [{ metric: 'vardorvis', weight }] }),
+      ),
+      { status: 422 },
+    );
+});
+test('overall and total scopes fetch one complete skill batch and ignore aggregate scores', async () => {
+  for (const aggregate of ['overall', 'total']) {
+    const source = fixture(aggregate, now - 2000, now);
+    const details = {
+      ...source,
+      metrics: skillIds.map((metric) => ({ metric, weight: 1 })),
+      participations: source.participations.map((p, i) => ({
+        ...p,
+        deltas: [
+          ...skillIds.map((metric) => ({
+            metric,
+            values: {
+              gained: i === 0 && metric === 'mining' ? '9007199254740993' : '0',
+            },
+          })),
+          { metric: 'total', values: { gained: '99999999999999999' } },
+        ],
+      })),
+    };
+    const urls: string[] = [];
+    const snapshot = await fetchCompetition(
+      'https://wiseoldman.net/competitions/123',
+      now,
+      async (input) => {
+        urls.push(String(input));
+        return Response.json(urls.length === 1 ? source : details);
+      },
+    );
+    assert.equal(snapshot.competition.kind, 'SKILL');
+    assert.deepEqual(snapshot.skills, [...skillIds]);
+    assert.equal(urls.length, 2);
+    assert.deepEqual(new URL(urls[1]!).searchParams.getAll('metrics'), [
+      ...skillIds,
+    ]);
+    assert.equal(snapshot.results?.participants[0]?.gained, '9007199254740993');
+    assert.equal(
+      Object.hasOwn(snapshot.results!.xp!.event.gains, 'total'),
+      false,
+    );
+    await assert.rejects(
+      fetchCompetition(
+        'https://wiseoldman.net/competitions/123',
+        now,
+        async (input) =>
+          Response.json(
+            String(input).includes('?')
+              ? { ...details, participantCount: 3 }
+              : source,
+          ),
+      ),
+      { status: 422 },
+    );
+  }
 });
 test('multi-skill results keep individual contributions and omit players whose relevant sum is zero', async () => {
   const source = fixture('overall', now - 2000, now);
@@ -167,7 +232,6 @@ test('multi-skill results keep individual contributions and omit players whose r
   let calls = 0;
   const snapshot = await fetchCompetition(
     'https://wiseoldman.net/competitions/123',
-    'SKILL',
     now,
     async (input) => {
       calls++;

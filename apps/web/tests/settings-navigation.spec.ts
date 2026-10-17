@@ -1,15 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
-import { PreviewAdminClient } from '../src/preview/admin.ts';
-import { PreviewXpClient } from '../src/preview/xp.ts';
+import { MemoryAdminClient } from './support/admin.ts';
+import { MemoryXpClient } from './support/xp.ts';
 import { defaultRuneLiteRules } from '@clog/domain';
 
 async function delayedSettings(page: Page) {
   const fixture = await adminFixtures(),
     signal = new AbortController().signal;
-  const settings = await new PreviewAdminClient().settings(signal);
-  const tracker = await new PreviewXpClient().tracker(signal);
+  const settings = await new MemoryAdminClient().settings(signal);
+  const tracker = await new MemoryXpClient().tracker(signal);
   const pending: (() => void)[] = [];
   let hold = false;
   await page.route('**/api/v1/**', async (route) => {
@@ -33,6 +33,11 @@ async function delayedSettings(page: Page) {
       },
       '/api/v1/admin/catalog': fixture.catalog,
       '/api/v1/admin/submissions': fixture.pending,
+      '/api/v1/admin/schedules': {
+        revision: 'schedules-1',
+        enabled: false,
+        schedules: [],
+      },
       '/api/v1/admin/accounts': {
         accounts: [
           {
@@ -44,7 +49,12 @@ async function delayedSettings(page: Page) {
         ],
       },
       '/api/v1/xp/tracker': tracker,
-      '/api/v1/admin/xp/imports': { imports: [] },
+      '/api/v1/admin/xp/imports': {
+        imports: [],
+        revision: 'xp-history-1',
+        pageCursor: 'xp-first',
+        nextCursor: null,
+      },
     };
     if (hold && path.startsWith('/api/v1/admin/'))
       await new Promise<void>((resolve) => pending.push(resolve));
@@ -65,7 +75,7 @@ async function delayedSettings(page: Page) {
   };
 }
 
-test('settings-navigation: forms, panel and footer keep their geometry while private settings load', async ({
+test('settings-navigation: current forms, focus, scroll, panel and footer stay stable until settings are ready', async ({
   page,
 }) => {
   const requests = await delayedSettings(page);
@@ -77,29 +87,42 @@ test('settings-navigation: forms, panel and footer keep their geometry while pri
   for (const width of [1100, 320]) {
     await page.setViewportSize({ width, height: 850 });
     for (const [name, field, calls] of [
-      ['Site settings', 'Clan name', 2],
+      ['Site settings', 'Displayed clan name', 2],
       ['Hardcore worlds', 'Displayed clan name', 2],
       ['RuneLite submissions', 'Current shared API key', 2],
     ] as const) {
-      requests.hold();
-      await page.getByRole('link', { name, exact: true }).click();
-      await expect.poll(requests.pending).toBe(calls);
-      const input = page.getByLabel(field, { exact: true });
-      await expect(input).toBeDisabled();
+      const currentHeading = page.locator('main h2').first();
+      const currentText = await currentHeading.textContent();
+      const currentPath = new URL(page.url()).pathname;
       const geometry = async () => ({
         nav: await page
           .getByRole('navigation', { name: 'Admin navigation' })
           .boundingBox(),
-        panel: await page.locator('.admin-panel').boundingBox(),
-        input: await input.boundingBox(),
+        panel: await page.locator('.admin-panel').first().boundingBox(),
         footer: await page.locator('.site-footer').boundingBox(),
+        scroll: await page.evaluate(() => scrollY),
       });
+      const link = page.getByRole('link', { name, exact: true });
+      await link.focus();
       const before = await geometry();
+      requests.hold();
+      await link.press('Enter');
+      await expect.poll(requests.pending).toBe(calls);
+      const input = page.getByLabel(field, { exact: true });
+      const destination = page.getByRole('heading', {
+        name: name === 'Hardcore worlds' ? 'Hardcore worlds settings' : name,
+        exact: true,
+      });
+      await expect(destination).toHaveCount(0);
+      await expect(currentHeading).toHaveText(currentText!);
+      await expect(link).toBeFocused();
+      expect(new URL(page.url()).pathname).toBe(currentPath);
+      expect(await geometry()).toEqual(before);
       requests.release();
+      await expect(destination).toBeVisible();
       await expect(input).toBeEnabled();
       if (name !== 'RuneLite submissions')
         await expect(page.getByLabel('Logo image')).toBeEnabled();
-      expect(await geometry()).toEqual(before);
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -121,8 +144,8 @@ test('settings-navigation: admin background stays fixed across delayed page chan
     page.screenshot({ clip: { x: 1, y: 400, width: 3, height: 3 } });
   const original = await background();
   for (const [name, ready] of [
-    ['Items catalog', 'Add item'],
-    ['XP imports', 'Import competition'],
+    ['Items catalog', 'Items catalog'],
+    ['Scheduling and Competitions', 'Schedule management'],
     ['Submissions', 'Submissions'],
     ['Moderator accounts', 'Existing accounts'],
     ['RuneLite submissions', 'RuneLite submissions'],

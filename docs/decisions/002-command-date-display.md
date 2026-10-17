@@ -1,3 +1,5 @@
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](../current-state.md); older pending-feature statements below are superseded.
+
 > **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](../site-customization.md). Earlier visual notes below are historical.
 
 # ADR 002: Discord commands, collection dates and collector display

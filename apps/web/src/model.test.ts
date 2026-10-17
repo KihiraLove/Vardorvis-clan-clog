@@ -8,6 +8,8 @@ import {
   parseCatalog,
   parseCollections,
   progress,
+  catalogSections,
+  progressClass,
 } from './model.ts';
 
 const catalog = {
@@ -31,6 +33,45 @@ const hardcore = {
   collectedOn: '2026-10-05',
   hardcore: true,
 };
+
+test('catalog sections retain staff names and order, reject dangling pages and allow an empty taxonomy', () => {
+  const data = parseCatalog({
+    ...catalog,
+    sections: [
+      { id: 'custom', name: 'Clan trophies' },
+      { id: 'bosses', name: 'Boss drops' },
+    ],
+    pages: [{ ...catalog.pages[0], category: 'custom' }],
+  });
+  assert.deepEqual(catalogSections(data), [
+    { id: 'custom', name: 'Clan trophies' },
+    { id: 'bosses', name: 'Boss drops' },
+  ]);
+  assert.throws(() =>
+    parseCatalog({
+      ...catalog,
+      sections: [{ id: 'custom', name: 'Clan trophies' }],
+    }),
+  );
+  assert.throws(() =>
+    parseCatalog({
+      ...catalog,
+      pages: [],
+      sections: [
+        { id: 'x', name: 'One' },
+        { id: 'x', name: 'Two' },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    catalogSections(parseCatalog({ ...catalog, pages: [], sections: [] })),
+    [],
+  );
+  assert.equal(progressClass(0, 0), 'count-empty');
+  assert.equal(progressClass(0, 2), 'count-empty');
+  assert.equal(progressClass(1, 2), 'count-partial');
+  assert.equal(progressClass(2, 2), 'complete');
+});
 
 test('manual items need no external game ID; malformed catalog relationships fail', () => {
   assert.equal(parseCatalog(catalog).items.length, 1);

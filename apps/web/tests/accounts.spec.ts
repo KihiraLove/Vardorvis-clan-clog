@@ -1,6 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
+import { defaultRuneLiteRules } from '@clog/domain';
 
 async function mockAccounts(
   page: Page,
@@ -107,12 +108,27 @@ async function mockAccounts(
           hardcoreEnabled: false,
         },
       });
+    if (path === '/api/v1/admin/runelite-settings')
+      return route.fulfill({
+        json: { revision: 'runelite-1', ...defaultRuneLiteRules('Clan name') },
+      });
     if (path === '/api/v1/admin/catalog')
       return route.fulfill({ json: fixture.catalog });
     if (path === '/api/v1/admin/submissions')
       return route.fulfill({ json: fixture.pending });
+    if (path === '/api/v1/admin/schedules')
+      return route.fulfill({
+        json: { revision: 'schedules-1', enabled: false, schedules: [] },
+      });
     if (path === '/api/v1/admin/xp/imports')
-      return route.fulfill({ json: { imports: [] } });
+      return route.fulfill({
+        json: {
+          imports: [],
+          revision: 'xp-history-1',
+          pageCursor: 'xp-first',
+          nextCursor: null,
+        },
+      });
     return route.fulfill({ status: 404, json: {} });
   });
   return state;
@@ -211,8 +227,19 @@ test('moderators retain review tools, have no owner controls and can update thei
   await expect(
     page.getByRole('button', { name: 'Add manual submission' }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('switch', { name: 'Filter out duplicates', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator('.submission-filter-panel')).toContainText(
+    'Only the administrator can change this.',
+  );
+  await expect(page.locator('.submission-filter-panel strong')).toHaveText(
+    /enabled|disabled|unavailable/,
+  );
   await expect(page.getByRole('link', { name: 'Items catalog' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'XP imports' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Scheduling and Competitions' }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole('navigation', { name: 'Admin navigation' })
@@ -220,13 +247,13 @@ test('moderators retain review tools, have no owner controls and can update thei
   ).toHaveText([
     'Submissions',
     'Items catalog',
-    'XP imports',
-    'Scheduling',
+    'Scheduling and Competitions',
+    'RuneLite submissions',
     'Your account',
   ]);
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Page management', exact: true }),
+    page.getByRole('heading', { name: 'Items catalog', exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel('Enable hardcore worlds')).toHaveCount(0);
   await expect(
@@ -270,15 +297,25 @@ test('moderators retain review tools, have no owner controls and can update thei
   await expect(
     page.getByRole('button', { name: 'Create moderator' }),
   ).toHaveCount(0);
-  const reads = state.privateReads;
   await page.goto('/admin/runelite');
-  await expect(page.getByRole('alert')).toHaveText(
-    'Only the administrator can change RuneLite settings.',
-  );
+  await expect(
+    page.getByRole('heading', { name: 'RuneLite submissions', exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByLabel('Current shared API key', { exact: true }),
+  ).toHaveValue('mock-test-clan-key');
+  await expect(
+    page.getByLabel('Current shared API key', { exact: true }),
+  ).toHaveAttribute('readonly', '');
+  await expect(
+    page.getByRole('button', { name: 'Generate new key', exact: true }),
   ).toHaveCount(0);
-  expect(state.privateReads).toBe(reads);
+  await expect(
+    page.getByRole('button', { name: 'Save API key settings', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel('Members worlds submissions', { exact: true }),
+  ).toBeEnabled();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(
     page.getByRole('heading', { name: 'Admin sign-in required' }),

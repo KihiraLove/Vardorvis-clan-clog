@@ -60,18 +60,13 @@ try {
   const importFixture = async (id, kind, start, end) => {
     const snapshot = await fetchCompetition(
       'https://wiseoldman.net/competitions/' + id,
-      kind,
       now,
       async () =>
         Response.json(
           source(id, kind === 'SKILL' ? 'attack' : 'vardorvis', start, end),
         ),
     );
-    const preview = await store.preview(
-        snapshot,
-        'fixture-staff',
-        kind === 'SKILL' ? ['the_whisperer'] : undefined,
-      ),
+    const preview = await store.preview(snapshot, 'fixture-staff'),
       key = randomUUID();
     const receipt = await store.apply(
       preview.previewToken,
@@ -83,6 +78,13 @@ try {
       'admin',
       false,
     );
+    if (kind === 'SKILL') {
+      assert.deepEqual(preview.pageIds, []);
+      assert.deepEqual(preview.pages, []);
+      assert.equal(receipt.scheduleId, null);
+      if (snapshot.lifecycle !== 'finished')
+        assert.equal(preview.action, 'import-metadata');
+    }
     assert.deepEqual(
       await store.apply(
         preview.previewToken,
@@ -110,7 +112,7 @@ try {
   await importFixture(900005, 'ACTIVITY', now - 2 * day, now - day);
   let state = await scheduling.state();
   assert.equal(state.enabled, false);
-  assert.equal(state.schedules.length, 3);
+  assert.equal(state.schedules.length, 2);
   assert.equal(
     state.schedules.find((s) => s.id === future.receipt.scheduleId).startsAt,
     future.snapshot.competition.startsAt,

@@ -9,12 +9,16 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthConfig } from './config.js';
 import { xpAdminRoutes } from './xp-routes.js';
 import { reviewRoutes } from './review-routes.js';
-import type { ReviewStore } from './review-types.js';
-import type { XpStore } from './xp-types.js';
+import type {
+  AuthStore,
+  ReviewRouteStore,
+  XpAdminStore,
+} from './route-services.js';
 import { fetchWomCompetition } from './wom.js';
-import { ApiError, type BackendStore } from './types.js';
+import { ApiError } from './types.js';
 import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
-import { hashPassword, verifyPassword } from './passwords.js';
+import { PasswordHasher } from './passwords.js';
+import { PreviewWork } from './preview-work.js';
 import {
   defaultSiteCopy,
   type SiteCopy,
@@ -36,17 +40,27 @@ function cookieValue(request: FastifyRequest, name: string) {
 }
 export function authRoutes(
   app: FastifyInstance,
-  store: BackendStore,
+  store: AuthStore,
   config: AuthConfig,
-  xp?: XpStore,
-  review?: ReviewStore,
+  xp?: XpAdminStore,
+  review?: ReviewRouteStore,
   fetchWom: typeof fetchWomCompetition = fetchWomCompetition,
   clanKeys?: ClanKeyStore,
+  previews = new PreviewWork(),
+  passwords = new PasswordHasher(),
 ) {
+  const hashPassword = (password: string) => passwords.hash(password);
+  const verifyPassword = (password: string, encoded: string) =>
+    passwords.verify(password, encoded);
   let dummyHash: string;
   app.addHook('onReady', async () => {
-    dummyHash = await hashPassword('admin');
-    await store.ensureDefaultAdmin(dummyHash);
+    // Unknown-account timing uses an unrelated verifier, never a usable default.
+    dummyHash = await hashPassword(nonce());
+    await store.ensureDefaultAdmin(
+      config.bootstrapPassword === undefined
+        ? undefined
+        : await hashPassword(config.bootstrapPassword),
+    );
   });
   const sessionName = config.secure ? '__Host-clog-session' : 'clog-session';
   const cookie = (value: string, seconds: number) =>
@@ -140,7 +154,7 @@ export function authRoutes(
     );
     return token;
   }
-  if (xp) xpAdminRoutes(app, xp, requireOwner, fetchWom);
+  if (xp) xpAdminRoutes(app, xp, requireAdmin, fetchWom, previews);
   if (review) reviewRoutes(app, review, requireAdmin);
   app.post<{ Body: { username: string; password: string } }>(
     '/api/v1/auth/login',
@@ -439,7 +453,7 @@ export function authRoutes(
     },
   );
   app.get('/api/v1/admin/clan-api-key', async (request) => {
-    await requireOwner(request);
+    await requireAdmin(request);
     if (!clanKeys)
       throw new ApiError(503, 'Clan API key storage is unavailable.');
     return clanKeys.settings();

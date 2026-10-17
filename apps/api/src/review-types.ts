@@ -11,8 +11,13 @@ export interface ReviewSubmission {
   submittedAt: string;
   proofUrl: string;
   screenshotPath?: string | null;
+  chatMessage?: string;
   hardcore: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  /** Persisted staff note; unrelated to approve/reject/revoke audit reason. */
+  reviewNote: string;
+  /** Last decision/correction reason, retained for historical transparency. */
+  reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
   itemId: number;
@@ -30,6 +35,9 @@ export interface ReviewCorrection {
   hardcore: boolean;
   reason: string;
 }
+export interface ReviewNote {
+  note: string;
+}
 export interface ReviewAction {
   expectedVersion: number;
   action: 'approve' | 'reject' | 'revoke';
@@ -45,6 +53,12 @@ export interface ReviewAudit {
   after: ReviewSubmission;
 }
 export interface ReviewStore {
+  submissionFilters?(): Promise<import('@clog/domain').SubmissionFilters>;
+  saveSubmissionFilters?(
+    filterCollected: boolean,
+    revision: string,
+    actorId: string,
+  ): Promise<import('@clog/domain').SubmissionFilters>;
   adminCatalog(): Promise<unknown>;
   createManual(
     fields: ManualSubmissionInput,
@@ -62,14 +76,24 @@ export interface ReviewStore {
     revision: string;
     submissions: ReviewSubmission[];
     nextCursor: string | null;
+    pageCursor: string;
+    filters?: import('@clog/domain').SubmissionFilters;
   }>;
   detail(
     id: string,
-  ): Promise<{ submission: ReviewSubmission; audit: ReviewAudit[] } | null>;
+    cursor?: string,
+    limit?: number,
+  ): Promise<{
+    submission: ReviewSubmission;
+    audit: ReviewAudit[];
+    auditRevision: string;
+    auditCursor: string;
+    nextAuditCursor: string | null;
+  } | null>;
   mutate(
     id: string,
     expectedVersion: number,
-    fields: ReviewCorrection | ReviewAction,
+    fields: ReviewCorrection | ReviewAction | ReviewNote,
     actorId: string,
     actorName: string,
   ): Promise<ReviewSubmission>;

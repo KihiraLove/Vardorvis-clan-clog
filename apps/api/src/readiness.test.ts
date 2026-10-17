@@ -2,30 +2,55 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from './app.js';
 import { checkReadiness, checkBotReadiness } from './readiness.js';
-test('readiness includes enabled gateway/intake and recovers without a process restart', async () => {
+test('website readiness survives Discord outages while dedicated intake health fails and recovers independently', async () => {
   let connected = true,
-    intake = true;
-  const app = createApp(async () => {}, undefined, {
-    logger: false,
-    checkBotReady: async () => {
-      if (!connected || !intake) throw new Error('Unavailable');
+    intake = true,
+    database = true;
+  const app = createApp(
+    async () => {
+      if (!database) throw Error('Database unavailable');
     },
-  });
+    undefined,
+    {
+      logger: false,
+      checkBotReady: async () => {
+        if (!connected || !intake) throw new Error('Unavailable');
+      },
+    },
+  );
   try {
     assert.equal((await app.inject('/readyz')).statusCode, 200);
+    assert.equal((await app.inject('/api/v1/discord/status')).statusCode, 200);
     connected = false;
-    assert.equal((await app.inject('/readyz')).statusCode, 503);
+    assert.equal((await app.inject('/readyz')).statusCode, 200);
+    assert.equal((await app.inject('/api/v1/discord/status')).statusCode, 503);
     assert.equal((await app.inject('/healthz')).statusCode, 200);
     connected = true;
     intake = false;
-    assert.equal((await app.inject('/readyz')).statusCode, 503);
+    assert.equal((await app.inject('/readyz')).statusCode, 200);
+    assert.equal((await app.inject('/api/v1/discord/status')).statusCode, 503);
     intake = true;
+    assert.equal((await app.inject('/readyz')).statusCode, 200);
+    assert.equal((await app.inject('/api/v1/discord/status')).statusCode, 200);
+    database = false;
+    assert.equal((await app.inject('/readyz')).statusCode, 503);
+    assert.equal((await app.inject('/healthz')).statusCode, 200);
+    database = true;
     assert.equal((await app.inject('/readyz')).statusCode, 200);
   } finally {
     await app.close();
   }
 });
 test('disabled bot needs no probe and stalled dependencies have bounded readiness', async () => {
+  const app = createApp(async () => {}, undefined, { logger: false });
+  try {
+    assert.deepEqual((await app.inject('/api/v1/discord/status')).json(), {
+      enabled: false,
+      ready: false,
+    });
+  } finally {
+    await app.close();
+  }
   await checkReadiness(async () => {});
   await assert.rejects(
     checkReadiness(

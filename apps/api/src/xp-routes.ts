@@ -1,14 +1,26 @@
 /** Coherent public tracker and authenticated, CSRF-bound import endpoints. */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError } from './types.js';
-import type { XpStore } from './xp-types.js';
+import type { XpAdminStore, XpPublicStore } from './route-services.js';
 import { fetchWomCompetition } from './wom.js';
+import { PreviewWork } from './preview-work.js';
+import { matchesEtag } from './projection-cache.js';
 export type XpAuthorize = (
   request: FastifyRequest,
   write?: boolean,
 ) => Promise<{ id: string; displayName: string }>;
-export function xpPublicRoutes(app: FastifyInstance, store: XpStore) {
+export function xpPublicRoutes(app: FastifyInstance, store: XpPublicStore) {
   app.get('/api/v1/xp/tracker', async (request, reply) => {
+    if (store.trackerSnapshot) {
+      const snapshot = await store.trackerSnapshot(),
+        etag = '"' + snapshot.revision + '"';
+      reply
+        .header('ETag', etag)
+        .header('Cache-Control', 'public, max-age=0, must-revalidate');
+      if (matchesEtag(request.headers['if-none-match'], etag))
+        return reply.code(304).send();
+      return reply.type('application/json').send(snapshot.body);
+    }
     const snapshot = await store.tracker(),
       etag = '"' + snapshot.revision + '"';
     reply
@@ -24,16 +36,17 @@ export function xpPublicRoutes(app: FastifyInstance, store: XpStore) {
 }
 export function xpAdminRoutes(
   app: FastifyInstance,
-  store: XpStore,
+  store: XpAdminStore,
   requireAdmin: XpAuthorize,
   fetchCompetition: typeof fetchWomCompetition = fetchWomCompetition,
+  previews = new PreviewWork(),
 ) {
   const secured = {
     onRequest: async (request: FastifyRequest) => {
       await requireAdmin(request, true);
     },
   };
-  app.post<{ Body: { competitionUrl: string; kind: 'SKILL' } }>(
+  app.post<{ Body: { competitionUrl: string; kind?: 'SKILL' } }>(
     '/api/v1/admin/xp/imports/preview',
     {
       ...secured,
@@ -41,7 +54,7 @@ export function xpAdminRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['competitionUrl', 'kind'],
+          required: ['competitionUrl'],
           properties: {
             competitionUrl: { type: 'string', minLength: 1, maxLength: 2048 },
             kind: { const: 'SKILL' },
@@ -49,10 +62,17 @@ export function xpAdminRoutes(
         },
       },
     },
-    async (req) => {
-      const admin = await requireAdmin(req, true),
-        snapshot = await fetchCompetition(req.body.competitionUrl);
-      return store.preview(snapshot, admin.id);
+    async (req, reply) => {
+      const admin = await requireAdmin(req, true);
+      return previews.run(req, reply, admin.id, async (signal) => {
+        const snapshot = await fetchCompetition(
+          req.body.competitionUrl,
+          fetch,
+          signal,
+        );
+        signal.throwIfAborted();
+        return store.preview(snapshot, admin.id);
+      });
     },
   );
   app.post<{
@@ -102,16 +122,26 @@ export function xpAdminRoutes(
       );
     },
   );
-  app.get(
+  app.get<{ Querystring: { cursor?: string; limit?: string } }>(
     '/api/v1/admin/xp/imports',
     {
       onRequest: async (req) => {
         await requireAdmin(req);
       },
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            cursor: { type: 'string', maxLength: 1024 },
+            limit: { type: 'string', pattern: '^([1-9]|1[0-9]|20)$' },
+          },
+        },
+      },
     },
     async (req) => {
       await requireAdmin(req);
-      return store.history();
+      return store.history(req.query.cursor, Number(req.query.limit ?? '20'));
     },
   );
 }

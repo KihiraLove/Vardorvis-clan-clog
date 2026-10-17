@@ -14,7 +14,10 @@ import { PgStore } from './store.js';
 import { createApp } from './app.js';
 import { hashPassword } from './passwords.js';
 import { fetchCompetition } from './competition-wom.js';
+import { parseWomSnapshot } from './wom.js';
 import type { CompetitionSnapshot } from './competition-types.js';
+import { PreviewWork } from './preview-work.js';
+import { WorkBudget } from '@clog/domain';
 test(
   'unified competitions preserve legacy data, isolate kinds, schedule atomically, reconcile results and enforce staff permissions',
   { skip: !process.env.TEST_DATABASE_URL },
@@ -37,6 +40,7 @@ test(
       origin: 'https://clog.example.com',
       secret: 'a'.repeat(64),
       secure: true,
+      bootstrapPassword: 'b'.repeat(64),
     };
     const now = await store.clock(),
       day = 86400000;
@@ -68,6 +72,7 @@ test(
       ],
     });
     let fakeSource: unknown = source(500, 'vardorvis', now - day, now + day);
+    let admissionClock = now;
     const app = createApp(undefined, undefined, {
       store: backend,
       competitions: store,
@@ -75,8 +80,22 @@ test(
       xp,
       auth,
       logger: false,
-      fetchCompetition: (url, kind, at) =>
-        fetchCompetition(url, kind, at, async () => Response.json(fakeSource)),
+      previews: new PreviewWork(
+        new WorkBudget(
+          { concurrent: 2, perMinute: 12 },
+          [{ concurrent: 1, perMinute: 4 }],
+          512,
+          () => admissionClock,
+        ),
+      ),
+      fetchCompetition: (url, at) =>
+        fetchCompetition(url, at, async () => Response.json(fakeSource)),
+      fetchWom: async () =>
+        parseWomSnapshot(
+          source(500, 'attack', now - 2 * day, now - day),
+          undefined,
+          500,
+        ),
     });
     const snapshot = async (
       id: number,
@@ -87,7 +106,6 @@ test(
     ) =>
       fetchCompetition(
         'https://wiseoldman.net/competitions/' + id,
-        kind,
         now,
         async () =>
           Response.json(
@@ -126,7 +144,7 @@ test(
       const files = (await readdir(migrations))
         .filter((f) => f.endsWith('.sql'))
         .sort();
-      for (const file of files.filter((f) => !f.startsWith('014')))
+      for (const file of files.filter((f) => f < '014'))
         await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       const legacy = await snapshot(
         99,
@@ -166,6 +184,8 @@ test(
       await pool.query(
         await readFile(new URL('014_wom_competitions.sql', migrations), 'utf8'),
       );
+      for (const file of files.filter((f) => f > '014_wom_competitions.sql'))
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       assert.equal(
         (await pool.query('SELECT count(*)::int AS count FROM xp_previews'))
           .rows[0].count,
@@ -195,8 +215,11 @@ test(
         receipt = await apply(p, key);
       assert.deepEqual(await apply(p, key), receipt);
       await pool.query(
-        "UPDATE competition_previews SET expires_at=now()-interval '1 hour' WHERE token_hash=encode(sha256($1::bytea),'hex')",
+        "UPDATE competition_previews SET expires_at=now()-interval '2 hours' WHERE token_hash=encode(sha256($1::bytea),'hex')",
         [p.previewToken],
+      );
+      await pool.query(
+        "DELETE FROM competition_previews WHERE expires_at <= now()-interval '1 hour'",
       );
       assert.deepEqual(
         await new PgCompetitionStore(pool).apply(
@@ -294,11 +317,15 @@ test(
         now + 2 * day,
       );
       p = await preview(skillFuture);
+      assert.equal(p.action, 'import-metadata');
       assert.deepEqual(p.pageIds, []);
-      await assert.rejects(apply(p), { status: 422 });
+      assert.deepEqual(p.pages, []);
+      const beforeSkillSchedules = await scheduling.state();
+      const skillReceipt = await apply(p, randomUUID(), 'moderator');
+      assert.equal(skillReceipt.scheduleId, null);
+      assert.deepEqual(await scheduling.state(), beforeSkillSchedules);
       await assert.rejects(preview(skillFuture, ['inactive']), { status: 422 });
-      p = await preview(skillFuture, ['other']);
-      await apply(p);
+      await assert.rejects(preview(skillFuture, ['other']), { status: 422 });
       const skillEntry = (await xp.tracker()).events.find((e) => e.id === 102)!;
       assert.equal(skillEntry.gains.attack, null);
       assert.deepEqual(skillEntry.podium, []);
@@ -316,7 +343,6 @@ test(
       );
       const mismatchedSkill = await fetchCompetition(
         'https://wiseoldman.net/competitions/102',
-        'SKILL',
         now,
         async () =>
           Response.json(source(102, 'mining', now - 2 * day, now - day)),
@@ -335,10 +361,7 @@ test(
       assert.equal(p.action, 'import-results');
       assert.equal(p.participants.length, 1);
       const count = (await scheduling.state()).schedules.length;
-      await assert.rejects(apply(p, randomUUID(), 'moderator'), {
-        status: 403,
-      });
-      await apply(p);
+      await apply(p, randomUUID(), 'moderator');
       assert.equal((await scheduling.state()).schedules.length, count);
       assert.equal((await xp.tracker()).totals.attack, '9007199254741116');
       assert.equal(
@@ -495,7 +518,6 @@ test(
         url = '/api/v1/admin/competitions/preview',
         payload = {
           competitionUrl: 'https://wiseoldman.net/competitions/500',
-          kind: 'ACTIVITY',
         };
       assert.equal(
         (await app.inject({ method: 'POST', url, payload })).statusCode,
@@ -518,7 +540,7 @@ test(
             method: 'POST',
             url,
             headers: moderator,
-            payload: { competitionUrl: payload.competitionUrl },
+            payload: { ...payload, kind: 'INVALID' },
           })
         ).statusCode,
         400,
@@ -528,18 +550,13 @@ test(
           .statusCode,
         200,
       );
-      fakeSource = source(500, 'attack', now - 2 * day, now - day);
-      assert.equal(
-        (
-          await app.inject({
-            method: 'POST',
-            url,
-            headers: moderator,
-            payload: { ...payload, kind: 'SKILL' },
-          })
-        ).statusCode,
-        403,
-      );
+      const detectedActivity = await app.inject({
+        method: 'POST',
+        url,
+        headers: moderator,
+        payload,
+      });
+      assert.equal(detectedActivity.json().competition.kind, 'ACTIVITY');
       assert.equal(
         (
           await app.inject({
@@ -549,8 +566,110 @@ test(
             payload: { ...payload, kind: 'SKILL' },
           })
         ).statusCode,
+        422,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: moderator,
+            payload: { ...payload, kind: 'ACTIVITY' },
+          })
+        ).statusCode,
         200,
       );
+      fakeSource = source(500, 'attack', now - 2 * day, now - day);
+      // Begin a new rate window for the next permission scenario. Saturation has dedicated tests.
+      admissionClock += 60000;
+      const moderatorFinished = await app.inject({
+        method: 'POST',
+        url,
+        headers: moderator,
+        payload,
+      });
+      assert.equal(moderatorFinished.statusCode, 200, moderatorFinished.body);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: owner,
+            payload,
+          })
+        ).statusCode,
+        200,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: moderator,
+            payload: { ...payload, kind: 'ACTIVITY' },
+          })
+        ).statusCode,
+        422,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url,
+            headers: owner,
+            payload: { ...payload, kind: 'ACTIVITY' },
+          })
+        ).statusCode,
+        422,
+      );
+      const detectedSkill = await app.inject({
+        method: 'POST',
+        url,
+        headers: owner,
+        payload: { ...payload, kind: 'SKILL' },
+      });
+      assert.equal(detectedSkill.statusCode, 200, detectedSkill.body);
+      assert.equal(detectedSkill.json().competition.kind, 'SKILL');
+      const finishedApply = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/competitions/imports',
+        headers: { ...moderator, 'idempotency-key': randomUUID() },
+        payload: {
+          previewToken: moderatorFinished.json().previewToken,
+          expectedRevision: moderatorFinished.json().expectedRevision,
+          scheduleRevision: moderatorFinished.json().scheduleRevision,
+        },
+      });
+      assert.equal(finishedApply.statusCode, 200, finishedApply.body);
+      assert.equal(
+        (await xp.tracker()).events.some((event) => event.id === 500),
+        true,
+      );
+      fakeSource = source(501, 'attack', now + day, now + 2 * day);
+      const futureSkill = await app.inject({
+        method: 'POST',
+        url,
+        headers: moderator,
+        payload: { competitionUrl: 'https://wiseoldman.net/competitions/501' },
+      });
+      assert.equal(futureSkill.statusCode, 200, futureSkill.body);
+      assert.equal(futureSkill.json().competition.kind, 'SKILL');
+      assert.equal(futureSkill.json().participants.length, 0);
+      assert.equal(futureSkill.json().action, 'import-metadata');
+      const beforeMetadataApply = await scheduling.state();
+      const appliedMetadata = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/competitions/imports',
+        headers: { ...moderator, 'idempotency-key': randomUUID() },
+        payload: {
+          previewToken: futureSkill.json().previewToken,
+          expectedRevision: futureSkill.json().expectedRevision,
+          scheduleRevision: futureSkill.json().scheduleRevision,
+        },
+      });
+      assert.equal(appliedMetadata.statusCode, 200, appliedMetadata.body);
+      assert.equal(appliedMetadata.json().scheduleId, null);
+      assert.deepEqual(await scheduling.state(), beforeMetadataApply);
       assert.equal(
         (
           await app.inject({
@@ -560,7 +679,7 @@ test(
             payload: { ...payload, kind: 'SKILL' },
           })
         ).statusCode,
-        403,
+        200,
       );
       assert.equal(
         (await app.inject('/api/v1/competitions/activities')).statusCode,

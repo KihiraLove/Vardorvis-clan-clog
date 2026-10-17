@@ -33,7 +33,7 @@ test('world rejection precedes whitelist and combined flags choose the strictest
       'reject',
     );
   }
-  for (const flag of ['HC_WORLD_PLACEHOLDER', 'HC_WORLDS_PLACEHOLDER']) {
+  for (const flag of ['HARDCORE_MAIN']) {
     assert.equal(
       runeLiteDecision([flag, 'MEMBERS'], 'Other', rules).action,
       'review',

@@ -1,3 +1,7 @@
+> **16 October 2026:** Frontend demo mode and its public assets have been removed. Any demo URLs or controls documented below are historical; current pages require the API. See [frontend loading](frontend-loading.md).
+
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](current-state.md); older pending-feature statements below are superseded.
+
 > **11 October 2026 update:** The supplied `clan-logo.png` is now the default; administrators can upload animated replacements. Branding labels and admin settings navigation are configurable as described in [site customization](site-customization.md). Earlier visual notes below are historical.
 
 > **Release update:** Schema 002 is now part of the consolidated fresh-install [baseline](../packages/database/migrations/001_baseline.sql).
@@ -41,11 +45,11 @@ The live Fastify service now reads the public release setting from PostgreSQL. M
 - [model.ts](../apps/web/src/model.ts) rejects duplicate active item/mode credits and exposes `modeCredits`. The shared domain projection limits legacy duplicate display; the database and write API enforce uniqueness.
 - [AdminSettings.tsx](../apps/web/src/AdminSettings.tsx) reads only after an admin session exists, saves with an expected revision, handles access loss/timeouts and reloads conflicts without repeating writes.
 - [site-settings.ts](../apps/web/src/site-settings.ts) validates settings. [admin-api.ts](../apps/web/src/admin-api.ts) adds authenticated no-store reads and CSRF-protected writes to the existing adapter.
-- [preview/admin.ts](../apps/web/src/preview/admin.ts) stores the flag and prevents duplicate approvals or approved edits into an occupied mode. Settings notifications preserve unrelated submission pagination.
+- [test API fixture](../apps/web/tests/support/admin.ts) stores the flag and prevents duplicate approvals or approved edits into an occupied mode. Settings notifications preserve unrelated submission pagination.
 - [XpPage.tsx](../apps/web/src/XpPage.tsx) loads one coherent tracker snapshot, selects Total or an event locally, polls while visible and retains successful data on refresh failure.
 - [xp-tracker.ts](../apps/web/src/xp-tracker.ts) validates event IDs, WOM links, one/all skill scope and decimal-string gains; projects event skills and sums with `BigInt`.
 - [xp-api.ts](../apps/web/src/xp-api.ts) adds conditional tracker reads, committing ETags only after validation. Older detailed adapters remain available but are no longer used by the public page.
-- [XpAdmin.tsx](../apps/web/src/XpAdmin.tsx) keeps guarded preview/apply but presents event/skill/gain information without participant tables. Internal import payloads still contain participant snapshots for reconciliation; public tracker payloads do not.
+- The former `XpAdmin.tsx` preview/apply interface is now handled by [CompetitionImport.tsx](../apps/web/src/CompetitionImport.tsx) within [AdminScheduling.tsx](../apps/web/src/AdminScheduling.tsx), under Scheduling and Competitions. The legacy `/admin/xp` URL opens that page. Internal import payloads still contain participant snapshots for reconciliation; public tracker payloads do not.
 - [style.css](../apps/web/src/style.css) contains the mockup layout, fixed 2× geometry, silhouette styling and responsive event grid.
 - [002_world_modes.sql](../packages/database/migrations/001_baseline.sql) evolves the schema without changing migration 001's checksum.
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { transaction } from './transaction.js';
 import {
   parseCollectionScheduleInput,
   scheduleIdPattern,
@@ -31,7 +32,11 @@ export interface SchedulingStore {
   ): Promise<SchedulingState>;
 }
 /** Acquire before item/page locks so schedule edits and submissions share one lock order. */
-export async function lockScheduling(client: pg.PoolClient): Promise<boolean> {
+export async function lockScheduling(
+  client: pg.PoolClient,
+  hardcore = false,
+): Promise<boolean> {
+  if (hardcore) return false;
   const row = (
     await client.query<{ enabled: boolean }>(
       'SELECT enabled FROM collection_scheduling WHERE singleton=true FOR SHARE',
@@ -40,23 +45,31 @@ export async function lockScheduling(client: pg.PoolClient): Promise<boolean> {
   if (!row) throw new ApiError(503, 'Scheduling settings unavailable.');
   return row.enabled;
 }
-export async function requireScheduledItem(
+export async function isScheduledItem(
   client: pg.PoolClient,
   enabled: boolean,
   itemId: number | null,
 ) {
-  if (!enabled) return;
-  const open =
+  if (!enabled) return true;
+  return (
     itemId !== null &&
     (
       await client.query(
         'SELECT 1 FROM page_items pi JOIN pages p ON p.id=pi.page_id AND p.active ' +
           'JOIN collection_log_schedule_pages sp ON sp.page_id=p.id JOIN collection_log_schedules s ON s.id=sp.schedule_id ' +
-          'WHERE pi.item_id=$1 AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at LIMIT 1',
+          'WHERE pi.item_id=$1 AND s.archived_at IS NULL AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at LIMIT 1',
         [itemId],
       )
-    ).rowCount === 1;
-  if (!open) throw new ApiError(403, closedCollectionPageMessage);
+    ).rowCount === 1
+  );
+}
+export async function requireScheduledItem(
+  client: pg.PoolClient,
+  enabled: boolean,
+  itemId: number | null,
+) {
+  if (!(await isScheduledItem(client, enabled, itemId)))
+    throw new ApiError(403, closedCollectionPageMessage);
 }
 export async function readState(
   client: pg.PoolClient,
@@ -76,7 +89,7 @@ export async function readState(
       pageIds: string[];
     }>(
       'SELECT s.id::text,s.title,s.starts_at AS "startsAt",s.ends_at AS "endsAt",array_agg(p.page_id ORDER BY p.page_id) AS "pageIds" ' +
-        'FROM collection_log_schedules s JOIN collection_log_schedule_pages p ON p.schedule_id=s.id GROUP BY s.id ORDER BY s.starts_at,s.id LIMIT 501',
+        'FROM collection_log_schedules s JOIN collection_log_schedule_pages p ON p.schedule_id=s.id WHERE s.archived_at IS NULL GROUP BY s.id ORDER BY s.starts_at,s.id LIMIT 501',
     )
   ).rows;
   if (schedules.length > 500)
@@ -94,18 +107,11 @@ export async function readState(
 export class PgSchedulingStore implements SchedulingStore {
   constructor(private readonly pool: pg.Pool) {}
   async state() {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return transaction(this.pool, 'snapshot', async (client) => {
       const state = await readState(client);
-      await client.query('COMMIT');
+
       return state;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
   private async mutate(
     revision: string,
@@ -114,9 +120,7 @@ export class PgSchedulingStore implements SchedulingStore {
     action: string,
     change: (client: pg.PoolClient, before: SchedulingState) => Promise<void>,
   ) {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
+    return transaction(this.pool, 'write', async (client) => {
       await client.query(
         'SELECT singleton FROM collection_scheduling WHERE singleton=true FOR UPDATE',
       );
@@ -144,14 +148,9 @@ export class PgSchedulingStore implements SchedulingStore {
           JSON.stringify(after),
         ],
       );
-      await client.query('COMMIT');
+
       return after;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
   setEnabled(
     enabled: boolean,

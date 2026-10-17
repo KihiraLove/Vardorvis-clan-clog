@@ -9,10 +9,7 @@ export const blockedRuneLiteWorldTypes: readonly string[] = [
   'TOURNAMENT',
   'TOURNAMENT_WORLD',
 ];
-export const hardcoreRuneLiteWorldTypes = [
-  'HC_WORLD_PLACEHOLDER',
-  'HC_WORLDS_PLACEHOLDER',
-] as const;
+export const hardcoreRuneLiteWorldTypes = ['HARDCORE_MAIN'] as const;
 export function parseRuneLiteWorldTypes(value: unknown): string[] {
   let types: unknown = value;
   if (typeof value === 'string') {

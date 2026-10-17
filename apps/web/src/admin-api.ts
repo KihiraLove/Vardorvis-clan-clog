@@ -9,6 +9,7 @@ import {
 import {
   parseRuneLiteSettings,
   parseRuneLiteRules,
+  parseSubmissionFilters,
   type RuneLiteSettingsUpdate,
 } from '@clog/domain';
 import { parseSettings } from './site-settings.ts';
@@ -59,6 +60,10 @@ export class AdminRequestError extends Error {
           'A page with this name already exists in this category.',
           'Choose distinct active catalog items.',
           'The catalog has reached its page or item-slot limit.',
+          'An in-game item ID already belongs to another item.',
+          'A section with this name already exists.',
+          'A page with this name already exists in this section.',
+          'Only sections with no pages can be deleted.',
         ].includes(serverConflict)
         ? serverConflict
         : status === 409 &&
@@ -83,6 +88,30 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async saveSubmissionFilters(
+    filterCollected: boolean,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const value = parseSubmissionFilters(
+      await this.json(
+        '/api/v1/admin/submission-filters',
+        signal,
+        this.write(
+          csrf,
+          { filterCollected, expectedRevision: revision },
+          'PUT',
+        ),
+      ),
+    );
+    if (
+      value.filterCollected !== filterCollected ||
+      value.revision === revision
+    )
+      throw new Error('Unexpected submission filter receipt.');
+    return value;
+  }
   async scheduling(signal: AbortSignal) {
     return parseSchedulingState(
       await this.json('/api/v1/admin/schedules', signal),
@@ -164,19 +193,31 @@ export class LiveAdminClient implements AdminClient {
     csrf: string,
     signal: AbortSignal,
   ) {
-    const { expectedRevision, ...input } = fields;
+    const { expectedRevision, clanKeyRequirement, ...input } = fields;
     const rules = parseRuneLiteRules(input);
     const result = parseRuneLiteSettings(
       await this.json(
         '/api/v1/admin/runelite-settings',
         signal,
-        this.write(csrf, { expectedRevision, ...rules }, 'PUT'),
+        this.write(
+          csrf,
+          {
+            expectedRevision,
+            ...rules,
+            ...(clanKeyRequirement ? { clanKeyRequirement } : {}),
+          },
+          'PUT',
+        ),
       ),
     );
-    const { revision, ...saved } = result;
+    const { revision, clanKeyRequirement: requirement, ...saved } = result;
     if (
       revision === expectedRevision ||
-      JSON.stringify(saved) !== JSON.stringify(rules)
+      JSON.stringify(saved) !== JSON.stringify(rules) ||
+      (clanKeyRequirement &&
+        (!requirement ||
+          requirement.enabled !== clanKeyRequirement.enabled ||
+          requirement.revision === clanKeyRequirement.expectedRevision))
     )
       throw new Error('Unexpected RuneLite settings receipt.');
     return result;
@@ -613,6 +654,135 @@ export class LiveAdminClient implements AdminClient {
   async catalog(signal: AbortSignal): Promise<AdminCatalog> {
     return parseAdminCatalog(await this.json('/api/v1/admin/catalog', signal));
   }
+  async createSection(
+    name: string,
+    key: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json(
+        '/api/v1/admin/catalog/sections',
+        signal,
+        this.write(csrf, { name, expectedRevision: revision }, 'POST', key),
+      ),
+    );
+    const section = object(result.section);
+    if (section.name !== name) throw new Error('Unexpected section receipt.');
+    return { id: text(section.id), name: text(section.name) };
+  }
+  private async catalogWrite(
+    path: string,
+    fields: object,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  ) {
+    const result = object(
+      await this.json(
+        '/api/v1/admin/catalog/' + path,
+        signal,
+        this.write(csrf, { ...fields, expectedRevision: revision }, method),
+      ),
+    );
+    text(result.catalogRevision);
+  }
+  async editSection(
+    id: string,
+    name: string | null,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'sections/' + encodeURIComponent(id),
+      name === null ? {} : { name },
+      revision,
+      csrf,
+      signal,
+      name === null ? 'DELETE' : 'PATCH',
+    );
+  }
+  async reorderSections(
+    ids: string[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'sections/order',
+      { orderedSectionIds: ids },
+      revision,
+      csrf,
+      signal,
+      'PUT',
+    );
+  }
+  async renamePage(
+    id: string,
+    name: string,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'pages/' + encodeURIComponent(id),
+      { name },
+      revision,
+      csrf,
+      signal,
+      'PATCH',
+    );
+  }
+  async attachItem(
+    pageId: string,
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'pages/' + encodeURIComponent(pageId) + '/items/' + id,
+      {},
+      revision,
+      csrf,
+      signal,
+      'PUT',
+    );
+  }
+  async editItem(
+    id: number,
+    fields: { name: string; gameItemIds: number[]; iconAssetId?: string },
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'items/' + id,
+      fields,
+      revision,
+      csrf,
+      signal,
+      'PATCH',
+    );
+  }
+  async deleteItem(
+    id: number,
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.catalogWrite(
+      'items/' + id,
+      {},
+      revision,
+      csrf,
+      signal,
+      'DELETE',
+    );
+  }
   async queue(
     view: QueueView,
     cursor: string | undefined,
@@ -629,10 +799,14 @@ export class LiveAdminClient implements AdminClient {
       view,
     );
   }
-  async detail(id: string, signal: AbortSignal) {
+  async detail(id: string, signal: AbortSignal, cursor?: string) {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
     const result = parseDetail(
       await this.json(
-        '/api/v1/admin/submissions/' + encodeURIComponent(id),
+        '/api/v1/admin/submissions/' +
+          encodeURIComponent(id) +
+          (cursor ? '?' + params : ''),
         signal,
       ),
     );
@@ -657,6 +831,28 @@ export class LiveAdminClient implements AdminClient {
     );
     if (result.id !== id || result.version <= version)
       throw new Error('Unexpected correction receipt.');
+    return result;
+  }
+  async saveReviewNote(
+    id: string,
+    version: number,
+    note: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSubmission(
+      await this.json(
+        '/api/v1/admin/submissions/' + encodeURIComponent(id) + '/note',
+        signal,
+        this.write(csrf, { expectedVersion: version, note }, 'PATCH'),
+      ),
+    );
+    if (
+      result.id !== id ||
+      result.version <= version ||
+      result.reviewNote !== note.trim()
+    )
+      throw new Error('Unexpected review note receipt.');
     return result;
   }
   async decide(

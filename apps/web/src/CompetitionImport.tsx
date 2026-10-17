@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CompetitionKind } from '@clog/domain';
+import { classifyAccessFailure } from './admin-session.ts';
 import {
   CompetitionRequestError,
   type CompetitionClient,
@@ -7,17 +7,19 @@ import {
 } from './competition-api.ts';
 import { exactXp, signedXp, skillName, type AdminSession } from './xp-model.ts';
 import { localScheduleLabel, utcScheduleLabel } from './schedule-time.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 export function CompetitionImport({
   client,
   session,
   onApplied,
+  onAccessLost,
 }: {
   client: CompetitionClient;
   session: AdminSession;
   onApplied: () => void;
+  onAccessLost: () => void;
 }) {
-  const [url, setUrl] = useState(''),
-    [kind, setKind] = useState<CompetitionKind | ''>('');
+  const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<CompetitionImportPreview>(),
     [pages, setPages] = useState<string[]>();
   const [busy, setBusy] = useState(false),
@@ -40,8 +42,9 @@ export function CompetitionImport({
     !!preview &&
     JSON.stringify(pages?.slice().sort()) !==
       JSON.stringify(preview.pageIds.slice().sort());
+  useAdminDraft(!!preview || dirty, busy);
   const execute = async (apply: boolean) => {
-    if (!kind || busy) return;
+    if (busy) return;
     const controller = new AbortController();
     operation.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15000);
@@ -61,7 +64,9 @@ export function CompetitionImport({
         setMessage(
           r.outcome === 'unchanged'
             ? 'Unchanged. No gains or schedules were added.'
-            : 'Competition imported.',
+            : preview.action === 'import-metadata'
+              ? 'Competition metadata imported. No pages were opened or XP added.'
+              : 'Competition imported.',
         );
         setPreview(undefined);
         setPages(undefined);
@@ -69,7 +74,6 @@ export function CompetitionImport({
       } else {
         const p = await client.preview(
           url,
-          kind,
           session.csrfToken,
           controller.signal,
           pages,
@@ -81,17 +85,35 @@ export function CompetitionImport({
         key.current = crypto.randomUUID();
       }
     } catch (e) {
-      if (!controller.signal.aborted)
-        setError(e instanceof Error ? e.message : 'Import failed.');
-      else
+      if (controller.signal.aborted) {
         setError(
           'Request timed out. Retry Apply to check the committed result safely.',
         );
+      } else {
+        const failure = classifyAccessFailure(e);
+        if (failure === 'expired') {
+          setPreview(undefined);
+          setPages(undefined);
+          onAccessLost();
+          return;
+        }
+        setError(
+          failure === 'denied'
+            ? 'Your account is not allowed to perform this competition import.'
+            : e instanceof CompetitionRequestError
+              ? e.message
+              : e instanceof Error
+                ? e.message
+                : 'Import failed.',
+        );
+      }
       if (
         e instanceof CompetitionRequestError &&
         [401, 403, 409].includes(e.status)
-      )
+      ) {
         setPreview(undefined);
+        setPages(undefined);
+      }
     } finally {
       clearTimeout(timeout);
       if (operation.current === controller) setBusy(false);
@@ -100,18 +122,6 @@ export function CompetitionImport({
   const correction = preview?.changes.some((c) => BigInt(c.change) < 0n);
   return (
     <section className="competition-import">
-      <h3>Import competition</h3>
-      <p>
-        Choose SKILL for XP or ACTIVITY for boss/activity results. Future and
-        running imports save metadata and an opening window; finished imports
-        save final results.
-      </p>
-      {session.role === 'moderator' && (
-        <p>
-          Finished SKILL results require the administrator. You can prepare
-          skill schedules and import ACTIVITY competitions.
-        </p>
-      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -119,9 +129,10 @@ export function CompetitionImport({
         }}
       >
         <fieldset disabled={busy} className="admin-fieldset">
-          <label>
+          <label className="admin-field-label">
             Wise Old Man competition link
             <input
+              className="admin-input"
               type="url"
               required
               value={url}
@@ -133,34 +144,26 @@ export function CompetitionImport({
               }}
             />
           </label>
-          <label>
-            Competition kind
-            <select
-              required
-              value={kind}
-              onChange={(e) => {
-                setKind(e.target.value as CompetitionKind);
-                setPreview(undefined);
-                setPages(undefined);
-              }}
-            >
-              <option value="">Choose SKILL or ACTIVITY</option>
-              <option value="SKILL">SKILL — XP</option>
-              <option value="ACTIVITY">ACTIVITY — boss/activity</option>
-            </select>
-          </label>
-          <button className="site-button" disabled={!kind || !url}>
+          <button className="site-button" disabled={!url}>
             {busy ? 'Please wait…' : 'Preview competition'}
           </button>
         </fieldset>
       </form>
-      {error && <p role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
+      {error && (
+        <p role="alert" className="admin-error">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="admin-success">
+          {message}
+        </p>
+      )}
       {preview && (
         <div className="xp-import-preview">
           <h4>{preview.competition.title}</h4>
           <p>
-            {preview.competition.kind} · {preview.lifecycle} ·{' '}
+            Detected kind: {preview.competition.kind} · {preview.lifecycle} ·{' '}
             {preview.competition.metrics.join(', ')}
           </p>
           <a
@@ -171,24 +174,26 @@ export function CompetitionImport({
             View competition on WOM
           </a>
           <p>
-            Source start: {localScheduleLabel(preview.competition.startsAt)}
+            Start: {localScheduleLabel(preview.competition.startsAt)}
             <br />
             <small>{utcScheduleLabel(preview.competition.startsAt)}</small>
             <br />
-            Source end: {localScheduleLabel(preview.competition.endsAt)}
+            End: {localScheduleLabel(preview.competition.endsAt)}
             <br />
             <small>{utcScheduleLabel(preview.competition.endsAt)}</small>
           </p>
           <p>
-            {preview.action === 'import-results'
-              ? 'Import finished results. No opening window will be created.'
-              : preview.action === 'preserve-schedule'
-                ? 'Preserve the existing linked schedule.'
-                : preview.action === 'preserve-deletion'
-                  ? 'Preserve the deleted schedule.'
-                  : preview.lifecycle === 'running'
-                    ? 'Create an opening window starting immediately when Apply commits, ending at the WOM end time.'
-                    : 'Create an opening window for the WOM start and end times.'}
+            {preview.action === 'import-metadata'
+              ? 'Import competition metadata only. No pages will be opened and no XP will be added.'
+              : preview.action === 'import-results'
+                ? 'Import finished results. No opening window will be created.'
+                : preview.action === 'preserve-schedule'
+                  ? 'Preserve the existing linked schedule.'
+                  : preview.action === 'preserve-deletion'
+                    ? 'Keep the linked window closed.'
+                    : preview.lifecycle === 'running'
+                      ? 'Create an opening window starting immediately when Apply commits, ending at the WOM end time.'
+                      : 'Create an opening window for the WOM start and end times.'}
           </p>
           {preview.scheduleStartsAt && (
             <p>
@@ -197,64 +202,76 @@ export function CompetitionImport({
               <small>{utcScheduleLabel(preview.scheduleStartsAt)}</small>
             </p>
           )}
-          {preview.action === 'create-schedule' && (
-            <>
-              <label>
-                Find opening pages
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </label>
-              <fieldset className="schedule-page-list" disabled={busy}>
-                <legend>Opening pages</legend>
-                {preview.pages
-                  .filter((p) =>
-                    p.name.toLowerCase().includes(search.toLowerCase()),
-                  )
-                  .map((p) => (
-                    <label className="admin-checkbox" key={p.id}>
-                      <input
-                        type="checkbox"
-                        checked={pages?.includes(p.id) ?? false}
-                        onChange={(e) =>
-                          setPages(
-                            e.target.checked
-                              ? [...(pages ?? []), p.id]
-                              : (pages ?? []).filter((id) => id !== p.id),
-                          )
-                        }
-                      />
-                      {p.name}
-                    </label>
-                  ))}
-              </fieldset>
-              <p>
-                {pages?.length ?? 0} pages selected.
-                {dirty ? ' Update the preview to confirm these pages.' : ''}
-              </p>
-              {dirty && (
-                <button
-                  className="site-button"
+          {preview.competition.kind === 'ACTIVITY' &&
+            preview.action === 'create-schedule' && (
+              <>
+                <label className="admin-field-label">
+                  Find opening pages
+                  <input
+                    className="admin-input"
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+                <fieldset
+                  className="admin-choice-fieldset schedule-page-list"
                   disabled={busy}
-                  onClick={() => {
-                    void execute(false);
-                  }}
                 >
-                  Update preview
-                </button>
-              )}
-            </>
-          )}
-          {preview.action === 'preserve-schedule' && (
-            <p>
-              Pages:{' '}
-              {preview.pageIds
-                .map((id) => preview.pages.find((p) => p.id === id)?.name ?? id)
-                .join(', ')}
-            </p>
-          )}
+                  <legend>Opening pages</legend>
+                  {preview.pages
+                    .filter((p) =>
+                      p.name.toLowerCase().includes(search.toLowerCase()),
+                    )
+                    .map((p) => (
+                      <label
+                        className="admin-checkbox admin-checkbox--touch"
+                        key={p.id}
+                      >
+                        <input
+                          className="admin-check"
+                          type="checkbox"
+                          checked={pages?.includes(p.id) ?? false}
+                          onChange={(e) =>
+                            setPages(
+                              e.target.checked
+                                ? [...(pages ?? []), p.id]
+                                : (pages ?? []).filter((id) => id !== p.id),
+                            )
+                          }
+                        />
+                        {p.name}
+                      </label>
+                    ))}
+                </fieldset>
+                <p>
+                  {pages?.length ?? 0} pages selected.
+                  {dirty ? ' Update the preview to confirm these pages.' : ''}
+                </p>
+                {dirty && (
+                  <button
+                    className="site-button"
+                    disabled={busy}
+                    onClick={() => {
+                      void execute(false);
+                    }}
+                  >
+                    Update preview
+                  </button>
+                )}
+              </>
+            )}
+          {preview.competition.kind === 'ACTIVITY' &&
+            preview.action === 'preserve-schedule' && (
+              <p>
+                Pages:{' '}
+                {preview.pageIds
+                  .map(
+                    (id) => preview.pages.find((p) => p.id === id)?.name ?? id,
+                  )
+                  .join(', ')}
+              </p>
+            )}
           {preview.lifecycle === 'finished' && (
             <details>
               <summary>
@@ -301,8 +318,9 @@ export function CompetitionImport({
             </p>
           ))}
           {correction && (
-            <label className="admin-checkbox">
+            <label className="admin-checkbox admin-checkbox--touch">
               <input
+                className="admin-check"
                 type="checkbox"
                 checked={ack}
                 onChange={(e) => setAck(e.target.checked)}
@@ -311,7 +329,9 @@ export function CompetitionImport({
             </label>
           )}
           {expired && (
-            <p role="alert">Preview expired. Preview this competition again.</p>
+            <p role="alert" className="admin-error">
+              Preview expired. Preview this competition again.
+            </p>
           )}
           <button
             className="site-button"

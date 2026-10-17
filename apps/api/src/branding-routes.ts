@@ -1,13 +1,15 @@
 import multipart from '@fastify/multipart';
+import type { BrandingFiles } from './route-services.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { BrandingStorage, MAX_LOGO_BYTES } from './branding-storage.js';
+import { MAX_LOGO_BYTES } from './branding-storage.js';
 import { defaultBranding, type BrandingStore } from './branding-store.js';
 import { assetIdPattern } from './icon-storage.js';
 import { ApiError } from './types.js';
+import { matchesEtag } from './projection-cache.js';
 export function brandingRoutes(
   app: FastifyInstance,
   store?: BrandingStore,
-  storage?: BrandingStorage,
+  storage?: BrandingFiles,
   authorize?: (
     request: FastifyRequest,
     write?: boolean,
@@ -16,9 +18,15 @@ export function brandingRoutes(
   for (const hardcore of [false, true])
     app.get(
       '/api/v1/branding' + (hardcore ? '/hardcore' : ''),
-      async (_request, reply) => {
-        reply.header('Cache-Control', 'no-store');
-        return store ? store.settings(hardcore) : defaultBranding;
+      async (request, reply) => {
+        const value = store ? await store.settings(hardcore) : defaultBranding,
+          etag = '"' + value.revision + '"';
+        reply
+          .header('Cache-Control', 'public, max-age=0, must-revalidate')
+          .header('ETag', etag);
+        if (matchesEtag(request.headers['if-none-match'], etag))
+          return reply.code(304).send();
+        return value;
       },
     );
   for (const favicon of [false, true])
@@ -137,16 +145,9 @@ export function brandingRoutes(
           }
           if (!input) throw new ApiError(400, 'Upload one logo image.');
           const record = await storage!.saveLogo(input);
-          try {
-            return await store!.save(record, revision, actor.id, hardcore);
-          } catch (error) {
-            // Retain files if a database outage makes the commit outcome uncertain.
-            const existing = await store!
-              .asset(record.logo.id)
-              .catch(() => undefined);
-            if (existing === null) await storage!.removeLogo(record);
-            throw error;
-          }
+          // A failed read after a lost write receipt cannot establish
+          // whether the new logo was committed. Defer reclamation.
+          return store!.save(record, revision, actor.id, hardcore);
         },
       );
     });

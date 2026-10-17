@@ -2,23 +2,23 @@
 
 # Admin catalog backend (CAT-02)
 
-The existing `/admin/catalog` UI now uses authenticated storage for item creation, icon uploads and page ordering. No external game ID is required. A newly created item appears on all selected pages and in catalog search, uncollected in both world modes.
+The `/admin/catalog` collection-log editor manages sections, pages and canonical items with a contextual editor on the right (below the log on mobile). Both staff roles can use all catalog controls. New items require a name, icon and in-game item ID and are added to the current page. Existing items, including pageless entries, can be searched and attached to any page.
 
 ## Routes and authorization
 
 All admin reads require an authenticated administrator or moderator account. Every mutation also requires the configured same-origin `Origin` and session-bound `X-CSRF-Token`. Authentication runs before body parsing and validation. Actors come from the session, never a request field. Private responses use `Cache-Control: no-store`.
 
-| Route                                          | Contract                                                                                                                     |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/admin/catalog`                    | Full catalog with source revision, item provenance/overrides, page versions and order provenance                             |
-| `POST /api/v1/admin/catalog/icons`             | One multipart `icon` file; returns `assetId`, same-origin `iconPath` and expiry                                              |
-| `POST /api/v1/admin/catalog/items`             | `{ name, iconAssetId, pageIds }` plus a stable `Idempotency-Key`; returns the item, page IDs and catalog revision            |
-| `PUT /api/v1/admin/catalog/pages/:id/order`    | Complete `orderedItemIds` and `expectedVersion`; returns the saved page/revision                                             |
-| `POST /api/v1/admin/catalog/items/:id/aliases` | Explicit `gameItemIds`, `expectedRevision` and nonblank `reason`; attaches unclaimed external aliases to that canonical item |
-| `GET /api/v1/catalog/icons/:uuid.png`          | Published icons are public; staged icons require their uploading admin's session and unexpired stage                         |
-| `GET /api/v1/catalog/search?q=...`             | Current public item matches, capped at 25, with the same catalog revision used by public reads                               |
+| Route                                          | Contract                                                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/admin/catalog`                    | Full catalog with source revision, item provenance/overrides, page versions and order provenance                               |
+| `POST /api/v1/admin/catalog/icons`             | One multipart `icon` file; returns `assetId`, same-origin `iconPath` and expiry                                                |
+| `POST /api/v1/admin/catalog/items`             | `{ name, gameItemIds, iconAssetId, pageIds }` plus a stable `Idempotency-Key`; returns the item, page IDs and catalog revision |
+| `PUT /api/v1/admin/catalog/pages/:id/order`    | Complete `orderedItemIds` and `expectedVersion`; returns the saved page/revision                                               |
+| `POST /api/v1/admin/catalog/items/:id/aliases` | Explicit `gameItemIds`, `expectedRevision` and nonblank `reason`; attaches unclaimed external aliases to that canonical item   |
+| `GET /api/v1/catalog/icons/:uuid.png`          | Published icons are public; staged icons require their uploading admin's session and unexpired stage                           |
+| `GET /api/v1/catalog/search?q=...`             | Current public item matches, capped at 25, with the same catalog revision used by public reads                                 |
 
-Names are trimmed, nonblank, at most 200 characters, and contain no control characters. Page IDs must be distinct and already exist. Item creation never creates a page. External IDs can be reconciled separately through the authenticated alias endpoint; the existing creation form retains its three required inputs.
+Names are trimmed, nonblank, at most 200 characters, and contain no control characters. Page IDs must be distinct and already exist. Item creation never creates a page. New items require 1–100 distinct positive in-game IDs (32-bit integers). These IDs resolve RuneLite claims to a stable canonical identity. An ID owned by another item returns 409. Editing can replace the aliases, display name and icon without changing the canonical identity or existing credits.
 
 The search endpoint supplies autocomplete consumers with current canonical IDs, names and icon paths. The existing admin matching UI reads the same live catalog. The merged Discord gateway and submission-review service use that catalog, so manual items are immediately available for bot autocomplete and exact review matching.
 
@@ -67,10 +67,25 @@ Database triggers advance page versions on membership mutations and advance cata
 
 ## Source refresh and reconciliation boundary
 
+### Collection-log editor (migration 024)
+
+The public catalog now includes ordered `sections: [{id,name}]`. The original five sections are seeded once. Section and page names can change without changing IDs. Catalog revisions and public projections invalidate on section writes. Both log modes use the same taxonomy; collection counts remain independent.
+
+- `POST /api/v1/admin/catalog/sections`: name, expectedRevision and an actor-scoped Idempotency-Key. Creates a section; exact retries return its durable receipt.
+- `PATCH /api/v1/admin/catalog/sections/:id`: name and expectedRevision. `DELETE` takes expectedRevision and requires no active pages in the section.
+- `PUT /api/v1/admin/catalog/sections/order`: orderedSectionIds (every active section exactly once) and expectedRevision.
+- `PATCH /api/v1/admin/catalog/pages/:id`: name and expectedRevision.
+- `PUT /api/v1/admin/catalog/pages/:pageId/items/:id`: expectedRevision. Adds an existing active item at the end, without creating another identity.
+- `PATCH /api/v1/admin/catalog/items/:id`: name, gameItemIds, optional staged iconAssetId and expectedRevision.
+- `DELETE /api/v1/admin/catalog/items/:id`: expectedRevision. Explicitly deactivates the item and removes its memberships, retaining stored claims, credits, aliases and audit history.
+
+Removing a page or an individual membership leaves an active pageless item when there are no remaining pages. It remains available in the existing-item picker and review matching. Only explicit **Delete item** deactivates it. The public total counts the unique items appearing on active pages.
+
+Six-dot handles reorder sections, pages within a section and items within a page. Drops publish immediately. Alt + arrow keys and contextual Move earlier/later controls offer keyboard and touch alternatives. Stale writes return 409 and refresh the snapshot for review; they are never replayed automatically. Creation forms retain request keys after uncertain results. Deleting sections, pages or items requires confirmation in the UI.
+
 ### Whole-page management
 
-Both staff roles can create, reorder and delete pages in **Items catalog → Page
-management**. These session/Origin/CSRF-protected endpoints use the catalog/import
+Both staff roles can create, rename, reorder and delete pages in **Items catalog**. These session/Origin/CSRF-protected endpoints use the catalog/import
 lock and commit the revision, memberships and audit together:
 
 - `POST /api/v1/admin/catalog/pages`: `name`, `category`, ordered `itemIds` (may
@@ -81,7 +96,7 @@ lock and commit the revision, memberships and audit together:
   every active page in that category exactly once, and `expectedRevision`.
 - `DELETE /api/v1/admin/catalog/pages/:id`: `expectedRevision` and
   `expectedVersion`. Removes all memberships and deactivates the page. Items
-  without another active page are deactivated; shared items and all review/credit
+  without another active page remain active and pageless; shared items and all review/credit
   history remain intact. Stale revisions/versions return 409.
 
 Migration 011 retains deleted page rows for audits and retries, records manual

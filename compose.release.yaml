@@ -1,0 +1,10 @@
+# All deployed writers use the resolved image digest.
+services:
+  db:
+    image: ${RELEASE_DB_IMAGE:-postgres:17-alpine}
+  migrate:
+    image: ${RELEASE_IMAGE:?Use the versioned deployment helper}
+    pull_policy: never
+  app:
+    image: ${RELEASE_IMAGE:?Use the versioned deployment helper}
+    pull_policy: never

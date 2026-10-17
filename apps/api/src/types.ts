@@ -7,6 +7,7 @@ export interface Settings {
   hardcoreEnabled: boolean;
 }
 export interface CatalogData {
+  sections?: { id: string; name: string }[];
   catalogVersion?: string;
   items: { id: number; name: string; iconPath: string }[];
   pages: { id: string; name: string; category: string; itemIds: number[] }[];
@@ -65,13 +66,17 @@ export interface BotReceipt {
   creditOccupied: boolean;
 }
 export interface BackendStore {
+  publicSnapshot?(
+    resource: 'catalog' | 'collections',
+  ): Promise<{ revision: string; body: string }>;
   manageModerator?(
     id: string,
     expectedVersion: number,
     action: 'disable' | 'enable' | 'delete',
     actor: string,
   ): Promise<StaffAccount>;
-  ensureDefaultAdmin(passwordHash: string): Promise<void>;
+  /** Preserve an existing administrator; a fresh database requires an explicit verifier. */
+  ensureDefaultAdmin(bootstrapPasswordHash?: string): Promise<void>;
   accountByUsername(username: string): Promise<StoredAccount | null>;
   accountById(id: string): Promise<StoredAccount | null>;
   accounts(): Promise<StaffAccount[]>;
@@ -106,8 +111,6 @@ export interface BackendStore {
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
   ): Promise<Settings | null>;
-  createState(hash: string, expiresAt: Date): Promise<void>;
-  consumeState(hash: string): Promise<boolean>;
   createSession(
     hash: string,
     identity: AccountSessionIdentity,
@@ -121,6 +124,7 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }

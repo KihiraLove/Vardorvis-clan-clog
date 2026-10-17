@@ -12,7 +12,13 @@ export const categories = [
   { id: 'minigames', name: 'Minigames' },
   { id: 'other', name: 'Other' },
 ] as const;
-export type Category = (typeof categories)[number]['id'];
+export type Category = string;
+export interface CatalogSection {
+  id: string;
+  name: string;
+}
+export const catalogSections = (catalog?: Catalog): readonly CatalogSection[] =>
+  catalog?.sections ?? categories;
 export interface Item {
   id: number;
   name: string;
@@ -25,6 +31,7 @@ export interface Page {
   itemIds: number[];
 }
 export interface Catalog {
+  sections?: CatalogSection[];
   revision: string;
   items: Item[];
   pages: Page[];
@@ -73,6 +80,15 @@ function unique<T>(values: T[]): void {
 /** Reject unsafe icon paths, duplicate identities and dangling page memberships. */
 export function parseCatalog(value: unknown): Catalog {
   const data = record(value);
+  const sections =
+    data.sections === undefined
+      ? [...categories]
+      : array(data.sections).map((entry) => {
+          const section = record(entry);
+          return { id: text(section.id), name: text(section.name) };
+        });
+  unique(sections.map((section) => section.id));
+  if (sections.length > 100) throw new Error('Too many catalog sections');
   const items = array(data.items).map((entry): Item => {
     const item = record(entry);
     const iconPath = text(item.iconPath);
@@ -89,7 +105,7 @@ export function parseCatalog(value: unknown): Catalog {
   const pages = array(data.pages).map((entry): Page => {
     const page = record(entry);
     const category = text(page.category);
-    if (!categories.some((tab) => tab.id === category))
+    if (!sections.some((tab) => tab.id === category))
       throw new Error('Unknown collection log category');
     const ids = array(page.itemIds).map(id);
     unique(ids);
@@ -103,7 +119,20 @@ export function parseCatalog(value: unknown): Catalog {
     };
   });
   unique(pages.map((page) => page.id));
-  return { revision: text(data.revision), items, pages };
+  return {
+    revision: text(data.revision),
+    items,
+    pages,
+    ...(data.sections === undefined ? {} : { sections }),
+  };
+}
+
+export function progressClass(collected: number, total: number): string {
+  return collected === 0
+    ? 'count-empty'
+    : total > 0 && collected === total
+      ? 'complete'
+      : 'count-partial';
 }
 
 /** Normalize approved credits; older responses without hardcore default to ordinary. */

@@ -6,6 +6,7 @@ export interface AuthConfig {
   origin: string;
   secret: string;
   secure: boolean;
+  bootstrapPassword?: string;
 }
 export interface BotConfig {
   token: string;
@@ -87,6 +88,14 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     throw new Error(
       'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
     );
+  const bootstrapPassword = env.ADMIN_BOOTSTRAP_PASSWORD || undefined;
+  if (
+    bootstrapPassword !== undefined &&
+    !/^[a-f\d]{64,256}$/iu.test(bootstrapPassword)
+  )
+    throw new Error(
+      'ADMIN_BOOTSTRAP_PASSWORD must contain 32–128 random bytes encoded as hex',
+    );
   return {
     iconDirectory,
     proofDirectory,
@@ -94,6 +103,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       origin: origin.origin,
       secret,
       secure: origin.protocol === 'https:',
+      ...(bootstrapPassword === undefined ? {} : { bootstrapPassword }),
     } satisfies AuthConfig,
     bot,
     trustProxy: trusted.length ? trusted : (false as const),

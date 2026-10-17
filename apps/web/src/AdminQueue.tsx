@@ -1,8 +1,9 @@
 /** Load catalog plus paged claims together, retaining cursor history for previous-page navigation. */
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AdminRequestError } from './admin-api.ts';
+import { classifyAccessFailure } from './admin-session.ts';
 import {
-  dateSourceLabel,
+  safeScreenshotPath,
   type AdminCatalog,
   type AdminClient,
   type QueueResult,
@@ -12,53 +13,96 @@ import type { AdminSession } from './xp-model.ts';
 import { xpTime } from './XpTables.tsx';
 import { SubmissionEditor } from './SubmissionEditor.tsx';
 import { ManualSubmissionForm } from './ManualSubmissionForm.tsx';
-import { ProofLink } from './AdminProofLink.tsx';
+import { usePreparedAdminData } from './admin-route-data.ts';
+import { useAdminAction } from './use-admin-action.ts';
+import type { SubmissionFilters } from '@clog/domain';
 export function AdminQueue({
   client,
+  hardcoreEnabled,
   session,
   onAccessLost,
 }: {
   client: AdminClient;
+  hardcoreEnabled: boolean;
   session: AdminSession;
   onAccessLost: () => void;
 }) {
+  const initial = usePreparedAdminData();
+  const preparedRead = useRef(!!initial?.queue);
   const [view, setView] = useState<QueueView>('pending'),
     [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors[cursors.length - 1];
+  const pagingHintId = useId();
   const [refresh, setRefresh] = useState(0),
     [selected, setSelected] = useState<string>();
-  const [snapshot, setSnapshot] = useState<{
-    view: QueueView;
-    cursor: string | undefined;
-    catalog: AdminCatalog;
-    queue: QueueResult;
-  }>();
-  const [loading, setLoading] = useState(true),
+  const [snapshot, setSnapshot] = useState<
+    | {
+        view: QueueView;
+        cursor: string | undefined;
+        catalog: AdminCatalog;
+        queue: QueueResult;
+      }
+    | undefined
+  >(
+    initial?.catalog && initial.queue
+      ? {
+          catalog: initial.catalog,
+          queue: initial.queue,
+          view: 'pending',
+          cursor: undefined,
+        }
+      : undefined,
+  );
+  const [loading, setLoading] = useState(!initial?.queue),
     [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [filters, setFilters] = useState<SubmissionFilters | undefined>(
+    initial?.queue?.filters,
+  );
+  const filterAction = useAdminAction(onAccessLost);
+  // Paging/filtering keeps the prepared catalog; explicit refresh and writes reload it.
+  const catalogCache = useRef(
+    initial?.catalog
+      ? { client, refresh: 0, catalog: initial.catalog }
+      : undefined,
+  );
   useEffect(() => {
+    if (preparedRead.current) {
+      preparedRead.current = false;
+      return;
+    }
     let active = true;
     const controller = new AbortController(),
       timer = window.setTimeout(() => controller.abort(), 10000);
     setLoading(true);
     setError(undefined);
     void Promise.all([
-      client.catalog(controller.signal),
+      catalogCache.current?.client === client &&
+      catalogCache.current.refresh === refresh
+        ? Promise.resolve(catalogCache.current.catalog)
+        : client.catalog(controller.signal),
       client.queue(view, cursor, controller.signal),
     ])
       .then(([catalog, queue]) => {
         // Historical claims may reference an item removed from the active catalog.
         if (queue.nextCursor !== null && queue.nextCursor === cursor)
           throw new Error('Inconsistent review snapshot.');
-        if (active) setSnapshot({ catalog, queue, view, cursor });
+        if (active) {
+          catalogCache.current = { client, refresh, catalog };
+          setSnapshot({ catalog, queue, view, cursor });
+          if (queue.filters)
+            setFilters((saved) =>
+              !saved ||
+              Number(queue.filters!.revision.split('-').at(-1)) >
+                Number(saved.revision.split('-').at(-1))
+                ? queue.filters
+                : saved,
+            );
+        }
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        if (
-          failure instanceof AdminRequestError &&
-          [401, 403].includes(failure.status)
-        )
-          onAccessLost();
+        if (classifyAccessFailure(failure) === 'expired') onAccessLost();
         else
           setError(
             failure instanceof AdminRequestError
@@ -79,6 +123,19 @@ export function AdminQueue({
   // A retained response must match the selected filter/page before it can be acted upon.
   const ready = snapshot?.view === view && snapshot.cursor === cursor;
   const changing = loading || (!ready && !error);
+  const pageProblem = error
+    ? 'The current page could not be loaded. Reload the submissions before paging.'
+    : !ready
+      ? 'The requested page is not loaded yet.'
+      : null;
+  const previousReason = loading
+    ? 'Loading submissions…'
+    : (pageProblem ??
+      (cursors.length === 1 ? 'Already on the first page.' : null));
+  const nextReason = loading
+    ? 'Loading submissions…'
+    : (pageProblem ??
+      (!snapshot?.queue.nextCursor ? 'Already on the last page.' : null));
   const choose = (next: QueueView) => {
     setView(next);
     setCursors([undefined]);
@@ -89,27 +146,72 @@ export function AdminQueue({
     <>
       {snapshot?.catalog && (
         <ManualSubmissionForm
+          hardcoreEnabled={hardcoreEnabled}
           catalog={snapshot.catalog}
           client={client}
           session={session}
           onAccessLost={onAccessLost}
           onCreated={(row) => {
             setNotice('Manual submission created: ' + row.status + '.');
-            setSelected(row.id);
+            setSelected(undefined);
             setView(row.status === 'pending' ? 'pending' : 'reviewed');
             setCursors([undefined]);
             setRefresh((v) => v + 1);
           }}
         />
       )}
+      <section className="admin-panel submission-filter-panel">
+        <h2 id="submission-filter-title">Filter out duplicates</h2>
+        {session.role === 'admin' ? (
+          <button
+            type="button"
+            className="site-button admin-toggle"
+            role="switch"
+            aria-labelledby="submission-filter-title"
+            aria-checked={filters?.filterCollected ?? false}
+            disabled={!filters || filterAction.busy}
+            onClick={() => {
+              if (!filters || session.role !== 'admin') return;
+              const checked = !filters.filterCollected;
+              void filterAction.execute(
+                async (signal) => {
+                  const saved = await client.saveSubmissionFilters(
+                    checked,
+                    filters.revision,
+                    session.csrfToken,
+                    signal,
+                  );
+                  if (!signal.aborted) setFilters(saved);
+                },
+                async (signal) => {
+                  const current = await client.queue(view, cursor, signal);
+                  if (!signal.aborted && current.filters)
+                    setFilters(current.filters);
+                },
+              );
+            }}
+          >
+            {filters?.filterCollected ? 'On' : 'Off'}
+          </button>
+        ) : (
+          <p>
+            Duplicate filtering is{' '}
+            <strong>
+              {filters
+                ? filters.filterCollected
+                  ? 'enabled'
+                  : 'disabled'
+                : 'unavailable'}
+            </strong>
+            . Only the administrator can change this.
+          </p>
+        )}
+        {filterAction.error && <p role="alert">{filterAction.error}</p>}
+      </section>
       <section className="admin-panel">
         <div className="admin-section-heading">
           <div>
             <h2>Submissions</h2>
-            <p>
-              Review the item, collector, date, proof and hardcore claim before
-              making a decision.
-            </p>
           </div>
           <button
             className="site-button"
@@ -175,87 +277,47 @@ export function AdminQueue({
                         : 'submission-card'
                     }
                   >
-                    <div className="submission-card__item">
-                      {item && <img src={item.iconPath} alt="" />}
-                      <div>
-                        <strong>
-                          {item?.name ??
-                            (row.itemId === null
-                              ? 'Needs item match'
-                              : 'Item unavailable in active catalog')}
-                        </strong>
-                        <span>
-                          {item
-                            ? 'Item #' + item.id
-                            : (row.itemId === null
-                                ? ''
-                                : `Item #${row.itemId} · `) +
-                              'Submitted: ' +
-                              row.rawItemText}
+                    <button
+                      type="button"
+                      className="submission-card__open"
+                      disabled={changing || !ready || Boolean(error)}
+                      onClick={() => setSelected(row.id)}
+                      aria-label={
+                        'Review ' +
+                        row.collectorName +
+                        ' · ' +
+                        (item?.name ?? row.rawItemText)
+                      }
+                    >
+                      <span className="submission-card__summary">
+                        <span className="submission-card__item">
+                          {item && <img src={item.iconPath} alt="" />}
+                          <strong>
+                            {item?.name ??
+                              (row.rawItemText || 'Needs item match')}
+                          </strong>
                         </span>
-                      </div>
+                        <span className="submission-card__collector">
+                          {row.collectorName}
+                        </span>
+                        <time dateTime={row.submittedAt}>
+                          {xpTime(row.submittedAt)}
+                        </time>
+                      </span>
+                      {safeScreenshotPath(row.screenshotPath) && (
+                        <img
+                          className="submission-card__screenshot"
+                          src={row.screenshotPath}
+                          alt="Submission screenshot"
+                          loading="lazy"
+                        />
+                      )}
                       <span
                         className={'admin-badge admin-badge--' + row.status}
                       >
                         {row.status}
                       </span>
-                    </div>
-                    <dl className="submission-facts">
-                      <div>
-                        <dt>Collector</dt>
-                        <dd>{row.collectorName}</dd>
-                      </div>
-                      <div>
-                        <dt>Collected on</dt>
-                        <dd>{row.collectedOn}</dd>
-                      </div>
-                      <div>
-                        <dt>Date source</dt>
-                        <dd>{dateSourceLabel(row.dateSource)}</dd>
-                      </div>
-                      <div>
-                        <dt>Submitted via</dt>
-                        <dd>
-                          {row.source === 'manual'
-                            ? 'Admin entry'
-                            : row.source === 'runelite'
-                              ? 'RuneLite'
-                              : 'Discord bot'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Claim</dt>
-                        <dd>
-                          {row.hardcore ? 'Hardcore worlds' : 'Ordinary worlds'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Submitted</dt>
-                        <dd>{xpTime(row.submittedAt)}</dd>
-                      </div>
-                    </dl>
-                    <div className="admin-actions">
-                      <ProofLink
-                        url={row.proofUrl}
-                        source={row.source}
-                        screenshot={row.screenshotPath}
-                        previewScreenshot={row.previewScreenshot}
-                      />
-                      <button
-                        type="button"
-                        className="site-button"
-                        disabled={changing || !ready || Boolean(error)}
-                        onClick={() => setSelected(row.id)}
-                        aria-label={
-                          'Review ' +
-                          row.collectorName +
-                          ' · ' +
-                          (item?.name ?? row.rawItemText)
-                        }
-                      >
-                        Review submission
-                      </button>
-                    </div>
+                    </button>
                   </li>
                 );
               })}
@@ -277,7 +339,11 @@ export function AdminQueue({
         <div className="admin-pagination">
           <button
             className="site-button"
-            disabled={changing || !ready || cursors.length === 1}
+            disabled={Boolean(previousReason)}
+            aria-describedby={
+              previousReason ? pagingHintId + '-previous' : undefined
+            }
+            aria-busy={loading}
             onClick={() => {
               setCursors((values) => values.slice(0, -1));
               setSelected(undefined);
@@ -288,19 +354,33 @@ export function AdminQueue({
           <span>Page {cursors.length}</span>
           <button
             className="site-button"
-            disabled={
-              loading || !ready || !snapshot.queue.nextCursor || Boolean(error)
-            }
+            disabled={Boolean(nextReason)}
+            aria-describedby={nextReason ? pagingHintId + '-next' : undefined}
+            aria-busy={loading}
             onClick={() => {
-              setCursors((values) => [...values, snapshot!.queue.nextCursor!]);
+              setCursors((values) => [
+                ...values.slice(0, -1),
+                snapshot!.queue.pageCursor,
+                snapshot!.queue.nextCursor!,
+              ]);
               setSelected(undefined);
             }}
           >
             Next page
           </button>
         </div>
+        {previousReason && (
+          <p id={pagingHintId + '-previous'} className="sr-only">
+            {previousReason}
+          </p>
+        )}
+        {nextReason && (
+          <p id={pagingHintId + '-next'} className="sr-only">
+            {nextReason}
+          </p>
+        )}
       </section>
-      {selected && ready && (
+      {selected && snapshot && (
         <SubmissionEditor
           key={selected}
           id={selected}

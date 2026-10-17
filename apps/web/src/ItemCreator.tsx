@@ -5,6 +5,7 @@ import {
   validateIconFile,
   validateIconSize,
   validateItem,
+  parseGameItemIds,
   type AdminCatalog,
   type AdminClient,
   type CreatedItem,
@@ -13,14 +14,17 @@ import {
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 /** Revoke preview URLs and close decoded bitmaps when replacing files or leaving the form. */
-function IconPicker({
+export function IconPicker({
   disabled,
   onValid,
+  optional = false,
 }: {
   disabled: boolean;
   onValid: (file: File | undefined) => void;
+  optional?: boolean;
 }) {
   const [file, setFile] = useState<File>(),
     [url, setUrl] = useState<string>(),
@@ -69,7 +73,7 @@ function IconPicker({
   return (
     <div className="icon-picker">
       <label>
-        Item icon (required)
+        {optional ? 'Replace item icon' : 'Item icon (required)'}
         <input
           type="file"
           accept="image/png,image/webp,.png,.webp"
@@ -77,9 +81,7 @@ function IconPicker({
           onChange={(event) => setFile(event.target.files?.[0])}
         />
       </label>
-      <p className="admin-note">
-        PNG or WebP · up to 2 MiB · 1–512 pixels in each dimension.
-      </p>
+      <p className="admin-note">PNG or WebP</p>
       {checking && <p role="status">Checking icon…</p>}
       {error && (
         <p role="alert" className="admin-error">
@@ -101,31 +103,31 @@ export function ItemCreator({
   session,
   onAccessLost,
   refresh,
+  pageId,
+  onStateChange,
 }: {
   client: AdminClient;
   catalog: AdminCatalog;
   session: AdminSession;
   onAccessLost: () => void;
   refresh: (signal: AbortSignal) => Promise<AdminCatalog>;
+  pageId: string;
+  onStateChange?: (state: { dirty: boolean; busy: boolean }) => void;
 }) {
   const [name, setName] = useState(''),
-    [pageIds, setPageIds] = useState<string[]>([]),
-    [query, setQuery] = useState('');
+    [gameIds, setGameIds] = useState('');
+  const pageIds = [pageId];
   const [file, setFile] = useState<File>(),
     [staged, setStaged] = useState<StagedIcon>(),
     [reset, setReset] = useState(0);
   const [pending, setPending] = useState<{ fields: CreateItem; key: string }>(),
     [created, setCreated] = useState<CreatedItem>();
-  useEffect(() => {
-    if (pending) return;
-    setPageIds((ids) => {
-      const current = ids.filter((id) =>
-        catalog.pages.some((page) => page.id === id),
-      );
-      return current.length === ids.length ? ids : current;
-    });
-  }, [catalog.pages, pending]);
   const action = useAdminAction(onAccessLost);
+  const dirty = !!(name || file || gameIds || pending);
+  useEffect(() => {
+    onStateChange?.({ dirty, busy: action.busy });
+  }, [dirty, action.busy, onStateChange]);
+  useAdminDraft(!!(name || file || gameIds || pending), action.busy);
   const iconChanged = useCallback((file: File | undefined) => {
     setFile(file);
     setStaged(undefined);
@@ -138,7 +140,12 @@ export function ItemCreator({
       if (!request) {
         if (!file) throw new Error('Choose a valid item icon before saving.');
         validateItem(
-          { name, pageIds, iconAssetId: 'not-uploaded-yet' },
+          {
+            name,
+            pageIds,
+            gameItemIds: parseGameItemIds(gameIds),
+            iconAssetId: 'not-uploaded-yet',
+          },
           catalog,
         );
         let icon = staged;
@@ -149,7 +156,12 @@ export function ItemCreator({
         }
         request = {
           fields: validateItem(
-            { name, pageIds, iconAssetId: icon.assetId },
+            {
+              name,
+              pageIds,
+              gameItemIds: parseGameItemIds(gameIds),
+              iconAssetId: icon.assetId,
+            },
             catalog,
           ),
           key: crypto.randomUUID(),
@@ -180,7 +192,7 @@ export function ItemCreator({
       setCreated(result);
       setPending(undefined);
       setName('');
-      setPageIds([]);
+      setGameIds('');
       setFile(undefined);
       setStaged(undefined);
       setReset((n) => n + 1);
@@ -208,8 +220,7 @@ export function ItemCreator({
       className="admin-panel item-creator"
       aria-labelledby="add-item-title"
     >
-      <h2 id="add-item-title">Add item</h2>
-      <p>Create one canonical item on one or more existing pages.</p>
+      <h2 id="add-item-title">Add new item</h2>
       {action.error && (
         <p role="alert" className="admin-error">
           {action.error}
@@ -246,7 +257,6 @@ export function ItemCreator({
         }}
       >
         <fieldset className="admin-fieldset" disabled={locked}>
-          <legend>Required item details</legend>
           <IconPicker key={reset} disabled={locked} onValid={iconChanged} />
           <label>
             Item name
@@ -257,44 +267,15 @@ export function ItemCreator({
               onChange={(event) => setName(event.target.value)}
             />
           </label>
-          <fieldset className="page-picker">
-            <legend>Collection-log pages (required)</legend>
+          <label>
+            In-game item ID (required)
             <input
-              type="search"
-              aria-label="Search collection-log pages"
-              placeholder="Search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              required
+              inputMode="numeric"
+              value={gameIds}
+              onChange={(event) => setGameIds(event.target.value)}
             />
-            {catalog.pages
-              .filter(
-                (page) =>
-                  page.name
-                    .toLowerCase()
-                    .includes(query.toLowerCase().trim()) ||
-                  pageIds.includes(page.id),
-              )
-              .map((page) => (
-                <label className="admin-checkbox" key={page.id}>
-                  <input
-                    type="checkbox"
-                    checked={pageIds.includes(page.id)}
-                    onChange={(event) =>
-                      setPageIds((ids) =>
-                        event.target.checked
-                          ? [...ids, page.id]
-                          : ids.filter((id) => id !== page.id),
-                      )
-                    }
-                  />
-                  {page.name}
-                </label>
-              ))}
-          </fieldset>
-          <p className="admin-note">
-            {pageIds.length} pages selected. New items append to each selected
-            page. No game item ID is required.
-          </p>
+          </label>
         </fieldset>
         {pending && !action.busy && (
           <p className="admin-note">

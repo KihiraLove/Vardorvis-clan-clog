@@ -3,8 +3,11 @@ node_modules
 **/node_modules
 **/dist
 **/coverage
+**/test-results
+**/playwright-report
 .env
 .env.*
 .data
 backups
 *.log
+.deploy.lock

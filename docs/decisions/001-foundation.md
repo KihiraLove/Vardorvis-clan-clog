@@ -1,3 +1,5 @@
+> **Historical record:** This document preserves decisions/review evidence at its recorded revision. Current topology, authentication, implemented features and acceptance are maintained in the [current inventory](../current-state.md); older pending-feature statements below are superseded.
+
 # ADR 001: monorepo and initial deployment
 
 Status: accepted for the project foundation, 2026-10-05. Open product questions are recorded below and can be changed without rewriting history.
