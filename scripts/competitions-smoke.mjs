@@ -1,3 +1,4 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Controlled fixtures for an isolated Compose project only; never run against clan data. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -14,7 +15,12 @@ if (process.env.COMPETITION_SMOKE_DISPOSABLE !== 'true')
   throw new Error(
     'Set COMPETITION_SMOKE_DISPOSABLE=true only for an isolated disposable database.',
   );
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL }),
+const pool = new pg.Pool({
+    connectionString: runtimeDatabaseUrl(
+      process.env,
+      process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+    ),
+  }),
   store = new PgCompetitionStore(pool),
   xp = new PgXpStore(pool),
   scheduling = new PgSchedulingStore(pool);

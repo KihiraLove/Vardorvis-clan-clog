@@ -26,7 +26,20 @@ jq -e '
 
 printf "\nStart and smoke test\n"
 docker run --rm -i --read-only --network none --label "clog.local-checks=$COMPOSE_PROJECT_NAME" --entrypoint node "$CHECK_APP_IMAGE" --input-type=module < scripts/inspect-runtime.mjs | tee .data/local-checks/runtime-image.json
+docker compose up -d --wait --wait-timeout 120 db
+docker compose run --rm -T migrate
+docker compose run --rm -T setup-admin --from-env
 docker compose up -d --wait --wait-timeout 120
+app_secret_check="$(docker compose ps -q app)"
+docker inspect "$app_secret_check" | jq -e '
+  (.[0].Config.Env | any(test("^(DATABASE_URL|POSTGRES_PASSWORD|APP_DB_PASSWORD|SESSION_SECRET)=.+")) | not) and
+  (.[0].Mounts | any(.Destination == "/run/clog-secrets/postgres") | not) and
+  ([.[0].Mounts[] | select(.Destination == "/run/clog-secrets/app" or .Destination == "/run/clog-secrets/session") | .RW] == [false,false])
+'
+docker compose run --rm --no-deps -T init --identity > /tmp/secret-identity-before.json
+docker compose run --rm --no-deps -T init
+docker compose run --rm --no-deps -T init --identity > /tmp/secret-identity-after.json
+cmp /tmp/secret-identity-before.json /tmp/secret-identity-after.json
 # Fresh install applies the immutable baseline and forward-only upgrades.
 test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql"
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
@@ -60,7 +73,8 @@ docker compose exec -T app node -e "fetch('http://127.0.0.1:8080/readyz').then(r
 printf "\nVerify restricted database runtime and append-only receipt/audit privileges\n"
 docker compose exec -T app node --input-type=module -e "
   import pg from 'pg';
-  const client = new pg.Client({connectionString: process.env.DATABASE_URL});
+  const {databaseUrl} = await import('@clog/database/dist/secrets.js');
+  const client = new pg.Client({connectionString: databaseUrl(process.env,'runtime')});
   await client.connect();
   try {
     const current = (await client.query('SELECT current_user AS user')).rows[0].user;
@@ -109,7 +123,8 @@ test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT count(*) FRO
 test "$(docker compose exec -T db psql -U clog -d clog -Atc "SELECT count(*) FROM competition_previews WHERE token_hash=repeat('b',64)")" = "0"
 docker compose exec -T app node --input-type=module -e "
   import pg from 'pg';
-  const c = new pg.Client({connectionString:process.env.DATABASE_URL});
+  const {databaseUrl} = await import('@clog/database/dist/secrets.js');
+  const c = new pg.Client({connectionString:databaseUrl(process.env,'runtime')});
   await c.connect();
   try {
     const p = (await c.query(\"SELECT has_table_privilege(current_user,'xp_previews','SELECT') AS xs,has_table_privilege(current_user,'xp_previews','INSERT') AS xi,has_table_privilege(current_user,'xp_previews','UPDATE') AS xu,has_table_privilege(current_user,'xp_previews','DELETE') AS xd,has_table_privilege(current_user,'competition_previews','SELECT') AS cs,has_table_privilege(current_user,'competition_previews','INSERT') AS ci,has_table_privilege(current_user,'competition_previews','UPDATE') AS cu,has_table_privilege(current_user,'competition_previews','DELETE') AS cd,has_table_privilege(current_user,'xp_import_history','DELETE') AS hd,has_table_privilege(current_user,'competition_import_history','DELETE') AS ch\")).rows[0];

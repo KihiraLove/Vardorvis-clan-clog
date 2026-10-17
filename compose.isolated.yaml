@@ -10,5 +10,7 @@ services:
     environment:
       BOT_ENABLED: 'false'
       BOT_API_TOKEN: ''
+      BOT_API_TOKEN_FILE: ''
       DISCORD_BOT_TOKEN: ''
+      DISCORD_BOT_TOKEN_FILE: ''
       DISCORD_GUILD_ID: ''

@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** B08/R03: bounded, opt-in collection with durable retirement before unlink. */
 import { lstat, opendir, realpath, unlink } from 'node:fs/promises';
 import { isAbsolute, join, parse, resolve } from 'node:path';
@@ -334,12 +335,12 @@ if (
 ) {
   const options = parseAssetMaintenanceOptions(process.argv.slice(2));
   const client = new pg.Client({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: readDatabaseUrl(),
     connectionTimeoutMillis: 5000,
     query_timeout: 15000,
   });
   try {
-    if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
+    if (!readDatabaseUrl()) throw new Error('DATABASE_URL is required.');
     await client.connect();
     const report = await runAssetMaintenance(
       client,

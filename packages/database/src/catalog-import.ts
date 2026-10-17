@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** Atomic, insert-only bootstrap. Refreshes and admin overrides are separate workflows. */
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -138,8 +139,6 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
-  console.log(
-    'Catalog ' + (await importBundledCatalog(process.env.DATABASE_URL)),
-  );
+  if (!readDatabaseUrl()) throw new Error('DATABASE_URL is required');
+  console.log('Catalog ' + (await importBundledCatalog(readDatabaseUrl())));
 }

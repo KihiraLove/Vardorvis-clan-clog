@@ -121,7 +121,7 @@ export interface BackendStore {
   allowLogin(keyHash: string): Promise<boolean>;
 }
 export const adminBootstrapRequiredMessage =
-  'No administrator exists. Set ADMIN_BOOTSTRAP_PASSWORD to an independently generated bootstrap credential before enabling auth.';
+  'No administrator exists. Run docker compose run --rm setup-admin --generate after database initialization, then sign in as admin and change the temporary password.';
 export class AdminBootstrapRequiredError extends Error {
   readonly code = 'ADMIN_BOOTSTRAP_REQUIRED';
   constructor() {

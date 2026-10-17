@@ -40,9 +40,11 @@ if [[ "${BOT_ENABLED:-false}" != true && "${BOT_ENABLED:-false}" != false ]]; th
   exit 1
 fi
 if [[ "${BOT_ENABLED:-false}" == true ]]; then
-  for variable in DISCORD_BOT_TOKEN DISCORD_GUILD_ID BOT_API_TOKEN; do
-    if [[ -z "${!variable:-}" ]]; then echo "BOT_ENABLED=true requires $variable" >&2; exit 1; fi
+  for variable in DISCORD_BOT_TOKEN BOT_API_TOKEN; do
+    file_variable="${variable}_FILE"
+    if [[ -z "${!variable:-}" && -z "${!file_variable:-}" ]]; then echo "BOT_ENABLED=true requires $variable or ${variable}_FILE" >&2; exit 1; fi
   done
+  if [[ -z "${DISCORD_GUILD_ID:-}" ]]; then echo 'BOT_ENABLED=true requires DISCORD_GUILD_ID' >&2; exit 1; fi
 fi
 export TRUSTED_PROXY_CIDRS="127.0.0.1/32${TRUSTED_PROXY_CIDRS:+,${TRUSTED_PROXY_CIDRS}}"
 node apps/api/dist/server.js &

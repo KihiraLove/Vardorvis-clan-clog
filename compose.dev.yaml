@@ -1,5 +1,11 @@
 # Both runtime and bootstrap use the one application build.
 services:
+  init:
+    image: clan-clog:dev
+    build: { context: ., target: app }
+  setup-admin:
+    image: clan-clog:dev
+    build: { context: ., target: app }
   migrate:
     image: clan-clog:dev
     build: { context: ., target: app }

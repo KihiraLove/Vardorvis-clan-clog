@@ -63,7 +63,7 @@ LABEL org.opencontainers.image.revision="$RELEASE_REVISION" io.clog.release-evid
 COPY --from=build /opt/clog-release /opt/clog-release
 USER root
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends nginx-light \
+  && apt-get install -y --no-install-recommends nginx-light util-linux \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /tmp/nginx /var/log/nginx /var/lib/nginx \
   && chown -R node:node /tmp/nginx /var/log/nginx /var/lib/nginx

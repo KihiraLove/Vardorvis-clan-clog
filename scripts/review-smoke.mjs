@@ -1,3 +1,4 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Regression checks for the disposable bundled image; never run against clan data. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -138,7 +139,12 @@ assert.deepEqual(
   first.body,
   'Retry returns the original receipt after later review',
 );
-const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const db = new pg.Client({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 await db.connect();
 try {
   const grants = (

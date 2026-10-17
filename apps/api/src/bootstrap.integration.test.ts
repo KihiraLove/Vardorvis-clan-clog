@@ -65,7 +65,7 @@ test(
             },
             {
               code: 'ADMIN_BOOTSTRAP_REQUIRED',
-              message: /No administrator exists.*ADMIN_BOOTSTRAP_PASSWORD/u,
+              message: /No administrator exists.*setup-admin --generate/u,
             },
           );
           assert.deepEqual(await store.accounts(), []);

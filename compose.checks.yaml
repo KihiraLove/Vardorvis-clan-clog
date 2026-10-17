@@ -1,6 +1,12 @@
 # Only scripts/check-local.mjs supplies these disposable resource names.
 # The external bridge is owned and removed by that runner, not a development stack.
 services:
+  init:
+    image: ${CHECK_APP_IMAGE:?Run npm run test:all}
+    pull_policy: never
+  setup-admin:
+    image: ${CHECK_APP_IMAGE:?Run npm run test:all}
+    pull_policy: never
   db:
     restart: 'no'
   migrate:
@@ -10,6 +16,8 @@ services:
     image: ${CHECK_APP_IMAGE:?Run npm run test:all}
     pull_policy: never
     restart: 'no'
+    environment:
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?Disposable test credential required}
     ports: !reset []
 networks:
   default:

@@ -7,7 +7,12 @@ Only the administrator changes site settings, shared keys and staff accounts.
 
 The API's `clog_runtime` role has explicit table/sequence permissions, no DDL or
 ownership, and no ability to rewrite receipts or audit history. Bootstrap removes
-unexpected grants. Owner credentials are reserved for setup and maintenance.
+unexpected grants. Owner credentials are reserved for setup and maintenance. Generated DB/session
+credentials live in separate private volumes, mounted read-only only into their
+consumers. Secret-file inputs are read inside Node, never copied to environment
+variables. Default application containers have no owner DB credential. First-admin
+provisioning is an explicit local command; temporary credentials are never printed
+by normal startup. Machine secrets persist across updates.
 Review revisions and database constraints protect credits under concurrent writes.
 
 Nginx enforces same-origin scripts/styles/API and denies framing. Local image

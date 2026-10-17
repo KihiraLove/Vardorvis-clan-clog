@@ -1,4 +1,5 @@
 /** Keep the Discord gateway disabled until all necessary private settings exist. */
+import { readSecret } from '@clog/domain/server-secrets';
 export interface BotConfig {
   discordToken: string;
   guildId: string;
@@ -17,9 +18,9 @@ export function requireSnowflake(
 export function readBotConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): BotConfig | null {
-  const discordToken = env.DISCORD_BOT_TOKEN?.trim() ?? '';
+  const discordToken = readSecret('DISCORD_BOT_TOKEN', env)?.trim() ?? '';
   const guildId = env.DISCORD_GUILD_ID?.trim() ?? '';
-  const apiToken = env.BOT_API_TOKEN?.trim() ?? '';
+  const apiToken = readSecret('BOT_API_TOKEN', env)?.trim() ?? '';
   // Disabled for Compose smoke tests and local UI work; partial setups fail closed.
   if (!discordToken && !guildId && !apiToken) return null;
   if (!discordToken || !guildId || !apiToken)

@@ -5,6 +5,9 @@ set -euo pipefail
 umask 077
 launcher_path="$(realpath "${BASH_SOURCE[0]}")"
 release_sha="${1:-}"
+[[ $# -le 2 && ( -z "${2:-}" || "${2:-}" == --setup-admin ) ]] || { echo 'Usage: deploy.sh RELEASE_SHA [--setup-admin]' >&2; exit 1; }
+export CLOG_SETUP_ADMIN=false
+if [[ "${2:-}" == --setup-admin ]]; then CLOG_SETUP_ADMIN=true; fi
 [[ "$release_sha" =~ ^[a-f0-9]{40}$ ]] || { echo 'Expected a full lowercase commit SHA' >&2; exit 1; }
 export CLOG_DEPLOY_ROOT="${CLOG_DEPLOY_ROOT:-/srv/clan-collection-log}"
 export CLOG_DEPLOY_PROJECT="${CLOG_DEPLOY_PROJECT:-clan-clog}"

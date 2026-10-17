@@ -3,6 +3,7 @@ import { REST, Routes } from 'discord.js';
 import { pathToFileURL } from 'node:url';
 import { collectionLogCommand } from './command.js';
 import { requireSnowflake } from './config.js';
+import { readSecret } from '@clog/domain/server-secrets';
 
 export type RegisterRequest = (route: string, body: object) => Promise<unknown>;
 export async function registerGuildCommand(
@@ -31,7 +32,7 @@ export async function registerFromEnv(
     mode === 'test' ? env.DISCORD_TEST_GUILD_ID : env.DISCORD_GUILD_ID,
     mode === 'test' ? 'DISCORD_TEST_GUILD_ID' : 'DISCORD_GUILD_ID',
   );
-  const token = env.DISCORD_BOT_TOKEN?.trim();
+  const token = readSecret('DISCORD_BOT_TOKEN', env)?.trim();
   if (!token)
     throw new Error('DISCORD_BOT_TOKEN is required for command registration');
   const sender =

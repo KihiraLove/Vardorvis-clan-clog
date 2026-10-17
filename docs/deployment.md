@@ -40,13 +40,16 @@ and records its image digest, schema and checksums. Install it on a fresh host:
 ```bash
 sudo install -d -m 700 /srv/clan-collection-log
 sudo install -m 755 infra/deploy.sh /srv/clan-collection-log/deploy.sh
-# Put the restricted .env in that directory, then:
-CLOG_USE_TRAEFIK=false /srv/clan-collection-log/deploy.sh FULL_40_CHARACTER_RELEASE_SHA
+# Put the non-secret .env in that directory. On the first deployment only:
+CLOG_USE_TRAEFIK=false /srv/clan-collection-log/deploy.sh FULL_40_CHARACTER_RELEASE_SHA --setup-admin
 ```
 
 Use `CLOG_USE_TRAEFIK=true` with the Traefik configuration above. The registry
 path defaults to the upstream `clan-clog` package; set `CLOG_IMAGE_NAME` for
 a fork. The operator needs Docker access, Bash, jq, flock and sha256sum.
+
+The explicit `--setup-admin` command prints a temporary password locally.
+Change it on the first login. Omit that flag on every later deployment.
 
 Later deployments take a coordinated backup, stop writers, apply compatible
 migrations, reconcile permissions and wait for health. Failure keeps evidence

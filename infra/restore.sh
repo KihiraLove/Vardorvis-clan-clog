@@ -21,7 +21,7 @@ done
 [[ -z "$(find "$CLOG_DEPLOY_ROOT" -mindepth 1 -maxdepth 1 ! -name .env -print -quit)" ]] || { echo 'Recovery directory must contain only .env' >&2; exit 1; }
 volume_names="$(docker volume ls --format '{{.Name}}')"
 network_names="$(docker network ls --format '{{.Name}}')"
-for name in postgres-data catalog-icons submission-images; do
+for name in postgres-data catalog-icons submission-images postgres-secret app-secret session-secret; do
   if grep -Fxq "${CLOG_DEPLOY_PROJECT}_$name" <<< "$volume_names"; then echo 'Restore volume name already exists' >&2; exit 1; fi
 done
 if grep -Fxq "${CLOG_DEPLOY_PROJECT}_default" <<< "$network_names"; then echo 'Restore network name already exists' >&2; exit 1; fi
@@ -33,7 +33,7 @@ flock -n 9 || { echo 'Another restore is using this directory' >&2; exit 1; }
 [[ "$(jq -er .bundleChecksum "$backup/release.json")" == "$(sha256sum "$backup/infrastructure/manifest.json" | cut -d' ' -f1)" ]] || exit 1
 [[ "$(jq -er .revision "$backup/release.json")" == "$(jq -er .revision "$backup/infrastructure/manifest.json")" ]] || exit 1
 # Archives contain only regular files/directories, with confined generated names.
-for archive in icons.tar.gz screenshots.tar.gz; do
+for archive in icons.tar.gz screenshots.tar.gz secrets.tar.gz; do
   tar -tvzf "$backup/$archive" | awk 'substr($1,1,1)!="-" && substr($1,1,1)!="d" {exit 1}'
   while IFS= read -r member; do
     [[ "$member" =~ ^\./[A-Za-z0-9_./-]*$ && ! "$member" =~ (^|/)\.\.(/|$) ]] || { echo 'Unsafe restore archive member' >&2; exit 1; }
@@ -73,7 +73,7 @@ done
 # pg_dump omits global roles; bootstrap recreates the restricted runtime role without replacing data.
 docker compose up --no-deps --force-recreate --abort-on-container-exit --exit-code-from migrate migrate > evidence/bootstrap.log 2>&1
 docker compose up -d --no-deps --wait --wait-timeout 120 app
-jq --arg project "$CLOG_DEPLOY_PROJECT" --arg infrastructure "$CLOG_RELEASE_DIR" --arg files "$COMPOSE_FILE" --arg config "$(sha256sum "$CLOG_DEPLOY_ROOT/.env" | cut -d' ' -f1)" '. + {restoredFrom:{revision:.revision,image:.image,bundleChecksum:.bundleChecksum},project:$project,infrastructure:$infrastructure,composeFiles:($files|split(":")),configurationChecksum:$config,traefik:false}' "$backup/release.json" > .current-release.json
+jq --arg project "$CLOG_DEPLOY_PROJECT" --arg infrastructure "$CLOG_RELEASE_DIR" --arg files "$COMPOSE_FILE" --arg config "$(configuration_checksum)" '. + {restoredFrom:{revision:.revision,image:.image,bundleChecksum:.bundleChecksum},project:$project,infrastructure:$infrastructure,composeFiles:($files|split(":")),configurationChecksum:$config,traefik:false}' "$backup/release.json" > .current-release.json
 printf '%s\n' "$CLOG_RELEASE_DIR" > .current-infrastructure
 printf 'passed\n' > evidence/restore-status
 echo 'Isolated database and both filesystem volumes restored; run the semantic acceptance checks before cutover.'

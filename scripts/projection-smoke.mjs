@@ -1,10 +1,16 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Production proxy and cross-instance cache acceptance on the disposable local stack. */
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { PgStore } from './apps/api/dist/store.js';
 if (process.env.PROJECTION_SMOKE_DISPOSABLE !== 'true')
   throw new Error('Disposable stack only.');
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 const read = (path, etag) =>
   fetch('http://127.0.0.1:8080/api/v1/' + path, {
     headers: etag ? { 'If-None-Match': etag } : {},

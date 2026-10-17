@@ -112,6 +112,9 @@ docker compose run --rm --no-deps -T --user 0 --entrypoint tar app -C /data/cata
 # encryption root; restoring PNGs without this root is insufficient.
 # Older images may have created this volume as root; preserve the ownership fix.
 docker compose run --rm --no-deps -T --user 0 --entrypoint sh app -c 'chown node:node /data/submission-images && tar -C /data/submission-images -czf - .' > "$backup_dir/screenshots.tar.gz.tmp"
+docker compose run --rm --no-deps -T init
+docker compose run --rm --no-deps -T --entrypoint tar init -C /run/clog-secrets -czf - ./postgres ./app ./session > "$backup_dir/secrets.tar.gz.tmp"
+if [[ -f .env ]]; then cp .env "$backup_dir/configuration.env.tmp"; else : > "$backup_dir/configuration.env.tmp"; fi
 
 # Re-inventory after capture to detect writers reappearing during the snapshot.
 inspect_running
@@ -125,7 +128,10 @@ tar -tzf "$backup_dir/screenshots.tar.gz.tmp" > /dev/null
 mv "$backup_dir/database.dump.tmp" "$backup_dir/database.dump"
 mv "$backup_dir/icons.tar.gz.tmp" "$backup_dir/icons.tar.gz"
 mv "$backup_dir/screenshots.tar.gz.tmp" "$backup_dir/screenshots.tar.gz"
-(cd "$backup_dir" && sha256sum database.dump icons.tar.gz screenshots.tar.gz > SHA256SUMS.tmp && sha256sum --check SHA256SUMS.tmp > /dev/null && mv SHA256SUMS.tmp SHA256SUMS)
+tar -tzf "$backup_dir/secrets.tar.gz.tmp" > /dev/null
+mv "$backup_dir/secrets.tar.gz.tmp" "$backup_dir/secrets.tar.gz"
+mv "$backup_dir/configuration.env.tmp" "$backup_dir/configuration.env"
+(cd "$backup_dir" && sha256sum database.dump icons.tar.gz screenshots.tar.gz secrets.tar.gz configuration.env > SHA256SUMS.tmp && sha256sum --check SHA256SUMS.tmp > /dev/null && mv SHA256SUMS.tmp SHA256SUMS)
 if [[ -n "${CLOG_RELEASE_DIR:-}" ]]; then
   # A versioned backup binds actual containers, schema and installed helper bytes.
   [[ -f .current-release.json && ! -L "$CLOG_RELEASE_DIR" ]] || exit 1

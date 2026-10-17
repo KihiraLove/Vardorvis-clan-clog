@@ -1,3 +1,4 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Disposable production-volume acceptance; never run against clan data. */
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
@@ -6,7 +7,12 @@ import { join } from 'node:path';
 import pg from 'pg';
 if (process.env.ASSET_SMOKE_DISPOSABLE !== 'true')
   throw new Error('Disposable stack only.');
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 const dirs = {
   icons: process.env.ICON_STORAGE_PATH,
   branding: join(process.env.ICON_STORAGE_PATH, 'branding'),

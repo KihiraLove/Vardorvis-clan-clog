@@ -16,20 +16,26 @@ terminal in its folder. Copy the example configuration:
 cp .env.example .env
 ```
 
-Generate four different secrets with `openssl rand -hex 32` and put them in
-`.env`: `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `SESSION_SECRET` and
-`ADMIN_BOOTSTRAP_PASSWORD`. Set `AUTH_ENABLED=true`. The default
-`PUBLIC_ORIGIN=http://127.0.0.1:8088` is suitable for this local setup.
-Keep this file private; never commit it.
+Set your site origin in `.env` (the default is http://127.0.0.1:8088 for
+local use). Initialize the database and create the first administrator:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml run --rm --build setup-admin --generate
+```
+
+This creates independent machine credentials in private Docker volumes and
+prints a temporary administrator password only for this explicit setup command.
+Keep that password privately until your first login. Start the website:
 
 ```bash
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
 ```
 
-Open http://127.0.0.1:8088/admin. Sign in as `admin` with the bootstrap password,
-choose a new password, then remove `ADMIN_BOOTSTRAP_PASSWORD` from `.env` and
-recreate the app with the same Compose command. Set your clan name, logo and
-submission rules in Site settings and RuneLite submissions.
+Open http://127.0.0.1:8088/admin. Sign in as `admin` with the temporary password
+and choose a new password. Machine credentials stay unchanged across restarts
+and updates; no bootstrap password needs to remain in `.env`. Configure your
+clan name, logo and submission rules in Site settings and RuneLite submissions.
+The setup command refuses to replace an existing administrator.
 
 The local build is named `clan-clog:dev`. PostgreSQL and uploaded images live
 in Docker volumes and survive container restarts. Startup creates the database,

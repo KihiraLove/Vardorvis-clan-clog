@@ -1,5 +1,7 @@
 /** Runtime composition: validated auth config, durable store and graceful shutdown. */
 import { checkBotReadiness } from './readiness.js';
+import { databaseUrl } from '@clog/database/dist/secrets.js';
+import { SecretInputError } from '@clog/domain/server-secrets';
 import pg from 'pg';
 import { observePoolFailures } from './db-pool.js';
 import { join } from 'node:path';
@@ -41,19 +43,22 @@ function fatal(error: unknown) {
   });
   if (failure.code === 'ADMIN_BOOTSTRAP_REQUIRED')
     process.stderr.write(adminBootstrapRequiredMessage + '\n');
+  if (error instanceof SecretInputError)
+    process.stderr.write(error.message + '\n');
   process.exit(1);
 }
 process.on('uncaughtException', fatal);
 process.on('unhandledRejection', fatal);
 async function main() {
   const config = readConfig();
-  if ((config.auth || config.bot) && !process.env.DATABASE_URL)
+  const url = databaseUrl(process.env, 'runtime', false);
+  if ((config.auth || config.bot) && !url)
     throw new Error(
       'DATABASE_URL is required when auth or bot intake is enabled',
     );
-  const pool = process.env.DATABASE_URL
+  const pool = url
     ? new pg.Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: url,
         connectionTimeoutMillis: 3000,
         statement_timeout: 5000,
         max: 10,

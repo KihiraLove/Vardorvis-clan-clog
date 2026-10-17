@@ -20,6 +20,7 @@ export const infrastructureFiles = [
   'infra/backup.sh',
   'infra/backup-current.sh',
   'infra/restore.sh',
+  'infra/rotate-secrets.sh',
   'infra/start-app.sh',
   'infra/nginx/nginx.conf',
   'infra/nginx/default.conf',

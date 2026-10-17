@@ -1,6 +1,7 @@
 /** Validate account-session configuration. Credentials live only in PostgreSQL. */
 import { isIP } from 'node:net';
 import { isAbsolute } from 'node:path';
+import { readSecret } from '@clog/database/dist/secrets.js';
 
 export interface AuthConfig {
   origin: string;
@@ -36,7 +37,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     )
       throw new Error('TRUSTED_PROXY_CIDRS must contain IP addresses or CIDRs');
   }
-  const botToken = env.BOT_API_TOKEN?.trim() ?? '';
+  const botToken = readSecret('BOT_API_TOKEN', env)?.trim() ?? '';
   const botGuildId = env.DISCORD_GUILD_ID?.trim() ?? '';
   if (!!botToken !== !!botGuildId)
     throw new Error('BOT_API_TOKEN and DISCORD_GUILD_ID must be set together');
@@ -83,12 +84,12 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     throw new Error(
       'PUBLIC_ORIGIN must use HTTPS (HTTP loopback only in development)',
     );
-  const secret = env.SESSION_SECRET?.trim() ?? '';
+  const secret = readSecret('SESSION_SECRET', env)?.trim() ?? '';
   if (!/^[a-f\d]{64,}$/iu.test(secret))
     throw new Error(
       'SESSION_SECRET must contain at least 32 random bytes encoded as hex',
     );
-  const bootstrapPassword = env.ADMIN_BOOTSTRAP_PASSWORD || undefined;
+  const bootstrapPassword = readSecret('ADMIN_BOOTSTRAP_PASSWORD', env);
   if (
     bootstrapPassword !== undefined &&
     !/^[a-f\d]{64,256}$/iu.test(bootstrapPassword)

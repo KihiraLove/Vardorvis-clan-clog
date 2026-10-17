@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** Apply forward-only SQL migrations; reject unknown or non-prefix database history. */
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -146,7 +147,7 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  const url = process.env.DATABASE_URL;
+  const url = readDatabaseUrl();
   if (!url) throw new Error('DATABASE_URL is required');
   await migrate(url);
   console.log('Database migrations applied');

@@ -254,6 +254,16 @@ try {
   await run('bash', ['infra/restore.sh', backup, project, target], {
     env: settings,
   });
+  const originalRuntimePassword = settings.APP_DB_PASSWORD;
+  for (const key of [
+    'POSTGRES_PASSWORD',
+    'APP_DB_PASSWORD',
+    'SESSION_SECRET',
+  ]) {
+    settings[key] = '';
+    cloneEnv[key] = '';
+  }
+  await writeEnv();
   const after = await snapshot(cloneEnv);
   assert.deepEqual(
     after,
@@ -499,12 +509,18 @@ try {
   scenarios.push(
     'controlled compatible image promotion and approved previous-image rollback preserve all business tables',
   );
-  const oldPassword = settings.APP_DB_PASSWORD;
-  settings.APP_DB_PASSWORD = randomBytes(32).toString('hex');
-  secrets.push(settings.APP_DB_PASSWORD);
-  await writeEnv();
-  cloneEnv.APP_DB_PASSWORD = settings.APP_DB_PASSWORD;
-  await deploy(manifest.revision);
+  const oldPassword = originalRuntimePassword;
+  const currentInfrastructure = JSON.parse(
+    await readFile(path.join(target, '.current-release.json'), 'utf8'),
+  ).infrastructure;
+  await run(
+    'bash',
+    [path.join(currentInfrastructure, 'infra/rotate-secrets.sh'), 'app'],
+    {
+      cwd: target,
+      env: { ...cloneEnv, CLOG_RELEASE_DIR: currentInfrastructure },
+    },
+  );
   await appState('old-credentials', {
     ...cloneEnv,
     RECOVERY_OLD_PASSWORD: oldPassword,

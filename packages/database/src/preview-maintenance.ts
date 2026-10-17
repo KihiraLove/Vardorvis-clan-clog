@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** B08/R03: one-shot, opt-in cleanup. Never delete durable import receipts. */
 import pg from 'pg';
 
@@ -196,7 +197,7 @@ if (
 ) {
   // The restricted app role deliberately has no DELETE on these tables.
   // Invoke as a one-shot migrate container, not the running app.
-  const url = process.env.DATABASE_URL;
+  const url = readDatabaseUrl();
   if (!url) throw new Error('DATABASE_URL is required');
   const client = new pg.Client({
     connectionString: url,

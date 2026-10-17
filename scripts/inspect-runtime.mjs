@@ -77,6 +77,8 @@ assert.equal(
 );
 for (const file of [
   'packages/database/dist/bootstrap.js',
+  'packages/database/dist/initialize-secrets.js',
+  'apps/api/dist/setup-admin.js',
   'packages/database/dist/release-state.js',
   'apps/api/dist/server.js',
   'apps/bot/dist/index.js',

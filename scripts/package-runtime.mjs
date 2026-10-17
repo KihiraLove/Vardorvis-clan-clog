@@ -18,10 +18,12 @@ export const workspaces = [
 ];
 export const runtimeEntries = [
   'apps/api/dist/server.js',
+  'apps/api/dist/setup-admin.js',
   'apps/bot/dist/index.js',
   'apps/bot/dist/register.js',
   'packages/domain/dist/index.js',
   'packages/database/dist/bootstrap.js',
+  'packages/database/dist/initialize-secrets.js',
   'packages/database/dist/migrate.js',
   'packages/database/dist/release-state.js',
   'packages/database/dist/preview-maintenance.js',

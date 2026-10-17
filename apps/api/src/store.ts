@@ -41,6 +41,30 @@ const duplicateUsername = (error: unknown) => {
     throw new ApiError(409, 'That username is already in use.');
   throw error;
 };
+export async function ensureDefaultAdministrator(
+  database: Pick<pg.Pool, 'query'>,
+  bootstrapPasswordHash?: string,
+) {
+  const hasAdministrator = async () =>
+    (await database.query("SELECT 1 FROM staff_accounts WHERE role='admin'"))
+      .rowCount !== 0;
+  // Look up the role, not the original username; disabled/renamed accounts
+  // must never trigger credential replacement or a second bootstrap.
+  if (await hasAdministrator()) return;
+  if (!bootstrapPasswordHash) throw new AdminBootstrapRequiredError();
+  await database.query(
+    `INSERT INTO staff_accounts(id,username,role,password_hash)
+       SELECT '00000000-0000-4000-8000-000000000001','admin','admin',$1
+       WHERE NOT EXISTS (SELECT 1 FROM staff_accounts WHERE role='admin')
+       ON CONFLICT DO NOTHING`,
+    [bootstrapPasswordHash],
+  );
+  // The single-admin unique index chooses one concurrent initializer. Other
+  // uniqueness conflicts (such as a moderator named admin) must fail closed.
+  if (!(await hasAdministrator()))
+    throw new Error('Administrator provisioning did not create an account.');
+}
+
 export class PgStore implements BackendStore {
   private readonly catalogCache = new ProjectionCache<CatalogData>();
   private readonly collectionCache = new ProjectionCache<PublicCredit[]>();
@@ -48,24 +72,7 @@ export class PgStore implements BackendStore {
   constructor(private readonly pool: pg.Pool) {}
 
   async ensureDefaultAdmin(bootstrapPasswordHash?: string) {
-    const hasAdministrator = async () =>
-      (await this.pool.query("SELECT 1 FROM staff_accounts WHERE role='admin'"))
-        .rowCount !== 0;
-    // Look up the role, not the original username; disabled/renamed accounts
-    // must never trigger credential replacement or a second bootstrap.
-    if (await hasAdministrator()) return;
-    if (!bootstrapPasswordHash) throw new AdminBootstrapRequiredError();
-    await this.pool.query(
-      `INSERT INTO staff_accounts(id,username,role,password_hash)
-       SELECT '00000000-0000-4000-8000-000000000001','admin','admin',$1
-       WHERE NOT EXISTS (SELECT 1 FROM staff_accounts WHERE role='admin')
-       ON CONFLICT DO NOTHING`,
-      [bootstrapPasswordHash],
-    );
-    // The single-admin unique index chooses one concurrent initializer. Other
-    // uniqueness conflicts (such as a moderator named admin) must fail closed.
-    if (!(await hasAdministrator()))
-      throw new Error('Administrator provisioning did not create an account.');
+    return ensureDefaultAdministrator(this.pool, bootstrapPasswordHash);
   }
   async accountByUsername(username: string): Promise<StoredAccount | null> {
     return (
