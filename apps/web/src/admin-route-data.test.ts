@@ -14,10 +14,14 @@ test('route loaders prepare every destination with one shared catalog read and n
     throw new Error('session already verified');
   });
   const catalog = t.mock.method(client, 'catalog');
+  for (const method of ['tracker', 'history'] as const)
+    t.mock.method(xp, method, async () => {
+      throw new Error('retired XP screen must not load private XP data');
+    });
   for (const [path, kind] of [
     ['/admin', 'queue'],
     ['/admin/catalog', 'catalog'],
-    ['/admin/xp', 'xp'],
+    ['/admin/xp', 'schedules'],
     ['/admin/schedules', 'schedules'],
     ['/admin/settings', 'settings'],
     ['/admin/settings/hardcore', 'settings'],
@@ -29,10 +33,7 @@ test('route loaders prepare every destination with one shared catalog read and n
     assert.equal(result.kind, kind);
     if (['queue', 'catalog', 'schedules'].includes(kind!))
       assert.ok(result.catalog?.revision);
-    if (kind === 'xp') {
-      assert.ok(result.tracker);
-      assert.deepEqual(result.history?.imports, []);
-    }
+    if (kind === 'schedules') assert.ok(result.schedules);
     if (kind === 'settings') {
       assert.ok(result.settings);
       assert.ok(result.branding);
@@ -42,7 +43,7 @@ test('route loaders prepare every destination with one shared catalog read and n
       assert.ok(result.runeLite);
     }
   }
-  assert.equal(catalog.mock.callCount(), 3);
+  assert.equal(catalog.mock.callCount(), 4);
 });
 test('moderator and mandatory-password routes never issue unauthorized reads', async (t) => {
   const client = new MemoryAdminClient(),
@@ -55,6 +56,10 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
     t.mock.method(client, method, async () => {
       throw new Error('unauthorized read');
     });
+  for (const method of ['tracker', 'history'] as const)
+    t.mock.method(xp, method, async () => {
+      throw new Error('retired XP screen must not load private XP data');
+    });
   for (const path of [
     '/admin/settings',
     '/admin/settings/hardcore',
@@ -64,11 +69,16 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
       (await loadAdminRoute(path, session, client, xp, signal())).kind,
       'denied',
     );
-  assert.deepEqual(
-    (await loadAdminRoute('/admin/xp', session, client, xp, signal())).history
-      ?.imports,
-    [],
+  const legacy = await loadAdminRoute(
+    '/admin/xp',
+    session,
+    client,
+    xp,
+    signal(),
   );
+  assert.equal(legacy.kind, 'schedules');
+  assert.ok(legacy.schedules);
+  assert.ok(legacy.catalog);
   assert.equal(
     (await loadAdminRoute('/admin/runelite', session, client, xp, signal()))
       .kind,

@@ -65,7 +65,7 @@ function command(
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 test(
   'bot process keeps handling repeated termination signals while its health server drains',
-  { skip: process.platform === 'win32', timeout: 10000 },
+  { skip: process.platform === 'win32', timeout: 40000 },
   async () => {
     const child = spawn(
       process.execPath,
@@ -95,26 +95,37 @@ test(
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
-    let output = '';
+    let output = '',
+      stderr = '';
     child.stdout.on('data', (chunk: Buffer) => {
       output += chunk.toString();
     });
-    const exited = once(child, 'exit');
-    const marker = async (value: string) => {
-      const deadline = Date.now() + 5000;
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    const marker = async (value: string, timeoutMs = 5000) => {
+      const deadline = Date.now() + timeoutMs;
       while (!output.includes(value)) {
-        assert.equal(child.exitCode, null, output);
-        assert.equal(child.signalCode, null, output);
-        assert.ok(Date.now() < deadline, output);
+        const detail = `Waiting for ${value}. stdout: ${output}\nstderr: ${stderr}`;
+        assert.equal(child.exitCode, null, detail);
+        assert.equal(child.signalCode, null, detail);
+        assert.ok(Date.now() < deadline, detail);
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
     };
     try {
-      await marker('fixture-listening');
-      child.kill('SIGTERM');
-      await marker('fixture-draining');
-      child.kill('SIGTERM');
-      assert.deepEqual(await exited, [0, null]);
+      // Cold imports from a Windows-mounted checkout can exceed five seconds.
+      // Keep the shorter deadline for the shutdown behavior itself.
+      await marker('fixture-listening', 30000);
+      const [exited] = await Promise.all([
+        once(child, 'exit', { signal: AbortSignal.timeout(5000) }),
+        (async () => {
+          child.kill('SIGTERM');
+          await marker('fixture-draining');
+          child.kill('SIGTERM');
+        })(),
+      ]);
+      assert.deepEqual(exited, [0, null]);
     } finally {
       if (child.exitCode === null && child.signalCode === null)
         child.kill('SIGKILL');
