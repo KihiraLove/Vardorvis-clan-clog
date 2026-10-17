@@ -49,7 +49,7 @@ The live Fastify service now reads the public release setting from PostgreSQL. M
 - [XpPage.tsx](../apps/web/src/XpPage.tsx) loads one coherent tracker snapshot, selects Total or an event locally, polls while visible and retains successful data on refresh failure.
 - [xp-tracker.ts](../apps/web/src/xp-tracker.ts) validates event IDs, WOM links, one/all skill scope and decimal-string gains; projects event skills and sums with `BigInt`.
 - [xp-api.ts](../apps/web/src/xp-api.ts) adds conditional tracker reads, committing ETags only after validation. Older detailed adapters remain available but are no longer used by the public page.
-- [XpAdmin.tsx](../apps/web/src/XpAdmin.tsx) keeps guarded preview/apply but presents event/skill/gain information without participant tables. Internal import payloads still contain participant snapshots for reconciliation; public tracker payloads do not.
+- The former `XpAdmin.tsx` preview/apply interface is now handled by [CompetitionImport.tsx](../apps/web/src/CompetitionImport.tsx) within [AdminScheduling.tsx](../apps/web/src/AdminScheduling.tsx), under Scheduling and Competitions. The legacy `/admin/xp` URL opens that page. Internal import payloads still contain participant snapshots for reconciliation; public tracker payloads do not.
 - [style.css](../apps/web/src/style.css) contains the mockup layout, fixed 2× geometry, silhouette styling and responsive event grid.
 - [002_world_modes.sql](../packages/database/migrations/001_baseline.sql) evolves the schema without changing migration 001's checksum.
 

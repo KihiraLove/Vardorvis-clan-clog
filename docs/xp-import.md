@@ -17,7 +17,8 @@ deltas without counting the aggregate total. Zero-sum participants are discarded
 unavailable data rejects the import. Overlapping competitions count independent
 reported contributions, rather than deduplicated lifetime gains.
 
-The shared preview/apply form is available from Scheduling and XP imports.
+The shared preview/apply form is available under **Scheduling and Competitions**
+at `/admin/schedules`; the legacy `/admin/xp` URL opens the same page.
 Future/running SKILL imports use `import-metadata`, persist their original dates
 without a schedule, and appear publicly with unavailable gains and an empty
 podium. Moderators can apply these imports. Crossing the source end requires a
