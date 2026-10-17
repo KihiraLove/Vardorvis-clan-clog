@@ -139,13 +139,12 @@ for (const width of [1100, 320]) {
     await page.setViewportSize({ width, height: 850 });
     await mockApi(page, { scenario: 'hardcore' });
     await page.goto('/admin/settings/hardcore');
-    await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
     await page
-      .getByRole('button', { name: 'Save hardcore settings', exact: true })
+      .getByRole('switch', { name: 'Enable hardcore worlds', exact: true })
       .click();
     await expect(
-      page.getByText('Hardcore worlds settings saved.'),
-    ).toBeVisible();
+      page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+    ).toBeChecked();
     await page.locator('.clan-brand').click();
     await expect(page.getByRole('tab')).toHaveCount(5);
 

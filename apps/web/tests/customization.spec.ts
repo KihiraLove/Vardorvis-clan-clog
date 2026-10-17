@@ -130,7 +130,7 @@ test('hardcore appearance can be configured while disabled and switches independ
     .getByRole('heading', { name: 'Clan logo', exact: true })
     .boundingBox();
   const name = await page
-    .getByLabel('Clan display name', { exact: true })
+    .getByLabel('Displayed clan name', { exact: true })
     .boundingBox();
   expect(logo!.y).toBeLessThan(name!.y);
   await expect(
@@ -146,6 +146,20 @@ test('hardcore appearance can be configured while disabled and switches independ
     .boundingBox();
   expect(flag!.y).toBeLessThan(hardcoreLogo!.y);
   await page.getByLabel('Displayed clan name').fill('Hardcore clan');
+  const release = page.getByRole('switch', {
+    name: 'Enable hardcore worlds',
+    exact: true,
+  });
+  await release.click();
+  await expect(release).toBeChecked();
+  await expect(page.getByLabel('Displayed clan name')).toHaveValue(
+    'Hardcore clan',
+  );
+  await release.click();
+  await expect(release).not.toBeChecked();
+  await expect(page.getByLabel('Displayed clan name')).toHaveValue(
+    'Hardcore clan',
+  );
   await page
     .getByLabel('Collection log title', { exact: true })
     .fill('Hardcore collection');
@@ -181,11 +195,10 @@ test('hardcore appearance can be configured while disabled and switches independ
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveCount(0);
   await page.goBack();
-  await page.getByLabel('Enable hardcore worlds').check();
-  await page
-    .getByRole('button', { name: 'Save hardcore settings', exact: true })
-    .click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds').click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.locator('header a.clan-brand').click();
   await page
     .getByRole('button', { name: 'Hardcore worlds', exact: true })
@@ -218,11 +231,10 @@ test('hardcore appearance can be configured while disabled and switches independ
     defaultBranding.logoPath,
   );
   await page.goBack();
-  await page.getByLabel('Enable hardcore worlds').uncheck();
-  await page
-    .getByRole('button', { name: 'Save hardcore settings', exact: true })
-    .click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds').click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).not.toBeChecked();
   await expect(page.getByLabel('Displayed clan name')).toHaveValue(
     'Hardcore clan',
   );

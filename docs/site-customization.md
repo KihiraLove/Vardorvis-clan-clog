@@ -1,7 +1,7 @@
 # Site customization and account/catalog management
 
 [Collection log scheduling](collection-log-scheduling.md) is available to both
-staff roles from **Scheduling**. The administrator controls enforcement; both
+staff roles from **Scheduling and Competitions**. The administrator controls enforcement; both
 roles can create, edit and delete overlapping page windows. Local date/time
 entry shows UTC previews, and disabled mode retains ordinary submission behavior.
 
@@ -12,11 +12,11 @@ shown in the mobile capture is a disposable test fixture.
 The former [mobile Page management panel](site-customization/page-management-mobile.png) is superseded by the collection-log catalog editor.
 Additional references show [independent hardcore branding](site-customization/hardcore-desktop.png)
 and [hardcore settings while disabled](site-customization/hardcore-settings-mobile.png).
-The [mobile XP imports page](site-customization/admin-xp-mobile.png) keeps the
-import form below admin navigation without the public heading and spacing.
+The [historical mobile XP imports page](site-customization/admin-xp-mobile.png)
+has been replaced by the import form under **Scheduling and Competitions**.
 
 The administrator's **Site settings** navigation entry opens `/admin/settings`.
-The clan logo is the first setting, followed by the regular clan name (default
+The clan logo is the first setting, followed by **Displayed clan name** (default
 **Clan name**) and text. The shared API key controls have their own
 **RuneLite submissions** page at `/admin/runelite`. Three labels are editable:
 
@@ -43,9 +43,11 @@ using the official GitHub mark and Ko-fi button. README badges show support, Git
 main CI workflow status; release downloads do not count container pulls.
 
 The **Hardcore worlds** navigation entry opens `/admin/settings/hardcore` even
-when hardcore visibility is disabled. **Enable hardcore worlds** is the first
-setting, followed by its own logo/favicon, displayed clan name and the same
-three text labels.
+when hardcore visibility is disabled. **Enable hardcore worlds** has its own
+section above **Hardcore worlds settings**, with an On/Off toggle that saves
+immediately without saving or discarding draft appearance edits. The appearance
+section contains its own logo/favicon, displayed clan name and the same three
+text labels.
 The regular and hardcore appearances start identical and save independently.
 The public skull switches the name, logo, browser title/icon and text together.
 Disabling the release flag hides the public switch while retaining all appearance
@@ -56,8 +58,8 @@ does not change RuneLite validation. XP totals and event data remain shared.
 RuneLite settings now provide a separate in-game clan name, an API-key-only
 matching option, world-policy dropdowns and a player whitelist. Displayed clan
 names do not change submission matching. See [automatic review rules](runelite-submissions.md).
-The public XP heading is omitted from the admin import page. The total caption
-and its setting have been removed; selected events still show their source link.
+The public XP section is hidden in Hardcore worlds until hardcore WOM
+competitions are implemented. Selected regular-world events retain their source link.
 
 ## Shared API key form
 
@@ -75,7 +77,7 @@ matching always requires a valid key.
 
 ## Items catalog and navigation
 
-The catalog settings page is an editable collection log. Section tabs, pages and item grids use six-dot drag handles; Alt + arrow keys and contextual Move earlier/later buttons also publish ordering. Small gear buttons open the right-hand editor, which stacks below the log on mobile.
+The catalog settings page is an editable collection log. Section tabs, pages and item grids use six-dot drag handles; Alt + arrow keys and contextual Move earlier/later buttons also arrange the local draft. **Save changes** publishes the pending order. Small gear buttons open the right-hand editor, which stacks below the log on mobile.
 
 Add section asks for a name. Section settings can rename or delete an empty section; sections containing pages cannot be deleted. Add page asks for a name within the selected section. Page settings can rename or delete the page. Deleting pages removes memberships while preserving items on other pages or as active pageless entries.
 
@@ -83,12 +85,14 @@ Add item offers **Add new item** and **Add existing item**. New items require a 
 
 Page names and the open page title use orange `#ff981f`; completed page names use `#0dc10d`. Obtained counts use red `#ff0000` at zero, yellow `#ffff00` when partial and green `#0dc10d` when complete. Page rows alternate `#574e43` and `#473d32`, with `#585040` borders. Both world modes retain independent collection counts.
 
-Administrator navigation is ordered **Submissions, Items catalog, XP imports, Scheduling,
+Administrator navigation is ordered **Submissions, Items catalog, Scheduling and Competitions,
 RuneLite submissions, Site settings, Hardcore worlds, Moderator accounts, Your
-account**. Moderators see Submissions, Items catalog, XP imports, Scheduling,
+account**. Moderators see Submissions, Items catalog, Scheduling and Competitions,
 RuneLite submissions and Your account. Owner settings remain inaccessible to
 moderators. The RuneLite page exposes the shared key for viewing and copying,
 with key replacement restricted to the administrator.
+On Submissions, moderators see the duplicate-filter status and a message that
+only the administrator can change it, instead of an interactive toggle.
 
 ## Moderator accounts
 

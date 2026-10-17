@@ -147,7 +147,7 @@ re-encoded, discarding metadata and original filenames.
 
 ## Website settings and manual submissions
 
-The admin's **Site settings → Clan display name** defaults to `Clan name`. Saving updates
+The admin's **Site settings → Displayed clan name** defaults to `Clan name`. Saving updates
 the public header, admin heading and document title independently of intake
 validation. Public tabs refresh settings every 25 seconds or
 when returning to the tab. `GET /api/v1/settings` returns `revision`,
@@ -171,7 +171,7 @@ the selected matching mode.
 Rotations invalidate the previous key immediately, including uploads that
 started before rotation but have not committed.
 
-**Automatic review** on this page provides **Clan matching**, a separate
+**Automatic review** on this page provides **Match Clan name or API**, a separate
 **In-game clan name for matching**, world-policy dropdowns and a player whitelist.
 The migration seeds the matching name from the existing visual clan name once;
 subsequent changes to either name do not affect the other. **Clan name** checks

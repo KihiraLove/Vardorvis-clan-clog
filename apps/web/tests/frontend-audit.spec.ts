@@ -750,7 +750,7 @@ for (const hardcore of [false, true]) {
     await expect(approve).toBeDisabled();
     await expect(
       editor.getByText(/then tick the proof acknowledgement/u),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await check.check();
     await expect(approve).toBeEnabled();
     // Any claim-field change invalidates the saved proof acknowledgment.
@@ -795,7 +795,7 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
   await expect(reject).toBeDisabled();
   await expect(
     editor.getByText('Enter a reason before rejecting a submission.'),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await editor
     .getByLabel('Review reason')
     .fill('The proof does not match the claimed item');
@@ -820,7 +820,7 @@ test('audit: approved credit requires an audit reason for claim corrections or r
   await expect(revoke).toBeDisabled();
   await expect(
     editor.getByText('Enter a reason before revoking a credit.'),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await editor.getByLabel('Collected on hardcore worlds').uncheck();
   const save = editor.getByRole('button', { name: 'Save corrections' });
   await expect(save).toBeDisabled();
@@ -838,7 +838,7 @@ test('audit: approved credit requires an audit reason for claim corrections or r
   await expect(revoke).toBeDisabled();
   await expect(
     editor.getByText('Enter a reason before revoking a credit.'),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await editor
     .getByLabel('Review reason')
     .fill('Revoking after independent proof review');

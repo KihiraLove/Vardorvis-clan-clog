@@ -87,7 +87,7 @@ test('settings-navigation: current forms, focus, scroll, panel and footer stay s
   for (const width of [1100, 320]) {
     await page.setViewportSize({ width, height: 850 });
     for (const [name, field, calls] of [
-      ['Site settings', 'Clan display name', 2],
+      ['Site settings', 'Displayed clan name', 2],
       ['Hardcore worlds', 'Displayed clan name', 2],
       ['RuneLite submissions', 'Current shared API key', 2],
     ] as const) {
@@ -109,12 +109,17 @@ test('settings-navigation: current forms, focus, scroll, panel and footer stay s
       await link.press('Enter');
       await expect.poll(requests.pending).toBe(calls);
       const input = page.getByLabel(field, { exact: true });
-      await expect(input).toHaveCount(0);
+      const destination = page.getByRole('heading', {
+        name: name === 'Hardcore worlds' ? 'Hardcore worlds settings' : name,
+        exact: true,
+      });
+      await expect(destination).toHaveCount(0);
       await expect(currentHeading).toHaveText(currentText!);
       await expect(link).toBeFocused();
       expect(new URL(page.url()).pathname).toBe(currentPath);
       expect(await geometry()).toEqual(before);
       requests.release();
+      await expect(destination).toBeVisible();
       await expect(input).toBeEnabled();
       if (name !== 'RuneLite submissions')
         await expect(page.getByLabel('Logo image')).toBeEnabled();

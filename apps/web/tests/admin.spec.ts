@@ -180,9 +180,10 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.submission-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();

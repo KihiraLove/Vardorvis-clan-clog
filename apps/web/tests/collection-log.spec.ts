@@ -256,9 +256,10 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.locator('header a.clan-brand').click();
 
   await page
@@ -303,9 +304,10 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();
-  await page.getByLabel('Enable hardcore worlds', { exact: true }).uncheck();
-  await page.getByRole('button', { name: 'Save hardcore settings' }).click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds', { exact: true }).click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).not.toBeChecked();
   await page.locator('header a.clan-brand').click();
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),

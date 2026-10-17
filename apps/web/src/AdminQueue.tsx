@@ -162,36 +162,50 @@ export function AdminQueue({
       )}
       <section className="admin-panel submission-filter-panel">
         <h2 id="submission-filter-title">Filter out duplicates</h2>
-        <button
-          type="button"
-          className="site-button admin-toggle"
-          role="switch"
-          aria-labelledby="submission-filter-title"
-          aria-checked={filters?.filterCollected ?? false}
-          disabled={session.role !== 'admin' || !filters || filterAction.busy}
-          onClick={() => {
-            if (!filters || session.role !== 'admin') return;
-            const checked = !filters.filterCollected;
-            void filterAction.execute(
-              async (signal) => {
-                const saved = await client.saveSubmissionFilters(
-                  checked,
-                  filters.revision,
-                  session.csrfToken,
-                  signal,
-                );
-                if (!signal.aborted) setFilters(saved);
-              },
-              async (signal) => {
-                const current = await client.queue(view, cursor, signal);
-                if (!signal.aborted && current.filters)
-                  setFilters(current.filters);
-              },
-            );
-          }}
-        >
-          {filters?.filterCollected ? 'On' : 'Off'}
-        </button>
+        {session.role === 'admin' ? (
+          <button
+            type="button"
+            className="site-button admin-toggle"
+            role="switch"
+            aria-labelledby="submission-filter-title"
+            aria-checked={filters?.filterCollected ?? false}
+            disabled={!filters || filterAction.busy}
+            onClick={() => {
+              if (!filters || session.role !== 'admin') return;
+              const checked = !filters.filterCollected;
+              void filterAction.execute(
+                async (signal) => {
+                  const saved = await client.saveSubmissionFilters(
+                    checked,
+                    filters.revision,
+                    session.csrfToken,
+                    signal,
+                  );
+                  if (!signal.aborted) setFilters(saved);
+                },
+                async (signal) => {
+                  const current = await client.queue(view, cursor, signal);
+                  if (!signal.aborted && current.filters)
+                    setFilters(current.filters);
+                },
+              );
+            }}
+          >
+            {filters?.filterCollected ? 'On' : 'Off'}
+          </button>
+        ) : (
+          <p>
+            Duplicate filtering is{' '}
+            <strong>
+              {filters
+                ? filters.filterCollected
+                  ? 'enabled'
+                  : 'disabled'
+                : 'unavailable'}
+            </strong>
+            . Only the administrator can change this.
+          </p>
+        )}
         {filterAction.error && <p role="alert">{filterAction.error}</p>}
       </section>
       <section className="admin-panel">

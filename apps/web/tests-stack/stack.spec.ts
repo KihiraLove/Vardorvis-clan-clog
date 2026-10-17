@@ -563,7 +563,10 @@ test('real moderator setup, role denial and server-side access revocation clear 
         name: 'Filter out duplicates',
         exact: true,
       }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    await expect(staff.locator('.submission-filter-panel')).toContainText(
+      'Only the administrator can change this.',
+    );
     await staff
       .getByRole('link', { name: 'RuneLite submissions', exact: true })
       .click();
@@ -573,7 +576,9 @@ test('real moderator setup, role denial and server-side access revocation clear 
       staff.getByRole('button', { name: 'Generate new key', exact: true }),
     ).toHaveCount(0);
     const keyBefore = await key.inputValue();
-    const policy = staff.getByLabel('F2P worlds', { exact: true });
+    const policy = staff.getByLabel('Free to play worlds submissions', {
+      exact: true,
+    });
     const before = await policy.inputValue();
     await policy.selectOption(before === 'review' ? 'allow' : 'review');
     await staff

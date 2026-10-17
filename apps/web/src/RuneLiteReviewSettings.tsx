@@ -18,10 +18,10 @@ const matchingMode = (matchName: boolean, requireKey: boolean) =>
   matchName ? (requireKey ? 'both' : 'name') : 'key';
 
 const worldOptions = [
-  ['f2p', 'F2P worlds', true],
-  ['pvp', 'PVP worlds', true],
-  ['members', 'MEMBERS worlds', false],
-  ['hardcore', 'HARDCORE_MAIN worlds', false],
+  ['f2p', 'Free to play worlds submissions', true],
+  ['pvp', 'PVP worlds submissions', true],
+  ['members', 'Members worlds submissions', false],
+  ['hardcore', 'Hardcore worlds submissions', false],
 ] as const;
 export function RuneLiteReviewSettings({
   client,
@@ -174,7 +174,7 @@ export function RuneLiteReviewSettings({
             );
           }}
         >
-          <label htmlFor="runelite-clan-matching">Clan matching</label>
+          <label htmlFor="runelite-clan-matching">Match Clan name or API</label>
           <select
             id="runelite-clan-matching"
             value={mode}

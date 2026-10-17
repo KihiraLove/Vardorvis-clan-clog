@@ -229,10 +229,13 @@ test('moderators retain review tools, have no owner controls and can update thei
   ).toBeVisible();
   await expect(
     page.getByRole('switch', { name: 'Filter out duplicates', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('switch', { name: 'Filter out duplicates', exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
+  await expect(page.locator('.submission-filter-panel')).toContainText(
+    'Only the administrator can change this.',
+  );
+  await expect(page.locator('.submission-filter-panel strong')).toHaveText(
+    /enabled|disabled|unavailable/,
+  );
   await expect(page.getByRole('link', { name: 'Items catalog' })).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Scheduling and Competitions' }),
@@ -311,7 +314,7 @@ test('moderators retain review tools, have no owner controls and can update thei
     page.getByRole('button', { name: 'Save API key settings', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByLabel('MEMBERS worlds', { exact: true }),
+    page.getByLabel('Members worlds submissions', { exact: true }),
   ).toBeEnabled();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(

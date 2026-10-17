@@ -6,7 +6,7 @@ test('key rotation preserves the selected clan matching mode, including name-onl
 }) => {
   await mockApi(page);
   await page.goto('/admin/runelite');
-  const matching = page.getByLabel('Clan matching', { exact: true });
+  const matching = page.getByLabel('Match Clan name or API', { exact: true });
   const saveReview = page.getByRole('button', {
     name: 'Save review settings',
     exact: true,

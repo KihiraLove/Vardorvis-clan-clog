@@ -24,6 +24,16 @@ import {
   type ReviewActionHint,
 } from './review-prerequisites.ts';
 
+const hiddenHints = new Set([
+  'No review note changes to save.',
+  'There are no review note changes to discard.',
+  'No claim corrections to save.',
+  'There are no claim corrections to discard.',
+  'Check the saved item, collector, date, world mode and proof, then tick the proof acknowledgement.',
+  'Enter a reason before rejecting a submission.',
+  'Enter a reason before revoking a credit.',
+]);
+
 const draftOf = (row: Submission): Correction => ({
   itemId: row.itemId ?? 0,
   collectorName: row.collectorName,
@@ -300,20 +310,20 @@ export function SubmissionEditor({
     acknowledged: checked,
     reasonProvided: Boolean(draft.reason.trim()),
   });
+  const shownHint = (key: ReviewActionHint) =>
+    blockers[key] && !hiddenHints.has(blockers[key]);
   const describedBy = (key: ReviewActionHint) =>
-    blockers[key] ? `review-${hintId}-${key}` : undefined;
+    shownHint(key) ? `review-${hintId}-${key}` : undefined;
   const explanations = (keys: ReviewActionHint[]) =>
-    keys
-      .filter((key) => blockers[key])
-      .map((key) => (
-        <p
-          className="admin-note admin-action-explanation"
-          id={`review-${hintId}-${key}`}
-          key={key}
-        >
-          {blockers[key]}
-        </p>
-      ));
+    keys.filter(shownHint).map((key) => (
+      <p
+        className="admin-note admin-action-explanation"
+        id={`review-${hintId}-${key}`}
+        key={key}
+      >
+        {blockers[key]}
+      </p>
+    ));
   const selected = catalog.items.find((item) => item.id === draft.itemId);
   const matches = catalog.items.filter(
     (item) =>
@@ -338,11 +348,7 @@ export function SubmissionEditor({
                 'Unmatched item'}{' '}
               · {row.collectorName}
             </h2>
-            <p className="admin-note">
-              Version {row.version} is the saved revision of this submission. It
-              changes when a note, correction or decision is saved, preventing
-              conflicting reviews from overwriting each other.
-            </p>
+            <p className="admin-note">Revision: {row.version}</p>
             <p>
               {row.status} ·{' '}
               {row.source === 'manual'
@@ -397,6 +403,31 @@ export function SubmissionEditor({
                   />
                 </dd>
               </div>
+              {selected && (
+                <>
+                  <div>
+                    <dt>Canonical item</dt>
+                    <dd>#{selected.id}</dd>
+                  </div>
+                  <div>
+                    <dt>Item origin</dt>
+                    <dd>
+                      {selected.origin === 'manual'
+                        ? 'Manual item'
+                        : 'Source item'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Collection log pages</dt>
+                    <dd>
+                      {catalog.pages
+                        .filter((page) => page.itemIds.includes(selected.id))
+                        .map((page) => page.name)
+                        .join(', ') || 'Not on a page'}
+                    </dd>
+                  </div>
+                </>
+              )}
             </dl>
             {row.chatMessage && (
               <div className="submission-chat-proof">
@@ -454,70 +485,63 @@ export function SubmissionEditor({
             )}
             <fieldset disabled={locked || !editable} className="admin-fieldset">
               <legend>Saved claim and corrections</legend>
-              <div className="admin-form-grid">
-                <label>
-                  Search catalog items
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                  />
-                </label>
+              <div className="admin-form-grid review-claim-columns">
                 <div>
-                  <label htmlFor="canonical-item">Canonical item</label>
-                  <select
-                    id="canonical-item"
-                    className="catalog-choice-list"
-                    required
-                    size={5}
-                    value={draft.itemId || ''}
-                    onChange={(event) =>
-                      change({ itemId: Number(event.target.value) })
-                    }
-                  >
-                    <option value="">Select the exact item…</option>
-                    {options.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} · #{item.id}
-                      </option>
-                    ))}
-                  </select>
+                  <label>
+                    Collector name
+                    <input
+                      required
+                      maxLength={80}
+                      value={draft.collectorName}
+                      onChange={(event) =>
+                        change({ collectorName: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Collection date
+                    <input
+                      type="date"
+                      required
+                      max={new Date().toISOString().slice(0, 10)}
+                      value={draft.collectedOn}
+                      onChange={(event) =>
+                        change({ collectedOn: event.target.value })
+                      }
+                    />
+                  </label>
                 </div>
-                <label>
-                  Collector name
-                  <input
-                    required
-                    maxLength={80}
-                    value={draft.collectorName}
-                    onChange={(event) =>
-                      change({ collectorName: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Collection date
-                  <input
-                    type="date"
-                    required
-                    max={new Date().toISOString().slice(0, 10)}
-                    value={draft.collectedOn}
-                    onChange={(event) =>
-                      change({ collectedOn: event.target.value })
-                    }
-                  />
-                </label>
+                <div>
+                  <label>
+                    Search catalog items
+                    <input
+                      type="search"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                  </label>
+                  <div>
+                    <label htmlFor="canonical-item">Canonical item</label>
+                    <select
+                      id="canonical-item"
+                      className="catalog-choice-list"
+                      required
+                      size={5}
+                      value={draft.itemId || ''}
+                      onChange={(event) =>
+                        change({ itemId: Number(event.target.value) })
+                      }
+                    >
+                      <option value="">Select the exact item…</option>
+                      {options.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} · #{item.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
-              {selected && (
-                <p className="admin-note">
-                  Canonical item #{selected.id} ·{' '}
-                  {selected.origin === 'manual' ? 'Manual item' : 'Source item'}{' '}
-                  ·{' '}
-                  {catalog.pages
-                    .filter((page) => page.itemIds.includes(selected.id))
-                    .map((page) => page.name)
-                    .join(', ')}
-                </p>
-              )}
               {!matches.length && (
                 <p className="admin-note">
                   No matching items. Add a missing item in Catalog items before
@@ -535,17 +559,13 @@ export function SubmissionEditor({
                 Collected on hardcore worlds
               </label>
               <label>
-                Review note
+                Review note (optional)
                 <textarea
                   maxLength={1000}
                   rows={3}
                   value={reviewNote}
                   onChange={(event) => setReviewNote(event.target.value)}
                 />
-                <span className="admin-note">
-                  Saved staff note, separate from claim corrections and decision
-                  reasons. Clear and save to remove the note.
-                </span>
               </label>
               <div className="admin-actions">
                 <button
@@ -570,7 +590,7 @@ export function SubmissionEditor({
               </div>
               {explanations(['note', 'discardNote'])}
               <label>
-                Review reason
+                Review reason (optional) / Rejection reason / Revoke reason
                 <textarea
                   maxLength={1000}
                   rows={3}
@@ -579,11 +599,6 @@ export function SubmissionEditor({
                     setDraft({ ...draft, reason: event.target.value })
                   }
                 />
-                <span className="admin-note">
-                  One-time audit reason for rejection, revocation and
-                  corrections to approved credits. Not saved as a lasting
-                  comment.
-                </span>
               </label>
               <div className="admin-actions">
                 <button

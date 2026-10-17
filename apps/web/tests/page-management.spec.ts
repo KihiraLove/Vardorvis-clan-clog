@@ -6,11 +6,10 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
 }) => {
   await mockApi(page);
   await page.goto('/admin/settings/hardcore');
-  await page.getByLabel('Enable hardcore worlds').check();
-  await page
-    .getByRole('button', { name: 'Save hardcore settings', exact: true })
-    .click();
-  await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  await page.getByLabel('Enable hardcore worlds').click();
+  await expect(
+    page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),
+  ).toBeChecked();
   await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await page
     .getByRole('button', { name: '+ Add section', exact: true })
