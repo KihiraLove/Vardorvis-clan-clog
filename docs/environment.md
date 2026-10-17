@@ -20,6 +20,11 @@ runtime DB passwords must differ. The first admin must choose a different
 12–256 character password. Then remove the bootstrap value and recreate the
 app. Changing that value later does not reset an existing account.
 
+If startup reports `ADMIN_BOOTSTRAP_REQUIRED`, the database has no administrator
+and the bootstrap password is missing. This can happen when reusing an older
+`.env` with new database volumes. Add a fresh generated value, recreate the app,
+then complete the first-login password change before removing it again.
+
 For local builds use the command in the [README](../README.md). For published
 images set `IMAGE_NAME=ghcr.io/<owner>/clan-clog` and an approved release tag.
 The example points to the upstream owner's package. See [deployment](deployment.md).

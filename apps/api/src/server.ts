@@ -7,6 +7,7 @@ import { BrandingStorage } from './branding-storage.js';
 import { PgBrandingStore } from './branding-store.js';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
+import { adminBootstrapRequiredMessage } from './types.js';
 import { PgStore } from './store.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
@@ -29,11 +30,17 @@ const diagnostics = new OperationalDiagnostics('api', (record) =>
   process.stderr.write(JSON.stringify(record) + '\n'),
 );
 function fatal(error: unknown) {
+  const failure = safeFailure(error);
   diagnostics.record('process', {
     operation: 'runtime',
-    ...safeFailure(error),
-    code: 'PROCESS_FAILED',
+    ...failure,
+    code:
+      failure.code === 'ADMIN_BOOTSTRAP_REQUIRED'
+        ? failure.code
+        : 'PROCESS_FAILED',
   });
+  if (failure.code === 'ADMIN_BOOTSTRAP_REQUIRED')
+    process.stderr.write(adminBootstrapRequiredMessage + '\n');
   process.exit(1);
 }
 process.on('uncaughtException', fatal);

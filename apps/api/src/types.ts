@@ -120,6 +120,14 @@ export interface BackendStore {
   deleteSession(hash: string): Promise<void>;
   allowLogin(keyHash: string): Promise<boolean>;
 }
+export const adminBootstrapRequiredMessage =
+  'No administrator exists. Set ADMIN_BOOTSTRAP_PASSWORD to an independently generated bootstrap credential before enabling auth.';
+export class AdminBootstrapRequiredError extends Error {
+  readonly code = 'ADMIN_BOOTSTRAP_REQUIRED';
+  constructor() {
+    super(adminBootstrapRequiredMessage);
+  }
+}
 export class ApiError extends Error {
   constructor(
     readonly status: number,

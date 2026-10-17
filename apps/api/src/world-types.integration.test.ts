@@ -1,6 +1,6 @@
 /** World flags, arbitrary keys and replay mode are exercised through real multipart intake. */
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -250,39 +250,28 @@ test(
         receipt,
       );
 
-      // Pre-world-type receipts stay immutable and replay only as ordinary-world input.
-      const legacyKey = randomUUID();
-      const legacy = await run('MEMBERS', legacyKey);
-      assert.equal(legacy.statusCode, 201, legacy.body);
-      const image = (
-        await pool.query(
-          'SELECT i.sha256 FROM submissions s JOIN submission_images i ON i.id=s.proof_image_id WHERE s.id=$1',
-          [legacy.json().submissionId],
-        )
-      ).rows[0];
-      const legacyHash = createHash('sha256')
-        .update(
-          JSON.stringify(['Collector', 'clan name', 900001, image.sha256]),
-        )
-        .digest('hex');
-      await pool.query(
-        'UPDATE submissions SET submitted_world_types=NULL,chat_message=NULL WHERE id=$1',
-        [legacy.json().submissionId],
+      // Every retry uses the current proof contract and preserves the saved receipt.
+      const savedRequest = async () =>
+        (
+          await pool.query(
+            'SELECT r.payload_hash,r.response,s.chat_message,s.submitted_world_types,s.proof_image_id FROM runelite_submission_requests r JOIN submissions s ON s.id=r.submission_id WHERE r.request_key=$1',
+            [key],
+          )
+        ).rows[0];
+      const beforeInvalidReplay = await savedRequest();
+      const missingProof = await run('HARDCORE_MAIN', key, null);
+      assert.equal(missingProof.statusCode, 422, missingProof.body);
+      assert.match(missingProof.json().error, /full chat message/u);
+      const changedProof = await run(
+        '["MEMBERS","HARDCORE_MAIN","SKILL_TOTAL"]',
+        key,
+        'A different chat message',
       );
-      await pool.query(
-        "UPDATE runelite_submission_requests SET payload_hash=$1,response=response-'hardcore' WHERE request_key=$2",
-        [legacyHash, legacyKey],
-      );
-      const original = { ...legacy.json() };
-      delete original.hardcore;
+      assert.equal(changedProof.statusCode, 409, changedProof.body);
+      assert.deepEqual(await savedRequest(), beforeInvalidReplay);
       assert.deepEqual(
-        (await run('MEMBERS', legacyKey, null)).json(),
-        original,
-      );
-      assert.equal((await run('MEMBERS', legacyKey)).statusCode, 409);
-      assert.equal(
-        (await run('HARDCORE_MAIN', legacyKey, null)).statusCode,
-        409,
+        (await run('["SKILL_TOTAL","HARDCORE_MAIN","MEMBERS"]', key)).json(),
+        receipt,
       );
 
       // Headers encode keys that cannot be represented literally in HTTP.
