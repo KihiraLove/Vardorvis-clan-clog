@@ -149,8 +149,10 @@ export function AdminScheduling({
         )}
         {session.role === 'admin' ? (
           <div className="scheduling-toggle">
-            <h3 id="scheduling-toggle-title">Enable scheduled opening windows for log pages
-              (submissions to closed pages are automatically rejected)</h3>
+            <h3 id="scheduling-toggle-title">
+              Enable scheduled opening windows for log pages (submissions to
+              closed pages are automatically rejected)
+            </h3>
             <button
               type="button"
               className="site-button admin-toggle"
