@@ -721,12 +721,22 @@ test('slow real reads preserve keyboard navigation; catalog geometry and both pr
     .png({ compressionLevel: 0 })
     .toBuffer();
   expect(buffer.length).toBeGreaterThan(4 * 1024 * 1024);
-  for (const [link, path] of [
-    ['Site settings', '/api/v1/branding'],
-    ['Hardcore worlds', '/api/v1/branding/hardcore'],
+  for (const [link, heading, path] of [
+    ['Site settings', 'Site settings', '/api/v1/branding'],
+    [
+      'Hardcore worlds',
+      'Hardcore worlds settings',
+      '/api/v1/branding/hardcore',
+    ],
   ] as const) {
     await page.getByRole('link', { name: link, exact: true }).click();
-    await page.getByLabel('Logo image', { exact: true }).setInputFiles({
+    // Both pages have this input; wait for the destination before selecting a file.
+    await expect(
+      page.getByRole('heading', { name: heading, exact: true }),
+    ).toBeVisible();
+    const logoInput = page.getByLabel('Logo image', { exact: true });
+    await expect(logoInput).toBeEnabled();
+    await logoInput.setInputFiles({
       name: 'browser-logo.png',
       mimeType: 'image/png',
       buffer,
