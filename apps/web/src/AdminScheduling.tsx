@@ -138,7 +138,7 @@ export function AdminScheduling({
   return (
     <>
       <section className="admin-panel scheduling-panel">
-        <h2>Scheduling</h2>
+        <h2>Scheduling and Competitions</h2>
         {error && (
           <p role="alert">
             {error}{' '}
@@ -157,7 +157,8 @@ export function AdminScheduling({
               type="button"
               className="site-button admin-toggle"
               role="switch"
-              aria-labelledby="scheduling-toggle-title"
+              aria-label="Collection log scheduling"
+              aria-describedby="scheduling-toggle-title"
               aria-checked={state?.enabled ?? false}
               disabled={busy}
               onClick={() => {

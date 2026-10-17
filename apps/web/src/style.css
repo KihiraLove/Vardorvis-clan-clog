@@ -2413,6 +2413,18 @@ main {
 .xp-podium__place {
   min-width: 0;
 }
+.xp-podium__place--1 {
+  grid-column: 2;
+  grid-row: 1;
+}
+.xp-podium__place--2 {
+  grid-column: 1;
+  grid-row: 1;
+}
+.xp-podium__place--3 {
+  grid-column: 3;
+  grid-row: 1;
+}
 .xp-podium__name {
   display: block;
   color: #ece9df;
@@ -2433,6 +2445,14 @@ main {
   background: #d7bd6d;
   height: 100px;
   border: 2px solid #54482d;
+}
+.xp-podium__place--2 .xp-podium__step {
+  height: 72px;
+  background: #b6b7ab;
+}
+.xp-podium__place--3 .xp-podium__step {
+  height: 48px;
+  background: #bd9470;
 }
 .competition-import {
   margin-bottom: 24px;

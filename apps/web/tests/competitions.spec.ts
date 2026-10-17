@@ -316,11 +316,33 @@ test('XP podium follows Total and selected SKILL events, preserves 2–1–3 geo
     name: 'XP podium for Total',
   });
   await expect(total.locator('li')).toHaveCount(3);
-  const first = await total.locator('.xp-podium__place--1').boundingBox(),
-    second = await total.locator('.xp-podium__place--2').boundingBox(),
-    third = await total.locator('.xp-podium__place--3').boundingBox();
-  expect(second!.x).toBeLessThan(first!.x);
-  expect(first!.x).toBeLessThan(third!.x);
+  for (const width of [1100, 320]) {
+    await page.setViewportSize({ width, height: 850 });
+    const first = total.locator('.xp-podium__place--1'),
+      second = total.locator('.xp-podium__place--2'),
+      third = total.locator('.xp-podium__place--3');
+    expect((await second.boundingBox())!.x).toBeLessThan(
+      (await first.boundingBox())!.x,
+    );
+    expect((await first.boundingBox())!.x).toBeLessThan(
+      (await third.boundingBox())!.x,
+    );
+    const firstStep = first.locator('.xp-podium__step'),
+      secondStep = second.locator('.xp-podium__step'),
+      thirdStep = third.locator('.xp-podium__step');
+    expect((await firstStep.boundingBox())!.height).toBeGreaterThan(
+      (await secondStep.boundingBox())!.height,
+    );
+    expect((await secondStep.boundingBox())!.height).toBeGreaterThan(
+      (await thirdStep.boundingBox())!.height,
+    );
+    await expect(firstStep).toHaveCSS('background-color', 'rgb(215, 189, 109)');
+    await expect(secondStep).toHaveCSS(
+      'background-color',
+      'rgb(182, 183, 171)',
+    );
+    await expect(thirdStep).toHaveCSS('background-color', 'rgb(189, 148, 112)');
+  }
   await page.getByRole('button', { name: 'Attack event', exact: true }).click();
   await expect(
     page

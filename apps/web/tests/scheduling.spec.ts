@@ -16,6 +16,9 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
     exact: true,
   });
   await expect(enabled).toBeEnabled();
+  await expect(enabled).toHaveAccessibleDescription(
+    'Enable scheduled opening windows for log pages (submissions to closed pages are automatically rejected)',
+  );
   const management = page.locator('section.admin-panel').filter({
     has: page.getByRole('heading', {
       name: 'Schedule management',
@@ -177,12 +180,7 @@ test('moderators can create windows but cannot see or write the administrator en
   });
   await page.goto('/admin/schedules');
   await expect(page.getByLabel('Schedule name', { exact: true })).toBeEnabled();
-  await expect(
-    page.getByRole('switch', {
-      name: 'Collection log scheduling',
-      exact: true,
-    }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('switch')).toHaveCount(0);
   await expect(
     page.getByRole('link', {
       name: 'Scheduling and Competitions',

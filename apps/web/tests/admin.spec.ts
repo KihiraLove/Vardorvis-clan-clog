@@ -416,11 +416,16 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await editor(page)
     .getByLabel('Canonical item', { exact: true })
     .selectOption(String(id));
-  await expect(
-    editor(page).getByText(
-      new RegExp('Canonical item #' + id + ' · Manual item'),
-    ),
-  ).toBeVisible();
+  const fact = (name: string) =>
+    editor(page)
+      .locator('.submission-facts > div')
+      .filter({ has: page.getByText(name, { exact: true }) })
+      .getByRole('definition');
+  await expect(fact('Canonical item')).toHaveText('#' + id);
+  await expect(fact('Item origin')).toHaveText('Manual item');
+  await expect(fact('Collection log pages')).toHaveText(
+    'Duke Sucellus, Vardorvis',
+  );
   await editor(page)
     .getByRole('button', { name: 'Save corrections', exact: true })
     .click();
