@@ -326,11 +326,21 @@ test(
         name.endsWith('.png'),
       ).length;
       for (const response of [
-        await runelite(),
-        await discord(),
-        await runelite(4),
-        await discord(0),
-      ])
+        await runelite(1, randomUUID(), 'Closed Collector'),
+        await runelite(4, randomUUID(), 'Closed Unpaged Collector'),
+      ]) {
+        assert.equal(response.statusCode, 201, response.body);
+        assert.equal(response.json().status, 'rejected');
+        const detail = (
+          await app.inject({
+            url: '/api/v1/admin/submissions/' + response.json().submissionId,
+            headers: moderator,
+          })
+        ).json();
+        assert.match(detail.submission.reviewReason, /closed/u);
+        assert.equal(detail.audit[0].action, 'reject');
+      }
+      for (const response of [await discord(), await discord(0)])
         assert.equal(response.statusCode, 403, response.body);
       assert.deepEqual(
         (
@@ -338,12 +348,15 @@ test(
             'SELECT (SELECT count(*)::int FROM submissions) submissions,(SELECT count(*)::int FROM submission_images) images',
           )
         ).rows[0],
-        beforeCounts,
+        {
+          submissions: beforeCounts.submissions + 2,
+          images: beforeCounts.images + 2,
+        },
       );
       assert.equal(
         (await readdir(directory)).filter((name) => name.endsWith('.png'))
           .length,
-        filesBefore + 2, // Rejected RuneLite files are retained, without DB references.
+        filesBefore + 2, // Rejected RuneLite submissions retain their proof.
       );
       // Closed regular pages and unpaged items stay open for hardcore intake.
       for (const id of [1, 4]) {
@@ -406,10 +419,9 @@ test(
         },
         admin.id,
       );
-      assert.equal(
-        (await runelite(2, randomUUID(), 'Trusted Player')).statusCode,
-        403,
-      );
+      const closedTrusted = await runelite(2, randomUUID(), 'Trusted Player');
+      assert.equal(closedTrusted.statusCode, 201, closedTrusted.body);
+      assert.equal(closedTrusted.json().status, 'rejected');
       assert.equal(
         (await runelite(1, randomUUID(), 'Trusted Player')).json().status,
         'approved',
@@ -461,7 +473,9 @@ test(
         422,
       );
       await pool.query("UPDATE pages SET active=true WHERE id='page-b'");
-      assert.equal((await runelite(4)).statusCode, 403);
+      const closedUnpaged = await runelite(4, randomUUID(), 'Still Closed');
+      assert.equal(closedUnpaged.statusCode, 201, closedUnpaged.body);
+      assert.equal(closedUnpaged.json().status, 'rejected');
       const stale = state.revision;
       const races = await Promise.all([
         write('POST', path, {

@@ -7,14 +7,15 @@ import {
   parseRuneLiteWorldTypes,
   runeLiteDecision,
   normalizePlayerName,
+  closedCollectionPageMessage,
   type RuneLiteRules,
 } from '@clog/domain';
 import { readRuneLiteSettings } from './runelite-settings.js';
-import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
+import { lockScheduling, isScheduledItem } from './scheduling-store.js';
 import { requireClanKey } from './clan-api-key.js';
 import {
   readSubmissionFilters,
-  requireUncollected,
+  isCollectedDuplicate,
 } from './submission-filters.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
@@ -65,9 +66,7 @@ function validateSubmission(fields: RuneLiteFields, rules: RuneLiteRules) {
       403,
       'Clan name does not match the configured in-game clan name.',
     );
-  const decision = runeLiteDecision(fields.worldTypes, fields.username, rules);
-  if (decision.action === 'reject') throw new ApiError(403, decision.reason);
-  return decision;
+  return runeLiteDecision(fields.worldTypes, fields.username, rules);
 }
 export async function insertImage(client: pg.PoolClient, image: IconRecord) {
   await client.query(
@@ -85,7 +84,7 @@ export interface RuneLiteFields {
 }
 export interface RuneLiteReceipt {
   submissionId: string;
-  status: 'pending' | 'approved';
+  status: 'pending' | 'approved' | 'rejected';
   itemId: number;
   submittedAt: string;
   collectedOn: string;
@@ -224,7 +223,6 @@ export class PgProofStore implements ProofStore {
           422,
           'Item ID is not in the active collection-log catalog.',
         );
-      await requireScheduledItem(client, schedulingEnabled, item.id);
       const filters = await readSubmissionFilters(client, true);
       const playerKey = normalizePlayerName(fields.username);
       const receivedAt = (
@@ -250,12 +248,19 @@ export class PgProofStore implements ProofStore {
         await client.query('COMMIT');
         return { receipt, imageId: duplicate.imageId };
       }
-      await requireUncollected(
+      const collectedDuplicate = await isCollectedDuplicate(
         client,
         filters.filterCollected,
         item.id,
         world.hardcore,
       );
+      const rejection = collectedDuplicate
+        ? 'Automatically rejected: Filter out duplicates is on and this item is already collected in this world mode.'
+        : decision.action === 'reject'
+          ? decision.reason
+          : !(await isScheduledItem(client, schedulingEnabled, item.id))
+            ? closedCollectionPageMessage
+            : undefined;
       if (image) await insertImage(client, image);
       const id = randomUUID();
       const row = (
@@ -276,28 +281,36 @@ export class PgProofStore implements ProofStore {
         )
       ).rows[0]!;
       let status: RuneLiteReceipt['status'] = 'pending';
-      if (decision.action === 'allow') {
-        // The unique credit index arbitrates concurrent auto/manual approvals.
-        await client.query('SAVEPOINT automatic_approval');
-        try {
+      if (rejection || decision.action === 'allow') {
+        if (rejection) {
           await client.query(
-            "UPDATE submissions SET status='approved',version=version+1,reviewed_at=now(),reviewed_by='system:runelite-auto-review',review_reason=$2 WHERE id=$1",
-            [id, decision.reason],
+            "UPDATE submissions SET status='rejected',version=version+1,reviewed_at=now(),reviewed_by='system:runelite-auto-review',review_reason=$2 WHERE id=$1",
+            [id, rejection],
           );
-          status = 'approved';
-        } catch (error) {
-          if (
-            !error ||
-            typeof error !== 'object' ||
-            !('code' in error) ||
-            error.code !== '23505' ||
-            !('constraint' in error) ||
-            error.constraint !== 'submissions_one_credit_per_world'
-          )
-            throw error;
-          await client.query('ROLLBACK TO SAVEPOINT automatic_approval');
+          status = 'rejected';
+        } else {
+          // The unique credit index arbitrates concurrent auto/manual approvals.
+          await client.query('SAVEPOINT automatic_approval');
+          try {
+            await client.query(
+              "UPDATE submissions SET status='approved',version=version+1,reviewed_at=now(),reviewed_by='system:runelite-auto-review',review_reason=$2 WHERE id=$1",
+              [id, decision.reason],
+            );
+            status = 'approved';
+          } catch (error) {
+            if (
+              !error ||
+              typeof error !== 'object' ||
+              !('code' in error) ||
+              error.code !== '23505' ||
+              !('constraint' in error) ||
+              error.constraint !== 'submissions_one_credit_per_world'
+            )
+              throw error;
+            await client.query('ROLLBACK TO SAVEPOINT automatic_approval');
+          }
+          await client.query('RELEASE SAVEPOINT automatic_approval');
         }
-        await client.query('RELEASE SAVEPOINT automatic_approval');
         const before = {
           id,
           version: 1,
@@ -320,15 +333,20 @@ export class PgProofStore implements ProofStore {
             id,
             'system:runelite-auto-review',
             'RuneLite auto review',
-            status === 'approved' ? 'approve' : 'create',
-            status === 'approved'
-              ? decision.reason
-              : 'Automatic approval deferred: an approved credit already exists for this item and world mode.',
+            status === 'rejected'
+              ? 'reject'
+              : status === 'approved'
+                ? 'approve'
+                : 'create',
+            rejection ??
+              (status === 'approved'
+                ? decision.reason
+                : 'Automatic approval deferred: an approved credit already exists for this item and world mode.'),
             JSON.stringify(before),
             JSON.stringify({
               ...before,
               status,
-              version: status === 'approved' ? 2 : 1,
+              version: status === 'pending' ? 1 : 2,
             }),
           ],
         );

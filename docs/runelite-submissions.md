@@ -45,7 +45,11 @@ keys with **401**, before reading uploads. A trimmed, case-insensitive clan-name
 comparison uses the separate **In-game clan name for matching** setting; it does
 not authenticate clan membership. All world policies default to staff review.
 Configured auto allow policies and the player whitelist can grant automatic
-approval. Receipts have `status: "pending"` or `status: "approved"`.
+approval. Valid claims always receive **201** and a durable submission receipt
+with `status: "pending"`, `"approved"` or `"rejected"`. Configured world-policy,
+closed-schedule and collected-item duplicate rejections are saved with their
+proof, rejection reason and a **RuneLite auto review** audit entry. They appear
+in the staff **Reviewed** queue and grant no collection credit.
 
 The game ID resolves through `game_item_ids` to an active canonical catalog
 item. Variant IDs can resolve to the same item; unknown/inactive IDs return
@@ -89,7 +93,7 @@ use the same normalized world-type set; changing modes or any flag returns
 **409**. Historical receipts created before world-type support can replay as
 ordinary-world requests with the original payload; requesting HC with their
 key returns **409**. Their original receipt is retained and may omit `hardcore`.
-Replays must still pass current world rejection policies, match the configured
+Replays must still pass the blocked-world validation above, match the configured
 in-game clan when matching is enabled and, when required, use the current
 API key. Credentials are not part of the immutable submission payload, so a
 retry using a newly rotated key can recover its original receipt. A future plugin should retain the
@@ -112,9 +116,11 @@ are separate. A new key after the minute can create a new claim; retrying an
 existing key always retains its original receipt. Staff corrections do not
 change the recorded event identity.
 
-The **Filter out duplicates** checkbox on **Submissions**, between manual
-submission and the queue, additionally rejects RuneLite and Discord claims for
-items already credited in that world mode with **403**. It defaults to off and
+The **Filter out duplicates** toggle on **Submissions**, between manual
+submission and the queue, checks items already credited in that world mode.
+New RuneLite claims return **201** with `status: "rejected"` and are stored with
+a reason explaining that the duplicate filter is on. Discord intake continues
+to reject these claims with **403**. The filter defaults to off and
 can be changed only by the administrator; moderators can view its current state.
 Manual staff entry remains available
 for backfilling achievements. Replays and recognized one-minute duplicates
@@ -189,9 +195,9 @@ validation. Auto approvals grant collection credit immediately and append an
 audit attributed to **RuneLite auto review**. If an approved credit already
 exists for the canonical item and world mode, the new claim remains pending
 with an audit explaining why approval was deferred. Replays retain their
-original pending/approved receipt after policy or whitelist changes.
-With **Filter out duplicates** enabled, already-credited items are rejected
-instead of creating another pending claim.
+original pending/approved/rejected receipt after policy, filter or whitelist
+changes. With **Filter out duplicates** enabled, already-credited items create
+a rejected submission instead of another pending claim.
 
 Staff-only `GET /api/v1/admin/runelite-settings` returns private rules with a
 `runelite-N` revision. CSRF-protected `PUT` replaces the complete rules and

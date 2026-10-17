@@ -247,10 +247,25 @@ test(
       assert.equal(
         approvals.filter(
           (result) =>
-            result.status === 'rejected' && result.reason.status === 403,
+            result.status === 'fulfilled' &&
+            result.value.receipt.status === 'rejected',
         ).length,
         3,
       );
+      assert.equal(
+        approvals.every((result) => result.status === 'fulfilled'),
+        true,
+      );
+      const rejected = await pool.query(
+        "SELECT s.version,s.review_reason,a.action,a.reason FROM submissions s JOIN audit_events a ON a.submission_id=s.id WHERE s.item_id=2 AND s.status='rejected'",
+      );
+      assert.equal(rejected.rows.length, 3);
+      for (const row of rejected.rows) {
+        assert.equal(row.version, 2);
+        assert.equal(row.action, 'reject');
+        assert.match(row.review_reason, /Filter out duplicates is on/u);
+        assert.equal(row.reason, row.review_reason);
+      }
       await assert.rejects(
         backend.submitClaim(
           {

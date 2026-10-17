@@ -304,18 +304,28 @@ test(
           hardcore: 'review',
         },
       });
-      for (const flag of ['F2P', 'PVP'])
-        assert.equal(
-          (
-            await submit(
-              JSON.stringify(['MEMBERS', flag]),
-              3,
-              'trusted player',
-              'Game Clan',
-            )
-          ).statusCode,
-          403,
+      for (const flag of ['F2P', 'PVP']) {
+        const denied = await submit(
+          JSON.stringify(['MEMBERS', flag]),
+          flag === 'F2P' ? 3 : 30,
+          'trusted player',
+          'Game Clan',
         );
+        assert.equal(denied.statusCode, 201, denied.body);
+        assert.equal(denied.json().status, 'rejected');
+        const saved = (
+          await app.inject({
+            url: '/api/v1/admin/submissions/' + denied.json().submissionId,
+            headers: moderator,
+          })
+        ).json();
+        assert.equal(saved.submission.status, 'rejected');
+        assert.match(saved.submission.reviewReason, new RegExp(flag));
+        assert.equal(saved.audit[0].action, 'reject');
+        assert.equal(saved.audit[0].before.status, 'pending');
+        assert.equal(saved.audit[0].after.status, 'rejected');
+        assert.equal(saved.audit[0].after.version, 2);
+      }
       assert.equal(
         (await submit('MEMBERS', 3, 'Collector', 'Game Clan')).json().status,
         'approved',

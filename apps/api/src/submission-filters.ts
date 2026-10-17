@@ -19,13 +19,13 @@ export async function readSubmissionFilters(
   };
 }
 
-export async function requireUncollected(
+export async function isCollectedDuplicate(
   client: pg.PoolClient,
   enabled: boolean,
   itemId: number | null,
   hardcore: boolean,
 ) {
-  if (
+  return Boolean(
     enabled &&
     itemId !== null &&
     (
@@ -33,8 +33,17 @@ export async function requireUncollected(
         "SELECT 1 FROM submissions WHERE item_id=$1 AND hardcore=$2 AND status='approved' LIMIT 1",
         [itemId, hardcore],
       )
-    ).rowCount
-  )
+    ).rowCount,
+  );
+}
+
+export async function requireUncollected(
+  client: pg.PoolClient,
+  enabled: boolean,
+  itemId: number | null,
+  hardcore: boolean,
+) {
+  if (await isCollectedDuplicate(client, enabled, itemId, hardcore))
     throw new ApiError(
       403,
       'This item is already collected in this world mode.',

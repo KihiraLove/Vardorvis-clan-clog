@@ -1,6 +1,6 @@
 # Collection log scheduling
 
-[WOM imports](wom-competitions.md) are available in Scheduling and XP imports.
+[WOM imports](wom-competitions.md) are available in Scheduling and Competitions.
 WOM metrics determine SKILL or ACTIVITY. Future/running SKILL imports save
 metadata without opening pages or adding XP. Future ACTIVITY imports open selected
 pages for the source period; running ACTIVITY imports open them from database
@@ -9,7 +9,7 @@ Review or correct the proposed pages and refresh the preview before applying.
 The import never enables scheduling. Re-imports preserve linked staff edits and
 deleted schedules; recreate a deleted window manually if wanted.
 
-**Scheduling** (`/admin/schedules`) is available to administrators and moderators.
+**Scheduling and Competitions** (`/admin/schedules`) is available to administrators and moderators.
 Schedules apply only to the regular collection log. Hardcore collection pages
 remain fully open, including when regular scheduling is enabled or no window is
 active. Hardcore WOM scheduling is not supported yet.
@@ -41,9 +41,11 @@ The API uses the PostgreSQL clock when admitting a new submission. No scheduled
 job is needed to open or close pages. The gate applies to **regular-world RuneLite and Discord
 submissions**, using the resolved canonical item and its current active
 page memberships. While enabled, unresolved regular Discord claims and unpaged regular items
-are rejected because they cannot match an open page. Closed public submissions return
-**403** and do not persist a claim or screenshot; staff see the rejection while
-remaining signed in. Whitelists and auto allow world policies cannot bypass
+are rejected because they cannot match an open page. Valid RuneLite submissions
+to closed pages return **201** with `status: "rejected"`, retaining the claim,
+proof, reason and automatic-review audit in the **Reviewed** queue. Discord
+intake continues to return **403** without storing a closed-page claim.
+Whitelists and auto allow world policies cannot bypass
 closed pages. World, clan/API-key, catalog, proof and credit uniqueness checks
 continue to apply.
 Hardcore intake skips this scheduling gate, so active unpaged items and unresolved

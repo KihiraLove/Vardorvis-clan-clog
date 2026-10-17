@@ -45,13 +45,13 @@ export async function lockScheduling(
   if (!row) throw new ApiError(503, 'Scheduling settings unavailable.');
   return row.enabled;
 }
-export async function requireScheduledItem(
+export async function isScheduledItem(
   client: pg.PoolClient,
   enabled: boolean,
   itemId: number | null,
 ) {
-  if (!enabled) return;
-  const open =
+  if (!enabled) return true;
+  return (
     itemId !== null &&
     (
       await client.query(
@@ -60,8 +60,16 @@ export async function requireScheduledItem(
           'WHERE pi.item_id=$1 AND s.archived_at IS NULL AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at LIMIT 1',
         [itemId],
       )
-    ).rowCount === 1;
-  if (!open) throw new ApiError(403, closedCollectionPageMessage);
+    ).rowCount === 1
+  );
+}
+export async function requireScheduledItem(
+  client: pg.PoolClient,
+  enabled: boolean,
+  itemId: number | null,
+) {
+  if (!(await isScheduledItem(client, enabled, itemId)))
+    throw new ApiError(403, closedCollectionPageMessage);
 }
 export async function readState(
   client: pg.PoolClient,

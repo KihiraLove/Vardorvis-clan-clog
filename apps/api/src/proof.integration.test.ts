@@ -722,6 +722,136 @@ test(
           assert.deepEqual(await readdir(directory), before);
         },
       );
+      await t.test(
+        'duplicate-filtered claims return 201 with saved rejection, proof and durable retry receipts',
+        async () => {
+          let filters = await review.submissionFilters();
+          filters = await review.saveSubmissionFilters(
+            true,
+            filters.revision,
+            admin.id,
+          );
+          const input: [string, string][] = [
+            ['username', 'Filtered Collector'],
+            ['clanName', 'Clan name'],
+            ['itemId', '990043'],
+            ['worldType', 'MEMBERS'],
+            ['chatMessage', 'Filtered Collector received Chat proof item.'],
+          ];
+          const rejectedKey = randomUUID();
+          const rejected = await runelite(input, png, rejectedKey);
+          assert.equal(rejected.statusCode, 201, rejected.body);
+          assert.equal(rejected.json().status, 'rejected');
+          const rejectedId = rejected.json().submissionId;
+          const stored = (
+            await app.inject({
+              url: '/api/v1/admin/submissions/' + rejectedId,
+              headers: moderator,
+            })
+          ).json();
+          assert.equal(stored.submission.status, 'rejected');
+          assert.equal(stored.submission.version, 2);
+          assert.match(
+            stored.submission.reviewReason,
+            /Filter out duplicates is on/u,
+          );
+          assert.equal(stored.submission.chatMessage, input[4]![1]);
+          assert.equal(stored.audit[0].action, 'reject');
+          assert.equal(stored.audit[0].reason, stored.submission.reviewReason);
+          assert.equal(stored.audit[0].before.status, 'pending');
+          assert.equal(stored.audit[0].after.status, 'rejected');
+          assert.equal(
+            (
+              await app.inject({
+                url: stored.submission.screenshotPath,
+                headers: moderator,
+              })
+            ).statusCode,
+            200,
+          );
+          const queueResponse = await app.inject({
+            url: '/api/v1/admin/submissions?status=reviewed',
+            headers: moderator,
+          });
+          assert.equal(queueResponse.statusCode, 200, queueResponse.body);
+          const queue = queueResponse.json();
+          assert.ok(
+            queue.submissions.some(
+              (row: { id: string; status: string }) =>
+                row.id === rejectedId && row.status === 'rejected',
+            ),
+          );
+          const chatOnly = await runelite(
+            input.map(([name, value]) => [
+              name,
+              name === 'username' ? 'Filtered Chat' : value,
+            ]),
+            null,
+            randomUUID(),
+          );
+          assert.equal(chatOnly.statusCode, 201, chatOnly.body);
+          assert.equal(chatOnly.json().status, 'rejected');
+          const rollbackKey = randomUUID();
+          const rollbackInput = input.map(([name, value]): [string, string] => [
+            name,
+            name === 'username' ? 'Rollback Filter' : value,
+          ]);
+          const beforeRollback = (
+            await pool.query('SELECT count(*)::int n FROM submissions')
+          ).rows[0].n;
+          await pool.query(
+            "CREATE FUNCTION fail_rejection_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='reject' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_rejection_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION fail_rejection_audit()",
+          );
+          assert.equal(
+            (await runelite(rollbackInput, null, rollbackKey)).statusCode,
+            503,
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submissions'))
+              .rows[0].n,
+            beforeRollback,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                'SELECT count(*)::int n FROM runelite_submission_requests WHERE request_key=$1',
+                [rollbackKey],
+              )
+            ).rows[0].n,
+            0,
+          );
+          await pool.query('DROP TRIGGER fail_rejection_audit ON audit_events');
+          const retried = await runelite(rollbackInput, null, rollbackKey);
+          assert.equal(retried.statusCode, 201, retried.body);
+          assert.equal(retried.json().status, 'rejected');
+          const count = (
+            await pool.query('SELECT count(*)::int n FROM submissions')
+          ).rows[0].n;
+          const observer = await runelite(input, png, randomUUID());
+          assert.deepEqual(observer.json(), {
+            ...rejected.json(),
+            duplicate: true,
+          });
+          await review.saveSubmissionFilters(false, filters.revision, admin.id);
+          assert.deepEqual(
+            (await runelite(input, png, rejectedKey)).json(),
+            rejected.json(),
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submissions'))
+              .rows[0].n,
+            count,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int n FROM submissions WHERE item_id=43 AND status='approved'",
+              )
+            ).rows[0].n,
+            1,
+          );
+        },
+      );
       for (let i = 0; i < 10; i++)
         assert.equal(await store.allowIntake('192.0.2.200'), true);
       assert.equal(await store.allowIntake('192.0.2.200'), false);
