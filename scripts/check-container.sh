@@ -15,7 +15,7 @@ run_gate() {
   "$@" 2>&1 | tee ".data/local-checks/$gate.log"
 }
 run_gate workflows actionlint -config-file .github/actionlint.yaml .github/workflows/*.yml
-run_gate supervisor shellcheck -x infra/*.sh
+run_gate supervisor shellcheck -x infra/*.sh infra/clog
 run_gate tools npm run test:tools
 run_gate dependencies node scripts/check-dependencies.mjs
 run_gate validate npm run validate

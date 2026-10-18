@@ -1,16 +1,16 @@
-# Only scripts/check-local.mjs supplies these disposable resource names.
-# The external bridge is owned and removed by that runner, not a development stack.
 services:
-  db:
-    restart: 'no'
-  migrate:
-    image: ${CHECK_APP_IMAGE:?Run npm run test:all}
-    pull_policy: never
-  app:
+  clan-clog:
     image: ${CHECK_APP_IMAGE:?Run npm run test:all}
     pull_policy: never
     restart: 'no'
+    environment:
+      BOT_SETTINGS_MODE: environment
+      BOT_ENABLED: 'false'
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?Disposable test credential required}
     ports: !reset []
+    networks:
+      default:
+        aliases: [app]
 networks:
   default:
     external: true

@@ -1,12 +1,16 @@
 /** Runtime composition: validated auth config, durable store and graceful shutdown. */
 import { checkBotReadiness } from './readiness.js';
+import { databaseUrl } from '@clog/database/dist/secrets.js';
+import { SecretInputError } from '@clog/domain/server-secrets';
 import pg from 'pg';
+import { PgDiscordSettingsStore } from '@clog/database/dist/discord-settings.js';
 import { observePoolFailures } from './db-pool.js';
 import { join } from 'node:path';
 import { BrandingStorage } from './branding-storage.js';
 import { PgBrandingStore } from './branding-store.js';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
+import { adminBootstrapRequiredMessage } from './types.js';
 import { PgStore } from './store.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
@@ -29,24 +33,33 @@ const diagnostics = new OperationalDiagnostics('api', (record) =>
   process.stderr.write(JSON.stringify(record) + '\n'),
 );
 function fatal(error: unknown) {
+  const failure = safeFailure(error);
   diagnostics.record('process', {
     operation: 'runtime',
-    ...safeFailure(error),
-    code: 'PROCESS_FAILED',
+    ...failure,
+    code:
+      failure.code === 'ADMIN_BOOTSTRAP_REQUIRED'
+        ? failure.code
+        : 'PROCESS_FAILED',
   });
+  if (failure.code === 'ADMIN_BOOTSTRAP_REQUIRED')
+    process.stderr.write(adminBootstrapRequiredMessage + '\n');
+  if (error instanceof SecretInputError)
+    process.stderr.write(error.message + '\n');
   process.exit(1);
 }
 process.on('uncaughtException', fatal);
 process.on('unhandledRejection', fatal);
 async function main() {
   const config = readConfig();
-  if ((config.auth || config.bot) && !process.env.DATABASE_URL)
+  const url = databaseUrl(process.env, 'runtime', false);
+  if ((config.auth || config.bot) && !url)
     throw new Error(
       'DATABASE_URL is required when auth or bot intake is enabled',
     );
-  const pool = process.env.DATABASE_URL
+  const pool = url
     ? new pg.Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: url,
         connectionTimeoutMillis: 3000,
         statement_timeout: 5000,
         max: 10,
@@ -90,6 +103,23 @@ async function main() {
       ? new PgClanKeyStore(pool, await loadClanKeyRoot(proofs.directory))
       : undefined;
   if (clanKeys) await clanKeys.ensureDefault();
+  const discordSettings =
+    pool && proofs
+      ? new PgDiscordSettingsStore(
+          pool,
+          await loadClanKeyRoot(proofs.directory),
+        )
+      : undefined;
+  if (discordSettings) await discordSettings.ensureDefault();
+  const managedBot = process.env.BOT_SETTINGS_MODE === 'database';
+  const botConfiguration = managedBot
+    ? async () => {
+        const saved = await discordSettings?.runtime();
+        return saved?.enabled
+          ? { token: saved.apiToken, guildId: saved.guildId }
+          : undefined;
+      }
+    : undefined;
   const catalog = pool ? new PgCatalogStore(pool) : undefined;
   const work = new WorkDrain();
   const app = createApp(
@@ -105,7 +135,12 @@ async function main() {
       }),
       store,
       checkBotReady:
-        process.env.BOT_ENABLED === 'true' ? checkBotReadiness : undefined,
+        process.env.BOT_SETTINGS_MODE !== 'disabled' &&
+        (managedBot || process.env.BOT_ENABLED === 'true')
+          ? checkBotReadiness
+          : undefined,
+      discordSettings,
+      botConfiguration,
       catalog,
       icons,
       logos,

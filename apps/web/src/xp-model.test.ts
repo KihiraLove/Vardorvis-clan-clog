@@ -3,17 +3,19 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   amount,
-  compareXp,
   competitionUrl,
   exactXp,
   millionXp,
   parseChanges,
-  parseImportHistory,
-  parseCompetition,
-  parseParticipants,
   skills,
   timestamp,
 } from './xp-model.ts';
+import {
+  compareXp,
+  parseImportHistory,
+  parseCompetition,
+  parseParticipants,
+} from '../tests/support/xp-contracts.ts';
 import { MemoryXpClient } from '../tests/support/xp.ts';
 
 const signal = () => new AbortController().signal;

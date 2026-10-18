@@ -3,8 +3,22 @@ import { REST, Routes } from 'discord.js';
 import { pathToFileURL } from 'node:url';
 import { collectionLogCommand } from './command.js';
 import { requireSnowflake } from './config.js';
+import { readSecret } from '@clog/domain/server-secrets';
+import { loadSavedConfiguration } from './saved-config.js';
 
 export type RegisterRequest = (route: string, body: object) => Promise<unknown>;
+export async function registerWithCredentials(
+  appId: string,
+  guildId: string,
+  token: string,
+) {
+  const rest = new REST({ version: '10', timeout: 8000, retries: 0 }).setToken(
+    token,
+  );
+  await registerGuildCommand(appId, guildId, async (route, body) => {
+    await rest.post(route as '/interactions', { body });
+  });
+}
 export async function registerGuildCommand(
   appId: string,
   guildId: string,
@@ -31,7 +45,7 @@ export async function registerFromEnv(
     mode === 'test' ? env.DISCORD_TEST_GUILD_ID : env.DISCORD_GUILD_ID,
     mode === 'test' ? 'DISCORD_TEST_GUILD_ID' : 'DISCORD_GUILD_ID',
   );
-  const token = env.DISCORD_BOT_TOKEN?.trim();
+  const token = readSecret('DISCORD_BOT_TOKEN', env)?.trim();
   if (!token)
     throw new Error('DISCORD_BOT_TOKEN is required for command registration');
   const sender =
@@ -50,6 +64,17 @@ if (
   const mode = process.argv[2];
   if (mode !== 'test' && mode !== 'guild')
     throw new Error('Run register:test or register:guild explicitly');
-  await registerFromEnv(mode);
+  if (process.env.BOT_SETTINGS_MODE === 'database') {
+    const saved = await loadSavedConfiguration();
+    try {
+      const config = saved.saved;
+      const guild = mode === 'test' ? config.testGuildId : config.guildId;
+      if (!config.token)
+        throw new Error('Save a Discord token in administration first');
+      await registerWithCredentials(config.applicationId, guild, config.token);
+    } finally {
+      await saved.pool.end();
+    }
+  } else await registerFromEnv(mode);
   console.log('Guild command registered in the selected guild.');
 }

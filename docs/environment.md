@@ -1,143 +1,100 @@
-# Environment and development
+# Configuration
 
-The production stack uses two long-lived containers: `app` (Nginx, API,
-optional Discord gateway) and PostgreSQL `db`. The `migrate` service is a
-one-shot bootstrap that uses the **same application image** and exits.
-See [release deployment](deployment.md) before recreating an existing DB.
+The image needs only `PUBLIC_ORIGIN` and a persistent `/data` volume.
+Use inline Compose values, or copy [the example](../.env.example) to `.env`.
+Database passwords and the session key are generated automatically in protected
+subdirectories of that volume. No separate secret or admin setup step is needed.
+Discord is configured in **Administration → Discord bot**.
 
-For the full automated suite, use `npm run test:all` with Node 24 and Docker.
-The [local test runner](local-testing.md) supplies disposable databases, test
-credentials, Linux tooling and Chromium; it does not load your runtime `.env`.
+## All supported settings
 
-## Required secrets and configuration
+The table includes ordinary settings, advanced host-process inputs and internal
+helper controls. Image-fixed paths describe the storage contract; keep those
+paths unchanged. Container paths are absolute. A secret value and its matching
+`_FILE` input are mutually exclusive (the supervisor accepts an initialization
+seed and then switches to its managed file). Secret files must be regular,
+readable, nonempty and at most 64 KiB; one final newline is allowed.
 
-Copy `.env.example` to `.env` and keep it private (`chmod 600 .env`).
-Generate independent `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` and
-`SESSION_SECRET` with `openssl rand -hex 32`.
+| Label                           | Default / use                                     | Explanation                                                                                                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `IMAGE_NAME`                    | `ghcr.io/kihiralove/clan-clog`                    | Full published application image repository; change for a fork.                                                                                                                                                                                        |
+| `IMAGE_TAG`                     | Required for published images                     | Approved release tag; versioned deployment selects it from the verified manifest. The development overlay uses `clan-clog:dev`.                                                                                                                        |
+| `WEB_PORT`                      | `8088`                                            | Host loopback port forwarded to the website.                                                                                                                                                                                                           |
+| `AUTH_ENABLED`                  | Image: `true`; host Node: `false`                 | Enables staff authentication. The normal image enables it; a host-run API must explicitly enable it.                                                                                                                                                   |
+| `PUBLIC_ORIGIN`                 | Example: `http://127.0.0.1:8088`                  | Exact browser origin. HTTPS is required except HTTP loopback in development.                                                                                                                                                                           |
+| `TRUSTED_PROXY_CIDRS`           | Empty                                             | Verified external proxy IPs/CIDRs, comma separated. The bundled launcher adds its internal Nginx loopback hop.                                                                                                                                         |
+| `POSTGRES_PASSWORD`             | Automatically generated                           | Optional explicit initialization seed or host-tool owner credential; 32–128 independent random bytes as hex. Changing a seed does not rotate an installed password.                                                                                    |
+| `POSTGRES_PASSWORD_FILE`        | Image: `/data/system/postgres/value`              | Owner credential; accessible only to the root supervisor/maintenance. External PostgreSQL can seed it from a mounted file on first initialization.                                                                                                     |
+| `APP_DB_PASSWORD`               | Automatically generated                           | Optional initialization seed or host runtime credential; independent from the owner password.                                                                                                                                                          |
+| `APP_DB_PASSWORD_FILE`          | Image: `/data/system/app/value`                   | Restricted application database credential; read-only to application workers.                                                                                                                                                                          |
+| `SESSION_SECRET`                | Automatically generated                           | Optional initialization seed or host authentication key; shared across staff sessions, independent from both DB credentials. Rotation signs everyone out.                                                                                              |
+| `SESSION_SECRET_FILE`           | Image: `/data/system/session/value`               | Persistent installation-wide session/CSRF signing key, read-only to workers. Each login still has its own server session.                                                                                                                              |
+| `ADMIN_BOOTSTRAP_PASSWORD`      | Generated automatically                           | Optional automation-only first-login seed, 32–128 random bytes as hex. Startup normally generates and prints a temporary password. Never resets an existing administrator.                                                                             |
+| `ADMIN_BOOTSTRAP_PASSWORD_FILE` | Unset                                             | File alternative for an automated initial administrator seed. Remove it after initialization.                                                                                                                                                          |
+| `DATABASE_URL`                  | Host Node/custom processes only                   | Full PostgreSQL URL, or use its file input. The installation supervisor requires individual DB fields instead; runtime workers must never receive an owner URL.                                                                                        |
+| `DATABASE_URL_FILE`             | Host Node/custom processes only                   | File containing the complete database URL.                                                                                                                                                                                                             |
+| `DB_HOST`                       | `127.0.0.1`                                       | Bundled PostgreSQL is private on loopback. Set this to the database host only in external mode.                                                                                                                                                        |
+| `DB_PORT`                       | `5432`                                            | Database port, from 1 to 65535.                                                                                                                                                                                                                        |
+| `DB_NAME`                       | `clog`                                            | Database name for host/custom tools. Bundled Compose services use `clog`.                                                                                                                                                                              |
+| `DB_USER`                       | Owner tools: `clog`; API: `clog_runtime`          | Connection role override for host/custom tools. Preserve the bundled restricted runtime role.                                                                                                                                                          |
+| `HOST`                          | Host API: `0.0.0.0`; Compose: `127.0.0.1`         | API listen address. The bundled proxy keeps the API private.                                                                                                                                                                                           |
+| `PORT`                          | `3000`                                            | API listen port inside its process/container.                                                                                                                                                                                                          |
+| `NODE_ENV`                      | Compose: `production`; dev overlay: `development` | Runtime mode; development permits the HTTP loopback origin.                                                                                                                                                                                            |
+| `ICON_STORAGE_PATH`             | Compose: `/data/catalog-icons`                    | Durable icon/branding directory; host-run API requires an absolute writable path.                                                                                                                                                                      |
+| `PROOF_STORAGE_PATH`            | Compose: `/data/submission-images`                | Durable private proof directory, also containing the clan-key encryption root.                                                                                                                                                                         |
+| `BOT_SETTINGS_MODE`             | Compose-fixed: `database`; host: `environment`    | Configuration source. `database` uses admin settings with automatic bot reload; `environment` uses standalone inputs below; `disabled` blocks the gateway and intake in isolated restores. Change bundled mode only through a custom Compose override. |
+| `BOT_ENABLED`                   | Environment mode: `false`                         | Standalone environment mode only: starts the gateway. Bundled Compose uses the Discord bot admin page.                                                                                                                                                 |
+| `BOT_API_TOKEN`                 | Environment mode: empty                           | Standalone environment mode only: internal 32+ byte hex credential shared by bot and API. Managed mode generates and encrypts this automatically.                                                                                                      |
+| `BOT_API_TOKEN_FILE`            | Environment mode: unset                           | File alternative in standalone environment mode; bundled Compose uses saved settings.                                                                                                                                                                  |
+| `DISCORD_BOT_TOKEN`             | Environment mode: empty                           | Standalone environment mode only: Discord Developer Portal token. Bundled Compose uses an encrypted token entered on the admin page.                                                                                                                   |
+| `DISCORD_BOT_TOKEN_FILE`        | Environment mode: unset                           | File alternative for a standalone Discord gateway token.                                                                                                                                                                                               |
+| `DISCORD_GUILD_ID`              | Environment mode: empty                           | Standalone environment mode server snowflake. Bundled Compose uses the saved server ID.                                                                                                                                                                |
+| `DISCORD_APPLICATION_ID`        | Environment mode: empty                           | Standalone command-registration application snowflake. Managed registration uses the saved application ID.                                                                                                                                             |
+| `DISCORD_TEST_GUILD_ID`         | Environment mode: empty                           | Standalone test-server registration snowflake. Managed registration uses the saved test server ID.                                                                                                                                                     |
+| `API_BASE_URL`                  | Compose: `http://127.0.0.1:3000`                  | Bot's internal API origin; standalone bot default is `http://api:3000`.                                                                                                                                                                                |
+| `BOT_INTAKE_USER_PER_MINUTE`    | Environment mode: `5`                             | Standalone per-user submission limit (1–120); bundled Compose uses the admin page.                                                                                                                                                                     |
+| `BOT_INTAKE_GUILD_PER_MINUTE`   | Environment mode: `60`                            | Standalone per-server submission limit (1–120); bundled Compose uses the admin page.                                                                                                                                                                   |
+| `BOT_SEARCH_USER_PER_MINUTE`    | Environment mode: `30`                            | Standalone per-user search limit (1–600); bundled Compose uses the admin page.                                                                                                                                                                         |
+| `BOT_SEARCH_GUILD_PER_MINUTE`   | Environment mode: `300`                           | Standalone per-server search limit (1–600); bundled Compose uses the admin page.                                                                                                                                                                       |
+| `CLOG_HOST`                     | Empty                                             | Public hostname for the optional Traefik overlay.                                                                                                                                                                                                      |
+| `TRAEFIK_HTTPS_ENTRYPOINT`      | `websecure`                                       | Existing Traefik HTTPS entrypoint name.                                                                                                                                                                                                                |
+| `TRAEFIK_CERT_RESOLVER`         | `letsencrypt`                                     | Existing Traefik certificate resolver name.                                                                                                                                                                                                            |
+| `COMPOSE_FILE`                  | Operator-selected                                 | Compose files, separated by colons on Linux; select the same files for startup and maintenance.                                                                                                                                                        |
+| `COMPOSE_PROJECT_NAME`          | Compose directory name                            | Your existing Compose project name is supported. No fixed project name is required.                                                                                                                                                                    |
+| `COMPOSE_ENV_FILES`             | Compose-selected                                  | Optional explicit environment file. Not required for an inline service definition.                                                                                                                                                                     |
+| `COMPOSE_DISABLE_ENV_FILE`      | Compose default                                   | Set true to disable implicit .env loading, useful for isolated checks.                                                                                                                                                                                 |
+| `CLOG_IMAGE_NAME`               | `ghcr.io/kihiralove/clan-clog`                    | Registry repository used by the installed deployment launcher.                                                                                                                                                                                         |
+| `CLOG_DEPLOY_ROOT`              | Current directory                                 | Optional Compose directory for the pinned updater.                                                                                                                                                                                                     |
+| `CLOG_RELEASE_DIR`              | Helper-managed                                    | Verified infrastructure directory extracted from the candidate image.                                                                                                                                                                                  |
+| `RELEASE_IMAGE`                 | Launcher-managed                                  | Resolved application image digest; not a user-selected mutable tag.                                                                                                                                                                                    |
+| `CLOG_SECRETS_ROOT`             | Image-fixed: `/data/system`                       | Managed secret root. The standalone initialization CLI defaults to `/run/clog-secrets`; do not change the image layout.                                                                                                                                |
+| `CLOG_DATABASE_DATA`            | Image-fixed: `/data/postgres`                     | Bundled PostgreSQL data directory. The standalone initialization CLI defaults to `/database-data`.                                                                                                                                                     |
+| `TEST_DATABASE_URL`             | Unset                                             | Disposable database for targeted integration tests; never point it at clan data.                                                                                                                                                                       |
+| `LOCAL_DOCKER_SOCKET`           | `/var/run/docker.sock`                            | Optional local acceptance runner Docker socket override.                                                                                                                                                                                               |
+| `CLOG_SERVICE`                  | `clan-clog`                                       | Service selected by backup, restore, rotation and pinned deployment; an explicit service argument takes precedence.                                                                                                                                    |
+| `CLOG_DATABASE_MODE`            | `bundled`                                         | Advanced: `external` uses an existing PostgreSQL 17 database; see below.                                                                                                                                                                               |
+| `CLOG_START_MODE`               | `normal`                                          | Internal maintenance: `maintenance` starts the database with writers paused; `restore` requires a new volume and creates no administrator.                                                                                                             |
+| `CLOG_BOOTSTRAP_FILE`           | Image-fixed: `/data/bootstrap/administrator.json` | Private pending first-login credential; removed after the administrator changes their password.                                                                                                                                                        |
+| `CLOG_STATE_DIR`                | Helper-managed: `.clog/<service>`                 | Per-service host locks, image override, backups and deployment evidence.                                                                                                                                                                               |
+| `CLOG_LOCK_HELD`                | Helper-managed                                    | Carries the selected-service host lock into nested backup operations.                                                                                                                                                                                  |
+| `CLOG_LOCAL_IMAGE`              | `false`                                           | Test-only: allow locally built pinned updater fixtures without pulling from the registry.                                                                                                                                                              |
 
-**Database credentials:** `POSTGRES_PASSWORD` is used by PostgreSQL and
-the one-shot bootstrap; `APP_DB_PASSWORD` is the separate restricted runtime
-password. `DATABASE_URL` is for host-side Node development only.
+## Advanced external PostgreSQL
 
-**Image and ports:** `IMAGE_PREFIX` and `IMAGE_TAG` select the one
-`<prefix>-app:<tag>` release image. `WEB_PORT` is the loopback diagnostic
-port (default 8088).
+The default needs no database configuration. For a separately managed PostgreSQL
+17 database, use an explicit Compose override with `CLOG_DATABASE_MODE: external`,
+`DB_HOST`, `DB_PORT`, `DB_NAME` and an owner `DB_USER`. Create the database first;
+the owner needs schema/role provisioning rights. On the first run, mount an owner
+password file and set `POSTGRES_PASSWORD_FILE` to it. The existing password must
+satisfy the managed 32–128 random-byte hex format. After initialization, remove
+that seed mount/override; the installation keeps its managed copy. Runtime workers
+use the generated `clog_runtime` credential. Do not pass owner URLs to workers.
 
-**Screenshots:** Compose sets `PROOF_STORAGE_PATH=/data/submission-images`
-on a durable private volume. Standalone API development must use an absolute
-writable directory (required when staff auth is enabled). Configured storage
-and a database enable [RuneLite submissions](runelite-submissions.md) without
-Discord credentials. Clan name is a database-backed admin setting.
-RuneLite submissions also require a random shared clan API key by default.
-Admins can disable enforcement and rotate/view the key in Site settings.
-No additional environment secret is needed: the private screenshot volume
-holds the encryption root, which must be backed up with the database.
+External DB availability, encryption, backups and lifecycle are your responsibility.
+The backup helper supports a logical external dump; automated restore targets a
+fresh bundled installation. This mode does not import older pre-release schemas.
 
-**Admin authentication:** `AUTH_ENABLED` controls staff-account
-login; `PUBLIC_ORIGIN` must exactly match the browser origin.
-`SESSION_SECRET` must
-hold 32+ random bytes encoded as hex. `TRUSTED_PROXY_CIDRS` optionally lists
-verified upstream proxy IPs and CIDRs (including Traefik). The bundled app
-always trusts its internal Nginx loopback hop. Leave the list empty only when
-no external reverse proxy is used;
-see [the trust-chain configuration](deployment.md#existing-traefik).
-
-For a fresh installation, generate a fourth independent secret with
-`openssl rand -hex 32` and set it as `ADMIN_BOOTSTRAP_PASSWORD` in the private
-environment file. It must contain 64–256 hexadecimal characters. Authenticated
-startup fails before listening if no administrator exists and this value is
-missing; there is no default password. Compose passes it only to the API runtime,
-never to the web bundle.
-
-The first authenticated startup creates one administrator with username `admin`
-and that bootstrap password, and no moderators. Sign in at `/admin` using the
-generated value and choose a different 12–256 character password before staff
-tools become available. Remove `ADMIN_BOOTSTRAP_PASSWORD` from the environment
-after setup and recreate/restart the app to remove it from the running container.
-Later startups work without it; supplying another value cannot reset, reactivate
-or recreate an existing administrator, including one whose username changed.
-Concurrent initializers create only one account; use the credential from the
-initializer that created it. Keep a fresh installation private until setup is
-complete. If provisioning fails, resolve the error and retry with the same
-credential; account creation is not a password-reset mechanism.
-
-The administrator
-can create moderators under **Moderator accounts**; each receives a temporary
-password and must replace it on first login. Both roles can change their own
-username and password under **Your account**, confirming the current password.
-Usernames are case-insensitively unique and use 3–32 letters, numbers, dots,
-underscores or hyphens. Credential changes revoke other sessions.
-
-Passwords are stored only as independently salted scrypt verifiers in PostgreSQL;
-the API never returns hashes. `ADMIN_PASSWORD` is no longer used. Renaming the
-administrator or restarting the app does not restore bootstrap credentials.
-Upgrading preserves existing accounts and passwords; an operator must replace
-any legacy `admin` password through account settings before exposing that account.
-Moderators can review, submit, maintain the catalog and import XP; only the
-administrator can access the hardcore release switch and account creation.
-
-Migration `003_staff_accounts.sql` is additive and invalidates previous shared
-sessions. Back up before upgrading, apply migrations and reconcile runtime
-permissions with the one-shot bootstrap. Database backups now include account
-hashes and must remain private. The old shared-password image does not support
-these accounts; restore the coordinated pre-upgrade backup when rolling back.
-
-**Discord:** `BOT_ENABLED` launches the gateway (default false).
-`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` and `BOT_API_TOKEN` enable it;
-`DISCORD_APPLICATION_ID` and `DISCORD_TEST_GUILD_ID` are used for
-explicit command registration.
-
-**Traefik:** `CLOG_HOST` is the public hostname; production
-`COMPOSE_FILE` selects `compose.yaml:compose.traefik.yaml`.
-`TRAEFIK_HTTPS_ENTRYPOINT` and `TRAEFIK_CERT_RESOLVER` refer to names
-already configured in the existing proxy.
-
-The running application listens to API requests on localhost inside the
-container (`127.0.0.1:3000`); Nginx publishes only port 8080. The optional
-Discord gateway calls the API on that same container-local address.
-Credentials are never included in the web bundle.
-
-## Local integrated application
-
-Install Node 24 and Docker Compose v2, then:
-
-```bash
-cp .env.example .env
-# Configure POSTGRES_PASSWORD, APP_DB_PASSWORD and SESSION_SECRET independently.
-# Set AUTH_ENABLED=true to enable staff login; keep PUBLIC_ORIGIN on HTTP loopback.
-# For the first installation, set ADMIN_BOOTSTRAP_PASSWORD from openssl rand -hex 32.
-npm ci
-npm run validate
-docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
-curl --fail http://127.0.0.1:8088/api/v1/status
-```
-
-The local application uses the full bundled catalog and starts with all
-items uncollected. The database is available only on host loopback (5432).
-To reset **disposable** data, see [fresh-install reset](deployment.md#fresh-install-database-baseline-breaking-change).
-
-Visit `http://127.0.0.1:8088/admin` and sign in with your staff credentials.
-Local development requires the same password login and first-login password
-change as production. With `AUTH_ENABLED=false`, staff tools are unavailable.
-
-## Host-side development and tests
-
-```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d db
-npm ci
-npm run build
-# Populate DATABASE_URL with host 127.0.0.1:5432 credentials.
-npm run db:migrate
-npm run catalog:import
-npm run dev:api
-# In a second terminal: npm run dev:web
-```
-
-Vite proxies `/api` to local Fastify port 3000. Database integration tests
-require an explicitly disposable `TEST_DATABASE_URL`; they intentionally
-skip without it. Local acceptance provisions PostgreSQL for those tests.
-The frontend requires the API; its former demo mode has been removed.
-
-For Discord commands and registration, see [bot operations](bot-operations.md).
-For operational backup/recovery and Traefik setup, see
-[deployment](deployment.md) and [OPS-01](ops-01.md).
+Keep generated storage across updates. For rotation, use the explicit
+[maintenance procedure](release-recovery.md), never replace initialization seeds.
+See [hosting](deployment.md), [RuneLite](runelite-submissions.md),
+[Discord](bot-operations.md) and [development](local-testing.md).

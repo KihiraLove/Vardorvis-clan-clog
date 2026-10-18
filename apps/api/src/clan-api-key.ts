@@ -165,44 +165,13 @@ export class PgClanKeyStore implements ClanKeyStore {
       'INSERT INTO clan_api_keys(singleton,encrypted_key,key_hash) VALUES(true,$1,$2) ON CONFLICT(singleton) DO NOTHING',
       [encrypt(key, this.root), digest(key)],
     );
-    // Preserve custom keys. Upgrade only historical keys shorter than the new minimum.
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const old = (
-        await client.query<KeyRow>(
-          'SELECT enabled,version,encrypted_key,key_hash FROM clan_api_keys WHERE singleton=true FOR UPDATE',
-        )
-      ).rows[0]!;
-      if (!validClanApiKey(decrypt(old.encrypted_key, this.root))) {
-        const replacement = generateClanKey();
-        const version = old.version + 1;
-        await client.query(
-          'UPDATE clan_api_keys SET encrypted_key=$1,key_hash=$2,version=$3 WHERE singleton=true',
-          [encrypt(replacement, this.root), digest(replacement), version],
-        );
-        await client.query(
-          "INSERT INTO clan_api_key_audit(actor_id,old_enabled,new_enabled,key_rotated,version) VALUES('system:minimum-key-length-upgrade',$1,$1,true,$2)",
-          [old.enabled, version],
-        );
-      }
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
     // Catch a missing/wrong restored encryption root without replacing a valid key.
     await this.settings();
   }
   private view(row: KeyRow): ClanKeySettings {
     const key = decrypt(row.encrypted_key, this.root);
     if (!validClanApiKey(key))
-      throw new ApiError(
-        503,
-        'Clan API key requires a minimum-length upgrade.',
-      );
+      throw new ApiError(503, 'Clan API key storage is invalid.');
     return {
       revision: 'clan-key-' + row.version,
       enabled: row.enabled,

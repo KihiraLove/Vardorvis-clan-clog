@@ -17,6 +17,22 @@ const actorDiscordId = '123456789012345678';
 const token = 'a'.repeat(64);
 const bot: BotConfig = { token, guildId };
 const headers = { authorization: 'Bearer ' + token };
+test('managed and isolated modes ignore legacy environment credentials, including invalid secret-file inputs', () => {
+  for (const mode of ['database', 'disabled'])
+    assert.equal(
+      readConfig({
+        BOT_SETTINGS_MODE: mode,
+        BOT_API_TOKEN: 'bad',
+        BOT_API_TOKEN_FILE: '/missing/credential',
+        DISCORD_GUILD_ID: 'bad',
+      }).bot,
+      undefined,
+    );
+  assert.throws(
+    () => readConfig({ BOT_SETTINGS_MODE: 'unknown' }),
+    /BOT_SETTINGS_MODE/,
+  );
+});
 const rows: MatchItem[] = [
   { id: 42, name: 'Dragon axe', aliases: ['D axe'] },
   { id: 43, name: 'Dragon axe (or)', aliases: ['Shared axe'] },

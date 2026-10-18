@@ -1,14 +1,7 @@
-# Recovery clones have private networks/volumes, no ports and no Discord login.
+# Isolated recovery: no published ports, proxy network or Discord gateway.
 services:
-  db:
-    restart: 'no'
-  migrate:
-    restart: 'no'
-  app:
+  clan-clog:
     restart: 'no'
     ports: !reset []
     environment:
-      BOT_ENABLED: 'false'
-      BOT_API_TOKEN: ''
-      DISCORD_BOT_TOKEN: ''
-      DISCORD_GUILD_ID: ''
+      BOT_SETTINGS_MODE: disabled

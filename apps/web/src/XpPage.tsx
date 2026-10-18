@@ -10,51 +10,42 @@ import { XpPodium } from './XpPodium.tsx';
 import { skills, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
-import { usePreparedAdminData } from './admin-route-data.ts';
 export function XpPage({
   client,
-  admin,
-  adminControls,
   copy = defaultSiteCopy,
 }: {
   client: XpClient;
-  admin: boolean;
-  adminControls?: ((onApplied: () => void) => React.ReactNode) | undefined;
   copy?: SiteCopy;
 }) {
-  const initial = usePreparedAdminData()?.tracker;
-  const [data, setData] = useState<XpTracker | undefined>(initial);
+  const [data, setData] = useState<XpTracker>();
   const [selected, setSelected] = useState<number>();
   const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(!initial);
+  const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true;
-    const subscription = publicPoller.subscribe(
-      async (signal) => {
-        if (active) setLoading(true);
-        try {
-          const value = await publicRead(client.tracker(signal), signal);
-          if (active && !signal.aborted) {
-            setData(value);
-            setError(undefined);
-          }
-        } catch {
-          if (active && reportPublicFailure(signal))
-            setError('XP could not be refreshed. Try again shortly.');
-        } finally {
-          if (active && reportPublicFailure(signal)) setLoading(false);
+    const subscription = publicPoller.subscribe(async (signal) => {
+      if (active) setLoading(true);
+      try {
+        const value = await publicRead(client.tracker(signal), signal);
+        if (active && !signal.aborted) {
+          setData(value);
+          setError(undefined);
         }
-      },
-      !initial || refresh > 0,
-    );
+      } catch {
+        if (active && reportPublicFailure(signal))
+          setError('XP could not be refreshed. Try again shortly.');
+      } finally {
+        if (active && reportPublicFailure(signal)) setLoading(false);
+      }
+    }, true);
     return () => {
       active = false;
       subscription.stop();
     };
-  }, [client, refresh, initial]);
+  }, [client, refresh]);
   useEffect(() => {
-    setData(initial);
+    setData(undefined);
     setSelected(undefined);
   }, [client]);
   const event = data?.events.find((entry) => entry.id === selected);
@@ -65,10 +56,9 @@ export function XpPage({
     <section
       className="event-tracker"
       id="xp-tracker"
-      aria-label={admin ? 'XP imports' : copy.xpTitle}
+      aria-label={copy.xpTitle}
     >
-      {!admin && <h1>{copy.xpTitle}</h1>}
-      {admin && adminControls?.(() => setRefresh((n) => n + 1))}
+      <h1>{copy.xpTitle}</h1>
       {error && (
         <p role="alert">
           {error}{' '}

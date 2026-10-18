@@ -13,6 +13,7 @@ let bytes = 0;
 for (const [file, expected] of Object.entries(manifest.files)) {
   assert.ok(
     file === 'package.json' ||
+      file === 'LICENSE' ||
       /^(?:apps\/(?:api|bot)|packages\/(?:database|domain))\/(?:package\.json|dist\/.+\.js)$/u.test(
         file,
       ),
@@ -76,6 +77,10 @@ assert.equal(
 );
 for (const file of [
   'packages/database/dist/bootstrap.js',
+  'packages/database/dist/initialize-secrets.js',
+  'apps/api/dist/setup-admin.js',
+  'apps/api/dist/installation.js',
+  'apps/api/dist/maintenance.js',
   'packages/database/dist/release-state.js',
   'apps/api/dist/server.js',
   'apps/bot/dist/index.js',
@@ -84,12 +89,17 @@ for (const file of [
   'catalog/snapshot.sha256',
   'catalog/clue-taxonomy.json',
   '/usr/share/nginx/html/index.html',
+  '/usr/lib/postgresql/17/bin/postgres',
+  '/usr/local/bin/clog',
+  '/usr/local/bin/start-installation',
 ])
   await lstat(file);
+// The official PostgreSQL template is a symlink into its parent directory.
+await readFile('/usr/share/postgresql/17/postgresql.conf.sample');
 const migrations = (await readdir('packages/database/migrations'))
   .filter((name) => name.endsWith('.sql'))
   .sort();
-assert.equal(migrations.at(-1), '024_catalog_editor.sql');
+assert.deepEqual(migrations, ['001_baseline.sql']);
 const cleanup = JSON.parse(
   await readFile('runtime-dependency-cleanup.json', 'utf8'),
 );

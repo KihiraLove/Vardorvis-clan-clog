@@ -182,6 +182,30 @@ test(
     }, false);
   },
 );
+
+test(
+  'settings reload restarts only the bot without accumulating crash backoff',
+  { skip: process.platform === 'win32', timeout: 15000 },
+  async () =>
+    fixture(async (f) => {
+      const api = await f.pid('api'),
+        proxy = await f.pid('proxy');
+      for (let i = 0; i < 3; i++) {
+        const bot = await f.pid('bot');
+        process.kill(bot, 'SIGTERM');
+        await f.until(async () => (await f.pid('bot')) !== bot);
+      }
+      assert.equal(await f.pid('api'), api);
+      assert.equal(await f.pid('proxy'), proxy);
+      assert.equal(
+        (f.logs().match(/"code":"CONFIGURATION_RELOAD"/gu) ?? []).length,
+        3,
+      );
+      assert.doesNotMatch(f.logs(), /"retrySeconds":[2-9]/u);
+      f.supervisor.kill('SIGTERM');
+      assert.deepEqual(await f.exit, { code: 0, signal: null });
+    }),
+);
 test(
   'shutdown cancels bot restart backoff without resurrecting the stopped child',
   { skip: process.platform === 'win32', timeout: 10000 },

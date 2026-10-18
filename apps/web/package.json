@@ -1,6 +1,6 @@
 {
   "name": "@clog/web",
-  "version": "0.1.0",
+  "version": "1.0.0-SNAPSHOT",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
     "test:stack": "playwright test --config playwright.stack.config.ts"
   },
   "dependencies": {
-    "@clog/domain": "0.1.0",
+    "@clog/domain": "1.0.0-SNAPSHOT",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -23,5 +23,6 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "vite": "^7.1.7"
-  }
+  },
+  "license": "MIT"
 }

@@ -92,7 +92,7 @@ test('live branding changes the public logo and icon; moderator accounts have no
       return route.fulfill({
         json: {
           revision: 'settings-1',
-          clanName: 'Vardorvis',
+          clanName: 'Example clan',
           hardcoreEnabled: false,
         },
       });

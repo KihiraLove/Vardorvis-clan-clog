@@ -38,6 +38,7 @@ const codes = [
   'READY',
   'NOT_READY',
   'PROCESS_FAILED',
+  'ADMIN_BOOTSTRAP_REQUIRED',
   'GATEWAY_CONNECTED',
   'REQUEST_COMPLETE',
   'RECEIPT_KNOWN',
@@ -56,6 +57,8 @@ export function safeFailure(
   } catch {
     /* Do not invoke unsafe driver object inspection while reporting a failure. */
   }
+  if (code === 'ADMIN_BOOTSTRAP_REQUIRED')
+    return { category: 'auth', code: 'ADMIN_BOOTSTRAP_REQUIRED' };
   if (code === '23505') return { category: 'conflict', code: 'DB_UNIQUE' };
   if (code === '23503') return { category: 'validation', code: 'DB_REFERENCE' };
   if (code === '40001' || code === '40P01')

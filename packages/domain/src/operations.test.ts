@@ -28,6 +28,7 @@ test('diagnostics classify known failures and keep secrets and unsafe driver obj
     ['08006', 'database'],
     ['57P01', 'database'],
     ['57014', 'timeout'],
+    ['ADMIN_BOOTSTRAP_REQUIRED', 'auth'],
   ]) {
     const unsafe = Object.assign(
       new Error('password proof cookie postgresql://secret'),

@@ -1,13 +1,20 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Regression checks for the disposable bundled image; never run against clan data. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import pg from 'pg';
+import { readFile } from 'node:fs/promises';
 
 if (process.env.REVIEW_SMOKE_TEST !== '1')
   throw new Error('For disposable CI databases only');
 const origin = process.env.PUBLIC_ORIGIN;
-const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+const password =
+  process.env.ADMIN_BOOTSTRAP_PASSWORD ||
+  (process.env.CLOG_BOOTSTRAP_FILE
+    ? JSON.parse(await readFile(process.env.CLOG_BOOTSTRAP_FILE, 'utf8'))
+        .password
+    : undefined);
 if (!password)
   throw new Error('Disposable smoke test requires ADMIN_BOOTSTRAP_PASSWORD');
 function request(
@@ -138,7 +145,12 @@ assert.deepEqual(
   first.body,
   'Retry returns the original receipt after later review',
 );
-const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const db = new pg.Client({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 await db.connect();
 try {
   const grants = (

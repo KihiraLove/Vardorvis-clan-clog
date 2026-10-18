@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** Bounded historical reads and explicit owner-operated, reversible archival. */
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
@@ -341,14 +342,14 @@ if (
         );
       if (!match || values.has(match[1]!))
         throw new Error(
-          'Unknown or duplicate option. See docs/lifecycle-archive.md.',
+          'Unknown or duplicate option. See docs/maintenance.md.',
         );
       values.set(match[1]!, match[2]!);
     }
   }
   const resource = values.get('resource') as LifecycleResource,
     action = values.get('action') ?? 'list';
-  const url = process.env.DATABASE_URL;
+  const url = readDatabaseUrl();
   if (!url) throw new Error('DATABASE_URL is required');
   const pool = new pg.Pool({
     connectionString: url,

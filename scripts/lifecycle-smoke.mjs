@@ -1,3 +1,4 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Owner CLI / restricted-runtime acceptance on the disposable production stack. */
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -8,7 +9,12 @@ import { PgSchedulingStore } from './apps/api/dist/scheduling-store.js';
 const plain = (value) => JSON.parse(JSON.stringify(value));
 if (process.env.LIFECYCLE_SMOKE_DISPOSABLE !== 'true')
   throw new Error('Disposable stack only.');
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 const lifecycle = new PgLifecycleStore(pool),
   xp = new PgXpStore(pool),
   scheduling = new PgSchedulingStore(pool);

@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** One-time, forward-only correction of Temple clue grouping using pinned OSRS Wiki tabs. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -310,9 +311,8 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
+  if (!readDatabaseUrl()) throw new Error('DATABASE_URL is required');
   console.log(
-    'Clue taxonomy ' +
-      (await applyBundledClueTaxonomy(process.env.DATABASE_URL)),
+    'Clue taxonomy ' + (await applyBundledClueTaxonomy(readDatabaseUrl())),
   );
 }

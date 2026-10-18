@@ -24,7 +24,6 @@ async function prepareEntry(
       path,
       session,
       runtime.admin,
-      runtime.xp,
       controller.signal,
     )
       .then(

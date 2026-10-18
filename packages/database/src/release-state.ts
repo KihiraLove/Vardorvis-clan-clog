@@ -1,3 +1,4 @@
+import { databaseUrl as readDatabaseUrl } from './secrets.js';
 /** Read-only image/schema preflight and non-secret release evidence. */
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -50,12 +51,11 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   try {
-    if (!process.env.DATABASE_URL)
-      throw new Error('Database configuration required');
+    if (!readDatabaseUrl()) throw new Error('Database configuration required');
     console.log(
       JSON.stringify(
         await releaseState(
-          process.env.DATABASE_URL,
+          readDatabaseUrl(),
           process.argv.slice(2).find((argument) => argument !== '--exact') ??
             '/opt/clog-release/manifest.json',
           process.argv.includes('--exact'),

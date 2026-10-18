@@ -1,6 +1,6 @@
 {
   "name": "@clog/bot",
-  "version": "0.1.0",
+  "version": "1.0.0-SNAPSHOT",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,13 @@
     "build:runtime": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.runtime.json"
   },
   "dependencies": {
-    "@clog/domain": "0.1.0",
+    "@clog/database": "1.0.0-SNAPSHOT",
+    "pg": "^8.16.3",
+    "@clog/domain": "1.0.0-SNAPSHOT",
     "discord.js": "^14.22.1"
-  }
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5"
+  },
+  "license": "MIT"
 }

@@ -182,7 +182,7 @@ export function proofRoutes(
             ? {}
             : { chatMessage: fields.chatMessage }),
         };
-        await store.validateSubmission(submission, key);
+        await store.validateSubmission(submission);
         const image = file
           ? await storage.save(file.bytes, file.mime)
           : undefined;

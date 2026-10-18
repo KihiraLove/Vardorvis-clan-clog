@@ -49,9 +49,8 @@ async function main() {
   const repo = await api(`/repos/${repository}`);
   const owner = repo.owner.login;
   const root = `/${repo.owner.type === 'Organization' ? 'orgs' : 'users'}/${owner}/packages/container`;
-  // Explicit allowlist includes the retired three-service development images.
-  for (const service of ['app', 'web', 'api', 'bot']) {
-    const name = `${repo.name.toLowerCase()}-${service}`;
+  // Only this project's application package is eligible.
+  for (const name of ['clan-clog']) {
     const base = `${root}/${encodeURIComponent(name)}`;
     const packageResponse = await fetch(`https://api.github.com${base}`, {
       headers,

@@ -1,3 +1,4 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Run inside a disposable app: complete state fingerprints and semantic recovery checks. */
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -13,7 +14,12 @@ import {
 } from './apps/api/dist/clan-api-key.js';
 if (process.env.RECOVERY_DISPOSABLE !== 'true')
   throw new Error('Disposable recovery stack required');
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 async function files(directory, prefix = '') {
   const output = {};
@@ -243,7 +249,12 @@ try {
       'Restored owner/moderator login, grants, icon/logo/proof bytes, private access and clan-key decryption passed; wrong/missing roots fail without replacing encrypted keys.',
     );
   } else if (process.argv[2] === 'old-credentials') {
-    const oldUrl = new URL(process.env.DATABASE_URL);
+    const oldUrl = new URL(
+      runtimeDatabaseUrl(
+        process.env,
+        process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+      ),
+    );
     oldUrl.password = process.env.RECOVERY_OLD_PASSWORD;
     const old = new pg.Client({
       connectionString: oldUrl.href,

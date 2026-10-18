@@ -58,7 +58,7 @@ export const auditTitles = [
   'audit: a pagination boundary does not use a loading cursor',
   'audit: an ordinary-world review note can be saved, discarded, cleared and reloaded independently',
   'audit: retain the current admin page until destination data is ready',
-  'audit: XP and Scheduling competition fields share input styling',
+  'audit: the retired XP imports URL opens the shared scheduling competition form',
 ];
 
 export const stackTitles = [

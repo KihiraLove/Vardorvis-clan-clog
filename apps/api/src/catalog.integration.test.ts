@@ -22,7 +22,7 @@ import type { AuthConfig } from './config.js';
 const actor = '00000000-0000-4000-8000-000000000001';
 const password = 'catalog-fixture-password';
 const config: AuthConfig = {
-  origin: 'https://daybloom.net',
+  origin: 'https://clog.example.com',
   secret: 'a'.repeat(64),
   secure: true,
 };

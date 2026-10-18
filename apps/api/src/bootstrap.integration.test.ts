@@ -59,9 +59,15 @@ test(
       await t.test(
         'missing credential prevents authenticated startup and leaves no account',
         async () => {
-          await assert.rejects(async () => {
-            await trackApp().ready();
-          }, /No administrator exists.*ADMIN_BOOTSTRAP_PASSWORD/u);
+          await assert.rejects(
+            async () => {
+              await trackApp().ready();
+            },
+            {
+              code: 'ADMIN_BOOTSTRAP_REQUIRED',
+              message: /No administrator exists.*setup-admin --generate/u,
+            },
+          );
           assert.deepEqual(await store.accounts(), []);
         },
       );

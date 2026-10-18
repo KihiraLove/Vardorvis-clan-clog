@@ -252,7 +252,7 @@ export async function getWom(
         signal,
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'Vardorvis-clan-clog/1.0',
+          'User-Agent': 'ClanCollectionLog/1.0.0-SNAPSHOT',
         },
       }),
       signal,

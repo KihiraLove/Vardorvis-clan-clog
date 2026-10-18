@@ -25,6 +25,7 @@ test('site settings lives on its own page and edited labels appear across the pu
     'RuneLite submissions',
     'Site settings',
     'Hardcore worlds',
+    'Discord bot',
     'Moderator accounts',
     'Your account',
   ]);

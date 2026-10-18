@@ -90,20 +90,15 @@ including after review/restart. Changing the payload with that key returns
 **409**. Without a key, the server assigns a fresh request key; the cross-client
 duplicate filter below still applies. Replays must
 use the same normalized world-type set; changing modes or any flag returns
-**409**. Historical receipts created before world-type support can replay as
-ordinary-world requests with the original payload; requesting HC with their
-key returns **409**. Their original receipt is retained and may omit `hardcore`.
-Replays must still pass the blocked-world validation above, match the configured
+**409**. Replays must still pass the blocked-world validation above, match the configured
 in-game clan when matching is enabled and, when required, use the current
 API key. Credentials are not part of the immutable submission payload, so a
 retry using a newly rotated key can recover its original receipt. A future plugin should retain the
 key, payload and optional PNG until it receives the receipt. Changing the chat
 message or adding/removing a screenshot under the same key returns **409**.
-Historical screenshot-only receipts can still replay their original payload
-without `chatMessage`; this exception cannot create a new submission.
 
 Independent clients observing the same player and canonical item in the same
-world mode within one minute share the first submission. This applies even when
+world mode within five seconds share the first submission. This applies even when
 their request keys, game-item variants, chat messages or screenshots differ. Player matching
 normalizes case, underscores, nonbreaking spaces and repeated whitespace.
 The window starts at the first accepted request and duplicates do not extend it.
@@ -112,7 +107,7 @@ the new request key for durable retries and discards the duplicate screenshot.
 The first submission's proof remains the review evidence; later duplicate chat
 messages do not overwrite it.
 It creates no extra claim, credit or review entry. Regular and hardcore events
-are separate. A new key after the minute can create a new claim; retrying an
+are separate. A new key after five seconds can create a new claim; retrying an
 existing key always retains its original receipt. Staff corrections do not
 change the recorded event identity.
 
@@ -123,7 +118,7 @@ a reason explaining that the duplicate filter is on. Discord intake continues
 to reject these claims with **403**. The filter defaults to off and
 can be changed only by the administrator; moderators can view its current state.
 Manual staff entry remains available
-for backfilling achievements. Replays and recognized one-minute duplicates
+for backfilling achievements. Replays and recognized five-second duplicates
 retain their successful receipt. CSRF-protected
 `PUT /api/v1/admin/submission-filters` accepts `{ filterCollected,
 expectedRevision }` using the `submission-filters-N` revision supplied by the
@@ -173,7 +168,7 @@ started before rotation but have not committed.
 
 **Automatic review** on this page provides **Match Clan name or API**, a separate
 **In-game clan name for matching**, world-policy dropdowns and a player whitelist.
-The migration seeds the matching name from the existing visual clan name once;
+Fresh setup uses Clan name as the in-game matching name;
 subsequent changes to either name do not affect the other. **Clan name** checks
 only this in-game name; **API key** checks only the key and retains the submitted
 clan name as provenance; **Both** requires both to match. Matching ignores case
@@ -225,7 +220,7 @@ rules PUT. Its key revision is `clan-key-N`; a stale key revision rolls back the
 entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
 Older clients can omit this field to preserve the existing key requirement.
 
-When [collection log scheduling](collection-log-scheduling.md) is enabled, a new
+When [collection log scheduling](staff-guide.md) is enabled, a new
 regular-world RuneLite claim must also belong to at least one currently open active page.
 Whitelist and world auto allow settings cannot bypass closed pages. Previously
 saved retries still return their original receipt after a page closes.
@@ -269,85 +264,11 @@ Public catalog, credits and XP responses contain no proof URLs, image paths or
 uploaded image data. Files remain available after approval/rejection/revocation
 for later review; uploads never grant approval privileges.
 
-## Persistence, upgrade and recovery
+## Storage and recovery
 
-[`023_runelite_chat_proof.sql`](../packages/database/migrations/023_runelite_chat_proof.sql)
-adds a nullable private chat-message column and permits chat proof without an
-image. Existing screenshot-only claims, receipts, audits and files are retained.
-Apply the migration before starting the updated API. Runtime table grants cover
-the new column; normal bootstrap still verifies them. Take a coordinated backup
-before upgrading; older images require their matching pre-023 backup.
-
-Forward-only migration
-[`004_runelite_submissions.sql`](../packages/database/migrations/004_runelite_submissions.sql)
-adds clan settings/audit columns, screenshot metadata/provenance and immutable
-RuneLite receipts. Existing Discord/manual rows and receipts remain valid.
-Normal bootstrap applies it and reconciles runtime grants; no database reset
-is required.
-
-[`005_clan_api_keys.sql`](../packages/database/migrations/005_clan_api_keys.sql)
-adds the key singleton and append-only key audit. Startup creates the default
-enabled key only when absent, including on upgrades from clan-name-only intake.
-Existing keys of at least 8 characters are preserved, regardless of their
-format. Startup replaces only historical keys shorter than 8 characters once,
-under a row lock, and records a `system:minimum-key-length-upgrade` audit entry.
-The enabled/disabled setting is preserved. A previously short key stops working
-when enforcement is on; configure clients with the displayed replacement.
-The key is encrypted with AES-256-GCM in PostgreSQL. Its encryption root is
-created atomically as a private 32-byte file, `.clan-api-key.secret`, in the
-screenshot volume; the standard screenshot archive includes this file too.
-Database dumps alone do not contain the plaintext shared key. Public upload
-authentication compares key digests in constant time and rechecks the current
-requirement under a database lock when committing the pending submission.
-
-[`009_runelite_world_types.sql`](../packages/database/migrations/009_runelite_world_types.sql)
-adds nullable original world flags. Existing claims and immutable receipts
-remain valid and keep their current world mode; new claims retain normalized
-flags and include the mode in their receipt. No new volume or secret is needed.
-
-[`012_runelite_auto_review.sql`](../packages/database/migrations/012_runelite_auto_review.sql)
-adds private versioned rules and an append-only administrator audit. All policies
-default to review, with clan matching enabled and an empty whitelist. Apply the
-migration and runtime-role bootstrap before starting the updated API. No new
-volume or secret is needed. Take a coordinated backup before upgrading: earlier
-API images do not enforce these configurable rules and still match the visual
-clan name, so reverting requires the matching pre-upgrade image and backup.
-
-[`022_submission_duplicate_filters.sql`](../packages/database/migrations/022_submission_duplicate_filters.sql)
-adds the versioned intake filter, append-only setting audit and immutable
-RuneLite event identities. It backfills the recent one-minute window from
-existing receipts. Apply migration and runtime grants before starting this
-API; an older image requires its matching pre-upgrade backup. No new volume or
-secret is needed.
-
-Compose supplies `PROOF_STORAGE_PATH=/data/submission-images` and a separate
-durable `submission-images` volume. For standalone API development set an
-absolute writable directory; it is required with staff authentication. A
-database-backed API with this storage path enables RuneLite intake even when
-Discord is disabled. Startup verifies writable storage. Image reads check the
-stored size and SHA-256 and return **503** on missing/corrupt files.
-
-Coordinated [`infra/backup.sh`](../infra/backup.sh) stops writers and archives
-`database.dump`, `icons.tar.gz` and `screenshots.tar.gz`, with checksums and a
-completion marker. Restore all three from the same backup while writers are
-stopped, preserving PNG filenames and node ownership of both image directories.
-Verify checksums before restoring and rehearse in a separate disposable Compose
-project. A backup made before this migration has no referenced screenshots;
-an empty screenshot archive is sufficient for that historical database.
-
-Preserve `.clan-api-key.secret` when moving/restoring a post-key-upgrade service,
-including if the API-key requirement was disabled. A missing/wrong root fails
-startup without silently replacing the shared key. A pre-key-upgrade backup
-has no encrypted key row and generates a new enabled key on its next startup.
-Images predating this key feature do not enforce the key requirement; use the
-matching image and coordinated database/screenshot-volume backup for recovery.
-
-Rolling back to an image that requires hex-only keys or lacks world-type intake
-requires its matching pre-upgrade database and image-volume backup. A hex-only
-image can replace a valid custom key during startup.
-
-An older image is incompatible with the new submission sources/settings once
-RuneLite claims exist. Recovery to such an image requires the coordinated
-pre-upgrade database and image-volume backup. Keep orphaned PNGs after an
-uncertain database/storage failure until a maintenance check confirms that no
-submission references their generated UUID; never delete referenced evidence.
+The fresh-install baseline creates all intake tables. API startup generates an
+enabled shared key only when absent. Keys are encrypted in PostgreSQL with a
+root stored as .clan-api-key.secret in the private proof volume. Keep the DB,
+proofs, catalog/branding volume and private configuration together in backups.
+A missing or wrong encryption root fails startup without replacing credentials.
+See [backup and recovery](release-recovery.md).

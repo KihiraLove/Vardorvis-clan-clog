@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AdminClient } from './admin-model.ts';
-import type { AdminSession, XpClient } from './xp-model.ts';
+import type { AdminSession } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { withAbort } from './with-abort.ts';
 import type { PreparedAdminEntry } from './app-runtime.ts';
@@ -26,7 +26,6 @@ export function useAdminRoutes({
   path,
   session,
   client,
-  xp,
   onAccessLost,
   register,
   initial,
@@ -34,7 +33,6 @@ export function useAdminRoutes({
   path: string;
   session: AdminSession | null;
   client: AdminClient;
-  xp: XpClient;
   onAccessLost: () => void;
   register: (navigator: AdminNavigator | null) => void;
   initial?: PreparedAdminEntry | undefined;
@@ -112,7 +110,7 @@ export function useAdminRoutes({
                   if ('error' in result) throw result.error;
                   return result.data;
                 })
-              : loadAdminRoute(target, session, client, xp, next.signal)
+              : loadAdminRoute(target, session, client, next.signal)
             : Promise.resolve(undefined),
           request.prepare?.(next.signal),
         ]).then(([data]) => data),
@@ -170,7 +168,7 @@ export function useAdminRoutes({
           next.signal.removeEventListener('abort', cancelEntry);
         });
     },
-    [cancel, client, onAccessLost, session, stop, xp],
+    [cancel, client, onAccessLost, session, stop],
   );
   useEffect(() => {
     register(start);

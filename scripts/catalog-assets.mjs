@@ -40,7 +40,7 @@ await Promise.all(
           const response = await fetch(url, {
             headers: {
               'User-Agent':
-                'VardorvisClanCatalog/0.1 (https://github.com/KihiraLove/Vardorvis-clan-clog)',
+                'ClanCollectionLogCatalog/1.0.0-SNAPSHOT (https://github.com/KihiraLove)',
             },
             signal: AbortSignal.timeout(30_000),
           });

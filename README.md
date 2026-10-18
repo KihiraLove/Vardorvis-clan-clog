@@ -1,82 +1,88 @@
-# Vardorvis Clan Collection Log
+# Clan Collection Log
 
-A public OSRS collection log with independent ordinary/hardcore credits, staff
-review and catalog tools, Discord/RuneLite intake and Wise Old Man competition
-imports. PostgreSQL stores the authoritative ledger; approved evidence credits
-one canonical item everywhere it appears in the selected mode.
+A self-hosted Old School RuneScape collection log for any clan. Track ordinary
+and hardcore collections, review evidence, manage your catalog, accept Discord
+and RuneLite submissions, and import Wise Old Man competitions.
 
-The [current architecture, operations and test inventory](docs/current-state.md)
-is the maintained starting point. Features are implemented in draft remediation
-[PR #105](https://github.com/KihiraLove/Vardorvis-clan-clog/pull/105) and awaiting
-merge. Remaining launch acceptance is listed there explicitly.
+Version: **1.0.0-SNAPSHOT**. Development databases from earlier snapshots must
+be recreated; there is no pre-release upgrade path.
 
-## Run all checks locally
+## Get started
 
-Install Node 24 and start Linux Docker with Compose, then run:
+Install Docker with Compose v2. Add this service and volume to your existing
+Compose file, replacing `v1.0.0` with an available published release:
+
+```yaml
+services:
+  clan-clog:
+    image: ghcr.io/kihiralove/clan-clog:v1.0.0
+    restart: unless-stopped
+    stop_grace_period: 90s
+    environment:
+      PUBLIC_ORIGIN: https://clog.example.com
+    ports:
+      - '127.0.0.1:8088:8080'
+    volumes:
+      - clan-clog-data:/data
+
+volumes:
+  clan-clog-data:
+```
+
+Point your HTTPS reverse proxy at `127.0.0.1:8088` (or `clan-clog:8080` for a
+proxy on the same Docker network) and set your actual website origin. Then
+start only this service:
+
+```bash
+docker compose up -d clan-clog
+docker compose logs clan-clog
+```
+
+Near the beginning of the log, find **FIRST LOGIN**, username `admin` and its
+temporary password. Visit `/admin`, sign in and choose a new password.
+Interrupted setup keeps the same temporary password; once changed, startup
+neither prints nor replaces it. No password-generation command or secret-filled
+`.env` is required. Configure your clan, submission rules and optional Discord
+bot in Administration.
+
+One container runs the website, private PostgreSQL 17 and optional bot. One
+`/data` volume keeps the database, uploads and generated credentials across
+updates. Keep the volume and back it up before changing images.
+
+## Build the current snapshot locally
+
+Clone this repository and run from its directory:
+
+```bash
+cp .env.example .env
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait clan-clog
+docker compose -f compose.yaml -f compose.dev.yaml logs clan-clog
+```
+
+The example origin is http://127.0.0.1:8088 for local use. The build is named
+`clan-clog:dev`; the same first-login flow applies.
+
+## Guides
+
+- [Configuration](docs/environment.md) and [hosting with HTTPS](docs/deployment.md)
+- [Staff guide](docs/staff-guide.md): reviews, catalog, scheduling and settings
+- [RuneLite submissions](docs/runelite-submissions.md) and [Discord setup](docs/bot-operations.md)
+- [Competitions](docs/wom-competitions.md) and [catalog sources](docs/catalog-import.md)
+- [Backups and recovery](docs/release-recovery.md) and [maintenance](docs/maintenance.md)
+- [Architecture](docs/architecture.md), [API contracts](docs/contracts.md) and [security](docs/security.md)
+- [Development and tests](docs/local-testing.md), [contributing](CONTRIBUTING.md) and [asset attribution](docs/assets.md)
+
+## Run the complete checks
+
+With Node 24 and Linux Docker running:
 
 ```bash
 node scripts/check-local.mjs
 ```
 
-This builds disposable Linux test environments and runs all automated repository
-checks, real PostgreSQL tests, Chromium, production-image inspection/smoke and
-isolated backup/recovery. Host npm dependencies, production secrets and GitHub
-credentials are unnecessary. Reports are under `.data/local-checks/<run-id>/`.
-See [local testing](docs/local-testing.md) for focused checks and cleanup.
+The runner uses disposable data without reading your runtime `.env`. Reports
+are saved in `.data/local-checks/<run-id>/`. Published GitHub Releases run
+acceptance before publishing the image; ordinary PR pushes do not run hosted CI.
 
-Pushes/PRs use no hosted CI. GitHub packages are published only after acceptance
-on a published Release. Deployment remains explicit; see
-[release deployment](docs/deployment.md).
-
-## Start a local application
-
-Copy `.env.example` to `.env`. Independently generate `POSTGRES_PASSWORD` and
-`APP_DB_PASSWORD` (32 random bytes as hex each); mirror the owner password in
-host `DATABASE_URL` only if using host tools. To enable staff tools, set
-`AUTH_ENABLED=true`, the loopback `PUBLIC_ORIGIN`, and independently generated
-`SESSION_SECRET` and `ADMIN_BOOTSTRAP_PASSWORD`. Sign in as `admin`, change its
-password, then remove the bootstrap value. Existing accounts survive restart.
-
-```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
-```
-
-Open the configured loopback origin (default `http://127.0.0.1:8088`). The local
-override builds the unified app image; PostgreSQL remains a separate container.
-Bootstrap applies migrations, imports the pinned full catalog and reconciles
-restricted runtime permissions. Bot gateway startup is optional and command
-registration is separate. See [environment setup](docs/environment.md) before
-enabling credentials; production staff access requires HTTPS.
-
-## Workspace and development
-
-| Path                | Responsibility                                                           |
-| ------------------- | ------------------------------------------------------------------------ |
-| `apps/web`          | React/Vite public log and staff UI                                       |
-| `apps/api`          | Fastify reads, staff authentication, intake, review, catalog and imports |
-| `apps/bot`          | Optional Discord adapter calling the API                                 |
-| `packages/domain`   | Shared identity, validation and exact XP rules                           |
-| `packages/database` | Immutable SQL, owner/bootstrap/maintenance CLIs and integration tests    |
-| `infra`             | Unified container supervisor/proxy and versioned deployment/recovery     |
-
-For host development, install Node 24 dependencies with `npm ci`, build shared
-workspaces and use `npm run dev:web` / `npm run dev:api` with the documented
-local database configuration. `npm run build` includes tests; Docker production
-uses the separate `npm run build:runtime` packaging path.
-
-The frontend uses the API in every environment. If the backend is unavailable,
-it shows an unavailable state with retry controls. There is no frontend demo
-mode or sample-data fallback. Test fixtures live outside the production graph;
-see the [loading policy](docs/frontend-loading.md).
-
-## Documentation
-
-- [Current architecture, behavior, runbooks, automated inventory and launch limits](docs/current-state.md)
-- [Requirements](docs/requirements.md) and [HTTP/Discord contracts](docs/contracts.md)
-- [Deployment](docs/deployment.md), [runtime operations](docs/runtime-operations.md) and [release recovery](docs/release-recovery.md)
-- [Schema retirement and runtime packaging](docs/runtime-packaging-and-auth-retirement.md)
-- [Local testing and release-only CI](docs/local-testing.md)
-- [Contribution workflow](CONTRIBUTING.md)
-
-Dated reviews and ADRs preserve historical reasoning; their feature status is
-superseded by the current inventory and linked implementation guides.
+Project code is [MIT licensed](LICENSE). Game and third-party assets retain
+their own ownership and licenses; see the asset attribution guide.

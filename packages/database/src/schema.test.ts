@@ -1,8 +1,6 @@
 /** Disposable-PostgreSQL integration check; absent TEST_DATABASE_URL explicitly skips it. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { randomUUID } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 import { migrate } from './migrate.js';
 
@@ -22,32 +20,7 @@ test(
       );
       assert.deepEqual(
         migrationRows.rows.map((row) => row.name),
-        [
-          '001_baseline.sql',
-          '002_manual_submission_requests.sql',
-          '003_staff_accounts.sql',
-          '004_runelite_submissions.sql',
-          '005_clan_api_keys.sql',
-          '006_clan_logos.sql',
-          '007_site_customization.sql',
-          '008_default_clan_name.sql',
-          '009_runelite_world_types.sql',
-          '010_hardcore_appearance.sql',
-          '011_catalog_page_management.sql',
-          '012_runelite_auto_review.sql',
-          '013_collection_log_schedules.sql',
-          '014_wom_competitions.sql',
-          '015_review_notes.sql',
-          '016_asset_maintenance.sql',
-          '017_review_pagination.sql',
-          '018_xp_history_pagination.sql',
-          '019_lifecycle_archive.sql',
-          '020_public_projections.sql',
-          '021_retire_oauth_states.sql',
-          '022_submission_duplicate_filters.sql',
-          '023_runelite_chat_proof.sql',
-          '024_catalog_editor.sql',
-        ],
+        ['001_baseline.sql'],
       );
       // Roll back fixtures; migrations persist in the disposable test database.
       await client.query('BEGIN');
@@ -108,64 +81,6 @@ test(
       await client.query('ROLLBACK');
     } finally {
       await client.end();
-    }
-  },
-);
-
-test(
-  'generic clan-name upgrade preserves administrator-chosen names, including an explicit return to Vardorvis',
-  { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
-    const connectionString = process.env.TEST_DATABASE_URL!;
-    const root = new pg.Pool({ connectionString });
-    const directory = new URL('../migrations/', import.meta.url);
-    const names = (await readdir(directory))
-      .filter((name) => name.endsWith('.sql'))
-      .sort();
-    try {
-      for (const chosen of ['Explicit clan', 'Vardorvis']) {
-        const schema = 'name_upgrade_' + randomUUID().replaceAll('-', '');
-        await root.query('CREATE SCHEMA ' + schema);
-        const pool = new pg.Pool({
-          connectionString,
-          options: '-c search_path=' + schema,
-        });
-        try {
-          for (const name of names.filter((name) => name < '008_'))
-            await pool.query(await readFile(new URL(name, directory), 'utf8'));
-          await pool.query('UPDATE site_settings SET clan_name=$1,version=2', [
-            chosen,
-          ]);
-          await pool.query(
-            "INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name) VALUES('owner',false,false,2,'Some previous name',$1)",
-            [chosen],
-          );
-          await pool.query(
-            await readFile(
-              new URL('008_default_clan_name.sql', directory),
-              'utf8',
-            ),
-          );
-          assert.deepEqual(
-            (await pool.query('SELECT clan_name,version FROM site_settings'))
-              .rows,
-            [{ clan_name: chosen, version: 2 }],
-          );
-          assert.equal(
-            (
-              await pool.query(
-                'SELECT count(*)::integer AS n FROM site_settings_audit',
-              )
-            ).rows[0].n,
-            1,
-          );
-        } finally {
-          await pool.end();
-          await root.query('DROP SCHEMA ' + schema + ' CASCADE');
-        }
-      }
-    } finally {
-      await root.end();
     }
   },
 );

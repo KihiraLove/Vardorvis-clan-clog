@@ -4,16 +4,18 @@ import {
   zeroTotals,
   skills,
   type AdminSession,
+  type SkillId,
+  type XpClient,
+} from '../../src/xp-model.ts';
+import {
   type ApplyResult,
   type CompetitionDetail,
   type ImportEntry,
   type ImportHistoryPage,
   type ImportPreview,
   type Member,
-  type SkillId,
-  type XpClient,
   type XpSnapshot,
-} from '../../src/xp-model.ts';
+} from './xp-contracts.ts';
 import { XpRequestError } from '../../src/xp-api.ts';
 import { podiumFromParticipants } from '../../src/xp-tracker.ts';
 import { competitionScope, type WomCompetition } from '@clog/domain';
@@ -53,7 +55,7 @@ export class MemoryXpClient implements XpClient {
     return {
       competition: {
         id,
-        title: attack ? 'Vardorvis Attack week' : 'Vardorvis skilling weekend',
+        title: attack ? 'Clan Attack week' : 'Clan skilling weekend',
         sourceUrl: 'https://wiseoldman.net/competitions/' + id,
         skills: attack ? ['attack'] : skills.map(([id]) => id),
         startsAt: '2026-10-01T00:00:00Z',

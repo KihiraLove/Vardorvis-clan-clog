@@ -180,7 +180,7 @@ test('admin setting writes carry CSRF and revision and validate saved visibility
     });
     return Response.json({
       revision: 'settings-2',
-      clanName: 'Vardorvis',
+      clanName: 'Example clan',
       hardcoreEnabled: true,
     });
   });

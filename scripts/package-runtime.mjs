@@ -18,10 +18,14 @@ export const workspaces = [
 ];
 export const runtimeEntries = [
   'apps/api/dist/server.js',
+  'apps/api/dist/installation.js',
+  'apps/api/dist/maintenance.js',
+  'apps/api/dist/setup-admin.js',
   'apps/bot/dist/index.js',
   'apps/bot/dist/register.js',
   'packages/domain/dist/index.js',
   'packages/database/dist/bootstrap.js',
+  'packages/database/dist/initialize-secrets.js',
   'packages/database/dist/migrate.js',
   'packages/database/dist/release-state.js',
   'packages/database/dist/preview-maintenance.js',
@@ -72,6 +76,7 @@ export async function packageRuntime(root, output) {
     }
   }
   await copy('package.json');
+  await copy('LICENSE');
   for (const workspace of workspaces) {
     const directory = path.join(root, workspace, 'dist');
     const info = await lstat(directory);

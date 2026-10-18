@@ -120,6 +120,14 @@ export interface BackendStore {
   deleteSession(hash: string): Promise<void>;
   allowLogin(keyHash: string): Promise<boolean>;
 }
+export const adminBootstrapRequiredMessage =
+  'No administrator exists. Run docker compose run --rm setup-admin --generate after database initialization, then sign in as admin and change the temporary password.';
+export class AdminBootstrapRequiredError extends Error {
+  readonly code = 'ADMIN_BOOTSTRAP_REQUIRED';
+  constructor() {
+    super(adminBootstrapRequiredMessage);
+  }
+}
 export class ApiError extends Error {
   constructor(
     readonly status: number,

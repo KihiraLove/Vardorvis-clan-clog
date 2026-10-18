@@ -1,77 +1,16 @@
-name: vardorvis-clog
-
-# Long-lived services: application + PostgreSQL. One-shot migrator uses the app image.
+# Copy this service and volume into an existing Compose project.
 services:
-  db:
-    image: postgres:17-alpine
+  clan-clog:
+    image: ${IMAGE_NAME:-ghcr.io/kihiralove/clan-clog}:${IMAGE_TAG:?Set IMAGE_TAG to a published release}
     restart: unless-stopped
+    stop_grace_period: 90s
     environment:
-      POSTGRES_DB: clog
-      POSTGRES_USER: clog
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U clog -d clog']
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    security_opt: ['no-new-privileges:true']
-
-  migrate:
-    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-app:${IMAGE_TAG:?Set IMAGE_TAG to a published sha tag}
-    command: ['node', 'packages/database/dist/bootstrap.js']
-    restart: 'no'
-    environment:
-      DATABASE_URL: postgresql://clog:${POSTGRES_PASSWORD}@db:5432/clog
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Generate a distinct runtime database password}
-      ICON_STORAGE_PATH: /data/catalog-icons
-      PROOF_STORAGE_PATH: /data/submission-images
-    volumes:
-      - catalog-icons:/data/catalog-icons
-      - submission-images:/data/submission-images
-    depends_on:
-      db: { condition: service_healthy }
-    security_opt: ['no-new-privileges:true']
-
-  app:
-    image: ${IMAGE_PREFIX:-ghcr.io/kihiralove/vardorvis-clan-clog}-app:${IMAGE_TAG:?Set IMAGE_TAG}
-    restart: unless-stopped
-    init: true
-    stop_grace_period: 70s
-    environment:
-      DATABASE_URL: postgresql://clog_runtime:${APP_DB_PASSWORD:?Generate a distinct runtime database password}@db:5432/clog
-      HOST: 127.0.0.1
-      PORT: '3000'
-      API_BASE_URL: http://127.0.0.1:3000
-      BOT_ENABLED: ${BOT_ENABLED:-false}
-      ICON_STORAGE_PATH: /data/catalog-icons
-      PROOF_STORAGE_PATH: /data/submission-images
-      NODE_ENV: production
-      AUTH_ENABLED: ${AUTH_ENABLED:-false}
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
-      SESSION_SECRET: ${SESSION_SECRET:-}
-      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the website origin}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
-      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
-      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
-      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
-      DISCORD_TEST_GUILD_ID: ${DISCORD_TEST_GUILD_ID:-}
-      BOT_INTAKE_USER_PER_MINUTE: ${BOT_INTAKE_USER_PER_MINUTE:-5}
-      BOT_INTAKE_GUILD_PER_MINUTE: ${BOT_INTAKE_GUILD_PER_MINUTE:-60}
-      BOT_SEARCH_USER_PER_MINUTE: ${BOT_SEARCH_USER_PER_MINUTE:-30}
-      BOT_SEARCH_GUILD_PER_MINUTE: ${BOT_SEARCH_GUILD_PER_MINUTE:-300}
-    volumes:
-      - catalog-icons:/data/catalog-icons
-      - submission-images:/data/submission-images
     ports:
       - '127.0.0.1:${WEB_PORT:-8088}:8080'
-    depends_on:
-      migrate: { condition: service_completed_successfully }
+    volumes:
+      - clan-clog-data:/data
     security_opt: ['no-new-privileges:true']
-
 volumes:
-  postgres-data:
-  catalog-icons:
-  submission-images:
+  clan-clog-data:

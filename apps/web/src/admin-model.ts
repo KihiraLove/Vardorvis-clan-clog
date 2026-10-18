@@ -286,6 +286,23 @@ export interface AdminClient {
   clanApiKey(
     signal: AbortSignal,
   ): Promise<import('./clan-api-key.ts').ClanKeySettings>;
+  discordSettings(
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').DiscordSettings>;
+  discordStatus(
+    signal: AbortSignal,
+  ): Promise<{ enabled: boolean; ready: boolean }>;
+  saveDiscordSettings(
+    fields: import('@clog/domain').DiscordSettingsUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').DiscordSettings>;
+  registerDiscordCommands(
+    target: 'guild' | 'test',
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<void>;
   runeLiteSettings(
     signal: AbortSignal,
   ): Promise<import('@clog/domain').RuneLiteSettings>;

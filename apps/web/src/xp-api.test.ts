@@ -1,220 +1,92 @@
-/** Mock XP endpoints check exact values, coherent revisions, staged ETags and import receipts. */
+/** Exercise only the aggregate tracker and private session used by the product. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LiveXpClient } from './xp-api.ts';
-import { competition, importPreview, publicXp } from '../tests/xp-fixtures.ts';
-
+import { zeroTotals } from './xp-model.ts';
 const signal = () => new AbortController().signal;
-const json = (data: unknown, etag = 'xp-one') =>
-  new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json', ETag: etag },
+const tracker = {
+  revision: 'xp-1',
+  totals: { ...zeroTotals(), attack: '9007199254740993' },
+  events: [],
+};
+const json = (value: unknown, etag = 'xp-1') =>
+  new Response(JSON.stringify(value), {
+    headers: { ETag: etag, 'Content-Type': 'application/json' },
   });
 
-test('XP history transport encodes opaque cursors, never caches private pages and rejects malformed receipts', async () => {
-  const page = {
-    revision: 'xp-history-7',
-    pageCursor: 'first',
-    nextCursor: null,
-    imports: [
-      {
-        id: 'receipt',
-        competitionId: 42,
-        title: 'Exact XP',
-        actorName: 'Staff',
-        importedAt: '2026-10-14T00:00:00Z',
-        outcome: 'unchanged',
-        changes: [
-          {
-            skill: 'attack',
-            before: '9007199254740993',
-            after: '9007199254740993',
-            change: '0',
-          },
-        ],
-      },
-    ],
-  };
-  const client = new LiveXpClient(async (path, options) => {
-    const parsed = new URL(String(path), 'https://clog.example.com');
-    assert.equal(parsed.pathname, '/api/v1/admin/xp/imports');
-    assert.equal(parsed.searchParams.get('cursor'), 'opaque/:?value');
-    assert.equal(options?.credentials, 'same-origin');
-    assert.equal(options?.cache, 'no-store');
-    return json(page);
-  });
-  assert.equal(
-    (await client.history(signal(), 'opaque/:?value')).imports[0]!.changes[0]!
-      .before,
-    '9007199254740993',
-  );
-  for (const value of [
-    { ...page, pageCursor: undefined },
-    { ...page, nextCursor: 12 },
-    { ...page, imports: [{ ...page.imports[0], outcome: 'deleted' }] },
-  ])
-    await assert.rejects(
-      new LiveXpClient(async () => json(value)).history(signal()),
-    );
-  for (const status of [401, 403, 409])
-    await assert.rejects(
-      new LiveXpClient(async () => new Response('{}', { status })).history(
-        signal(),
-      ),
-      { status },
-    );
-});
-
-test('public reads preserve exact large XP and reuse conditional snapshots with native fetch context', async () => {
-  const data = publicXp('9007199254740993');
-  let phase = 0;
+test('aggregate tracker preserves exact gains, native fetch context and validated conditional reuse', async () => {
+  let repeated = false;
   const client = new LiveXpClient(async function (
     this: unknown,
     path,
     options,
   ) {
     assert.equal(this, globalThis);
+    assert.equal(path, '/api/v1/xp/tracker');
     assert.equal(options?.credentials, 'same-origin');
     assert.equal(options?.cache, 'no-cache');
-    if (!phase) return json(data[String(path)]);
+    if (!repeated) return json(tracker);
     assert.equal(
       (options?.headers as Record<string, string>)['If-None-Match'],
-      'xp-one',
+      'xp-1',
     );
     return new Response(null, { status: 304 });
   });
-  const first = await client.load('attack', 1001, signal());
-  assert.equal(first.overview.totals.attack, '9007199254740993');
-  assert.equal(first.detail!.participants[2]!.gains.attack, '0');
-  assert.equal(first.detail!.participants[3]!.gains.attack, null);
-  phase = 1;
-  assert.deepEqual(await client.load('attack', 1001, signal()), first);
+  const first = await client.tracker(signal());
+  assert.equal(first.totals.attack, '9007199254740993');
+  repeated = true;
+  assert.deepEqual(await client.tracker(signal()), first);
 });
 
-test('partial errors or mixed revisions never commit staged ETags', async () => {
-  const original = publicXp();
-  let phase = 0;
-  const client = new LiveXpClient(async (path, options) => {
-    const key = String(path);
-    if (!phase) return json(original[key]);
-    if (phase === 1)
-      return key.endsWith('/members')
-        ? new Response(null, { status: 503 })
-        : json(publicXp('19595678', 'xp-two')[key], 'xp-two');
-    if (phase === 2)
-      return json(
-        key.endsWith('/competitions')
-          ? publicXp('19595678', 'xp-two')[key]
-          : original[key],
-        'must-not-commit',
+test('invalid or aborted tracker responses never replace a valid cached snapshot', async () => {
+  let phase = 'valid';
+  const controller = new AbortController();
+  const client = new LiveXpClient(async (_path, options) => {
+    if (phase !== 'valid')
+      assert.equal(
+        (options?.headers as Record<string, string>)['If-None-Match'],
+        'xp-1',
       );
-    assert.equal(
-      (options?.headers as Record<string, string>)['If-None-Match'],
-      'xp-one',
-    );
-    return new Response(null, { status: 304 });
+    if (phase === 'invalid') return json({ ...tracker, totals: {} }, 'bad');
+    if (phase === 'aborted') {
+      controller.abort();
+      return json({ ...tracker, revision: 'xp-2' }, 'xp-2');
+    }
+    if (phase === 'replay') return new Response(null, { status: 304 });
+    return json(tracker);
   });
-  const first = await client.load('attack', undefined, signal());
-  phase = 1;
-  await assert.rejects(client.load('attack', undefined, signal()), {
-    status: 503,
+  const first = await client.tracker(signal());
+  phase = 'invalid';
+  await assert.rejects(client.tracker(signal()));
+  phase = 'aborted';
+  await assert.rejects(client.tracker(controller.signal), {
+    name: 'AbortError',
   });
-  phase = 2;
-  await assert.rejects(
-    client.load('attack', undefined, signal()),
-    /Inconsistent XP revision/,
-  );
-  phase = 3;
-  assert.deepEqual(await client.load('attack', undefined, signal()), first);
+  phase = 'replay';
+  assert.deepEqual(await client.tracker(signal()), first);
 });
 
-test('incomplete totals, invalid dates and aborted reads fail without caching', async () => {
-  for (const mode of ['missing', 'date', 'abort']) {
-    let phase = 0;
-    const client = new LiveXpClient(async (path, options) => {
-      if (phase)
-        assert.equal(
-          (options?.headers as Record<string, string>)['If-None-Match'],
-          undefined,
-        );
-      const payload = structuredClone(publicXp()[String(path)]) as Record<
-        string,
-        unknown
-      >;
-      if (!phase && String(path).endsWith('/skills')) {
-        if (mode === 'missing') payload.skills = [];
-        if (mode === 'date') payload.updatedAt = 'invalid';
-      }
-      return json(payload);
-    });
-    const controller = new AbortController();
-    if (mode === 'abort') controller.abort();
-    await assert.rejects(client.load('attack', undefined, controller.signal));
-    phase = 1;
-    await client.load('attack', undefined, signal());
-  }
-});
-
-test('preview requests canonicalize the source and carry CSRF; applies use the validated token and stable request key', async () => {
-  const requests: { path: string; options: RequestInit | undefined }[] = [];
-  const client = new LiveXpClient(async (path, options) => {
-    requests.push({ path: String(path), options });
-    return json(
-      String(path).endsWith('/preview')
-        ? importPreview
-        : { outcome: 'applied', revision: 'xp-two' },
-    );
-  });
-  const preview = await client.preview(
-    'https://www.wiseoldman.net/competitions/1001/?x=1#results',
-    'csrf',
-    signal(),
-  );
-  await client.apply(preview, 'csrf', 'same-request', signal());
-  await client.apply(preview, 'csrf', 'same-request', signal());
-  assert.deepEqual(JSON.parse(requests[0]!.options!.body as string), {
-    competitionUrl: competition.sourceUrl,
-  });
-  assert.equal(
-    (requests[0]!.options!.headers as Record<string, string>)['X-CSRF-Token'],
-    'csrf',
-  );
-  for (const request of requests.slice(1)) {
-    assert.equal(request.options?.cache, 'no-store');
-    assert.equal(
-      (request.options!.headers as Record<string, string>)['Idempotency-Key'],
-      'same-request',
-    );
-    assert.deepEqual(JSON.parse(request.options!.body as string), {
-      previewToken: 'validated-token',
-      expectedRevision: 'xp-one',
-      acknowledgeCorrections: false,
-    });
-  }
-});
-
-test('wrong competition previews and non-admin sessions cannot be treated as an authorized import', async () => {
-  const wrong = {
-    ...importPreview,
-    competition: {
-      ...importPreview.competition,
-      id: 1002,
-      sourceUrl: 'https://wiseoldman.net/competitions/1002',
-    },
+test('session reads are private, validate identity, and distinguish signed-out from forbidden', async () => {
+  const session = {
+    authenticated: true,
+    csrfToken: 'csrf',
+    displayName: 'Staff',
+    username: 'staff',
+    role: 'moderator',
+    mustChangePassword: false,
   };
-  await assert.rejects(
-    new LiveXpClient(async () => json(wrong)).preview(
-      competition.sourceUrl,
-      'csrf',
-      signal(),
-    ),
-    /does not match/,
-  );
-  assert.equal(
-    await new LiveXpClient(
-      async () => new Response(null, { status: 401 }),
-    ).session(signal()),
-    null,
-  );
+  const client = new LiveXpClient(async (path, options) => {
+    assert.equal(path, '/api/v1/auth/session');
+    assert.equal(options?.cache, 'no-store');
+    assert.equal(options?.credentials, 'same-origin');
+    return json(session);
+  });
+  assert.equal((await client.session(signal()))?.role, 'moderator');
+  for (const status of [401, 403, 503]) {
+    const failed = new LiveXpClient(async () => new Response(null, { status }));
+    if (status === 401) assert.equal(await failed.session(signal()), null);
+    else await assert.rejects(failed.session(signal()), { status });
+  }
   assert.equal(
     await new LiveXpClient(async () => json({ authenticated: false })).session(
       signal(),
@@ -222,35 +94,8 @@ test('wrong competition previews and non-admin sessions cannot be treated as an 
     null,
   );
   await assert.rejects(
-    new LiveXpClient(async () => new Response(null, { status: 403 })).preview(
-      competition.sourceUrl,
-      'csrf',
+    new LiveXpClient(async () => json({ ...session, role: 'owner' })).session(
       signal(),
     ),
-    { status: 403 },
   );
-});
-
-test('XP capacity errors explain the limit without displaying arbitrary server messages', async () => {
-  const capacity =
-    'The XP tracker has reached its 2000-event capacity. Existing events can still be refreshed.';
-  for (const error of [capacity, 'Untrusted server text']) {
-    const client = new LiveXpClient(
-      async () => new Response(JSON.stringify({ error }), { status: 409 }),
-    );
-    await assert.rejects(
-      client.preview(
-        'https://wiseoldman.net/competitions/1001',
-        'csrf',
-        signal(),
-      ),
-      {
-        status: 409,
-        message:
-          error === capacity
-            ? capacity
-            : 'This preview is out of date. Preview the competition again.',
-      },
-    );
-  }
 });

@@ -11,7 +11,7 @@ import { PgClanKeyStore } from './clan-api-key.js';
 import { PgRuneLiteSettingsStore } from './runelite-settings.js';
 
 test(
-  'independent RuneLite observers share a fixed one-minute event and durable receipts; collected filtering is atomic and staff-controlled',
+  'independent RuneLite observers share a fixed five-second event and durable receipts; collected filtering is atomic and staff-controlled',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const root = new pg.Pool({
@@ -107,7 +107,7 @@ test(
         { status: 409 },
       );
       await pool.query(
-        "UPDATE runelite_drop_events SET first_received_at=clock_timestamp()-interval '55 seconds' WHERE submission_id=$1",
+        "UPDATE runelite_drop_events SET first_received_at=clock_timestamp()-interval '3 seconds' WHERE submission_id=$1",
         [first.receipt.submissionId],
       );
       const anchored = (
@@ -137,7 +137,7 @@ test(
         anchored,
       );
       await pool.query(
-        "UPDATE runelite_drop_events SET first_received_at=clock_timestamp()-interval '61 seconds' WHERE submission_id=$1",
+        "UPDATE runelite_drop_events SET first_received_at=clock_timestamp()-interval '6 seconds' WHERE submission_id=$1",
         [first.receipt.submissionId],
       );
       assert.deepEqual(

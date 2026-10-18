@@ -10,7 +10,7 @@ import {
   type QueueView,
 } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
-import { xpTime } from './XpTables.tsx';
+import { formatUtcTime } from './format-time.ts';
 import { SubmissionEditor } from './SubmissionEditor.tsx';
 import { ManualSubmissionForm } from './ManualSubmissionForm.tsx';
 import { usePreparedAdminData } from './admin-route-data.ts';
@@ -301,7 +301,7 @@ export function AdminQueue({
                           {row.collectorName}
                         </span>
                         <time dateTime={row.submittedAt}>
-                          {xpTime(row.submittedAt)}
+                          {formatUtcTime(row.submittedAt)}
                         </time>
                       </span>
                       {safeScreenshotPath(row.screenshotPath) && (

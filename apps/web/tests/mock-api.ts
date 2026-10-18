@@ -108,6 +108,26 @@ export async function mockApi(
           }
         }
         result = logos[mode];
+      } else if (path === '/api/v1/discord/status') {
+        result = await admin.discordStatus(signal);
+      } else if (path === '/api/v1/admin/discord-settings') {
+        result =
+          method === 'GET'
+            ? await admin.discordSettings(signal)
+            : await admin.saveDiscordSettings(b, csrf, signal);
+      } else if (path === '/api/v1/admin/discord-settings/register') {
+        await admin.registerDiscordCommands(
+          b.target,
+          b.expectedRevision,
+          csrf,
+          signal,
+        );
+        const saved = await admin.discordSettings(signal);
+        result = {
+          registered: true,
+          revision: saved.revision,
+          guildId: b.target === 'test' ? saved.testGuildId : saved.guildId,
+        };
       } else if (path === '/api/v1/admin/settings')
         result =
           method === 'GET'

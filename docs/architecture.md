@@ -1,29 +1,43 @@
 # Architecture
 
-The maintained architecture and operations/test inventory is
-[current state](current-state.md). This page maps the code boundaries.
+The `clan-clog` image runs PostgreSQL 17, Nginx, a Fastify API and an optional Discord bot in one container. A root supervisor initializes storage and PostgreSQL, then starts application processes as UID 1000 and PostgreSQL as UID 999. One persistent `/data` volume holds the installation. PostgreSQL listens only on loopback and a private Unix socket.
 
-| Boundary       | Responsibility                                                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Web            | Public projections and staff UI; one client session owner, prepared authorized navigation, isolated explicit preview ledger. |
-| API            | Validates/authenticates requests, enforces roles/admission and invokes narrow service contracts.                             |
-| Stores         | Own explicit SQL locking, version checks, atomic audits/receipts and cache invalidation.                                     |
-| Domain         | Canonical identities, world-mode credit rules, matching/validation and exact integer XP.                                     |
-| Database tools | Checksummed migration ledger, restricted role bootstrap, catalog import and bounded owner maintenance.                       |
-| Bot            | Acknowledges/adapts Discord interactions, calls API with service credentials and preserves receipt identity on retries.      |
-| Container      | Nginx static/same-origin proxy, API and optional bot with ordered drain and independent gateway recovery.                    |
-| Deployment     | Versioned digest-pinned infrastructure, coordinated backup and isolated restore.                                             |
+```mermaid
+flowchart LR
+  Browser --> Nginx
+  Nginx --> API[Fastify API]
+  Discord --> Bot[Optional bot]
+  Bot --> API
+  API --> DB[(PostgreSQL)]
+  Bot -->|Read encrypted settings| DB
+  API --> Files[Uploaded images and branding]
+```
 
-PostgreSQL is authoritative; local process caches hold immutable revisioned
-projections. File volumes retain icons/branding and private proof. Public
-responses omit staff identity, proof and private settings. The bot never writes
-SQL directly. Owner credentials are absent from the long-running API role.
+| Folder              | Responsibility                                                    |
+| ------------------- | ----------------------------------------------------------------- |
+| `apps/web`          | React/Vite public log and staff tools                             |
+| `apps/api`          | Authentication, reads, intake, reviews, catalog and competitions  |
+| `apps/bot`          | Discord commands and saved configuration; submissions use the API |
+| `packages/domain`   | Shared validation, item identity, world modes and exact XP        |
+| `packages/database` | Database setup, catalog import, permissions and maintenance       |
+| `infra`             | Nginx, process supervisor, deployment and recovery                |
+| `catalog`           | Pinned catalog inputs, identity mapping and asset provenance      |
 
-See [store transactions and route capabilities](store-and-route-contracts.md),
-[public projections](public-performance.md), [runtime availability](runtime-operations.md),
-[database/release compatibility](release-recovery.md) and
-[runtime packaging](runtime-packaging-and-auth-retirement.md).
+PostgreSQL is authoritative. An item has one canonical ID across every page.
+Approval grants one active credit per item per world mode; rejection and
+revocation grant none. Claims, receipts and audit records remain private.
+Revisions prevent one staff edit from overwriting another. Request keys let
+clients retry uncertain writes without creating a second submission or import.
 
-The [project walkthrough](project-guide.md) and [foundation ADR](decisions/001-foundation.md)
-are dated historical context. Their old topology, OAuth and pending-feature
-statements are not the current architecture contract.
+Bootstrap applies `001_baseline.sql`, imports the catalog and provisions
+`clog_runtime`. Only bootstrap/maintenance gets owner credentials. Startup
+checks migration names and checksums; incompatible history fails before writes.
+Development databases from before this snapshot are unsupported.
+
+Public reads use revision-based ETags and visibility-aware polling. Staff routes
+load code and data together and clear private state on access loss. Production
+builds exclude tests and fixture data. Item icons, fonts, UI art, logos and
+uploads are served locally; the browser never fetches WOM results directly.
+
+See [security](security.md), [contracts](contracts.md), [testing](local-testing.md)
+and [recovery](release-recovery.md) for the operational boundaries.

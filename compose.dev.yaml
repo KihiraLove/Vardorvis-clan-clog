@@ -1,12 +1,6 @@
-# Both runtime and bootstrap use the one application build.
 services:
-  migrate:
-    image: clog-app:dev
-    build: { context: ., target: app }
-  app:
-    image: clog-app:dev
+  clan-clog:
+    image: clan-clog:dev
     build: { context: ., target: app }
     environment:
       NODE_ENV: development
-  db:
-    ports: ['127.0.0.1:5432:5432']

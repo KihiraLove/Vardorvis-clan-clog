@@ -1,3 +1,4 @@
+import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Real supervisor/proxy/API with a local gateway-health fixture; never connects to Discord. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -25,7 +26,12 @@ if (process.env.AVAILABILITY_SMOKE_DISPOSABLE !== 'true')
 const token = process.env.BOT_API_TOKEN,
   guild = process.env.DISCORD_GUILD_ID;
 assert.ok(token && guild);
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: runtimeDatabaseUrl(
+    process.env,
+    process.env.POSTGRES_PASSWORD_FILE ? 'owner' : 'runtime',
+  ),
+});
 const logPath = '/tmp/clog-availability.log';
 // Nginx reopens /dev/stdout and /dev/stderr. Node's 'pipe' uses Unix sockets,
 // which cannot be reopened that way; regular file descriptors model container logs.

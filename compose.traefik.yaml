@@ -1,7 +1,7 @@
 # The existing Traefik owns TLS and Let's Encrypt. Only the app joins network web.
 # No clog container must join Traefik's socket-proxy network socknet.
 services:
-  app:
+  clan-clog:
     environment:
       AUTH_ENABLED: 'true'
       PUBLIC_ORIGIN: https://${CLOG_HOST:?Set CLOG_HOST to the public hostname}

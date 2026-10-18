@@ -86,7 +86,7 @@ async function mockAdmin(page: Page) {
       return route.fulfill({
         json: {
           revision: 'settings-1',
-          clanName: 'Vardorvis',
+          clanName: 'Example clan',
           hardcoreEnabled: false,
         },
       });
@@ -416,11 +416,16 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await editor(page)
     .getByLabel('Canonical item', { exact: true })
     .selectOption(String(id));
-  await expect(
-    editor(page).getByText(
-      new RegExp('Canonical item #' + id + ' · Manual item'),
-    ),
-  ).toBeVisible();
+  const fact = (name: string) =>
+    editor(page)
+      .locator('.submission-facts > div')
+      .filter({ has: page.getByText(name, { exact: true }) })
+      .getByRole('definition');
+  await expect(fact('Canonical item')).toHaveText('#' + id);
+  await expect(fact('Item origin')).toHaveText('Manual item');
+  await expect(fact('Collection log pages')).toHaveText(
+    'Duke Sucellus, Vardorvis',
+  );
   await editor(page)
     .getByRole('button', { name: 'Save corrections', exact: true })
     .click();
@@ -882,7 +887,7 @@ test('live admin shows a password form and submits a password without Discord OA
       return route.fulfill({
         json: {
           revision: 'settings-1',
-          clanName: 'Vardorvis',
+          clanName: 'Example clan',
           hardcoreEnabled: false,
         },
       });

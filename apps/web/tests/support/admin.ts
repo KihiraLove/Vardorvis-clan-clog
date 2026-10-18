@@ -53,6 +53,57 @@ import {
 } from './scenarios.ts';
 
 export class MemoryAdminClient implements AdminClient {
+  private discordState: import('@clog/domain').DiscordSettings = {
+    revision: 'discord-1',
+    enabled: false,
+    applicationId: '',
+    guildId: '',
+    testGuildId: '',
+    tokenConfigured: false,
+    limits: {
+      intakeUser: 5,
+      intakeGuild: 60,
+      searchUser: 30,
+      searchGuild: 300,
+    },
+  };
+  async discordSettings(signal: AbortSignal) {
+    this.access(signal);
+    if (
+      this.staff.find((account) => account.username === this.username)?.role !==
+      'admin'
+    )
+      throw new AdminRequestError(403);
+    return structuredClone(this.discordState);
+  }
+  async discordStatus(signal: AbortSignal) {
+    this.access(signal);
+    return { enabled: this.discordState.enabled, ready: false };
+  }
+  async saveDiscordSettings(
+    input: import('@clog/domain').DiscordSettingsUpdate,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    const old = await this.discordSettings(signal);
+    if (input.expectedRevision !== old.revision)
+      throw new AdminRequestError(409);
+    const { expectedRevision, token, ...fields } = input;
+    this.discordState = {
+      ...fields,
+      revision: 'discord-' + (Number(expectedRevision.slice(8)) + 1),
+      tokenConfigured: token === undefined ? old.tokenConfigured : !!token,
+    };
+    return this.discordSettings(signal);
+  }
+  async registerDiscordCommands(
+    _target: 'guild' | 'test',
+    _revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    await this.discordSettings(signal);
+  }
   private submissionFilterState = {
     revision: 'submission-filters-1',
     filterCollected: false,
