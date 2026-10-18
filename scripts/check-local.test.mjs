@@ -9,6 +9,7 @@ test('local acceptance isolates concurrent runs and ignores production environme
     const first = configuration('clog-checks-first');
     const second = configuration('clog-checks-second');
     const url = new URL(first.env.TEST_DATABASE_URL);
+    assert.match(first.env.POSTGRES_PASSWORD, /^[a-f0-9]{64}$/);
     assert.equal(url.hostname, first.database);
     assert.equal(url.pathname, '/clog_test');
     assert.notEqual(url.password, process.env.POSTGRES_PASSWORD);
@@ -16,6 +17,7 @@ test('local acceptance isolates concurrent runs and ignores production environme
     assert.equal(first.env.CHECK_NETWORK, first.network);
     assert.equal(first.env.COMPOSE_DISABLE_ENV_FILE, 'true');
     assert.equal(first.env.BOT_ENABLED, 'false');
+    assert.equal(first.env.BOT_SETTINGS_MODE, 'environment');
     assert.equal(first.env.DISCORD_BOT_TOKEN, '');
     for (const key of [
       'network',

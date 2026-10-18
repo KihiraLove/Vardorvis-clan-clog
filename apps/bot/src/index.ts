@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { HttpBotApi } from './api.js';
 import { readBotConfig } from './config.js';
+import { loadSavedConfiguration, watchConfiguration } from './saved-config.js';
 import { wireGateway } from './runtime.js';
 import { cachedReadiness } from './readiness.js';
 import { BotWorkloads, readWorkloadLimits } from './workloads.js';
@@ -26,7 +27,16 @@ function fatal(error: unknown) {
 process.on('uncaughtException', fatal);
 process.on('unhandledRejection', fatal);
 async function main() {
-  const config = readBotConfig();
+  const saved =
+    process.env.BOT_SETTINGS_MODE === 'database'
+      ? await loadSavedConfiguration()
+      : undefined;
+  const config =
+    process.env.BOT_SETTINGS_MODE === 'disabled'
+      ? null
+      : saved
+        ? saved.config
+        : readBotConfig();
   const client = config
     ? new Client({ intents: [GatewayIntentBits.Guilds] })
     : null;
@@ -37,7 +47,7 @@ async function main() {
           client,
           api,
           config.guildId,
-          new BotWorkloads(readWorkloadLimits()),
+          new BotWorkloads(saved?.saved.limits ?? readWorkloadLimits()),
           { diagnostics },
         )
       : null;
@@ -104,15 +114,18 @@ async function main() {
     });
   });
   let closing: Promise<void> | undefined;
+  let stopWatching: (() => void) | undefined;
   function shutdown(exitCode = 0) {
     if (exitCode) process.exitCode = exitCode;
     if (closing) return closing;
     stopping = true;
+    stopWatching?.();
     closing = (async () => {
       let drained = true;
       const complete = await withinDeadline(async () => {
         drained = (await runtime?.stop()) ?? true;
         await new Promise<void>((resolve) => server.close(() => resolve()));
+        await saved?.pool.end();
       }, 37000);
       if (!complete || !drained) {
         diagnostics.record('shutdown', {
@@ -131,6 +144,13 @@ async function main() {
       void shutdown().catch(fatal);
     });
   server.listen(3001, '0.0.0.0');
+  if (saved)
+    stopWatching = watchConfiguration(
+      saved.saved.revision,
+      () => saved.store.settings(),
+      () => shutdown(),
+      () => shutdown(1),
+    );
   if (client && config) {
     client.on(Events.Error, (error) => {
       diagnostics.record('failure', {

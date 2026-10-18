@@ -329,6 +329,23 @@ CREATE TABLE catalog_versions (
     imported_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE discord_settings (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
+    version integer NOT NULL DEFAULT 1 CHECK(version > 0),
+    settings jsonb NOT NULL CHECK(jsonb_typeof(settings)='object'),
+    credentials text NOT NULL
+);
+
+CREATE TABLE discord_settings_audit (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    actor_id uuid NOT NULL,
+    version integer NOT NULL UNIQUE CHECK(version > 1),
+    old_settings jsonb NOT NULL,
+    new_settings jsonb NOT NULL,
+    token_changed boolean NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE clan_api_key_audit (
     id bigint NOT NULL,
     actor_id text NOT NULL,

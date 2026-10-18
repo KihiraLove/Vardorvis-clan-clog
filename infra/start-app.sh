@@ -39,7 +39,7 @@ if [[ "${BOT_ENABLED:-false}" != true && "${BOT_ENABLED:-false}" != false ]]; th
   echo 'BOT_ENABLED must be true or false' >&2
   exit 1
 fi
-if [[ "${BOT_ENABLED:-false}" == true ]]; then
+if [[ "${BOT_SETTINGS_MODE:-environment}" == environment && "${BOT_ENABLED:-false}" == true ]]; then
   for variable in DISCORD_BOT_TOKEN BOT_API_TOKEN; do
     file_variable="${variable}_FILE"
     if [[ -z "${!variable:-}" && -z "${!file_variable:-}" ]]; then echo "BOT_ENABLED=true requires $variable or ${variable}_FILE" >&2; exit 1; fi
@@ -57,7 +57,7 @@ start_bot() {
   bot_pid=$!
   bot_started=$SECONDS
 }
-if [[ "${BOT_ENABLED:-false}" == true ]]; then start_bot; fi
+if [[ "${BOT_SETTINGS_MODE:-environment}" == database || ( "${BOT_SETTINGS_MODE:-environment}" == environment && "${BOT_ENABLED:-false}" == true ) ]]; then start_bot; fi
 while true; do
   watched=("$api_pid" "$proxy_pid")
   if [[ -n "$bot_pid" ]]; then watched+=("$bot_pid"); fi
@@ -70,8 +70,10 @@ while true; do
     if ((status == 0)); then exit 1; fi
     exit "$status"
   elif [[ -n "$bot_pid" && "$ended" == "$bot_pid" ]]; then
-    if ((SECONDS - bot_started >= 60)); then backoff=1; fi
-    printf '{"service":"supervisor","event":"process","component":"bot","code":"PROCESS_FAILED","status":%d,"retrySeconds":%d}\n' "$status" "$backoff" >&2
+    if ((status == 0 || SECONDS - bot_started >= 60)); then backoff=1; fi
+    code=PROCESS_FAILED
+    if ((status == 0)); then code=CONFIGURATION_RELOAD; fi
+    printf '{"service":"supervisor","event":"process","component":"bot","code":"%s","status":%d,"retrySeconds":%d}\n' "$code" "$status" "$backoff" >&2
     bot_pid=''
     sleep "$backoff" &
     retry_pid=$!

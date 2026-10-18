@@ -37,8 +37,20 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     )
       throw new Error('TRUSTED_PROXY_CIDRS must contain IP addresses or CIDRs');
   }
-  const botToken = readSecret('BOT_API_TOKEN', env)?.trim() ?? '';
-  const botGuildId = env.DISCORD_GUILD_ID?.trim() ?? '';
+  if (
+    !['database', 'environment', 'disabled', undefined, ''].includes(
+      env.BOT_SETTINGS_MODE,
+    )
+  )
+    throw new Error(
+      'BOT_SETTINGS_MODE must be database, environment or disabled',
+    );
+  const legacyBot =
+    !env.BOT_SETTINGS_MODE || env.BOT_SETTINGS_MODE === 'environment';
+  const botToken = legacyBot
+    ? (readSecret('BOT_API_TOKEN', env)?.trim() ?? '')
+    : '';
+  const botGuildId = legacyBot ? (env.DISCORD_GUILD_ID?.trim() ?? '') : '';
   if (!!botToken !== !!botGuildId)
     throw new Error('BOT_API_TOKEN and DISCORD_GUILD_ID must be set together');
   if (

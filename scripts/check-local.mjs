@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const label = 'clog.local-checks';
 
-export function configuration(id, password = randomBytes(24).toString('hex')) {
+export function configuration(id, password = randomBytes(32).toString('hex')) {
   if (!/^clog-checks-[a-z0-9-]+$/.test(id))
     throw new Error('Invalid disposable project name');
   return {
@@ -33,6 +33,7 @@ export function configuration(id, password = randomBytes(24).toString('hex')) {
       SESSION_SECRET: randomBytes(32).toString('hex'),
       ADMIN_BOOTSTRAP_PASSWORD: randomBytes(32).toString('hex'),
       BOT_ENABLED: 'false',
+      BOT_SETTINGS_MODE: 'environment',
       BOT_API_TOKEN: '',
       DISCORD_BOT_TOKEN: '',
       DISCORD_APPLICATION_ID: '',

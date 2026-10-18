@@ -3,6 +3,7 @@ import { checkBotReadiness } from './readiness.js';
 import { databaseUrl } from '@clog/database/dist/secrets.js';
 import { SecretInputError } from '@clog/domain/server-secrets';
 import pg from 'pg';
+import { PgDiscordSettingsStore } from '@clog/database/dist/discord-settings.js';
 import { observePoolFailures } from './db-pool.js';
 import { join } from 'node:path';
 import { BrandingStorage } from './branding-storage.js';
@@ -102,6 +103,23 @@ async function main() {
       ? new PgClanKeyStore(pool, await loadClanKeyRoot(proofs.directory))
       : undefined;
   if (clanKeys) await clanKeys.ensureDefault();
+  const discordSettings =
+    pool && proofs
+      ? new PgDiscordSettingsStore(
+          pool,
+          await loadClanKeyRoot(proofs.directory),
+        )
+      : undefined;
+  if (discordSettings) await discordSettings.ensureDefault();
+  const managedBot = process.env.BOT_SETTINGS_MODE === 'database';
+  const botConfiguration = managedBot
+    ? async () => {
+        const saved = await discordSettings?.runtime();
+        return saved?.enabled
+          ? { token: saved.apiToken, guildId: saved.guildId }
+          : undefined;
+      }
+    : undefined;
   const catalog = pool ? new PgCatalogStore(pool) : undefined;
   const work = new WorkDrain();
   const app = createApp(
@@ -117,7 +135,12 @@ async function main() {
       }),
       store,
       checkBotReady:
-        process.env.BOT_ENABLED === 'true' ? checkBotReadiness : undefined,
+        process.env.BOT_SETTINGS_MODE !== 'disabled' &&
+        (managedBot || process.env.BOT_ENABLED === 'true')
+          ? checkBotReadiness
+          : undefined,
+      discordSettings,
+      botConfiguration,
       catalog,
       icons,
       logos,

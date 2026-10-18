@@ -1,5 +1,6 @@
 /** Public projections plus optional configured admin auth; unavailable services fail closed. */
 import { proofRoutes } from './proof-routes.js';
+import { discordSettingsRoutes } from './discord-settings-routes.js';
 import { runeLiteSettingsRoutes } from './runelite-settings-routes.js';
 import { schedulingRoutes } from './scheduling-routes.js';
 import { competitionRoutes } from './competition-routes.js';
@@ -39,6 +40,11 @@ import { matchesEtag } from './projection-cache.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type Settings } from './types.js';
 interface Options {
+  discordSettings?:
+    | import('@clog/database/dist/discord-settings.js').DiscordSettingsStore
+    | undefined;
+  registerDiscord?: typeof import('@clog/bot/dist/register.js').registerWithCredentials;
+  botConfiguration?: (() => Promise<BotConfig | undefined>) | undefined;
   work?: WorkDrain;
   diagnostics?: OperationalDiagnostics;
   poolMetrics?: () => { total: number; idle: number; waiting: number };
@@ -212,7 +218,11 @@ export function createApp(
   });
   app.get('/api/v1/discord/status', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    if (!options.checkBotReady) return { enabled: false, ready: false };
+    if (
+      !options.checkBotReady ||
+      (options.botConfiguration && !(await options.botConfiguration()))
+    )
+      return { enabled: false, ready: false };
     try {
       await checkReadiness(options.checkBotReady);
       return { enabled: true, ready: true };
@@ -278,12 +288,18 @@ export function createApp(
     return {
       stage: store ? 'backend' : 'foundation',
       catalogReady,
-      submissionsEnabled: !!(store && options.bot),
+      submissionsEnabled: !!(
+        store &&
+        (options.botConfiguration
+          ? await options.botConfiguration()
+          : options.bot)
+      ),
       runeliteSubmissionsEnabled: !!(options.proofs && options.proofStore),
       adminAuthEnabled: !!(store && options.auth),
     };
   });
-  if (store && options.bot) botRoutes(app, store, options.bot);
+  if (store && (options.botConfiguration || options.bot))
+    botRoutes(app, store, options.botConfiguration ?? options.bot!);
   const requireAdmin =
     store && options.auth
       ? authRoutes(
@@ -333,6 +349,12 @@ export function createApp(
   );
   brandingRoutes(app, options.branding, options.logos, requireAdmin);
   runeLiteSettingsRoutes(app, options.runeLiteSettings, requireAdmin);
+  discordSettingsRoutes(
+    app,
+    options.discordSettings,
+    requireAdmin,
+    options.registerDiscord,
+  );
   schedulingRoutes(app, options.scheduling, requireAdmin);
   lifecycleRoutes(app, options.lifecycle, requireAdmin);
   competitionRoutes(

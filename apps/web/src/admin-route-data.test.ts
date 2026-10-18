@@ -20,6 +20,7 @@ test('route loaders prepare every destination with one shared catalog read and n
     ['/admin/settings', 'settings'],
     ['/admin/settings/hardcore', 'settings'],
     ['/admin/runelite', 'runelite'],
+    ['/admin/discord', 'discord'],
     ['/admin/accounts', 'accounts'],
     ['/admin/account', 'account'],
   ]) {
@@ -45,7 +46,12 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
     ...(await client.session(signal()))!,
     role: 'moderator',
   };
-  for (const method of ['settings', 'branding', 'accounts'] as const)
+  for (const method of [
+    'settings',
+    'branding',
+    'accounts',
+    'discordSettings',
+  ] as const)
     t.mock.method(client, method, async () => {
       throw new Error('unauthorized read');
     });
@@ -53,6 +59,7 @@ test('moderator and mandatory-password routes never issue unauthorized reads', a
     '/admin/settings',
     '/admin/settings/hardcore',
     '/admin/accounts',
+    '/admin/discord',
   ])
     assert.equal(
       (await loadAdminRoute(path, session, client, signal())).kind,

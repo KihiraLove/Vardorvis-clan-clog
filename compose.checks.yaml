@@ -17,6 +17,10 @@ services:
     pull_policy: never
     restart: 'no'
     environment:
+      BOT_SETTINGS_MODE: environment
+      BOT_ENABLED: ${BOT_ENABLED:-false}
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?Disposable test credential required}
     ports: !reset []
 networks:

@@ -22,6 +22,7 @@ import { AccountSettings } from './AccountSettings.tsx';
 import { AdminAccounts } from './AdminAccounts.tsx';
 import { RuneLiteReviewSettings } from './RuneLiteReviewSettings.tsx';
 import { AdminScheduling } from './AdminScheduling.tsx';
+import { DiscordBotSettings } from './DiscordBotSettings.tsx';
 import type { CompetitionClient } from './competition-api.ts';
 
 export interface AdminRouteProps {
@@ -45,6 +46,7 @@ export function AdminNavigation({
           ? [
               ['/admin/settings', 'Site settings'],
               ['/admin/settings/hardcore', 'Hardcore worlds'],
+              ['/admin/discord', 'Discord bot'],
               ['/admin/accounts', 'Moderator accounts'],
             ]
           : []),
@@ -360,6 +362,12 @@ export function AdminPage({
               onAccessLost={accessLost}
             />
           </section>
+        ) : path === '/admin/discord' && session.role === 'admin' ? (
+          <DiscordBotSettings
+            client={client}
+            session={session}
+            onAccessLost={accessLost}
+          />
         ) : path === '/admin/accounts' ? (
           session.role === 'admin' ? (
             <AdminAccounts

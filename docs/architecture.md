@@ -11,18 +11,19 @@ flowchart LR
   Discord --> Bot[Optional bot]
   Bot --> API
   API --> DB[(PostgreSQL)]
+  Bot -->|Read encrypted settings| DB
   API --> Files[Uploaded images and branding]
 ```
 
-| Folder              | Responsibility                                                   |
-| ------------------- | ---------------------------------------------------------------- |
-| `apps/web`          | React/Vite public log and staff tools                            |
-| `apps/api`          | Authentication, reads, intake, reviews, catalog and competitions |
-| `apps/bot`          | Discord commands; calls the API, never writes the DB             |
-| `packages/domain`   | Shared validation, item identity, world modes and exact XP       |
-| `packages/database` | Database setup, catalog import, permissions and maintenance      |
-| `infra`             | Nginx, process supervisor, deployment and recovery               |
-| `catalog`           | Pinned catalog inputs, identity mapping and asset provenance     |
+| Folder              | Responsibility                                                    |
+| ------------------- | ----------------------------------------------------------------- |
+| `apps/web`          | React/Vite public log and staff tools                             |
+| `apps/api`          | Authentication, reads, intake, reviews, catalog and competitions  |
+| `apps/bot`          | Discord commands and saved configuration; submissions use the API |
+| `packages/domain`   | Shared validation, item identity, world modes and exact XP        |
+| `packages/database` | Database setup, catalog import, permissions and maintenance       |
+| `infra`             | Nginx, process supervisor, deployment and recovery                |
+| `catalog`           | Pinned catalog inputs, identity mapping and asset provenance      |
 
 PostgreSQL is authoritative. An item has one canonical ID across every page.
 Approval grants one active credit per item per world mode; rejection and

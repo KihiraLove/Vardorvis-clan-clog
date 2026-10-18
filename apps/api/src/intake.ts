@@ -57,12 +57,22 @@ function requireBot(request: FastifyRequest, config: BotConfig) {
 export function botRoutes(
   app: FastifyInstance,
   store: BotStore,
-  config: BotConfig,
+  configuration: BotConfig | (() => Promise<BotConfig | undefined>),
 ) {
+  const authorized = new WeakMap<FastifyRequest, BotConfig>();
+  const check = async (request: FastifyRequest) => {
+    const config =
+      typeof configuration === 'function'
+        ? await configuration()
+        : configuration;
+    if (!config) throw new ApiError(503, 'Discord submissions are disabled.');
+    requireBot(request, config);
+    authorized.set(request, config);
+  };
   app.get<{ Querystring: { q?: string; limit?: string } }>(
     '/api/v1/bot/items',
     {
-      onRequest: async (request) => requireBot(request, config),
+      onRequest: check,
       schema: {
         querystring: {
           type: 'object',
@@ -84,7 +94,7 @@ export function botRoutes(
   app.post<{ Body: BotSubmissionInput }>(
     '/api/v1/bot/submissions',
     {
-      onRequest: async (request) => requireBot(request, config),
+      onRequest: check,
       schema: {
         body: {
           type: 'object',
@@ -112,7 +122,7 @@ export function botRoutes(
     },
     async (request, reply) => {
       const body = request.body;
-      if (body.guildId !== config.guildId)
+      if (body.guildId !== authorized.get(request)!.guildId)
         throw new ApiError(
           403,
           'Submissions are restricted to the configured guild.',

@@ -1,6 +1,11 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
 import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
 import {
+  parseDiscordSettings,
+  parseDiscordFields,
+  type DiscordSettingsUpdate,
+} from '@clog/domain';
+import {
   parseSchedulingState,
   parseCollectionScheduleInput,
   closedCollectionPageMessage,
@@ -88,6 +93,68 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async discordStatus(signal: AbortSignal) {
+    const response = await this.request('/api/v1/discord/status', {
+      signal,
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!response.ok && response.status !== 503)
+      throw new Error('Discord status is unavailable.');
+    const result = object(await response.json());
+    if (
+      typeof result.enabled !== 'boolean' ||
+      typeof result.ready !== 'boolean'
+    )
+      throw new Error('Invalid Discord status.');
+    return { enabled: result.enabled, ready: result.ready };
+  }
+  async discordSettings(signal: AbortSignal) {
+    return parseDiscordSettings(
+      await this.json('/api/v1/admin/discord-settings', signal),
+    );
+  }
+  async saveDiscordSettings(
+    fields: DiscordSettingsUpdate,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseDiscordSettings(
+      await this.json(
+        '/api/v1/admin/discord-settings',
+        signal,
+        this.write(csrf, fields, 'PUT'),
+      ),
+    );
+    if (
+      result.revision === fields.expectedRevision ||
+      JSON.stringify(parseDiscordFields(result)) !==
+        JSON.stringify(parseDiscordFields(fields)) ||
+      (fields.token !== undefined && result.tokenConfigured !== !!fields.token)
+    )
+      throw new Error('Unexpected Discord settings receipt.');
+    return result;
+  }
+  async registerDiscordCommands(
+    target: 'guild' | 'test',
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = object(
+      await this.json(
+        '/api/v1/admin/discord-settings/register',
+        signal,
+        this.write(csrf, { target, expectedRevision: revision }, 'POST'),
+      ),
+    );
+    if (
+      result.registered !== true ||
+      result.revision !== revision ||
+      typeof result.guildId !== 'string'
+    )
+      throw new Error('Unexpected Discord registration receipt.');
+  }
   async saveSubmissionFilters(
     filterCollected: boolean,
     revision: string,

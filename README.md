@@ -36,6 +36,8 @@ and choose a new password. Machine credentials stay unchanged across restarts
 and updates; no bootstrap password needs to remain in `.env`. Configure your
 clan name, logo and submission rules in Site settings and RuneLite submissions.
 The setup command refuses to replace an existing administrator.
+Configure the optional Discord integration on the administrator's **Discord bot**
+page; Discord credentials do not need to be placed in `.env`.
 
 The local build is named `clan-clog:dev`. PostgreSQL and uploaded images live
 in Docker volumes and survive container restarts. Startup creates the database,

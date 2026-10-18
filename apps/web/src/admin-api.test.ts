@@ -10,6 +10,62 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('Discord settings use CSRF and revision checks; unavailable gateway status remains readable', async () => {
+  const fields = {
+    enabled: true,
+    applicationId: '123456789012345678',
+    guildId: '223456789012345678',
+    testGuildId: '',
+    limits: {
+      intakeUser: 5,
+      intakeGuild: 60,
+      searchUser: 30,
+      searchGuild: 300,
+    },
+  };
+  const token = 'private_token_123456789012345678';
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(options?.cache, 'no-store');
+    assert.equal(options?.credentials, 'same-origin');
+    if (path === '/api/v1/discord/status')
+      return new Response(JSON.stringify({ enabled: true, ready: false }), {
+        status: 503,
+      });
+    assert.equal(path, '/api/v1/admin/discord-settings');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      ...fields,
+      token,
+      expectedRevision: 'discord-1',
+    });
+    return json({ ...fields, tokenConfigured: true, revision: 'discord-2' });
+  });
+  const saved = await client.saveDiscordSettings(
+    { ...fields, token, expectedRevision: 'discord-1' },
+    'csrf',
+    signal(),
+  );
+  assert.equal(saved.tokenConfigured, true);
+  assert.equal('token' in saved, false);
+  assert.deepEqual(await client.discordStatus(signal()), {
+    enabled: true,
+    ready: false,
+  });
+  await assert.rejects(
+    new LiveAdminClient(async () =>
+      json({ ...fields, tokenConfigured: true, revision: 'discord-1' }),
+    ).saveDiscordSettings(
+      { ...fields, expectedRevision: 'discord-1' },
+      'csrf',
+      signal(),
+    ),
+    /Unexpected Discord settings receipt/,
+  );
+});
+
 test('page item deletion sends the selected page, CSRF and both revisions, and validates its retirement receipt', async () => {
   const client = new LiveAdminClient(async (path, options) => {
     assert.equal(path, '/api/v1/admin/catalog/pages/one%2Fpage/items/42');

@@ -144,6 +144,16 @@ export {
 } from './site-copy.js';
 export { clanKeyBytes, clanKeyMinLength, validClanApiKey } from './clan-key.js';
 export {
+  defaultDiscordLimits,
+  discordSnowflake,
+  parseDiscordFields,
+  parseDiscordSettings,
+  type DiscordFields,
+  type DiscordLimits,
+  type DiscordSettings,
+  type DiscordSettingsUpdate,
+} from './discord-settings.js';
+export {
   blockedRuneLiteWorldTypes,
   hardcoreRuneLiteWorldTypes,
   parseRuneLiteWorldTypes,

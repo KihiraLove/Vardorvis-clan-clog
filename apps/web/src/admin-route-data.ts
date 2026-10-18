@@ -15,6 +15,7 @@ import { withAbort } from './with-abort.ts';
 
 export interface PreparedAdminData {
   kind:
+    | 'discord'
     | 'queue'
     | 'catalog'
     | 'schedules'
@@ -26,6 +27,7 @@ export interface PreparedAdminData {
   catalog?: AdminCatalog;
   queue?: QueueResult;
   schedules?: SchedulingState;
+  discord?: import('@clog/domain').DiscordSettings;
   settings?: SiteSettings;
   branding?: Branding;
   clanKey?: ClanKeySettings;
@@ -41,6 +43,7 @@ export const adminRouteLabels: Record<string, string> = {
   '/admin/settings': 'Site settings',
   '/admin/settings/hardcore': 'Hardcore worlds',
   '/admin/runelite': 'RuneLite submissions',
+  '/admin/discord': 'Discord bot',
   '/admin/accounts': 'Moderator accounts',
   '/admin/account': 'Your account',
 };
@@ -66,18 +69,25 @@ async function readAdminRoute(
     return { kind: 'account' };
   if (
     session.role !== 'admin' &&
-    ['/admin/settings', '/admin/settings/hardcore', '/admin/accounts'].includes(
-      path,
-    )
+    [
+      '/admin/settings',
+      '/admin/settings/hardcore',
+      '/admin/accounts',
+      '/admin/discord',
+    ].includes(path)
   )
     return {
       kind: 'denied',
       denial:
         path === '/admin/accounts'
           ? 'Only the administrator can create moderator accounts.'
-          : 'Only the administrator can change site settings.',
+          : path === '/admin/discord'
+            ? 'Only the administrator can manage Discord settings.'
+            : 'Only the administrator can change site settings.',
     };
   switch (path) {
+    case '/admin/discord':
+      return { kind: 'discord', discord: await client.discordSettings(signal) };
     case '/admin/catalog':
       return { kind: 'catalog', catalog: await client.catalog(signal) };
     case '/admin/xp':
