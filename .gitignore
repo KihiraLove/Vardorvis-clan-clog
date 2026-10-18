@@ -20,3 +20,4 @@ secrets/
 
 # Host-run durable uploads must never be committed.
 .data/
+.clog/

@@ -14,12 +14,9 @@ rotates the internal token. Saved settings are read again before intake requests
 
 The API's `clog_runtime` role has explicit table/sequence permissions, no DDL or
 ownership, and no ability to rewrite receipts or audit history. Bootstrap removes
-unexpected grants. Owner credentials are reserved for setup and maintenance. Generated DB/session
-credentials live in separate private volumes, mounted read-only only into their
-consumers. Secret-file inputs are read inside Node, never copied to environment
-variables. Default application containers have no owner DB credential. First-admin
-provisioning is an explicit local command; temporary credentials are never printed
-by normal startup. Machine secrets persist across updates.
+unexpected grants. Owner credentials are reserved for setup and maintenance. Generated DB/session credentials live in protected subdirectories of `/data/system`. Application workers run as UID 1000 and cannot traverse the root-owned database-owner directory. The root supervisor handles setup and maintenance; the application uses `clog_runtime`. Secret files are read inside Node and persist across updates. A root-only local control socket coordinates maintenance.
+
+Fresh startup prints a random temporary administrator password near the beginning of container logs, before database/catalog setup. The private pending credential survives interrupted setup. The first login requires a replacement password; its successful commit removes pending state. Later startup never resets an administrator or prints their permanent password. Keep container logs private while the initial password remains active.
 Review revisions and database constraints protect credits under concurrent writes.
 
 Nginx enforces same-origin scripts/styles/API and denies framing. Local image
@@ -36,7 +33,7 @@ not unbounded upstream calls. Keep dependencies current and retain audit evidenc
 `/healthz` reports process liveness. `/readyz` requires the API accepting work
 and a DB probe. Discord status is independent. A failed bot restarts with backoff;
 API/proxy failure stops the application container. Compose restarts it.
-Shutdown drains bot, API and proxy within the 70-second grace period. A lost
+Shutdown drains bot, API and proxy before PostgreSQL stops, within the 90-second grace period. A lost
 COMMIT/response may still have saved data; retry the same identity to reconcile.
 
 Operational logs/counters use bounded sanitized error classes and correlation

@@ -14,7 +14,7 @@ environment edits or website restart are needed. The page shows connection statu
 Use **Register for test server** or **Register for main server** after saving.
 Registration upserts `/cc-clog` without replacing unrelated commands and never
 runs automatically. The equivalent local command is
-`docker compose exec app node apps/bot/dist/register.js test` (or `guild`).
+`docker compose exec --user 1000 clan-clog node apps/bot/dist/register.js test` (or `guild`).
 
 Members use `/cc-clog submit item proof [submitter-name] [hardcore]`. Choose an
 autocomplete match where possible; unmatched text remains reviewable. Proof

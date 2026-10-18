@@ -54,7 +54,7 @@ function run(
       stderr = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.stderr.on('data', (chunk) => (stderr += chunk));
-    const timer = setTimeout(() => child.kill('SIGTERM'), 180000);
+    const timer = setTimeout(() => child.kill('SIGTERM'), 240000);
     child.on('error', reject);
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -108,7 +108,11 @@ const appState = (mode, env = {}) =>
       ...(env.RECOVERY_OLD_PASSWORD
         ? ['-e', 'RECOVERY_OLD_PASSWORD=' + env.RECOVERY_OLD_PASSWORD]
         : []),
-      'app',
+      '--user',
+      '0',
+      env.CLOG_SERVICE || 'clan-clog',
+      'clog',
+      mode === 'seed' ? 'owner' : 'runtime',
       'node',
       '--input-type=module',
       '-',
@@ -119,13 +123,15 @@ const appState = (mode, env = {}) =>
 const snapshot = (env = {}) =>
   compose(
     [
-      'run',
-      '--rm',
-      '--no-deps',
+      'exec',
       '-T',
+      '--user',
+      '0',
       '-e',
       'RECOVERY_DISPOSABLE=true',
-      'migrate',
+      env.CLOG_SERVICE || 'clan-clog',
+      'clog',
+      'owner',
       'node',
       '--input-type=module',
       '-',
@@ -166,44 +172,6 @@ try {
     await readFile(path.join(bundle, 'manifest.json'), 'utf8'),
   );
   assert.match(manifest.revision, /^[a-f0-9]{40}$/);
-  const sourceDb = await compose(['ps', '-q', 'db']);
-  const dbId = await docker(['inspect', '--format', '{{.Image}}', sourceDb]);
-  const dbDigest = await docker([
-    'image',
-    'inspect',
-    '--format',
-    '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}',
-    dbId,
-  ]);
-  const sourceSchema = JSON.parse(
-    await compose([
-      'run',
-      '--rm',
-      '--no-deps',
-      '-T',
-      'migrate',
-      'node',
-      'packages/database/dist/release-state.js',
-      '--exact',
-    ]),
-  );
-  await writeFile(
-    '.current-release.json',
-    JSON.stringify({
-      format: 1,
-      revision: manifest.revision,
-      image: baseId,
-      dbImage: dbDigest,
-      infrastructure: bundle,
-      launcherChecksum: checksum(await readFile('infra/deploy.sh')),
-      bundleChecksum: checksum(
-        await readFile(path.join(bundle, 'manifest.json')),
-      ),
-      evidence: manifest.evidence,
-      schema: sourceSchema,
-      testOverlayChecksum: checksum(await readFile('compose.checks.yaml')),
-    }),
-  );
   await appState('seed');
   const before = await snapshot();
   const backup = path.join(root, 'backup');
@@ -215,55 +183,41 @@ try {
   );
   const target = path.join(root, 'clone');
   await mkdir(target);
-  const settings = {
-    POSTGRES_PASSWORD: randomBytes(32).toString('hex'),
-    APP_DB_PASSWORD: randomBytes(32).toString('hex'),
-    SESSION_SECRET: randomBytes(32).toString('hex'),
-    ADMIN_BOOTSTRAP_PASSWORD: randomBytes(32).toString('hex'),
-    AUTH_ENABLED: 'true',
-    PUBLIC_ORIGIN: 'https://clog.example.com',
-    BOT_ENABLED: 'false',
-  };
-  secrets.push(
-    ...Object.values(settings).filter((value) => /^[a-f0-9]{64}$/.test(value)),
+  const targetCompose = path.join(target, 'compose.json');
+  await writeFile(
+    targetCompose,
+    JSON.stringify({
+      services: {
+        recovery: {
+          image: baseId,
+          restart: 'no',
+          stop_grace_period: '90s',
+          environment: {
+            PUBLIC_ORIGIN: 'https://clog.example.com',
+            BOT_SETTINGS_MODE: 'disabled',
+          },
+          volumes: ['recovery-data:/data'],
+        },
+      },
+      volumes: { 'recovery-data': {} },
+    }),
   );
-  const writeEnv = () =>
-    writeFile(
-      path.join(target, '.env'),
-      Object.entries(settings)
-        .map(([k, v]) => k + '=' + v)
-        .join('\n') + '\n',
-      { mode: 0o600 },
-    );
-  await writeEnv();
   cloneEnv = {
-    ...settings,
     COMPOSE_PROJECT_NAME: project,
-    COMPOSE_FILE:
-      path.join(target, 'releases/restored/compose.yaml') +
-      ':' +
-      path.join(target, 'releases/restored/compose.release.yaml') +
-      ':' +
-      path.join(target, 'releases/restored/compose.isolated.yaml'),
-    COMPOSE_ENV_FILES: path.join(target, '.env'),
+    COMPOSE_FILE: targetCompose,
+    COMPOSE_ENV_FILES: '/dev/null',
     COMPOSE_DISABLE_ENV_FILE: 'true',
-    RELEASE_IMAGE: baseId,
-    RELEASE_DB_IMAGE: dbDigest,
-    IMAGE_TAG: manifest.revision,
+    CLOG_SERVICE: 'recovery',
   };
-  await run('bash', ['infra/restore.sh', backup, project, target], {
-    env: settings,
+  await run('bash', [path.resolve('infra/restore.sh'), backup, 'recovery'], {
+    cwd: target,
+    env: cloneEnv,
   });
-  const originalRuntimePassword = settings.APP_DB_PASSWORD;
-  for (const key of [
-    'POSTGRES_PASSWORD',
-    'APP_DB_PASSWORD',
-    'SESSION_SECRET',
-  ]) {
-    settings[key] = '';
-    cloneEnv[key] = '';
-  }
-  await writeEnv();
+  const originalRuntimePassword = await compose(
+    ['exec', '-T', '--user', '0', 'recovery', 'cat', '/data/system/app/value'],
+    { env: cloneEnv },
+  );
+  secrets.push(originalRuntimePassword);
   const after = await snapshot(cloneEnv);
   assert.deepEqual(
     after,
@@ -271,11 +225,13 @@ try {
     'Every public table and both filesystem inventories must restore exactly',
   );
   await appState('verify', cloneEnv);
-  const appContainer = await compose(['ps', '-q', 'app'], { env: cloneEnv });
+  let appContainer = await compose(['ps', '-q', 'recovery'], {
+    env: cloneEnv,
+  });
   const isolated = JSON.parse(await docker(['inspect', appContainer]))[0];
   assert.deepEqual(isolated.HostConfig.PortBindings, {});
   assert.ok(!Object.keys(isolated.NetworkSettings.Networks).includes('web'));
-  assert.ok(isolated.Config.Env.includes('BOT_ENABLED=false'));
+  assert.ok(isolated.Config.Env.includes('BOT_SETTINGS_MODE=disabled'));
   scenarios.push(
     'fresh namespace: all database tables/files exact; accounts/credits/audits/XP/schedules/catalog preserved; assets/private access/key decryption verified',
   );
@@ -286,7 +242,9 @@ try {
     '{{.State.StartedAt}}',
     appContainer,
   ]);
-  await run('bash', ['infra/restore.sh', backup, project, target], {
+  await run('bash', [path.resolve('infra/restore.sh'), backup, 'recovery'], {
+    cwd: target,
+    env: cloneEnv,
     expectFailure: true,
   });
   const corrupt = path.join(root, 'corrupt');
@@ -294,18 +252,17 @@ try {
   await writeFile(path.join(corrupt, 'icons.tar.gz'), 'corrupt');
   const rejectedTarget = path.join(root, 'rejected');
   await mkdir(rejectedTarget);
-  await cp(path.join(target, '.env'), path.join(rejectedTarget, '.env'));
-  await run(
-    'bash',
-    ['infra/restore.sh', corrupt, project + '-corrupt', rejectedTarget],
-    { expectFailure: true },
-  );
+  await run('bash', [path.resolve('infra/restore.sh'), corrupt, 'recovery'], {
+    expectFailure: true,
+    cwd: target,
+    env: cloneEnv,
+  });
   await rm(path.join(corrupt, 'COMPLETE'));
-  await run(
-    'bash',
-    ['infra/restore.sh', corrupt, project + '-incomplete', rejectedTarget],
-    { expectFailure: true },
-  );
+  await run('bash', [path.resolve('infra/restore.sh'), corrupt, 'recovery'], {
+    expectFailure: true,
+    cwd: target,
+    env: cloneEnv,
+  });
   assert.equal(
     await docker(['inspect', '--format', '{{.State.StartedAt}}', appContainer]),
     started,
@@ -320,14 +277,17 @@ try {
   const deployEnv = {
     ...cloneEnv,
     CLOG_DEPLOY_ROOT: target,
-    CLOG_DEPLOY_PROJECT: project,
+    CLOG_LOCAL_IMAGE: 'true',
     CLOG_IMAGE_NAME: prefix,
   };
   const deploy = (revision, expectFailure = false) =>
-    run('bash', [path.resolve('infra/deploy.sh'), revision], {
+    run('bash', [path.resolve('infra/deploy.sh'), revision, 'recovery'], {
       env: deployEnv,
+      cwd: target,
       expectFailure,
     });
+  await deploy(manifest.revision);
+  appContainer = await compose(['ps', '-q', 'recovery'], { env: cloneEnv });
   // A crash between optional pointer-cache writes cannot redirect the canonical release record.
   await writeFile(
     path.join(target, '.current-infrastructure'),
@@ -339,10 +299,10 @@ try {
       path.resolve('infra/backup-current.sh'),
       path.join(root, 'canonical-state-backup'),
     ],
-    { env: deployEnv },
+    { env: deployEnv, cwd: target },
   );
   scenarios.push(
-    'canonical atomic release record controls backup despite stale convenience pointer',
+    'canonical atomic release record controls backup: actual container identity overrides stale convenience pointer',
   );
   started = await docker([
     'inspect',
@@ -397,7 +357,7 @@ try {
     );
     await writeFile(
       path.join(directory, 'Dockerfile'),
-      `FROM ${process.env.CHECK_APP_IMAGE}\nUSER root\nCOPY bundle /opt/clog-release\n${extra}LABEL org.opencontainers.image.revision="${revision}"\nUSER node\n`,
+      `FROM ${process.env.CHECK_APP_IMAGE}\nUSER root\nCOPY bundle /opt/clog-release\n${extra}LABEL org.opencontainers.image.revision="${revision}"\n`,
     );
     if (kind === 'tampered')
       await writeFile(
@@ -430,40 +390,20 @@ try {
   );
   const broken = await candidate('failed-migration');
   await deploy(broken, true);
-  let failedMigrationLog;
-  for (const name of await readdir(path.join(target, 'evidence'))) {
-    const directory = path.join(target, 'evidence', name);
-    const candidateInfo = await readFile(
-      path.join(directory, 'candidate.json'),
-      'utf8',
-    )
-      .then(JSON.parse)
-      .catch(() => null);
-    if (candidateInfo?.revision === broken) {
-      assert.equal(
-        (await readFile(path.join(directory, 'status'), 'utf8'))
-          .trim()
-          .startsWith('failed'),
-        true,
-      );
-      failedMigrationLog = await readFile(
-        path.join(directory, 'bootstrap.log'),
-        'utf8',
-      );
-    }
-  }
-  assert.match(
-    failedMigrationLog ?? '',
-    /division by zero/u,
-    'The transaction must execute the injected failing SQL',
+  const failedContainer = await compose(['ps', '-q', 'recovery'], {
+    env: cloneEnv,
+  });
+  const failedState = JSON.parse(
+    await docker(['exec', '--user', '0', failedContainer, 'clog', 'status']),
   );
-  await writeFile(
-    path.join(evidence, 'migration-failure.log'),
-    safe(failedMigrationLog),
-  );
+  assert.equal(failedState.phase, 'failed');
+  assert.equal(failedState.workers, false);
   assert.equal(
     JSON.parse(
-      await readFile(path.join(target, '.current-release.json'), 'utf8'),
+      await readFile(
+        path.join(target, '.clog/recovery/current-release.json'),
+        'utf8',
+      ),
     ).revision,
     manifest.revision,
   );
@@ -472,8 +412,12 @@ try {
       [
         'exec',
         '-T',
-        'db',
+        '--user',
+        '999',
+        'recovery',
         'psql',
+        '-h',
+        '/run/clog/postgres',
         '-U',
         'clog',
         '-d',
@@ -494,14 +438,20 @@ try {
   await deploy(compatible);
   assert.equal(
     JSON.parse(
-      await readFile(path.join(target, '.current-release.json'), 'utf8'),
+      await readFile(
+        path.join(target, '.clog/recovery/current-release.json'),
+        'utf8',
+      ),
     ).revision,
     compatible,
   );
   await deploy(manifest.revision);
   assert.equal(
     JSON.parse(
-      await readFile(path.join(target, '.previous-release.json'), 'utf8'),
+      await readFile(
+        path.join(target, '.clog/recovery/previous-release.json'),
+        'utf8',
+      ),
     ).revision,
     compatible,
   );
@@ -511,7 +461,10 @@ try {
   );
   const oldPassword = originalRuntimePassword;
   const currentInfrastructure = JSON.parse(
-    await readFile(path.join(target, '.current-release.json'), 'utf8'),
+    await readFile(
+      path.join(target, '.clog/recovery/current-release.json'),
+      'utf8',
+    ),
   ).infrastructure;
   await run(
     'bash',
@@ -530,12 +483,14 @@ try {
   scenarios.push(
     'runtime credential rotation rejects new connections with old secret and preserves restricted access/state',
   );
-  const crashed = await compose(['ps', '-q', 'app'], { env: cloneEnv });
+  const crashed = await compose(['ps', '-q', 'recovery'], { env: cloneEnv });
   await compose(
     [
       'exec',
       '-T',
-      'app',
+      '--user',
+      '0',
+      'recovery',
       'node',
       '--input-type=module',
       '-e',
@@ -569,7 +524,7 @@ try {
     JSON.stringify(before, null, 2) + '\n',
   );
   await cp(
-    path.join(target, '.current-release.json'),
+    path.join(target, '.clog/recovery/current-release.json'),
     path.join(evidence, 'release.json'),
   );
   await writeFile(

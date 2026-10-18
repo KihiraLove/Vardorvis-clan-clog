@@ -1,119 +1,16 @@
-name: clan-clog
-
-# Long-lived services: application + PostgreSQL. One-shot migrator uses the app image.
+# Copy this service and volume into an existing Compose project.
 services:
-  init:
-    image: ${IMAGE_NAME:-ghcr.io/kihiralove/clan-clog}:${IMAGE_TAG:?Set IMAGE_TAG}
-    user: '0:0'
-    restart: 'no'
-    entrypoint:
-      [
-        'flock',
-        '--nonblock',
-        '/run/clog-secrets/postgres/init.lock',
-        'node',
-        'packages/database/dist/initialize-secrets.js',
-      ]
-    environment:
-      DB_HOST: db
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-}
-      SESSION_SECRET: ${SESSION_SECRET:-}
-    volumes:
-      - postgres-secret:/run/clog-secrets/postgres
-      - app-secret:/run/clog-secrets/app
-      - session-secret:/run/clog-secrets/session
-      - postgres-data:/database-data:ro
-    security_opt: ['no-new-privileges:true']
-
-  db:
-    image: postgres:17-alpine
+  clan-clog:
+    image: ${IMAGE_NAME:-ghcr.io/kihiralove/clan-clog}:${IMAGE_TAG:?Set IMAGE_TAG to a published release}
     restart: unless-stopped
+    stop_grace_period: 90s
     environment:
-      POSTGRES_DB: clog
-      POSTGRES_USER: clog
-      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-/run/clog-secrets/postgres/value}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - postgres-secret:/run/clog-secrets/postgres:ro
-    depends_on:
-      init: { condition: service_completed_successfully }
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U clog -d clog']
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    security_opt: ['no-new-privileges:true']
-
-  migrate:
-    image: ${IMAGE_NAME:-ghcr.io/kihiralove/clan-clog}:${IMAGE_TAG:?Set IMAGE_TAG to a published sha tag}
-    command: ['node', 'packages/database/dist/bootstrap.js']
-    restart: 'no'
-    environment:
-      DB_HOST: db
-      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-/run/clog-secrets/postgres/value}
-      APP_DB_PASSWORD_FILE: ${APP_DB_PASSWORD_FILE:-/run/clog-secrets/app/value}
-      ICON_STORAGE_PATH: /data/catalog-icons
-      PROOF_STORAGE_PATH: /data/submission-images
-    volumes:
-      - catalog-icons:/data/catalog-icons
-      - submission-images:/data/submission-images
-      - postgres-secret:/run/clog-secrets/postgres:ro
-      - app-secret:/run/clog-secrets/app:ro
-    depends_on:
-      db: { condition: service_healthy }
-    security_opt: ['no-new-privileges:true']
-
-  app:
-    image: ${IMAGE_NAME:-ghcr.io/kihiralove/clan-clog}:${IMAGE_TAG:?Set IMAGE_TAG}
-    restart: unless-stopped
-    init: true
-    stop_grace_period: 70s
-    environment:
-      DB_HOST: db
-      APP_DB_PASSWORD_FILE: ${APP_DB_PASSWORD_FILE:-/run/clog-secrets/app/value}
-      HOST: 127.0.0.1
-      PORT: '3000'
-      API_BASE_URL: http://127.0.0.1:3000
-      BOT_SETTINGS_MODE: database
-      ICON_STORAGE_PATH: /data/catalog-icons
-      PROOF_STORAGE_PATH: /data/submission-images
-      NODE_ENV: production
-      AUTH_ENABLED: ${AUTH_ENABLED:-false}
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
-      SESSION_SECRET_FILE: ${SESSION_SECRET_FILE:-/run/clog-secrets/session/value}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the website origin}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
-    volumes:
-      - catalog-icons:/data/catalog-icons
-      - submission-images:/data/submission-images
-      - app-secret:/run/clog-secrets/app:ro
-      - session-secret:/run/clog-secrets/session:ro
     ports:
       - '127.0.0.1:${WEB_PORT:-8088}:8080'
-    depends_on:
-      migrate: { condition: service_completed_successfully }
-    security_opt: ['no-new-privileges:true']
-
-  setup-admin:
-    image: ${IMAGE_NAME:-ghcr.io/kihiralove/clan-clog}:${IMAGE_TAG:?Set IMAGE_TAG}
-    profiles: ['setup']
-    entrypoint: ['node', 'apps/api/dist/setup-admin.js']
-    command: ['--generate']
-    environment:
-      DB_HOST: db
-      APP_DB_PASSWORD_FILE: ${APP_DB_PASSWORD_FILE:-/run/clog-secrets/app/value}
-      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
-      ADMIN_BOOTSTRAP_PASSWORD_FILE: ${ADMIN_BOOTSTRAP_PASSWORD_FILE:-}
     volumes:
-      - app-secret:/run/clog-secrets/app:ro
-    depends_on:
-      migrate: { condition: service_completed_successfully }
+      - clan-clog-data:/data
     security_opt: ['no-new-privileges:true']
-
 volumes:
-  postgres-data:
-  catalog-icons:
-  submission-images:
-  postgres-secret:
-  app-secret:
-  session-secret:
+  clan-clog-data:

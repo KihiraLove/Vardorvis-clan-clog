@@ -4,11 +4,17 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import pg from 'pg';
+import { readFile } from 'node:fs/promises';
 
 if (process.env.REVIEW_SMOKE_TEST !== '1')
   throw new Error('For disposable CI databases only');
 const origin = process.env.PUBLIC_ORIGIN;
-const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+const password =
+  process.env.ADMIN_BOOTSTRAP_PASSWORD ||
+  (process.env.CLOG_BOOTSTRAP_FILE
+    ? JSON.parse(await readFile(process.env.CLOG_BOOTSTRAP_FILE, 'utf8'))
+        .password
+    : undefined);
 if (!password)
   throw new Error('Disposable smoke test requires ADMIN_BOOTSTRAP_PASSWORD');
 function request(

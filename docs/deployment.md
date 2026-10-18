@@ -1,14 +1,13 @@
 # Hosting
 
-Use Linux Docker with Compose v2 and a reverse proxy that terminates HTTPS.
-For a first trial use the local build in the [README](../README.md). Complete
-[configuration](environment.md) and change the initial admin password before
-exposing the site. There are no earlier deployed releases to migrate.
+Use Linux Docker, Compose v2 and an HTTPS reverse proxy. The [README](../README.md)
+contains a service definition you can paste into a Compose project containing
+other services. No dedicated project name, database service or secret setup is
+required. Choose a unique service name, volume and host port for each installation.
 
-## Published images
+## Images and storage
 
-Publishing a GitHub Release on `main` runs acceptance, then publishes a single
-multi-platform image for amd64 and arm64:
+Published Releases on `main` run acceptance before publishing amd64/arm64 images:
 
 ```text
 ghcr.io/<repository-owner>/clan-clog:v1.0.0
@@ -16,45 +15,55 @@ ghcr.io/<repository-owner>/clan-clog:release-<full-commit-sha>
 ghcr.io/<repository-owner>/clan-clog:sha-<full-commit-sha>
 ```
 
-Ordinary pushes, tags and draft releases do not publish. Set `IMAGE_NAME`
-to that full path and `IMAGE_TAG` to an approved published tag. Never use
-`1.0.0-SNAPSHOT` as evidence of a published stable release.
+Ordinary pushes, tags and drafts do not publish. Select an available release;
+`1.0.0-SNAPSHOT` is not a published stable release. The repository Compose file
+uses `IMAGE_NAME` and `IMAGE_TAG` from `.env`; an inline service can use a literal
+image reference and needs no `.env`.
+
+Persist `/data` in one named volume. It contains PostgreSQL 17, uploads and
+credentials. Do not change container UID, mount PostgreSQL separately, or use
+`down --volumes` on an installation you want to keep. See [recovery](release-recovery.md).
 
 ## HTTPS
 
-The default port is loopback-only. Forward your reverse proxy to
-`127.0.0.1:8088`, set the HTTPS `PUBLIC_ORIGIN`, and configure verified proxy
-addresses in `TRUSTED_PROXY_CIDRS`. Preserve the application security headers.
+The default port is loopback-only. Point your reverse proxy at `127.0.0.1:8088`,
+set `PUBLIC_ORIGIN` to the exact HTTPS origin and configure the proxy's verified
+addresses in `TRUSTED_PROXY_CIDRS` when needed. Preserve security headers.
+Only port 8080 is served externally; the API and database stay private.
+For a proxy on the same Docker network, use `http://clan-clog:8080` as its
+upstream; the host port mapping can be omitted.
 
-For an existing Traefik installation with an external `web` network, set
-`CLOG_HOST` and the entrypoint/resolver names, then use
-`compose.yaml:compose.traefik.yaml` as `COMPOSE_FILE`. Inspect
-[the overlay](../compose.traefik.yaml) for your network requirements. Nginx
-proxies the internal API; do not expose port 3000 or the database publicly.
+For an existing Traefik installation on network `web`, set `CLOG_HOST`, then use
+`compose.yaml:compose.traefik.yaml` as `COMPOSE_FILE`. Adapt the router/service
+names if hosting multiple installations behind the same Traefik.
 
-## Versioned deployment
+## Updates
 
-The installed launcher extracts verified infrastructure from the selected image
-and records its image digest, schema and checksums. Install it on a fresh host:
+Take a [backup](release-recovery.md), change just this service's image tag, then:
 
 ```bash
-sudo install -d -m 700 /srv/clan-collection-log
-sudo install -m 755 infra/deploy.sh /srv/clan-collection-log/deploy.sh
-# Put the non-secret .env in that directory. On the first deployment only:
-CLOG_USE_TRAEFIK=false /srv/clan-collection-log/deploy.sh FULL_40_CHARACTER_RELEASE_SHA --setup-admin
+docker compose pull clan-clog
+docker compose up -d --no-deps --wait clan-clog
 ```
 
-Use `CLOG_USE_TRAEFIK=true` with the Traefik configuration above. The registry
-path defaults to the upstream `clan-clog` package; set `CLOG_IMAGE_NAME` for
-a fork. The operator needs Docker access, Bash, jq, flock and sha256sum.
+Use your selected service name in place of `clan-clog`. Accounts and credentials
+remain in the volume; updates never reset the administrator.
 
-The explicit `--setup-admin` command prints a temporary password locally.
-Change it on the first login. Omit that flag on every later deployment.
+For an optional pinned updater, keep `infra/` from a reviewed release and run
+from your Compose directory:
 
-Later deployments take a coordinated backup, stop writers, apply compatible
-migrations, reconcile permissions and wait for health. Failure keeps evidence
-under `evidence/` and does not perform an automatic rollback. Keep the installed
-launcher checksum with your operator records. The optional manual deployment
-workflow requires your own protected self-hosted runner and launcher checksum.
+```bash
+bash /path/to/infra/deploy.sh FULL_40_CHARACTER_RELEASE_SHA clan-clog
+```
 
-Back up before changing images or secrets. See [backup and recovery](release-recovery.md).
+It verifies infrastructure and schema compatibility, backs up the selected
+installation, recreates only that service, and publishes successful metadata
+atomically under `.clog/clan-clog/`. Failure keeps evidence and does not downgrade
+the schema. Requires Bash, jq, flock, sha256sum and Docker access.
+
+The updater writes `.clog/clan-clog/image.yaml` with the resolved image digest.
+Its helpers load this overlay automatically. For subsequent plain Compose commands,
+include it in `COMPOSE_FILE` (after your own files), or copy the recorded image
+into your service definition. The optional GitHub deployment workflow requires
+your own protected runner and a reviewed launcher checksum; install the complete
+`infra/` helper directory beside the launcher.

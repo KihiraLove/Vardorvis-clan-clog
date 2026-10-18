@@ -22,10 +22,14 @@ export function initializeSecrets(
   database: string,
   env: NodeJS.ProcessEnv = process.env,
   adopt = false,
+  allowPendingRotation = false,
 ) {
   const manifest = join(root, 'postgres', 'installation.json');
   const existing = existsSync(manifest);
-  if (existsSync(join(root, 'postgres', 'rotation.json')))
+  if (
+    !allowPendingRotation &&
+    existsSync(join(root, 'postgres', 'rotation.json'))
+  )
     throw new Error(
       'A secret rotation is incomplete; resume the rotation before startup',
     );

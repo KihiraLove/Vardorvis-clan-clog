@@ -1,16 +1,4 @@
-# All deployed writers use the resolved image digest.
 services:
-  init:
-    image: ${RELEASE_IMAGE:?Use the versioned deployment helper}
-    pull_policy: never
-  setup-admin:
-    image: ${RELEASE_IMAGE:?Use the versioned deployment helper}
-    pull_policy: never
-  db:
-    image: ${RELEASE_DB_IMAGE:-postgres:17-alpine}
-  migrate:
-    image: ${RELEASE_IMAGE:?Use the versioned deployment helper}
-    pull_policy: never
-  app:
-    image: ${RELEASE_IMAGE:?Use the versioned deployment helper}
+  clan-clog:
+    image: ${RELEASE_IMAGE:?Use the deployment helper}
     pull_policy: never

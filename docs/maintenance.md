@@ -1,16 +1,15 @@
 # Maintenance
 
-Use the matching deployed Compose configuration and owner-credentialed `migrate`
-service. Keep a coordinated [backup](release-recovery.md) before maintenance.
+Use the matching Compose configuration and select your installation service. The examples use `clan-clog`; owner commands run locally through the root-only `clog` maintenance tool. Keep a coordinated [backup](release-recovery.md) before maintenance.
 Do not run against a different database from the mounted asset volumes.
 
 ## Abandoned uploads
 
 ```bash
-flock -n .deploy.lock docker compose run --rm --no-deps migrate \
+docker compose exec --user 0 clan-clog clog owner \
   node packages/database/dist/asset-maintenance.js --dry-run
 # Inspect the report, then explicitly apply a bounded batch:
-flock -n .deploy.lock docker compose run --rm --no-deps migrate \
+docker compose exec --user 0 clan-clog clog owner \
   node packages/database/dist/asset-maintenance.js --apply --grace-hours=24 --max-files=100 --max-entries=1000
 ```
 
@@ -25,7 +24,7 @@ from zero. Missing DB barriers or unexpected file replacement fails closed.
 ## Expired previews
 
 ```bash
-docker compose run --rm --no-deps migrate node packages/database/dist/preview-maintenance.js --dry-run
+docker compose exec --user 0 clan-clog clog owner node packages/database/dist/preview-maintenance.js --dry-run
 ```
 
 Review the report before adding `--apply`. Only sufficiently expired previews
@@ -34,9 +33,9 @@ are removed; durable receipts and import history remain replayable.
 ## Ended schedules and competitions
 
 ```bash
-docker compose run --rm --no-deps migrate node packages/database/dist/lifecycle.js --resource=competitions --view=current --limit=20
-docker compose run --rm --no-deps migrate node packages/database/dist/lifecycle.js --resource=competitions --action=detail --id=123
-docker compose run --rm --no-deps migrate node packages/database/dist/lifecycle.js --resource=competitions --action=archive --id=123 --actor="Operator" --reason="Ended event"
+docker compose exec --user 0 clan-clog clog owner node packages/database/dist/lifecycle.js --resource=competitions --view=current --limit=20
+docker compose exec --user 0 clan-clog clog owner node packages/database/dist/lifecycle.js --resource=competitions --action=detail --id=123
+docker compose exec --user 0 clan-clog clog owner node packages/database/dist/lifecycle.js --resource=competitions --action=archive --id=123 --actor="Operator" --reason="Ended event"
 ```
 
 Mutation is dry-run by default; inspect it, then repeat with `--apply`. Use

@@ -1,47 +1,66 @@
 # Clan Collection Log
 
 A self-hosted Old School RuneScape collection log for any clan. Track ordinary
-and hardcore collections, review drop evidence, manage your catalog, accept
-Discord and RuneLite submissions, and import Wise Old Man competitions.
+and hardcore collections, review evidence, manage your catalog, accept Discord
+and RuneLite submissions, and import Wise Old Man competitions.
 
-Version: **1.0.0-SNAPSHOT**. This is the first-release baseline. Existing
-development databases must be recreated; there is no pre-release upgrade path.
+Version: **1.0.0-SNAPSHOT**. Development databases from earlier snapshots must
+be recreated; there is no pre-release upgrade path.
 
 ## Get started
 
-Install Docker with Compose v2, download or clone this repository, and open a
-terminal in its folder. Copy the example configuration:
+Install Docker with Compose v2. Add this service and volume to your existing
+Compose file, replacing `v1.0.0` with an available published release:
+
+```yaml
+services:
+  clan-clog:
+    image: ghcr.io/kihiralove/clan-clog:v1.0.0
+    restart: unless-stopped
+    stop_grace_period: 90s
+    environment:
+      PUBLIC_ORIGIN: https://clog.example.com
+    ports:
+      - '127.0.0.1:8088:8080'
+    volumes:
+      - clan-clog-data:/data
+
+volumes:
+  clan-clog-data:
+```
+
+Point your HTTPS reverse proxy at `127.0.0.1:8088` (or `clan-clog:8080` for a
+proxy on the same Docker network) and set your actual website origin. Then
+start only this service:
+
+```bash
+docker compose up -d clan-clog
+docker compose logs clan-clog
+```
+
+Near the beginning of the log, find **FIRST LOGIN**, username `admin` and its
+temporary password. Visit `/admin`, sign in and choose a new password.
+Interrupted setup keeps the same temporary password; once changed, startup
+neither prints nor replaces it. No password-generation command or secret-filled
+`.env` is required. Configure your clan, submission rules and optional Discord
+bot in Administration.
+
+One container runs the website, private PostgreSQL 17 and optional bot. One
+`/data` volume keeps the database, uploads and generated credentials across
+updates. Keep the volume and back it up before changing images.
+
+## Build the current snapshot locally
+
+Clone this repository and run from its directory:
 
 ```bash
 cp .env.example .env
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait clan-clog
+docker compose -f compose.yaml -f compose.dev.yaml logs clan-clog
 ```
 
-Set your site origin in `.env` (the default is http://127.0.0.1:8088 for
-local use). Initialize the database and create the first administrator:
-
-```bash
-docker compose -f compose.yaml -f compose.dev.yaml run --rm --build setup-admin --generate
-```
-
-This creates independent machine credentials in private Docker volumes and
-prints a temporary administrator password only for this explicit setup command.
-Keep that password privately until your first login. Start the website:
-
-```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait
-```
-
-Open http://127.0.0.1:8088/admin. Sign in as `admin` with the temporary password
-and choose a new password. Machine credentials stay unchanged across restarts
-and updates; no bootstrap password needs to remain in `.env`. Configure your
-clan name, logo and submission rules in Site settings and RuneLite submissions.
-The setup command refuses to replace an existing administrator.
-Configure the optional Discord integration on the administrator's **Discord bot**
-page; Discord credentials do not need to be placed in `.env`.
-
-The local build is named `clan-clog:dev`. PostgreSQL and uploaded images live
-in Docker volumes and survive container restarts. Startup creates the database,
-imports the bundled catalog, and gives the running app restricted DB access.
+The example origin is http://127.0.0.1:8088 for local use. The build is named
+`clan-clog:dev`; the same first-login flow applies.
 
 ## Guides
 
@@ -55,16 +74,15 @@ imports the bundled catalog, and gives the running app restricted DB access.
 
 ## Run the complete checks
 
-With Node 24 and Linux Docker available:
+With Node 24 and Linux Docker running:
 
 ```bash
 node scripts/check-local.mjs
 ```
 
-This uses disposable containers and test data, without reading your runtime
-`.env`. Results are saved in `.data/local-checks/<run-id>/`. Focused checks are
-described in the development guide. Published GitHub Releases run acceptance
-before publishing the `clan-clog` image; normal PR pushes do not run hosted CI.
+The runner uses disposable data without reading your runtime `.env`. Reports
+are saved in `.data/local-checks/<run-id>/`. Published GitHub Releases run
+acceptance before publishing the image; ordinary PR pushes do not run hosted CI.
 
-Project code is [MIT licensed](LICENSE). Bundled game and third-party assets
-retain their own ownership and licenses; see the asset attribution guide.
+Project code is [MIT licensed](LICENSE). Game and third-party assets retain
+their own ownership and licenses; see the asset attribution guide.

@@ -22,6 +22,8 @@ export const infrastructureFiles = [
   'infra/restore.sh',
   'infra/rotate-secrets.sh',
   'infra/start-app.sh',
+  'infra/start-installation.sh',
+  'infra/clog',
   'infra/nginx/nginx.conf',
   'infra/nginx/default.conf',
   'docs/release-recovery.md',

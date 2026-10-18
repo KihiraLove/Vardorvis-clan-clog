@@ -33,6 +33,18 @@ database. They can create/drop schemas and change roles; never use personal or
 production data. Some tests skip without it, which is not complete validation.
 Build shared packages before running their dependent compiled tests.
 
+For the container startup changes, build a disposable image and run only its
+installation checks:
+
+```bash
+docker build --target app -t clan-clog:checks .
+CHECK_APP_IMAGE=clan-clog:checks node scripts/installation-smoke.mjs
+```
+
+This creates and removes its own Compose project and volumes. It covers interrupted
+first setup, password changes, persistence, credentials, maintenance and multiple
+installations alongside an unrelated service.
+
 For UI behavior, run a selected Playwright spec from `apps/web`, for example
 `npx playwright test tests/admin.spec.ts --grep 'review'`. Its config starts
 Vite on port 5187. Use a production web build to verify bundle budgets and that

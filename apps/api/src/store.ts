@@ -1,5 +1,6 @@
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
+import { unlink } from 'node:fs/promises';
 import {
   parseSiteCopy,
   parseHardcoreAppearance,
@@ -161,6 +162,12 @@ export class PgStore implements BackendStore {
         [id, username],
       );
       await client.query('COMMIT');
+      if (
+        passwordHash &&
+        account.role === 'admin' &&
+        process.env.CLOG_BOOTSTRAP_FILE
+      )
+        await unlink(process.env.CLOG_BOOTSTRAP_FILE).catch(() => {});
       return account;
     } catch (error) {
       await client.query('ROLLBACK');

@@ -1,8 +1,6 @@
 # Architecture
 
-The site has two long-running containers: the application and PostgreSQL 17.
-The application image, `clan-clog`, runs Nginx, a Fastify API and an optional
-Discord bot. A short-lived `migrate` service uses that same image for setup.
+The `clan-clog` image runs PostgreSQL 17, Nginx, a Fastify API and an optional Discord bot in one container. A root supervisor initializes storage and PostgreSQL, then starts application processes as UID 1000 and PostgreSQL as UID 999. One persistent `/data` volume holds the installation. PostgreSQL listens only on loopback and a private Unix socket.
 
 ```mermaid
 flowchart LR

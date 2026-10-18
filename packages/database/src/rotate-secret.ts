@@ -57,8 +57,10 @@ export async function rotateSecret(
     )) {
       const client = new pg.Client({
         connectionString: databaseUrl({
-          DB_HOST: env.DB_HOST || 'db',
+          DB_HOST: env.DB_HOST || '127.0.0.1',
           DB_PORT: env.DB_PORT,
+          DB_NAME: env.DB_NAME,
+          DB_USER: env.DB_USER,
           POSTGRES_PASSWORD: candidate,
         }),
         connectionTimeoutMillis: 5000,
@@ -76,14 +78,15 @@ export async function rotateSecret(
         'Cannot authenticate database owner; retain pending rotation and restore access',
       );
     try {
-      const role = kind === 'postgres' ? 'clog' : 'clog_runtime';
+      const role = kind === 'postgres' ? env.DB_USER || 'clog' : 'clog_runtime';
       await connection.query(
-        `ALTER ROLE "${role}" PASSWORD ${connection.escapeLiteral(pending.next)}`,
+        `ALTER ROLE ${connection.escapeIdentifier(role)} PASSWORD ${connection.escapeLiteral(pending.next)}`,
       );
       const check = new pg.Client({
         connectionString: databaseUrl({
-          DB_HOST: env.DB_HOST || 'db',
+          DB_HOST: env.DB_HOST || '127.0.0.1',
           DB_PORT: env.DB_PORT,
+          DB_NAME: env.DB_NAME,
           DB_USER: role,
           POSTGRES_PASSWORD: pending.next,
         }),
