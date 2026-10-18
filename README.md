@@ -4,8 +4,10 @@ A self-hosted Old School RuneScape collection log for any clan. Track ordinary
 and hardcore collections, review evidence, manage your catalog, accept Discord
 and RuneLite submissions, and import Wise Old Man competitions.
 
-Version: **1.0.0-SNAPSHOT**. Development databases from earlier snapshots must
-be recreated; there is no pre-release upgrade path.
+Version: **1.0.0-SNAPSHOT**. Existing installations using `001_baseline.sql`
+upgrade through forward-only migrations. Keep the persistent data volume and
+take a backup before updating. Development databases predating that baseline
+are unsupported.
 
 ## Get started
 

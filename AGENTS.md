@@ -1,5 +1,11 @@
 # Repository instructions
 
+## Live deployments
+
+- Preserve live installations and their data. Apply database changes through new,
+  forward-only migrations; never modify an already released migration or baseline.
+- Include an upgrade check from the existing schema when changing the database.
+
 ## Validation
 
 - Run only tests and checks relevant to the changed behavior or files.
