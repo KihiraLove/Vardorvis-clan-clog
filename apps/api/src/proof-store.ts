@@ -217,7 +217,7 @@ export class PgProofStore implements ProofStore {
           receipt: RuneLiteReceipt;
           imageId: string | null;
         }>(
-          'SELECT e.receipt,s.proof_image_id::text AS "imageId" FROM runelite_drop_events e JOIN submissions s ON s.id=e.submission_id WHERE e.player_key=$1 AND e.item_id=$2 AND e.hardcore=$3 AND e.first_received_at > $4::timestamptz - interval \'1 minute\' ORDER BY e.first_received_at LIMIT 1',
+          'SELECT e.receipt,s.proof_image_id::text AS "imageId" FROM runelite_drop_events e JOIN submissions s ON s.id=e.submission_id WHERE e.player_key=$1 AND e.item_id=$2 AND e.hardcore=$3 AND e.first_received_at > $4::timestamptz - interval \'5 seconds\' ORDER BY e.first_received_at LIMIT 1',
           [playerKey, item.id, world.hardcore, receivedAt],
         )
       ).rows[0];

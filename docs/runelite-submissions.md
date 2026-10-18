@@ -98,7 +98,7 @@ key, payload and optional PNG until it receives the receipt. Changing the chat
 message or adding/removing a screenshot under the same key returns **409**.
 
 Independent clients observing the same player and canonical item in the same
-world mode within one minute share the first submission. This applies even when
+world mode within five seconds share the first submission. This applies even when
 their request keys, game-item variants, chat messages or screenshots differ. Player matching
 normalizes case, underscores, nonbreaking spaces and repeated whitespace.
 The window starts at the first accepted request and duplicates do not extend it.
@@ -107,7 +107,7 @@ the new request key for durable retries and discards the duplicate screenshot.
 The first submission's proof remains the review evidence; later duplicate chat
 messages do not overwrite it.
 It creates no extra claim, credit or review entry. Regular and hardcore events
-are separate. A new key after the minute can create a new claim; retrying an
+are separate. A new key after five seconds can create a new claim; retrying an
 existing key always retains its original receipt. Staff corrections do not
 change the recorded event identity.
 
@@ -118,7 +118,7 @@ a reason explaining that the duplicate filter is on. Discord intake continues
 to reject these claims with **403**. The filter defaults to off and
 can be changed only by the administrator; moderators can view its current state.
 Manual staff entry remains available
-for backfilling achievements. Replays and recognized one-minute duplicates
+for backfilling achievements. Replays and recognized five-second duplicates
 retain their successful receipt. CSRF-protected
 `PUT /api/v1/admin/submission-filters` accepts `{ filterCollected,
 expectedRevision }` using the `submission-filters-N` revision supplied by the
