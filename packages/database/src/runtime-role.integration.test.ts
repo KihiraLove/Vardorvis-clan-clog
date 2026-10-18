@@ -1,10 +1,11 @@
 /** Effective privileges and real writes on a disposable database, with real role logins. */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import pg from 'pg';
 import { migrate } from './migrate.js';
 import { provisionRuntimeRole } from './runtime-role.js';
+import { PgDiscordSettingsStore } from './discord-settings.js';
 
 // Independent contract: never calculate the expected privileges from the implementation.
 const operations = new Map<string, string[]>();
@@ -16,7 +17,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT',
-    'audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit submission_images xp_import_history',
+    'audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history discord_settings_audit manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit submission_images xp_import_history',
   ],
   [
     'SELECT UPDATE',
@@ -24,7 +25,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT UPDATE',
-    'catalog_assets catalog_sections clan_api_keys competition_previews items pages staff_accounts submissions wom_competitions xp_events xp_previews',
+    'catalog_assets catalog_sections clan_api_keys competition_previews discord_settings items pages staff_accounts submissions wom_competitions xp_events xp_previews',
   ],
   [
     'SELECT INSERT DELETE',
@@ -40,6 +41,7 @@ const sequences = [
   'clan_api_key_audit_id_seq',
   'clan_branding_audit_id_seq',
   'collection_schedule_audit_id_seq',
+  'discord_settings_audit_id_seq',
   'runelite_settings_audit_id_seq',
   'site_settings_audit_id_seq',
   'staff_account_audit_id_seq',
@@ -242,6 +244,69 @@ test(
             'CREATE ROLE forbidden_role',
           ])
             await assert.rejects(runtime.query(sql), { code: '42501' }, sql);
+        },
+      );
+      await t.test(
+        'Discord settings initialize and update through the runtime role while populated audits remain append-only',
+        async () => {
+          const url = new URL(ownerUrl);
+          url.username = 'clog_runtime';
+          url.password = firstPassword;
+          const pool = new pg.Pool({ connectionString: url.toString() });
+          try {
+            const store = new PgDiscordSettingsStore(pool, randomBytes(32));
+            await store.ensureDefault();
+            const initial = await store.settings();
+            const actor = randomUUID(),
+              token = 'runtime-fixture-discord-token';
+            const saved = await store.update(
+              {
+                expectedRevision: initial.revision,
+                enabled: true,
+                applicationId: '123456789012345678',
+                guildId: '234567890123456789',
+                testGuildId: '',
+                limits: initial.limits,
+                token,
+              },
+              actor,
+            );
+            assert.equal(saved.revision, 'discord-2');
+            assert.equal(saved.enabled, true);
+            assert.equal(saved.tokenConfigured, true);
+            assert.equal((await store.runtime()).token, token);
+            assert.ok(
+              !(
+                await pool.query('SELECT credentials FROM discord_settings')
+              ).rows[0].credentials.includes(token),
+            );
+            const audit = (
+              await pool.query('SELECT * FROM discord_settings_audit')
+            ).rows;
+            assert.equal(audit.length, 1);
+            assert.equal(audit[0].actor_id, actor);
+            assert.equal(audit[0].token_changed, true);
+            assert.ok(!JSON.stringify(audit).includes(token));
+            await assert.rejects(
+              pool.query(
+                'UPDATE discord_settings_audit SET token_changed=false',
+              ),
+              { code: '42501' },
+            );
+            await assert.rejects(
+              pool.query('DELETE FROM discord_settings_audit'),
+              { code: '42501' },
+            );
+            await assert.rejects(pool.query('DELETE FROM discord_settings'), {
+              code: '42501',
+            });
+            assert.deepEqual(
+              (await pool.query('SELECT * FROM discord_settings_audit')).rows,
+              audit,
+            );
+          } finally {
+            await pool.end();
+          }
         },
       );
       await t.test(
