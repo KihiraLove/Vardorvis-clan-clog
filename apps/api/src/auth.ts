@@ -20,9 +20,15 @@ import type { ClanKeyStore, ClanKeyUpdate } from './clan-api-key.js';
 import { PasswordHasher } from './passwords.js';
 import { PreviewWork } from './preview-work.js';
 import {
+  moderatorPagesForRequest,
+  type AccessControlStore,
+} from './access-control.js';
+import {
   defaultSiteCopy,
   type SiteCopy,
   type HardcoreAppearance,
+  defaultModeratorPages,
+  staffPages,
 } from '@clog/domain';
 const hash = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -48,7 +54,12 @@ export function authRoutes(
   clanKeys?: ClanKeyStore,
   previews = new PreviewWork(),
   passwords = new PasswordHasher(),
+  accessControl?: AccessControlStore,
 ) {
+  const moderatorAccess = async () =>
+    accessControl
+      ? (await accessControl.settings()).moderatorPages
+      : [...defaultModeratorPages];
   const hashPassword = (password: string) => passwords.hash(password);
   const verifyPassword = (password: string, encoded: string) =>
     passwords.verify(password, encoded);
@@ -116,6 +127,16 @@ export function authRoutes(
     }
     if (session.mustChangePassword && !allowSetup)
       throw new ApiError(403, 'Change your password before using staff tools.');
+    const path = request.routeOptions.url ?? request.url.split('?')[0]!;
+    if (session.role === 'moderator' && path.startsWith('/api/v1/admin/')) {
+      const required = moderatorPagesForRequest(path, request.method);
+      const allowed = await moderatorAccess();
+      if (!required.some((page) => allowed.includes(page)))
+        throw new ApiError(
+          403,
+          'Your account is not allowed to access this page.',
+        );
+    }
     return session;
   }
   async function requireOwner(request: FastifyRequest, write = false) {
@@ -124,7 +145,7 @@ export function authRoutes(
       throw new ApiError(403, 'Only the administrator can use this tool.');
     return session;
   }
-  const receipt = (session: {
+  const receipt = async (session: {
     token: string;
     displayName: string;
     role: 'admin' | 'moderator';
@@ -136,6 +157,10 @@ export function authRoutes(
     role: session.role,
     mustChangePassword: session.mustChangePassword,
     csrfToken: csrf(session.token),
+    allowedPages:
+      session.role === 'admin'
+        ? staffPages.map((page) => page.id)
+        : await moderatorAccess(),
   });
   async function signIn(account: {
     id: string;
@@ -196,7 +221,7 @@ export function authRoutes(
       if (old) await store.deleteSession(key(old));
       const token = await signIn(account);
       return reply.header('Set-Cookie', cookie(token, 8 * 60 * 60)).send(
-        receipt({
+        await receipt({
           token,
           displayName: account.username,
           role: account.role,
@@ -281,7 +306,7 @@ export function authRoutes(
       );
       const token = await signIn(saved);
       return reply.header('Set-Cookie', cookie(token, 8 * 60 * 60)).send(
-        receipt({
+        await receipt({
           token,
           displayName: saved.username,
           role: saved.role,
@@ -362,9 +387,57 @@ export function authRoutes(
       },
     );
   app.get('/api/v1/admin/settings', async (request) => {
-    await requireOwner(request);
+    await requireAdmin(request);
     return store.settings();
   });
+  app.get('/api/v1/admin/access-control', async (request) => {
+    await requireOwner(request);
+    if (!accessControl)
+      throw new ApiError(503, 'Access control is unavailable.');
+    return accessControl.settings();
+  });
+  app.put<{
+    Body: {
+      moderatorPages: import('@clog/domain').StaffPage[];
+      expectedRevision: string;
+    };
+  }>(
+    '/api/v1/admin/access-control',
+    {
+      onRequest: async (request) => {
+        await requireOwner(request, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['moderatorPages', 'expectedRevision'],
+          properties: {
+            moderatorPages: {
+              type: 'array',
+              maxItems: staffPages.length,
+              uniqueItems: true,
+              items: { enum: staffPages.map((page) => page.id) },
+            },
+            expectedRevision: {
+              type: 'string',
+              pattern: '^access-control-[1-9][0-9]{0,9}$',
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await requireOwner(request, true);
+      if (!accessControl)
+        throw new ApiError(503, 'Access control is unavailable.');
+      return accessControl.update(
+        request.body.moderatorPages,
+        request.body.expectedRevision,
+        actor.id,
+      );
+    },
+  );
   const copySchema = {
     type: 'object',
     additionalProperties: false,

@@ -48,6 +48,10 @@ docker compose up -d --no-deps --wait clan-clog
 
 Use your selected service name in place of `clan-clog`. Accounts and credentials
 remain in the volume; updates never reset the administrator.
+Startup applies pending, checksummed migrations automatically. Released migrations
+are immutable; new versions add forward-only migrations and preserve existing data.
+After a schema upgrade, an older image may be incompatible. Restore the coordinated
+backup to roll back both the database and image; do not delete migration history.
 
 For an optional pinned updater, keep `infra/` from a reviewed release and run
 from your Compose directory:

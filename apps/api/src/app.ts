@@ -40,6 +40,7 @@ import { matchesEtag } from './projection-cache.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type Settings } from './types.js';
 interface Options {
+  accessControl?: import('./access-control.js').AccessControlStore | undefined;
   discordSettings?:
     | import('@clog/database/dist/discord-settings.js').DiscordSettingsStore
     | undefined;
@@ -312,6 +313,7 @@ export function createApp(
           options.clanKeys,
           previews,
           passwords,
+          options.accessControl,
         )
       : undefined;
   if (!requireAdmin) {

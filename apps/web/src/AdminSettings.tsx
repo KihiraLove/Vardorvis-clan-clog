@@ -39,6 +39,7 @@ export function AdminSettings({
   const action = useAdminAction(onAccessLost);
   const releaseAction = useAdminAction(onAccessLost);
   const busy = action.busy || releaseAction.busy;
+  const editable = session.role === 'admin';
   const savedAppearance = hardcore ? saved?.hardcore : saved;
   useAdminDraft(
     !!saved &&
@@ -93,9 +94,9 @@ export function AdminSettings({
             className="site-button admin-toggle"
             aria-labelledby="hardcore-release-title"
             aria-checked={enabled}
-            disabled={busy || !saved}
+            disabled={busy || !saved || !editable}
             onClick={() => {
-              if (!saved) return;
+              if (!saved || !editable) return;
               const next = !enabled;
               void releaseAction.execute(
                 async (signal) => {
@@ -137,6 +138,7 @@ export function AdminSettings({
       )}
       <section className="admin-panel">
         <h2>{hardcore ? 'Hardcore worlds settings' : 'Site settings'}</h2>
+        {!editable && <p>Only the administrator can change these settings.</p>}
         <ClanLogoSettings
           client={client}
           session={session}
@@ -157,7 +159,7 @@ export function AdminSettings({
           aria-busy={!saved && !readError}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!saved) return;
+            if (!saved || !editable) return;
             void action.execute(
               async (signal) => {
                 const value = await client.saveSettings(
@@ -197,7 +199,7 @@ export function AdminSettings({
               required
               maxLength={80}
               value={clanName}
-              disabled={busy || !saved}
+              disabled={busy || !saved || !editable}
               onChange={(event) => setClanName(event.target.value)}
             />
           </label>
@@ -215,7 +217,7 @@ export function AdminSettings({
                 <input
                   required
                   maxLength={160}
-                  disabled={busy || !saved}
+                  disabled={busy || !saved || !editable}
                   value={copy[key]}
                   onChange={(event) =>
                     setCopy((current) => ({
@@ -230,6 +232,7 @@ export function AdminSettings({
           <button
             className="site-button"
             disabled={
+              !editable ||
               busy ||
               !saved ||
               !clanName.trim() ||

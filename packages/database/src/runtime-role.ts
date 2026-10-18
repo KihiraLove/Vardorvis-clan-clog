@@ -63,6 +63,8 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   site_settings_audit: append,
   staff_account_audit: append,
   staff_accounts: edit,
+  staff_page_access: update,
+  staff_page_access_audit: append,
   submission_images: append,
   submissions: edit,
   wom_competitions: edit,
@@ -86,6 +88,7 @@ const sequencePolicy: Readonly<Record<string, readonly SequencePrivilege[]>> = {
   runelite_settings_audit_id_seq: ['USAGE', 'SELECT'],
   site_settings_audit_id_seq: ['USAGE', 'SELECT'],
   staff_account_audit_id_seq: ['USAGE', 'SELECT'],
+  staff_page_access_audit_id_seq: ['USAGE', 'SELECT'],
 };
 
 export function validateRuntimePassword(value: string | undefined): string {

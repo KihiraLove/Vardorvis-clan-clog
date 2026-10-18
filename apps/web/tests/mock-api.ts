@@ -62,6 +62,16 @@ export async function mockApi(
       if (asset) return await route.fulfill(asset);
       let result: unknown;
       if (path === '/api/v1/auth/session') result = await session();
+      else if (path === '/api/v1/admin/access-control')
+        result =
+          method === 'GET'
+            ? await admin.accessControl(signal)
+            : await admin.saveAccessControl(
+                b.moderatorPages,
+                b.expectedRevision,
+                csrf,
+                signal,
+              );
       else if (path === '/api/v1/auth/logout') {
         await admin.logout(csrf, signal);
         result = {};

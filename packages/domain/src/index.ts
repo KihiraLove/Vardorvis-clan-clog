@@ -181,6 +181,16 @@ export {
 } from './scheduling.js';
 export { WorkBudget, WorkloadError, type WorkLimit } from './work-budget.js';
 export {
+  staffPages,
+  defaultModeratorPages,
+  parseStaffPages,
+  parseAccessControl,
+  staffPageForPath,
+  canAccessStaffPage,
+  type StaffPage,
+  type AccessControlSettings,
+} from './staff-pages.js';
+export {
   parseSubmissionFilters,
   type SubmissionFilters,
 } from './submission-filters.js';

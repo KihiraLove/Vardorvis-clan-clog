@@ -2570,3 +2570,13 @@ main {
 .admin-route-shell {
   min-height: 22rem;
 }
+.access-control-settings fieldset {
+  max-width: 36rem;
+}
+.access-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}

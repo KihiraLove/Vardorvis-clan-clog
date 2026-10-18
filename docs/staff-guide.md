@@ -1,10 +1,18 @@
 # Staff guide
 
 Open `/admin` directly. The administrator can create moderator accounts; each
-person changes their temporary password at first login. Both roles can review
+person changes their temporary password at first login. By default, moderators can review
 submissions, enter manual claims, manage the catalog and import competitions.
 Only the administrator changes site settings, shared keys and enforcement switches,
 and manages accounts. Both roles can edit automatic review rules.
+
+On **Access control**, the administrator chooses which pages all moderators can
+access. Changes take effect on subsequent API requests; open moderator tabs refresh
+their navigation within 25 seconds or when refocused. Turning off a page also blocks
+its actions and direct API requests. Shared catalog reads remain available to allowed
+submission and scheduling tools. Access control, account management and existing
+administrator-only actions cannot be delegated. Granted Site settings, Hardcore worlds
+and Discord bot pages are read-only for moderators; secrets are never redisplayed.
 
 ## Submissions
 

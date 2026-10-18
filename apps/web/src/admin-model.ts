@@ -149,6 +149,15 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  accessControl(
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').AccessControlSettings>;
+  saveAccessControl(
+    pages: import('@clog/domain').StaffPage[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').AccessControlSettings>;
   createSection(
     name: string,
     key: string,

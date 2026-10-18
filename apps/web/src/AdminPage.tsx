@@ -23,6 +23,8 @@ import { AdminAccounts } from './AdminAccounts.tsx';
 import { RuneLiteReviewSettings } from './RuneLiteReviewSettings.tsx';
 import { AdminScheduling } from './AdminScheduling.tsx';
 import { DiscordBotSettings } from './DiscordBotSettings.tsx';
+import { AccessControlSettings } from './AccessControlSettings.tsx';
+import { staffPages, canAccessStaffPage, staffPageForPath } from '@clog/domain';
 import type { CompetitionClient } from './competition-api.ts';
 
 export interface AdminRouteProps {
@@ -38,15 +40,12 @@ export function AdminNavigation({
   return (
     <nav className="admin-navigation" aria-label="Admin navigation">
       {[
-        ['/admin', 'Submissions'],
-        ['/admin/catalog', 'Items catalog'],
-        ['/admin/schedules', 'Scheduling and Competitions'],
-        ['/admin/runelite', 'RuneLite submissions'],
+        ...staffPages
+          .filter((page) => canAccessStaffPage(session, page.id))
+          .map((page) => [page.path, page.label]),
         ...(session?.role === 'admin'
           ? [
-              ['/admin/settings', 'Site settings'],
-              ['/admin/settings/hardcore', 'Hardcore worlds'],
-              ['/admin/discord', 'Discord bot'],
+              ['/admin/access-control', 'Access control'],
               ['/admin/accounts', 'Moderator accounts'],
             ]
           : []),
@@ -115,6 +114,43 @@ export function AdminPage({
     initial,
   });
   const action = useAdminAction(accessLost);
+  // Update role/page access without reloading unchanged forms or private drafts.
+  useEffect(() => {
+    if (!session || session.mustChangePassword) return;
+    const controller = new AbortController();
+    let reading = false;
+    const check = async () => {
+      if (reading || controller.signal.aborted) return;
+      reading = true;
+      try {
+        const next = await client.session(controller.signal);
+        if (!controller.signal.aborted) {
+          if (!next) accessLost();
+          else
+            setAccess((previous) =>
+              previous.phase === 'authenticated' &&
+              JSON.stringify(previous.session) === JSON.stringify(next)
+                ? previous
+                : { phase: 'authenticated', session: next },
+            );
+        }
+      } catch {
+        /* A transient read failure does not turn a denied API operation into success. */
+      } finally {
+        reading = false;
+      }
+    };
+    const onFocus = () => {
+      void check();
+    };
+    const timer = window.setInterval(onFocus, 25000);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [client, session, accessLost]);
   const loginAction = useAdminAction(accessLost);
   const loggingIn = loginAction.busy,
     loginError = loginAction.error;
@@ -244,10 +280,14 @@ export function AdminPage({
             </div>
           </aside>
         )}
-        {session?.role === 'admin' &&
+        {session &&
           !session.mustChangePassword &&
           routes.ready?.path === path &&
           routes.ready.data.kind === 'settings' &&
+          canAccessStaffPage(
+            session,
+            path.endsWith('/hardcore') ? 'hardcore' : 'settings',
+          ) &&
           (path === '/admin/settings' ||
             path === '/admin/settings/hardcore') && (
             <AdminSettings
@@ -334,6 +374,14 @@ export function AdminPage({
             <h2>Loading {adminRouteLabels[path] ?? 'Submissions'}…</h2>
             <p role="status">Preparing this page before showing its forms.</p>
           </section>
+        ) : !session.mustChangePassword &&
+          path !== '/admin/account' &&
+          !['/admin/accounts', '/admin/access-control'].includes(path) &&
+          !canAccessStaffPage(
+            session,
+            staffPageForPath(path) ?? 'submissions',
+          ) ? (
+          <p role="alert">Your account is not allowed to view this page.</p>
         ) : routes.ready.data.kind === 'denied' ? (
           <p role="alert">{routes.ready.data.denial}</p>
         ) : session.mustChangePassword || path === '/admin/account' ? (
@@ -362,7 +410,13 @@ export function AdminPage({
               onAccessLost={accessLost}
             />
           </section>
-        ) : path === '/admin/discord' && session.role === 'admin' ? (
+        ) : path === '/admin/access-control' && session.role === 'admin' ? (
+          <AccessControlSettings
+            client={client}
+            session={session}
+            onAccessLost={accessLost}
+          />
+        ) : path === '/admin/discord' ? (
           <DiscordBotSettings
             client={client}
             session={session}
@@ -381,11 +435,8 @@ export function AdminPage({
             </p>
           )
         ) : path === '/admin/settings' ||
-          path === '/admin/settings/hardcore' ? (
-          session.role === 'admin' ? null : (
-            <p role="alert">Only the administrator can change site settings.</p>
-          )
-        ) : path === '/admin/catalog' ? (
+          path === '/admin/settings/hardcore' ? null : path ===
+          '/admin/catalog' ? (
           <AdminCatalogPage
             client={client}
             session={session}

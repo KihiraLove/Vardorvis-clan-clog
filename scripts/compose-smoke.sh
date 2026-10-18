@@ -38,7 +38,7 @@ docker compose up -d --no-deps --force-recreate --wait clan-clog
 docker compose exec -T --user 0 clan-clog clog identity > /tmp/secret-identity-after.json
 cmp /tmp/secret-identity-before.json /tmp/secret-identity-after.json
 # Fresh install applies the immutable baseline and forward-only upgrades.
-test "$(docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql"
+test "$(docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql,002_staff_page_access.sql"
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
 curl --fail http://app:8080/api/v1/status
 curl --fail --output /tmp/catalog.json http://app:8080/api/v1/catalog

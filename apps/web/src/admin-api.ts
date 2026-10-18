@@ -1,6 +1,9 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
 import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
 import {
+  parseAccessControl,
+  parseStaffPages,
+  type StaffPage,
   parseDiscordSettings,
   parseDiscordFields,
   type DiscordSettingsUpdate,
@@ -93,6 +96,32 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async accessControl(signal: AbortSignal) {
+    return parseAccessControl(
+      await this.json('/api/v1/admin/access-control', signal),
+    );
+  }
+  async saveAccessControl(
+    pages: StaffPage[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const moderatorPages = parseStaffPages(pages);
+    const result = parseAccessControl(
+      await this.json(
+        '/api/v1/admin/access-control',
+        signal,
+        this.write(csrf, { moderatorPages, expectedRevision: revision }, 'PUT'),
+      ),
+    );
+    if (
+      result.revision === revision ||
+      JSON.stringify(result.moderatorPages) !== JSON.stringify(moderatorPages)
+    )
+      throw new Error('Unexpected access control receipt.');
+    return result;
+  }
   async discordStatus(signal: AbortSignal) {
     const response = await this.request('/api/v1/discord/status', {
       signal,

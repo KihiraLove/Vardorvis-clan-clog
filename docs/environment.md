@@ -92,7 +92,7 @@ use the generated `clog_runtime` credential. Do not pass owner URLs to workers.
 
 External DB availability, encryption, backups and lifecycle are your responsibility.
 The backup helper supports a logical external dump; automated restore targets a
-fresh bundled installation. This mode does not import older pre-release schemas.
+fresh bundled installation. This mode does not import schemas predating `001_baseline.sql`.
 
 Keep generated storage across updates. For rotation, use the explicit
 [maintenance procedure](release-recovery.md), never replace initialization seeds.

@@ -24,6 +24,7 @@ export function DiscordBotSettings({
   const [token, setToken] = useState(''),
     [clearToken, setClearToken] = useState(false);
   const action = useAdminAction(onAccessLost);
+  const editable = session.role === 'admin';
   const [connection, setConnection] = useState('Checking…');
   useEffect(() => {
     const controller = new AbortController();
@@ -68,7 +69,7 @@ export function DiscordBotSettings({
     if (!signal.aborted) accept(value);
   };
   const register = (target: 'guild' | 'test') => {
-    if (!saved) return;
+    if (!editable || !saved) return;
     void action.execute(
       async (signal) => {
         await client.registerDiscordCommands(
@@ -93,6 +94,12 @@ export function DiscordBotSettings({
   return (
     <section className="admin-panel discord-settings">
       <h2>Discord bot</h2>
+      {!editable && (
+        <p>
+          Only the administrator can change Discord settings or register
+          commands.
+        </p>
+      )}
       <p role="status">Status: {connection}</p>
       <p>
         Connect your own Discord application. Changes take effect automatically
@@ -101,6 +108,7 @@ export function DiscordBotSettings({
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          if (!editable) return;
           void action.execute(async (signal) => {
             const input: DiscordSettingsUpdate = {
               ...parseDiscordFields(fields),
@@ -127,7 +135,7 @@ export function DiscordBotSettings({
           }, reload);
         }}
       >
-        <fieldset disabled={action.busy}>
+        <fieldset disabled={action.busy || !editable}>
           <legend>Connection</legend>
           <div>
             <span id="discord-enable-label">Enable Discord bot</span>{' '}
@@ -220,7 +228,7 @@ export function DiscordBotSettings({
             </label>
           )}
         </fieldset>
-        <fieldset disabled={action.busy}>
+        <fieldset disabled={action.busy || !editable}>
           <legend>Rate limits per minute</legend>
           <div className="discord-settings-grid">
             {(
@@ -254,13 +262,16 @@ export function DiscordBotSettings({
           </div>
         </fieldset>
         <div className="admin-actions">
-          <button className="site-button" disabled={action.busy || !dirty}>
+          <button
+            className="site-button"
+            disabled={!editable || action.busy || !dirty}
+          >
             Save Discord settings
           </button>
           <button
             type="button"
             className="site-button"
-            disabled={action.busy || !dirty}
+            disabled={!editable || action.busy || !dirty}
             onClick={() => accept(saved)}
           >
             Discard changes
@@ -276,6 +287,7 @@ export function DiscordBotSettings({
         <button
           className="site-button"
           disabled={
+            !editable ||
             action.busy ||
             dirty ||
             !saved.tokenConfigured ||
@@ -289,6 +301,7 @@ export function DiscordBotSettings({
         <button
           className="site-button"
           disabled={
+            !editable ||
             action.busy ||
             dirty ||
             !saved.tokenConfigured ||

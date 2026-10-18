@@ -1,5 +1,11 @@
 /** XP wire types, exact arithmetic and parsers; also supplies shared private-response guards. */
-import { skills, isSkill, type Skill } from '@clog/domain';
+import {
+  skills,
+  isSkill,
+  parseStaffPages,
+  type StaffPage,
+  type Skill,
+} from '@clog/domain';
 export { skills, skillName, skillIcon } from '@clog/domain';
 export type SkillId = Skill;
 // Decimal strings survive JSON without Number rounding; null means unavailable, not zero.
@@ -12,6 +18,7 @@ export interface ImportChange {
   change: string;
 }
 export interface AdminSession {
+  allowedPages?: StaffPage[];
   csrfToken: string;
   displayName: string;
   username: string;
@@ -33,6 +40,9 @@ export function parseAdminSession(input: unknown): AdminSession | null {
     username: text(value.username),
     role: value.role as AdminSession['role'],
     mustChangePassword: value.mustChangePassword,
+    ...(value.allowedPages === undefined
+      ? {}
+      : { allowedPages: parseStaffPages(value.allowedPages) }),
   };
 }
 export interface XpClient {

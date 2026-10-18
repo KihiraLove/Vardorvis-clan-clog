@@ -61,7 +61,7 @@ export function brandingRoutes(
     if (!authorize || !store || !storage)
       throw new ApiError(503, 'Clan branding unavailable.');
     const actor = await authorize(request, write);
-    if (actor.role !== 'admin')
+    if (write && actor.role !== 'admin')
       throw new ApiError(
         403,
         'Only the administrator can change the clan logo.',

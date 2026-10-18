@@ -12,6 +12,7 @@ import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { adminBootstrapRequiredMessage } from './types.js';
 import { PgStore } from './store.js';
+import { PgAccessControlStore } from './access-control.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
 import { PgXpStore } from './xp-store.js';
@@ -134,6 +135,7 @@ async function main() {
         waiting: pool?.waitingCount ?? 0,
       }),
       store,
+      accessControl: pool ? new PgAccessControlStore(pool) : undefined,
       checkBotReady:
         process.env.BOT_SETTINGS_MODE !== 'disabled' &&
         (managedBot || process.env.BOT_ENABLED === 'true')

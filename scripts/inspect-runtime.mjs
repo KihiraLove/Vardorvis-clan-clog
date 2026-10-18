@@ -99,7 +99,7 @@ await readFile('/usr/share/postgresql/17/postgresql.conf.sample');
 const migrations = (await readdir('packages/database/migrations'))
   .filter((name) => name.endsWith('.sql'))
   .sort();
-assert.deepEqual(migrations, ['001_baseline.sql']);
+assert.deepEqual(migrations, ['001_baseline.sql', '002_staff_page_access.sql']);
 const cleanup = JSON.parse(
   await readFile('runtime-dependency-cleanup.json', 'utf8'),
 );

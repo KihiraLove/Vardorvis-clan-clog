@@ -26,6 +26,7 @@ test('site settings lives on its own page and edited labels appear across the pu
     'Site settings',
     'Hardcore worlds',
     'Discord bot',
+    'Access control',
     'Moderator accounts',
     'Your account',
   ]);

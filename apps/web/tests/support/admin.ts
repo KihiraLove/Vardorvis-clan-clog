@@ -53,6 +53,29 @@ import {
 } from './scenarios.ts';
 
 export class MemoryAdminClient implements AdminClient {
+  private accessState: import('@clog/domain').AccessControlSettings = {
+    revision: 'access-control-1',
+    moderatorPages: ['submissions', 'catalog', 'schedules', 'runelite'],
+  };
+  async accessControl(signal: AbortSignal) {
+    this.access(signal);
+    return structuredClone(this.accessState);
+  }
+  async saveAccessControl(
+    pages: import('@clog/domain').StaffPage[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.accessState.revision)
+      throw new AdminRequestError(409);
+    this.accessState = {
+      revision: 'access-control-' + (Number(revision.slice(15)) + 1),
+      moderatorPages: [...pages],
+    };
+    return this.accessControl(signal);
+  }
   private discordState: import('@clog/domain').DiscordSettings = {
     revision: 'discord-1',
     enabled: false,
