@@ -1,6 +1,7 @@
 /** No API response fixtures: real TLS/cookies → production Nginx/API → disposable PG. */
 import { expect, test, type Page } from '@playwright/test';
-import pg from 'pg';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { randomBytes } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
@@ -8,6 +9,20 @@ import { writeFile } from 'node:fs/promises';
 const origin = 'https://clog.example.com';
 const password = 'ci-only-test-admin-password'; // Set by review-smoke in this disposable stack only.
 const editor = (page: Page) => page.locator('.submission-editor');
+const execute = promisify(execFile);
+const queryInstallation = `
+import pg from 'pg';
+import {databaseUrl} from '@clog/database/dist/secrets.js';
+const {query,values}=JSON.parse(process.argv[1]);
+const client=new pg.Client({connectionString:databaseUrl(process.env,'runtime'),connectionTimeoutMillis:5000,query_timeout:5000});
+await client.connect();
+try {
+  await client.query('BEGIN READ ONLY');
+  const result=await client.query(query,values);
+  await client.query('COMMIT');
+  console.log(JSON.stringify(result.rows));
+} finally {await client.end();}
+`;
 async function login(page: Page, username = 'admin', secret = password) {
   await page.goto('/admin');
   await page.getByLabel('Username', { exact: true }).fill(username);
@@ -25,22 +40,36 @@ async function database<T>(
   values: unknown[] = [],
 ): Promise<T[]> {
   if (
-    !/^clog-checks-[a-z0-9-]+$/u.test(process.env.COMPOSE_PROJECT_NAME ?? '') ||
-    !process.env.POSTGRES_PASSWORD
+    process.env.STACK_BROWSER_TEST !== '1' ||
+    !/^clog-checks-[a-z0-9-]+$/u.test(process.env.COMPOSE_PROJECT_NAME ?? '')
   )
     throw new Error('Disposable database required');
-  const client = new pg.Client({
-    host: 'db',
-    user: 'clog',
-    password: process.env.POSTGRES_PASSWORD,
-    database: 'clog',
-  });
-  await client.connect();
-  try {
-    return (await client.query(query, values)).rows;
-  } finally {
-    await client.end();
-  }
+  // PostgreSQL is private inside the installation; use its restricted runtime
+  // credentials without exporting passwords or exposing a database port.
+  const { stdout } = await execute(
+    'docker',
+    [
+      'compose',
+      'exec',
+      '-T',
+      '--user',
+      '0',
+      'clan-clog',
+      'clog',
+      'runtime',
+      'node',
+      '--input-type=module',
+      '-e',
+      queryInstallation,
+      JSON.stringify({ query, values }),
+    ],
+    {
+      cwd: new URL('../../../', import.meta.url),
+      encoding: 'utf8',
+      timeout: 20000,
+    },
+  );
+  return JSON.parse(stdout) as T[];
 }
 async function capture(page: Page, name: string) {
   await page.evaluate(() => document.fonts.ready);
