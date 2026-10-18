@@ -19,6 +19,7 @@ stop() {
   printf '%s\n' "$kind:stop" >> "$FIXTURE/events"
   while [[ -f "$FIXTURE/$kind.hold" && ! -f "$FIXTURE/$kind.release" ]]; do sleep 0.03; done
   printf '%s\n' "$kind:done" >> "$FIXTURE/events"
+  if [[ -f "$FIXTURE/$kind.exit" ]]; then exit "$(cat "$FIXTURE/$kind.exit")"; fi
   exit 0
 }
 trap stop TERM INT QUIT
@@ -32,7 +33,7 @@ const fs=require('node:fs'),dir=process.env.FIXTURE;
 fs.writeFileSync(dir+'/proxy.pid',String(process.pid));
 fs.appendFileSync(dir+'/events','proxy:start:'+process.pid+'\\n');
 let stopped=false;
-const stop=()=>{if(stopped)return;stopped=true;fs.appendFileSync(dir+'/events','proxy:stop\\nproxy:done\\n');process.exit(0);};
+const stop=()=>{if(stopped)return;stopped=true;fs.appendFileSync(dir+'/events','proxy:stop\\nproxy:done\\n');process.exit(fs.existsSync(dir+'/proxy.exit')?Number(fs.readFileSync(dir+'/proxy.exit','utf8')):0);};
 process.on('SIGQUIT',stop);process.on('SIGTERM',stop);
 setInterval(()=>{},1000);
 `;
@@ -138,6 +139,28 @@ test(
       assert.ok(events.indexOf('api:done') < events.indexOf('proxy:stop'));
     }),
 );
+test(
+  'shutdown reports each failed child and still drains the remaining components',
+  { skip: process.platform === 'win32', timeout: 15000 },
+  async () => {
+    for (const component of ['bot', 'api', 'proxy'])
+      await fixture(async (f) => {
+        await writeFile(join(f.dir, component + '.exit'), '23');
+        f.supervisor.kill('SIGTERM');
+        assert.deepEqual(await f.exit, { code: 1, signal: null });
+        assert.match(
+          f.logs(),
+          new RegExp(
+            `"component":"${component}","code":"DRAIN_FAILED","status":23`,
+            'u',
+          ),
+        );
+        for (const child of ['bot', 'api', 'proxy'])
+          assert.match(await f.state(), new RegExp(child + ':done', 'u'));
+      });
+  },
+);
+
 test(
   'a bot crash restarts only the bot with backoff while the website stays alive',
   { skip: process.platform === 'win32', timeout: 15000 },

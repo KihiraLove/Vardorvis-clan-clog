@@ -332,6 +332,16 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
   console.log(
     'Website remains ready across gateway outage/recovery and bot-only restart; shutdown drains committed/unconfirmed receipts and critical crashes fail closed.',
   );
+} catch (error) {
+  // The fixture redirects children to a regular file so Nginx can reopen its
+  // streams. Include that evidence in smoke.log and the CI failure artifact.
+  const evidence = await readFile(logPath, 'utf8').catch(
+    () => 'Supervisor log unavailable.',
+  );
+  console.error(
+    'Availability supervisor log:\n' + evidence.replaceAll(token, '[redacted]'),
+  );
+  throw error;
 } finally {
   if (main && main.exitCode === null) {
     main.kill('SIGTERM');

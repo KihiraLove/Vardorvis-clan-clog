@@ -20,7 +20,10 @@ stop_child() {
     done
   fi
   wait "$pid" 2>/dev/null || status=$?
-  if ((status != 0)); then cleanup_failed=1; fi
+  if ((status != 0)); then
+    printf '{"service":"supervisor","event":"shutdown","component":"%s","code":"DRAIN_FAILED","status":%d}\n' "$component" "$status" >&2
+    cleanup_failed=1
+  fi
 }
 cleanup() {
   trap '' TERM INT
