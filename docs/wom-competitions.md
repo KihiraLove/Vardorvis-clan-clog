@@ -24,6 +24,12 @@ unknown metrics and mixed types are rejected. Overall expands into the 24 canoni
 skills without counting raw XP twice, including when a skill is also selected.
 Live participant data is discarded for metadata-only imports.
 
+Standalone **EHP** and **EHB** competitions use the same preview/apply flow.
+Future/running imports store metadata; finished imports retain decimal hours and
+WOM's ranked results. They create no skill-XP contribution or page window and
+do not change hardcore collections. Computed results have no dedicated public
+tracker or leaderboard.
+
 Metric definitions and weights appear in the preview and public competition scope.
 Finished previews retain individual metric gains and WOM's combined score. Selected
 XP competition podiums use those standings; the Total podium and XP skill totals

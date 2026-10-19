@@ -351,6 +351,70 @@ test('multi-boss, multi-activity and computed competitions retain every delta an
   }
 });
 
+for (const metric of ['ehp', 'ehb'] as const) {
+  test(`standalone ${metric.toUpperCase()} accepts decimal numbers/strings without skill XP or breakdown fetches`, async () => {
+    for (const [gained, expected] of [
+      [0.125, '0.125'],
+      [1e-7, '0.0000001'],
+      [
+        '9007199254740993.123456789012345678',
+        '9007199254740993.123456789012345678',
+      ],
+    ] as const) {
+      const source = {
+        ...fixture(metric, now - 2000, now),
+        participantCount: 1,
+        participations: [
+          {
+            playerId: 7,
+            player: { displayName: 'Efficient player' },
+            deltas: [{ metric, values: { gained } }],
+          },
+        ],
+      };
+      let calls = 0;
+      const result = await fetchCompetition(
+        'https://wiseoldman.net/competitions/123',
+        now,
+        async () => {
+          calls++;
+          return Response.json(source);
+        },
+      );
+      assert.equal(calls, 1);
+      assert.deepEqual(result.skills, []);
+      assert.equal(result.results?.xp, undefined);
+      assert.deepEqual(result.results?.participants, [
+        {
+          playerId: 7,
+          displayName: 'Efficient player',
+          gained: expected,
+          rank: 1,
+          deltas: [{ metric, gained: expected }],
+        },
+      ]);
+      assert.deepEqual(result.competition.metricDefinitions, [
+        { metric, weight: '1' },
+      ]);
+      for (const startsAt of [now - 1000, now + 1000]) {
+        const live = await fetchCompetition(
+          'https://wiseoldman.net/competitions/123',
+          now,
+          request({
+            ...source,
+            startsAt: new Date(startsAt).toISOString(),
+            endsAt: new Date(now + 2000).toISOString(),
+            participantCount: 999,
+            participations: [{ malformed: true }],
+          }),
+        );
+        assert.equal(live.results, undefined);
+        assert.equal(JSON.stringify(live).includes('malformed'), false);
+      }
+    }
+  });
+}
+
 test('weighted skill standings use WOM scores while the tracker receives only raw skill XP', async () => {
   const source = {
     ...fixture('attack', now - 2000, now),
