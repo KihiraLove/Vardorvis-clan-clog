@@ -411,7 +411,7 @@ export function SiteApp({
         <footer className="site-footer">
           <div className="footer-support">
             <a
-              href="https://github.com/KihiraLove"
+              href="https://github.com/KihiraLove/clan-clog"
               className="github-support"
               target="_blank"
               rel="noopener noreferrer"

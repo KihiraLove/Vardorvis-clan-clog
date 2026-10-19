@@ -108,7 +108,7 @@ test('site settings lives on its own page and edited labels appear across the pu
   );
   await expect(
     page.getByRole('link', { name: 'GitHub', exact: true }),
-  ).toHaveAttribute('href', 'https://github.com/KihiraLove');
+  ).toHaveAttribute('href', 'https://github.com/KihiraLove/clan-clog');
   expect(
     await page
       .locator('.github-support')
