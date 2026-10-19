@@ -12,7 +12,7 @@ RUN npm ci --no-audit --no-fund
 # Cached local/CI tooling; never copied into the production image.
 FROM docker:28-cli AS docker-tools
 FROM postgres:17-bookworm AS postgres-runtime
-FROM rhysd/actionlint:1.7.7 AS workflow-tools
+FROM rhysd/actionlint:1.7.12 AS workflow-tools
 FROM mcr.microsoft.com/playwright:v1.62.1-noble AS checks-dependencies
 WORKDIR /app
 # Match apps/web's exact Playwright version; use our Node 24/npm runtime.
