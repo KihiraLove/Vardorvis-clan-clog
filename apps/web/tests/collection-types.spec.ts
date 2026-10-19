@@ -101,8 +101,7 @@ test('Event gold outline and event-first history coexist with complete oldest-fi
   await admin.saveSettings(true, settings.revision, 'test-admin', signal);
   await page.goto('/');
   const slot = page.getByRole('button', {
-    name: 'Virtus mask: collected',
-    exact: true,
+    name: /^Virtus mask: collected, \d+ obtains$/,
   });
   await expect(slot).toHaveClass(/item-slot--event/);
   await slot.focus();
@@ -204,7 +203,10 @@ test.describe('mobile collection history', () => {
     );
     await page.goto('/');
     await page
-      .getByRole('button', { name: 'Virtus mask: collected', exact: true })
+      .getByRole('button', {
+        name: 'Virtus mask: collected, 71 obtains',
+        exact: true,
+      })
       .tap();
     const menu = page.getByRole('tooltip');
     await expect(menu).toBeVisible();

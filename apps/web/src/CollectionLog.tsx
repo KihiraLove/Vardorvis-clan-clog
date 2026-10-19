@@ -54,7 +54,7 @@ function ItemSlot({
     <button
       type="button"
       className={`item-slot${state.collected ? ' item-slot--collected' : ''}${state.hardcoreCollected ? ' item-slot--hardcore' : ''}${state.eventCollected ? ' item-slot--event' : ''}`}
-      aria-label={`${item.name}: ${state.collected ? 'collected' : 'not collected'}${state.hardcoreCollected ? ', hardcore' : ''}`}
+      aria-label={`${item.name}: ${state.collected ? 'collected' : 'not collected'}${state.hardcoreCollected ? ', hardcore' : ''}${state.obtainCount >= 2 ? `, ${state.obtainCount} obtains` : ''}`}
       aria-describedby={active ? `item-menu-${item.id}` : undefined}
       onPointerEnter={(event) => {
         if (event.pointerType !== 'touch') reveal(event.currentTarget, false);
@@ -80,6 +80,19 @@ function ItemSlot({
           draggable="false"
           onError={() => setBroken(true)}
         />
+      )}
+      {state.obtainCount >= 2 && (
+        <span
+          className="item-obtain-count"
+          aria-hidden="true"
+          style={
+            {
+              '--count-digits': String(state.obtainCount).length,
+            } as CSSProperties
+          }
+        >
+          {state.obtainCount}
+        </span>
       )}
     </button>
   );

@@ -198,6 +198,7 @@ export function itemState(itemId: number, credits: readonly Credit[]) {
   return {
     collected: state.collected,
     collectors,
+    obtainCount: collectors.length,
     hardcoreCollected: collectors.some((credit) => credit.hardcore),
     eventCollected: collectors.some(
       (credit) => !credit.hardcore && credit.collectionType === 'event',

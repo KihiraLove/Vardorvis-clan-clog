@@ -116,12 +116,14 @@ test('typed public histories retain repeated Regular credits, one Event and inde
   }).credits;
   const state = itemState(1, modeCredits(credits, false));
   assert.equal(state.eventCollected, true);
+  assert.equal(state.obtainCount, 3);
   assert.deepEqual(
     state.collectors.map((c) => c.submissionId),
     ['event', 'a', 'b'],
   );
   assert.deepEqual(progress([1, 1], credits), { collected: 1, total: 1 });
   assert.equal(itemState(1, modeCredits(credits, true)).eventCollected, false);
+  assert.equal(itemState(1, modeCredits(credits, true)).obtainCount, 1);
   assert.equal(
     itemState(
       1,
@@ -156,6 +158,7 @@ test('defaults are uncollected and queue statuses never produce public credit', 
   assert.deepEqual(itemState(1, data.credits), {
     collected: false,
     collectors: [],
+    obtainCount: 0,
     hardcoreCollected: false,
     eventCollected: false,
   });
@@ -166,6 +169,55 @@ test('defaults are uncollected and queue statuses never produce public credit', 
     }).credits[0]?.hardcore,
     false,
   );
+});
+
+test('obtain totals follow surviving approved records, canonical corrections and world moves', () => {
+  const saved = [
+    { ...normal, submissionId: 'first', status: 'approved' },
+    { ...normal, submissionId: 'repeat', status: 'approved' },
+    {
+      ...normal,
+      submissionId: 'event',
+      collectionType: 'event',
+      status: 'approved',
+    },
+    { ...hardcore, submissionId: 'hc', status: 'approved' },
+    ...['pending', 'rejected', 'revoked'].map((status) => ({
+      ...normal,
+      submissionId: status,
+      status,
+    })),
+  ];
+  const read = (rows = saved) =>
+    parseCollections({ revision: 'obtains', credits: rows }).credits;
+  const count = (rows = saved, itemId = 1, hc = false) =>
+    itemState(itemId, modeCredits(read(rows), hc)).obtainCount;
+  assert.equal(count(), 3);
+  assert.equal(count(saved, 1, true), 1);
+  assert.equal(count(saved, 2), 0);
+  assert.deepEqual(progress([1, 1, 2], modeCredits(read(), false)), {
+    collected: 1,
+    total: 2,
+  });
+  const revoked = saved.map((row) =>
+    row.submissionId === 'first' ? { ...row, status: 'revoked' } : row,
+  );
+  assert.equal(count(revoked), 2);
+  const corrected = revoked.map((row) =>
+    row.submissionId === 'repeat' ? { ...row, itemId: 2 } : row,
+  );
+  assert.equal(count(corrected), 1);
+  assert.equal(count(corrected, 2), 1);
+  const moved = corrected.map((row) =>
+    row.submissionId === 'repeat' ? { ...row, hardcore: true } : row,
+  );
+  assert.equal(count(moved, 2), 0);
+  assert.equal(count(moved, 2, true), 1);
+  const reclassified = saved.map((row) =>
+    row.submissionId === 'event' ? { ...row, collectionType: 'regular' } : row,
+  );
+  assert.equal(count(reclassified), 3);
+  assert.throws(() => read([...saved, saved[0]!]));
 });
 test('one shared item increments both pages but global progress counts it once', () => {
   const credits = parseCollections({
