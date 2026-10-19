@@ -35,7 +35,8 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button,
@@ -48,7 +49,8 @@ button {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid #f1c45e;
   outline-offset: 3px;
 }
@@ -1818,15 +1820,21 @@ html:has(.submission-review-dialog[open]) {
   display: none;
 }
 .public-navigation-bar {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px minmax(0, 1fr);
+  column-gap: 12px;
   min-height: 40px;
 }
 .public-navigation {
+  grid-column: 2;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   width: min(292px, 100%);
+}
+.submission-help-button {
+  grid-column: 3;
+  justify-self: end;
 }
 .public-navigation a {
   display: grid;
@@ -1842,6 +1850,120 @@ html:has(.submission-review-dialog[open]) {
 }
 .public-navigation--hidden {
   visibility: hidden;
+}
+html:has(.submission-help-dialog[open]) {
+  overflow: hidden;
+}
+.submission-help-dialog {
+  width: min(760px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  color: inherit;
+  background: #29261e;
+  border: 1px solid #796544;
+  overflow: hidden;
+}
+.submission-help-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.submission-help-dialog::backdrop {
+  background: #000b;
+}
+.submission-help-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #594c34;
+}
+.submission-help-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #dec77c;
+}
+.submission-help-heading button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 24px;
+}
+.submission-help-body {
+  padding: 8px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.submission-help-body:focus-visible {
+  outline: 2px solid #f1c45e;
+  outline-offset: -4px;
+}
+.help-markdown {
+  color: #c9c2b2;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.help-markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-family: system-ui, sans-serif;
+  font-weight: 700;
+  text-shadow: none;
+  margin: 1em 0 0.6em;
+  color: #dec77c;
+  line-height: 1.3;
+}
+.help-markdown :is(h1, h2) {
+  font-size: 21px;
+}
+.help-markdown a {
+  color: #f3d890;
+  font-size: inherit;
+  text-underline-offset: 3px;
+}
+.help-markdown p {
+  font-size: inherit;
+  color: inherit;
+  line-height: inherit;
+  margin: 1em 0;
+}
+.help-markdown :is(pre, blockquote) {
+  background: #1d1b15;
+  padding: 12px;
+  margin-inline: 0;
+}
+.help-markdown pre {
+  overflow-x: auto;
+}
+.help-markdown blockquote {
+  border-left: 3px solid #796544;
+}
+.submission-help-settings section {
+  max-height: 360px;
+  overflow: auto;
+}
+.submission-help-settings > p {
+  margin: 0;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .public-navigation-bar {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+    min-height: 88px;
+  }
+  .public-navigation {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+    min-height: 40px;
+  }
+  .submission-help-button {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 40px;
+  }
 }
 #xp-main > .event-tracker {
   margin-top: 50px;

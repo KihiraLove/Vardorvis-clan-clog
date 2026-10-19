@@ -8,11 +8,13 @@ import { usePublicLog } from './use-public-log.ts';
 import { type SiteSettings } from './site-settings.ts';
 import { defaultBranding } from './branding.ts';
 import { PublicMetadataClient } from './public-metadata.ts';
+import { SubmissionHelp } from './SubmissionHelp.tsx';
 import { usePublicPolling } from './use-public-polling.ts';
 import type { SiteNavigation } from './use-route-navigation.ts';
 import type { RouteResources } from './app-runtime.ts';
 import {
   defaultSiteCopy,
+  defaultSubmissionHelp,
   type SiteCopy,
   type HardcoreAppearance,
 } from '@clog/domain';
@@ -109,6 +111,8 @@ export function SiteApp({
   const [liveEnabled, setLiveEnabled] = useState(false);
   const [liveClanName, setLiveClanName] = useState('');
   const [liveCopy, setLiveCopy] = useState<SiteCopy>(defaultSiteCopy);
+  const [liveHelp, setLiveHelp] = useState(defaultSubmissionHelp);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [liveBranding, setLiveBranding] = useState(defaultBranding);
   const [liveHardcoreBranding, setLiveHardcoreBranding] =
     useState(defaultBranding);
@@ -163,6 +167,7 @@ export function SiteApp({
     setLiveEnabled(value.hardcoreEnabled);
     setLiveClanName(value.clanName);
     setLiveCopy(value.copy ?? defaultSiteCopy);
+    setLiveHelp(value.howToSubmitMarkdown ?? defaultSubmissionHelp);
     setLiveHardcoreAppearance(
       value.hardcore ?? {
         clanName: value.clanName,
@@ -199,6 +204,7 @@ export function SiteApp({
   const copy = appearance?.copy ?? defaultSiteCopy;
   const settingsSaved = (value: SiteSettings) => {
     setLiveCopy(value.copy ?? defaultSiteCopy);
+    setLiveHelp(value.howToSubmitMarkdown ?? defaultSubmissionHelp);
     setLiveHardcoreAppearance(
       value.hardcore ?? {
         clanName: value.clanName,
@@ -362,7 +368,20 @@ export function SiteApp({
                 Xp tracker
               </a>
             </nav>
+            <button
+              type="button"
+              className="site-button submission-help-button"
+              onClick={(event) => {
+                event.currentTarget.focus({ preventScroll: true });
+                setHelpOpen(true);
+              }}
+            >
+              How to submit
+            </button>
           </div>
+        )}
+        {!admin && helpOpen && (
+          <SubmissionHelp text={liveHelp} onClose={() => setHelpOpen(false)} />
         )}
         <main
           id={admin ? 'admin-main' : xp ? 'xp-main' : 'collection-log'}

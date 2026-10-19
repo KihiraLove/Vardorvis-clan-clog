@@ -461,10 +461,13 @@ export function authRoutes(
       clanName?: string;
       copy?: SiteCopy;
       hardcore?: HardcoreAppearance;
+      howToSubmitMarkdown?: string;
     };
   }>(
     '/api/v1/admin/settings',
     {
+      // JSON escaping can expand a valid 32 KiB guide beyond the default body limit.
+      bodyLimit: 256 * 1024,
       schema: {
         body: {
           type: 'object',
@@ -473,6 +476,7 @@ export function authRoutes(
           properties: {
             hardcoreEnabled: { type: 'boolean' },
             copy: copySchema,
+            howToSubmitMarkdown: { type: 'string', maxLength: 32768 },
             hardcore: {
               type: 'object',
               additionalProperties: false,
@@ -516,6 +520,7 @@ export function authRoutes(
         request.body.clanName,
         request.body.copy,
         request.body.hardcore,
+        request.body.howToSubmitMarkdown,
       );
       if (!saved)
         throw new ApiError(

@@ -5,7 +5,8 @@ import path from 'node:path';
 const walk = async (directory) => {
   const results = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (['node_modules', 'dist', '.git'].includes(entry.name)) continue;
+    if (['node_modules', 'dist', '.git', '.data'].includes(entry.name))
+      continue;
     const location = path.join(directory, entry.name);
     if (entry.isDirectory()) results.push(...(await walk(location)));
     else if (location.endsWith('.md')) results.push(location);

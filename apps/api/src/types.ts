@@ -1,5 +1,6 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
+  howToSubmitMarkdown?: string;
   copy?: import('@clog/domain').SiteCopy;
   hardcore?: import('@clog/domain').HardcoreAppearance;
   clanName: string;
@@ -112,6 +113,7 @@ export interface BackendStore {
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
+    howToSubmitMarkdown?: string,
   ): Promise<Settings | null>;
   createSession(
     hash: string,

@@ -24,6 +24,14 @@ Successful replay returns the saved receipt. Auth failures are 401/403; stale
 state is 409; malformed or unsupported input is 400/422. A timeout cannot prove
 rollback: preserve the retry key and reconcile the original operation.
 
+`GET /settings` publishes `howToSubmitMarkdown`, shared by all public views.
+Administrator-only `PUT /admin/settings` accepts this optional field alongside
+`hardcoreEnabled` and `expectedRevision`. Omission preserves saved content; an
+empty string uses default instructions in the UI. The maximum is 32,768 UTF-8
+bytes with no NUL characters. Saves advance the settings ETag and audit the old
+and new text. Markdown is rendered without raw HTML or embedded images, with
+safe links opening separately. This content is public; do not include secrets.
+
 Review queries return at most 20 rows plus an opaque next cursor. Cursors bind
 filters/revision and cannot combine different snapshots. Audit and import history
 are similarly bounded. Approval requires saved proof acknowledgement and a matched

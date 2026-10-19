@@ -45,6 +45,7 @@ test('preview keys default on and can be viewed and rotated while the requiremen
     'copy',
     'hardcore',
     'hardcoreEnabled',
+    'howToSubmitMarkdown',
     'revision',
   ]);
   await assert.rejects(

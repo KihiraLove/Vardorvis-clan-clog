@@ -11,6 +11,8 @@ const generateFixtureKey = () =>
 import { AdminRequestError } from '../../src/admin-api.ts';
 import {
   defaultSiteCopy,
+  defaultSubmissionHelp,
+  parseSubmissionHelp,
   parseSiteCopy,
   parseHardcoreAppearance,
   type SiteCopy,
@@ -322,6 +324,7 @@ export class MemoryAdminClient implements AdminClient {
   private revision = 0;
   private queueRevision = 0;
   private setting = {
+    howToSubmitMarkdown: defaultSubmissionHelp,
     copy: { ...defaultSiteCopy },
     hardcore: { clanName: 'Clan name', copy: { ...defaultSiteCopy } },
     revision: 'settings-0',
@@ -766,11 +769,16 @@ export class MemoryAdminClient implements AdminClient {
     clanName?: string,
     copy?: SiteCopy,
     hardcore?: HardcoreAppearance,
+    howToSubmitMarkdown?: string,
   ) {
     this.access(signal);
     if (expectedRevision !== this.setting.revision)
       throw new AdminRequestError(409);
     this.setting = {
+      howToSubmitMarkdown:
+        howToSubmitMarkdown === undefined
+          ? this.setting.howToSubmitMarkdown
+          : parseSubmissionHelp(howToSubmitMarkdown),
       copy: copy ? parseSiteCopy(copy) : this.setting.copy,
       hardcore: hardcore
         ? parseHardcoreAppearance(hardcore)

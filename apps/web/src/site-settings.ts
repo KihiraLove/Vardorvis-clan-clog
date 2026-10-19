@@ -1,5 +1,6 @@
 /** Versioned release visibility; missing public settings must fail closed. */
 export interface SiteSettings {
+  howToSubmitMarkdown?: string;
   copy?: SiteCopy;
   hardcore?: HardcoreAppearance;
   revision: string;
@@ -23,6 +24,9 @@ export function parseSettings(value: unknown): SiteSettings {
     revision: data.revision,
     hardcoreEnabled: data.hardcoreEnabled,
     clanName: data.clanName,
+    ...(data.howToSubmitMarkdown === undefined
+      ? {}
+      : { howToSubmitMarkdown: parseSubmissionHelp(data.howToSubmitMarkdown) }),
     ...(data.copy === undefined ? {} : { copy: parseSiteCopy(data.copy) }),
     ...(data.hardcore === undefined
       ? {}
@@ -30,6 +34,7 @@ export function parseSettings(value: unknown): SiteSettings {
   };
 }
 import {
+  parseSubmissionHelp,
   parseSiteCopy,
   parseHardcoreAppearance,
   type SiteCopy,

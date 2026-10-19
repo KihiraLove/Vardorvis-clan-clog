@@ -150,6 +150,7 @@ export async function mockApi(
                 b.clanName,
                 b.copy,
                 b.hardcore,
+                b.howToSubmitMarkdown,
               );
       else if (path === '/api/v1/admin/clan-api-key')
         result =

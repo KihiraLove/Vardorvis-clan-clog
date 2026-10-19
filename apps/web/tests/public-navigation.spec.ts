@@ -90,6 +90,10 @@ for (const width of [1440, 740, 320]) {
         .getByRole('link', { name: 'Admin panel', exact: true })
         .focus();
       await page.keyboard.press('Tab');
+      await expect(
+        page.getByRole('button', { name: 'How to submit', exact: true }),
+      ).toBeFocused();
+      await page.keyboard.press('Tab');
       expect(
         await page
           .locator('main')

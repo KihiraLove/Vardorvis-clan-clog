@@ -9,6 +9,12 @@ import type { SiteSettings } from './site-settings.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { defaultSiteCopy, parseSiteCopy, type SiteCopy } from '@clog/domain';
 import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
+import {
+  defaultSubmissionHelp,
+  parseSubmissionHelp,
+  submissionHelpMaxBytes,
+} from '@clog/domain';
+import { SubmissionHelpContent } from './SubmissionHelp.tsx';
 export function AdminSettings({
   client,
   session,
@@ -35,26 +41,35 @@ export function AdminSettings({
     initialAppearance?.copy ?? { ...defaultSiteCopy },
   );
   const [readError, setReadError] = useState<string>();
+  const [help, setHelp] = useState(
+    initial?.howToSubmitMarkdown ?? defaultSubmissionHelp,
+  );
+  const [preview, setPreview] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
   const releaseAction = useAdminAction(onAccessLost);
   const busy = action.busy || releaseAction.busy;
   const editable = session.role === 'admin';
   const savedAppearance = hardcore ? saved?.hardcore : saved;
-  useAdminDraft(
+  const helpBytes = new TextEncoder().encode(help).length;
+  const helpInvalid =
+    !hardcore && (helpBytes > submissionHelpMaxBytes || help.includes('\0'));
+  const dirty =
     !!saved &&
-      (enabled !== saved.hardcoreEnabled ||
-        clanName !== (savedAppearance?.clanName ?? saved.clanName) ||
-        JSON.stringify(copy) !==
-          JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy)),
-    busy,
-  );
+    (enabled !== saved.hardcoreEnabled ||
+      clanName !== (savedAppearance?.clanName ?? saved.clanName) ||
+      JSON.stringify(copy) !==
+        JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy) ||
+      (!hardcore &&
+        help !== (saved.howToSubmitMarkdown ?? defaultSubmissionHelp)));
+  useAdminDraft(dirty, busy);
   const apply = (value: SiteSettings) => {
     const appearance = hardcore ? value.hardcore : value;
     setSaved(value);
     setEnabled(value.hardcoreEnabled);
     setClanName(appearance?.clanName ?? value.clanName);
     setCopy(appearance?.copy ?? { ...defaultSiteCopy });
+    setHelp(value.howToSubmitMarkdown ?? defaultSubmissionHelp);
   };
   useEffect(() => {
     if (initial && refresh === 0) return;
@@ -159,7 +174,7 @@ export function AdminSettings({
           aria-busy={!saved && !readError}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!saved || !editable) return;
+            if (!saved || !editable || helpInvalid) return;
             void action.execute(
               async (signal) => {
                 const value = await client.saveSettings(
@@ -172,6 +187,7 @@ export function AdminSettings({
                   hardcore
                     ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
                     : undefined,
+                  hardcore ? undefined : parseSubmissionHelp(help),
                 );
                 if (!signal.aborted) {
                   apply(value);
@@ -229,27 +245,71 @@ export function AdminSettings({
               </label>
             ))}
           </fieldset>
+          {!hardcore && (
+            <fieldset className="site-copy-fields submission-help-settings">
+              <legend>Submission help</legend>
+              <label htmlFor="submission-help-markdown">
+                How to submit (Markdown)
+              </label>
+              <textarea
+                id="submission-help-markdown"
+                rows={14}
+                value={help}
+                disabled={busy || !saved || !editable}
+                aria-describedby="submission-help-limit"
+                aria-invalid={helpInvalid || undefined}
+                onChange={(event) => setHelp(event.target.value)}
+              />
+              <p id="submission-help-limit">
+                {helpBytes.toLocaleString()} / 32,768 bytes. Supports Markdown
+                headings, lists, links, emphasis and code blocks. Empty text
+                uses the default instructions.
+              </p>
+              {helpInvalid && (
+                <p role="alert">
+                  Use at most 32 KiB of UTF-8 text with no NUL characters.
+                </p>
+              )}
+              <button
+                type="button"
+                className="site-button"
+                aria-expanded={preview}
+                onClick={() => setPreview(!preview)}
+              >
+                {preview ? 'Hide preview' : 'Preview instructions'}
+              </button>
+              {preview && (
+                <section aria-label="Submission help preview">
+                  <SubmissionHelpContent text={help} />
+                </section>
+              )}
+            </fieldset>
+          )}
           <button
             className="site-button"
             disabled={
               !editable ||
+              !dirty ||
+              helpInvalid ||
               busy ||
               !saved ||
               !clanName.trim() ||
-              Object.values(copy).some((text) => !text.trim()) ||
-              (enabled === saved.hardcoreEnabled &&
-                clanName.trim() ===
-                  (hardcore
-                    ? (saved.hardcore?.clanName ?? saved.clanName)
-                    : saved.clanName) &&
-                JSON.stringify(copy) ===
-                  JSON.stringify(
-                    (hardcore ? saved.hardcore?.copy : saved.copy) ??
-                      defaultSiteCopy,
-                  ))
+              Object.values(copy).some((text) => !text.trim())
             }
           >
             {hardcore ? 'Save hardcore settings' : 'Save site settings'}
+          </button>
+          <button
+            type="button"
+            className="site-button"
+            disabled={!dirty || busy || !saved || !editable}
+            onClick={() => {
+              if (saved) apply(saved);
+              action.setError(undefined);
+              action.setMessage(undefined);
+            }}
+          >
+            Discard changes
           </button>
         </form>
         {action.error && <p role="alert">{action.error}</p>}

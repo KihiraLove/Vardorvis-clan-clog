@@ -93,3 +93,10 @@ The hardcore switch controls public visibility; disabling it preserves records.
 The public XP tracker is hidden in hardcore mode until hardcore competitions
 are supported. Set the actual in-game clan match under RuneLite submissions,
 independently of the displayed site name. See [RuneLite](runelite-submissions.md).
+
+In Site settings, edit **How to submit (Markdown)** and use **Preview instructions**
+before saving. One public guide serves the collection log, XP tracker and hardcore
+views. Headings, lists, links, emphasis and code blocks are supported; raw HTML
+and embedded images are not rendered. The limit is 32 KiB of UTF-8 text. Empty
+text displays the default guide. Save explicitly or discard changes; only the
+administrator can edit this content.

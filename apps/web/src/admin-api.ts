@@ -740,6 +740,7 @@ export class LiveAdminClient implements AdminClient {
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
+    howToSubmitMarkdown?: string,
   ) {
     const result = parseSettings(
       await this.json(
@@ -753,6 +754,9 @@ export class LiveAdminClient implements AdminClient {
             ...(clanName === undefined ? {} : { clanName }),
             ...(copy === undefined ? {} : { copy }),
             ...(hardcore === undefined ? {} : { hardcore }),
+            ...(howToSubmitMarkdown === undefined
+              ? {}
+              : { howToSubmitMarkdown }),
           },
           'PUT',
         ),
@@ -760,6 +764,8 @@ export class LiveAdminClient implements AdminClient {
     );
     if (
       result.hardcoreEnabled !== hardcoreEnabled ||
+      (howToSubmitMarkdown !== undefined &&
+        result.howToSubmitMarkdown !== howToSubmitMarkdown) ||
       (clanName !== undefined && result.clanName !== clanName.trim()) ||
       (copy !== undefined &&
         JSON.stringify(result.copy) !== JSON.stringify(copy)) ||

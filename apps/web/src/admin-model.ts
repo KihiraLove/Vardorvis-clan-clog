@@ -348,6 +348,7 @@ export interface AdminClient {
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
+    howToSubmitMarkdown?: string,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
   login(username: string, password: string, signal: AbortSignal): Promise<void>;

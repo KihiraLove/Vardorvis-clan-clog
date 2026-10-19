@@ -34,10 +34,10 @@ test(
       await Promise.all([migrate(url), migrate(url)]);
       const rows = (await client.query('SELECT name FROM schema_migrations'))
         .rows;
-      assert.equal(rows.length, 6);
+      assert.equal(rows.length, 7);
       assert.equal(
         new Set(rows.map((row: { name: string }) => row.name)).size,
-        6,
+        7,
       );
       assert.equal(
         (await client.query('SELECT count(*)::int AS count FROM xp_state'))
@@ -209,7 +209,7 @@ test(
       assert.equal(settings.clan_name, 'Clan name');
       assert.equal(settings.hardcore_name, 'Clan name');
       assert.equal(settings.hardcore_enabled, false);
-      assert.equal(settings.version, 2);
+      assert.equal(settings.version, 3);
       assert.deepEqual(settings.public_copy, settings.hardcore_copy);
       assert.equal(settings.public_copy.xpTotalCaption, undefined);
       assert.equal(

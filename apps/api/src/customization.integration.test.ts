@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import pg from 'pg';
-import { defaultSiteCopy } from '@clog/domain';
+import { defaultSiteCopy, defaultSubmissionHelp } from '@clog/domain';
 import { createApp } from './app.js';
 import { PgStore } from './store.js';
 import { PgCatalogStore } from './catalog-store.js';
@@ -95,6 +95,7 @@ test(
         moderator = await login('reviewer', 'mod-new-password');
       const initial = (await app.inject('/api/v1/settings')).json();
       assert.deepEqual(initial.copy, defaultSiteCopy);
+      assert.equal(initial.howToSubmitMarkdown, defaultSubmissionHelp);
       const copy = {
         collectionTitle: 'Our drops',
         collectionCaption: 'Collected at clan events',
@@ -115,8 +116,24 @@ test(
         hardcoreEnabled: true,
         expectedRevision: initial.revision,
         copy,
+        howToSubmitMarkdown:
+          '## Clan guide\n\nUse **RuneLite**, then keep your proof.  \n',
       };
       assert.equal((await save(moderator, fields)).statusCode, 403);
+      for (const howToSubmitMarkdown of ['bad\0text', '😀'.repeat(8193)])
+        assert.equal(
+          (await save(owner, { ...fields, howToSubmitMarkdown })).statusCode,
+          422,
+        );
+      assert.equal(
+        (
+          await save(owner, {
+            ...fields,
+            howToSubmitMarkdown: 'a'.repeat(32769),
+          })
+        ).statusCode,
+        400,
+      );
       assert.equal(
         (await save({ ...owner, origin: 'https://other.example' }, fields))
           .statusCode,
@@ -143,6 +160,36 @@ test(
       );
       const saved = await save(owner, fields);
       assert.equal(saved.statusCode, 200, saved.body);
+      assert.equal(
+        saved.json().howToSubmitMarkdown,
+        fields.howToSubmitMarkdown,
+      );
+      const publicHelp = await app.inject({
+        url: '/api/v1/settings',
+        headers: { 'if-none-match': '"' + initial.revision + '"' },
+      });
+      assert.equal(publicHelp.statusCode, 200);
+      assert.equal(
+        publicHelp.json().howToSubmitMarkdown,
+        fields.howToSubmitMarkdown,
+      );
+      assert.deepEqual(Object.keys(publicHelp.json()).sort(), [
+        'clanName',
+        'copy',
+        'hardcore',
+        'hardcoreEnabled',
+        'howToSubmitMarkdown',
+        'revision',
+      ]);
+      assert.equal(
+        (
+          await app.inject({
+            url: '/api/v1/settings',
+            headers: { 'if-none-match': publicHelp.headers.etag as string },
+          })
+        ).statusCode,
+        304,
+      );
       assert.deepEqual(
         (await app.inject('/api/v1/settings')).json().copy,
         copy,
@@ -158,6 +205,14 @@ test(
       assert.equal(settingsAudit.actor_discord_id, admin.id);
       assert.deepEqual(settingsAudit.old_public_copy, defaultSiteCopy);
       assert.deepEqual(settingsAudit.new_public_copy, copy);
+      assert.equal(
+        settingsAudit.old_how_to_submit_markdown,
+        defaultSubmissionHelp,
+      );
+      assert.equal(
+        settingsAudit.new_how_to_submit_markdown,
+        fields.howToSubmitMarkdown,
+      );
       // Legacy clients that only change hardcore/name retain the new labels.
       assert.equal(
         (
@@ -170,6 +225,29 @@ test(
         200,
       );
       assert.deepEqual((await backend.settings()).copy, copy);
+      assert.equal(
+        (await new PgStore(pool).settings()).howToSubmitMarkdown,
+        fields.howToSubmitMarkdown,
+      );
+      // Maximum-size guides exceed the global 16 KiB body limit and must still save.
+      for (const howToSubmitMarkdown of [
+        'a'.repeat(32768),
+        '😀'.repeat(8192),
+        '\t'.repeat(32768),
+        '',
+      ]) {
+        const current = await backend.settings();
+        const receipt = await save(owner, {
+          hardcoreEnabled: false,
+          expectedRevision: current.revision,
+          howToSubmitMarkdown,
+        });
+        assert.equal(receipt.statusCode, 200, receipt.body);
+        assert.equal(
+          (await backend.settings()).howToSubmitMarkdown,
+          howToSubmitMarkdown,
+        );
+      }
       await pool.query(
         "INSERT INTO items(id,name,icon_path) VALUES(42,'Deleted drop','/items/42.png'),(43,'Kept drop','/items/43.png'); INSERT INTO pages(id,category,name,sort_order) VALUES('custom-a','bosses','A',1),('custom-b','other','B',2); INSERT INTO page_items(page_id,item_id,slot) VALUES('custom-a',42,0),('custom-a',43,1),('custom-b',42,0)",
       );
@@ -337,7 +415,7 @@ test(
         while (
           !(
             await root.query(
-              "SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query='SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE'",
+              "SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query='SELECT 1 FROM items WHERE id=$1 AND active FOR UPDATE'",
               [schema],
             )
           ).rowCount

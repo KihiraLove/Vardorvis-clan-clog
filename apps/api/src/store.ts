@@ -4,6 +4,7 @@ import { unlink } from 'node:fs/promises';
 import {
   parseSiteCopy,
   parseHardcoreAppearance,
+  parseSubmissionHelp,
   classifyCollection,
   type SiteCopy,
   type HardcoreAppearance,
@@ -568,8 +569,9 @@ export class PgStore implements BackendStore {
         public_copy: SiteCopy;
         hardcore_name: string;
         hardcore_copy: SiteCopy;
+        how_to_submit_markdown: string;
       }>(
-        'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true',
+        'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy, how_to_submit_markdown FROM site_settings WHERE singleton=true',
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Settings unavailable.');
@@ -577,6 +579,7 @@ export class PgStore implements BackendStore {
       revision: 'settings-' + row.version,
       hardcoreEnabled: row.hardcore_enabled,
       clanName: row.clan_name,
+      howToSubmitMarkdown: parseSubmissionHelp(row.how_to_submit_markdown),
       copy: parseSiteCopy(row.public_copy),
       hardcore: parseHardcoreAppearance({
         clanName: row.hardcore_name,
@@ -591,7 +594,15 @@ export class PgStore implements BackendStore {
     clanName?: string,
     copy?: SiteCopy,
     hardcore?: HardcoreAppearance,
+    howToSubmitMarkdown?: string,
   ): Promise<Settings | null> {
+    if (howToSubmitMarkdown !== undefined) {
+      try {
+        parseSubmissionHelp(howToSubmitMarkdown);
+      } catch (error) {
+        throw new ApiError(422, (error as Error).message);
+      }
+    }
     if (
       clanName !== undefined &&
       (!clanName.trim() || clanName.trim().length > 80)
@@ -608,8 +619,9 @@ export class PgStore implements BackendStore {
           public_copy: SiteCopy;
           hardcore_name: string;
           hardcore_copy: SiteCopy;
+          how_to_submit_markdown: string;
         }>(
-          'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true FOR UPDATE',
+          'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy, how_to_submit_markdown FROM site_settings WHERE singleton=true FOR UPDATE',
         )
       ).rows[0];
       if (!old || 'settings-' + old.version !== revision) {
@@ -617,13 +629,14 @@ export class PgStore implements BackendStore {
         return null;
       }
       const version = old.version + 1;
+      const help = howToSubmitMarkdown ?? old.how_to_submit_markdown;
       const name = clanName?.trim() ?? old.clan_name;
       const text = parseSiteCopy(copy ?? old.public_copy);
       const hc = parseHardcoreAppearance(
         hardcore ?? { clanName: old.hardcore_name, copy: old.hardcore_copy },
       );
       await client.query(
-        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4, hardcore_name=$5, hardcore_copy=$6 WHERE singleton=true',
+        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4, hardcore_name=$5, hardcore_copy=$6, how_to_submit_markdown=$7 WHERE singleton=true',
         [
           enabled,
           version,
@@ -631,10 +644,11 @@ export class PgStore implements BackendStore {
           JSON.stringify(text),
           hc.clanName,
           JSON.stringify(hc.copy),
+          help,
         ],
       );
       await client.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy,old_hardcore_name,new_hardcore_name,old_hardcore_copy,new_hardcore_copy) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy,old_hardcore_name,new_hardcore_name,old_hardcore_copy,new_hardcore_copy,old_how_to_submit_markdown,new_how_to_submit_markdown) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)',
         [
           actor,
           old.hardcore_enabled,
@@ -648,6 +662,8 @@ export class PgStore implements BackendStore {
           hc.clanName,
           JSON.stringify(old.hardcore_copy),
           JSON.stringify(hc.copy),
+          old.how_to_submit_markdown,
+          help,
         ],
       );
       await client.query('COMMIT');
@@ -657,6 +673,7 @@ export class PgStore implements BackendStore {
         clanName: name,
         copy: text,
         hardcore: hc,
+        howToSubmitMarkdown: help,
       };
     } catch (error) {
       await client.query('ROLLBACK');

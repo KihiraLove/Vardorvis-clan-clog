@@ -134,6 +134,7 @@ test(
         '004_permanently_open_pages.sql',
         '005_unmatched_runelite.sql',
         '006_collection_types.sql',
+        '007_submission_help.sql',
       ],
     );
     assert.equal(

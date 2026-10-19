@@ -89,7 +89,9 @@ test(
         result.push(
           (
             await client.query(
-              "SELECT to_jsonb(t)-'collection_type'-'collection_reason' row FROM " +
+              "SELECT to_jsonb(t)-'collection_type'-'collection_reason'-'how_to_submit_markdown'" +
+                (table === 'site_settings' ? "-'version'" : '') +
+                ' row FROM ' +
                 table +
                 ' t ORDER BY to_jsonb(t)::text',
             )

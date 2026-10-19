@@ -111,7 +111,7 @@ test(
     assert.equal(
       (await client.query('SELECT count(*)::int n FROM schema_migrations'))
         .rows[0].n,
-      6,
+      7,
     );
     const unknown = randomUUID();
     await client.query(

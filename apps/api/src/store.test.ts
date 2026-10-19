@@ -4,7 +4,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
-import { defaultSiteCopy } from '@clog/domain';
+import { defaultSiteCopy, defaultSubmissionHelp } from '@clog/domain';
 import { PgStore } from './store.js';
 import { createApp } from './app.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -39,9 +39,10 @@ test(
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
-        revision: 'settings-1',
+        revision: 'settings-3',
         clanName: 'Clan name',
         hardcoreEnabled: false,
+        howToSubmitMarkdown: defaultSubmissionHelp,
         copy: defaultSiteCopy,
         hardcore: { clanName: 'Clan name', copy: defaultSiteCopy },
       });
@@ -71,7 +72,7 @@ test(
       assert.deepEqual(reordered.json().pages[0].itemIds, [43, 42]);
       async function claim(id: string, mode: boolean, status: string) {
         await pool.query(
-          "INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore,status,reviewed_by,reviewed_at) VALUES($1,$4,'private-user','private-guild','raw-private',42,'Collector','2026-10-01','admin','https://imgur.com/private-evidence',$2,$3,'private-reviewer',now())",
+          "INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore,status,reviewed_by,reviewed_at,collection_type) VALUES($1,$4,'private-user','private-guild','raw-private',42,'Collector','2026-10-01','admin','https://imgur.com/private-evidence',$2,$3,'private-reviewer',now(),CASE WHEN $2 THEN 'regular' ELSE 'event' END)",
           [id, mode, status, id],
         );
       }
@@ -99,8 +100,8 @@ test(
       assert.equal(revised.json().credits[0].hardcore, true);
       assert.equal(revised.json().credits.length, 1);
       const results = await Promise.all([
-        store.saveSettings(true, 'settings-1', 'admin-one'),
-        store.saveSettings(false, 'settings-1', 'admin-two'),
+        store.saveSettings(true, 'settings-3', 'admin-one'),
+        store.saveSettings(false, 'settings-3', 'admin-two'),
       ]);
       assert.equal(results.filter(Boolean).length, 1);
       assert.equal(

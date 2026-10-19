@@ -1,7 +1,7 @@
 /** Verify independently audited regular and hardcore settings from a fresh setup. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -47,9 +47,10 @@ test(
         '../../../packages/database/migrations/',
         import.meta.url,
       );
-      await pool.query(
-        await readFile(new URL('001_baseline.sql', migrations), 'utf8'),
-      );
+      for (const file of (await readdir(migrations))
+        .filter((name) => name.endsWith('.sql'))
+        .sort())
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       await logos.initialize();
       const svg = Buffer.from(
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>',
