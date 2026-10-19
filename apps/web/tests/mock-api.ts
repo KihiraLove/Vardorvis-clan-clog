@@ -185,6 +185,13 @@ export async function mockApi(
           csrf,
           signal,
         );
+      else if (path === '/api/v1/admin/schedules/permanent-pages')
+        result = await admin.setPermanentPages(
+          b.pageIds,
+          b.expectedRevision,
+          csrf,
+          signal,
+        );
       else if (path.startsWith('/api/v1/admin/schedules/')) {
         const id = path.split('/').at(-1)!;
         result =

@@ -131,6 +131,7 @@ test(
         '001_baseline.sql',
         '002_staff_page_access.sql',
         '003_wom_multi_metric.sql',
+        '004_permanently_open_pages.sql',
       ],
     );
     assert.equal(
@@ -384,6 +385,17 @@ test(
     );
     assert.deepEqual(await access.settings(), beforeConflict);
     await save([]);
+    assert.equal(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/v1/admin/schedules/permanent-pages',
+          headers: modHeaders,
+          payload: { expectedRevision: 'schedules-1', pageIds: [] },
+        })
+      ).statusCode,
+      403,
+    );
     assert.equal(
       (
         await app.inject({

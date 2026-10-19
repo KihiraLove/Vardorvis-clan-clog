@@ -172,6 +172,7 @@ export {
 export {
   parseCollectionScheduleInput,
   parseSchedulingState,
+  parsePermanentPageIds,
   scheduleIdPattern,
   scheduledItemOpen,
   closedCollectionPageMessage,

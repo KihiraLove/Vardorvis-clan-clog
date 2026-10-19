@@ -17,11 +17,12 @@ import { PgClanKeyStore, loadClanKeyRoot } from './clan-api-key.js';
 import { PgSchedulingStore, lockScheduling } from './scheduling-store.js';
 import { PgRuneLiteSettingsStore } from './runelite-settings.js';
 import { hashPassword } from './passwords.js';
+import { PgCatalogStore } from './catalog-store.js';
 
 test(
   'scheduling gates public intake atomically while staff manual claims can record closed-page achievements',
   { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
+  async (t) => {
     const connectionString = process.env.TEST_DATABASE_URL!;
     const root = new pg.Pool({ connectionString });
     const schema = 'schedule_test_' + randomUUID().replaceAll('-', '');
@@ -116,6 +117,7 @@ test(
         revision: 'schedules-1',
         enabled: false,
         schedules: [],
+        permanentlyOpenPageIds: [],
       });
       const path = '/api/v1/admin/schedules';
       assert.equal((await app.inject(path)).statusCode, 401);
@@ -561,6 +563,192 @@ test(
         await blocker.query('ROLLBACK');
         blocker.release();
       }
+      await t.test(
+        'permanent selections authorize staff writes, retain windows and open both intake paths independently',
+        async () => {
+          const permanentPath = path + '/permanent-pages';
+          assert.equal(
+            (
+              await app.inject({
+                method: 'PUT',
+                url: permanentPath,
+                payload: { expectedRevision: state.revision, pageIds: [] },
+              })
+            ).statusCode,
+            401,
+          );
+          assert.equal(
+            (
+              await write(
+                'PUT',
+                permanentPath,
+                { expectedRevision: state.revision, pageIds: ['page-a'] },
+                { ...moderator, 'x-csrf-token': 'bad' },
+              )
+            ).statusCode,
+            403,
+          );
+          for (const pageIds of [
+            ['missing'],
+            ['page-a', 'page-a'],
+            [1],
+            [' page-a'],
+          ])
+            assert.ok(
+              [400, 422].includes(
+                (
+                  await write('PUT', permanentPath, {
+                    expectedRevision: state.revision,
+                    pageIds,
+                  })
+                ).statusCode,
+              ),
+            );
+          assert.equal(
+            (
+              await write('PUT', permanentPath, {
+                expectedRevision: state.revision,
+                pageIds: [],
+                enabled: true,
+              })
+            ).statusCode,
+            400,
+          );
+          const windows = structuredClone(state.schedules);
+          const response = await write('PUT', permanentPath, {
+            expectedRevision: state.revision,
+            pageIds: ['page-a'],
+          });
+          assert.equal(response.statusCode, 200, response.body);
+          state = response.json();
+          assert.deepEqual(state.permanentlyOpenPageIds, ['page-a']);
+          assert.deepEqual(state.schedules, windows);
+          assert.equal(state.enabled, true);
+          assert.equal(
+            (
+              await write('PUT', permanentPath, {
+                expectedRevision: 'schedules-1',
+                pageIds: [],
+              })
+            ).statusCode,
+            409,
+          );
+          for (const window of windows) {
+            const response = await write('DELETE', path + '/' + window.id, {
+              expectedRevision: state.revision,
+            });
+            assert.equal(response.statusCode, 200, response.body);
+            state = response.json();
+          }
+          assert.deepEqual(state.schedules, []);
+          assert.deepEqual(state.permanentlyOpenPageIds, ['page-a']);
+          const permanentRune = await runelite(
+            3,
+            randomUUID(),
+            'Permanent Player',
+          );
+          assert.equal(permanentRune.statusCode, 201, permanentRune.body);
+          assert.notEqual(permanentRune.json().status, 'rejected');
+          assert.equal((await discord(3)).statusCode, 201); // Shared canonical item needs only permanent page A.
+          await toggle(false);
+          assert.deepEqual(state.permanentlyOpenPageIds, ['page-a']);
+          await toggle(true);
+          assert.deepEqual(
+            (await new PgSchedulingStore(pool).state()).permanentlyOpenPageIds,
+            ['page-a'],
+          );
+          const last = (
+            await pool.query(
+              "SELECT actor_id,old_values,new_values FROM collection_schedule_audit WHERE action='set_permanent_pages' ORDER BY id DESC LIMIT 1",
+            )
+          ).rows[0];
+          assert.equal(last.actor_id, mod.id);
+          assert.deepEqual(last.old_values.permanentlyOpenPageIds, []);
+          assert.deepEqual(last.new_values.permanentlyOpenPageIds, ['page-a']);
+          await pool.query(
+            'CREATE TRIGGER fail_schedule_audit BEFORE INSERT ON collection_schedule_audit FOR EACH ROW EXECUTE FUNCTION fail_schedule_audit()',
+          );
+          assert.equal(
+            (
+              await write('PUT', permanentPath, {
+                expectedRevision: state.revision,
+                pageIds: [],
+              })
+            ).statusCode,
+            503,
+          );
+          assert.deepEqual(await scheduling.state(), state);
+          await pool.query(
+            'DROP TRIGGER fail_schedule_audit ON collection_schedule_audit',
+          );
+          const races = await Promise.all([
+            write('PUT', permanentPath, {
+              expectedRevision: state.revision,
+              pageIds: ['page-b'],
+            }),
+            write('POST', path, { expectedRevision: state.revision, ...input }),
+          ]);
+          assert.equal(races.filter((r) => r.statusCode === 409).length, 1);
+          assert.equal(
+            races.filter((r) => r.statusCode === 200 || r.statusCode === 201)
+              .length,
+            1,
+          );
+          state = await scheduling.state();
+          const saved = await write(
+            'PUT',
+            permanentPath,
+            { expectedRevision: state.revision, pageIds: ['page-a'] },
+            owner,
+          );
+          assert.equal(saved.statusCode, 200, saved.body);
+          state = saved.json();
+        },
+      );
+      await t.test(
+        'retiring a permanent page removes its opening atomically and prevents stale reopening',
+        async () => {
+          const catalogStore = new PgCatalogStore(pool);
+          const catalog = await catalogStore.catalog();
+          const page = catalog.pages.find((p) => p.id === 'page-a')!;
+          const oldRevision = state.revision;
+          await catalogStore.removePage(
+            page.id,
+            catalog.revision,
+            page.version,
+            admin.id,
+          );
+          state = await scheduling.state();
+          assert.deepEqual(state.permanentlyOpenPageIds, []);
+          assert.notEqual(state.revision, oldRevision);
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT 1 FROM collection_permanent_pages WHERE page_id='page-a'",
+              )
+            ).rowCount,
+            0,
+          );
+          const last = (
+            await pool.query(
+              'SELECT action,old_values,new_values FROM collection_schedule_audit ORDER BY id DESC LIMIT 1',
+            )
+          ).rows[0];
+          assert.equal(last.action, 'remove_permanent_page');
+          assert.deepEqual(last.old_values.permanentlyOpenPageIds, ['page-a']);
+          assert.deepEqual(last.new_values.permanentlyOpenPageIds, []);
+          const restore = await write('PUT', path + '/permanent-pages', {
+            expectedRevision: state.revision,
+            pageIds: ['page-a'],
+          });
+          assert.equal(restore.statusCode, 422);
+          await pool.query("UPDATE pages SET active=true WHERE id='page-a'");
+          assert.deepEqual(
+            (await scheduling.state()).permanentlyOpenPageIds,
+            [],
+          );
+        },
+      );
     } finally {
       await app.close();
       await pool.end();

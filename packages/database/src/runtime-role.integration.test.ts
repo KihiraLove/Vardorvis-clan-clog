@@ -29,7 +29,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT DELETE',
-    'admin_sessions collection_log_schedule_pages game_item_ids page_items',
+    'admin_sessions collection_log_schedule_pages collection_permanent_pages game_item_ids page_items',
   ],
   ['SELECT INSERT UPDATE DELETE', 'auth_rate_limits collection_log_schedules'],
 ])
@@ -332,6 +332,20 @@ test(
           );
           await runtime.query(
             "INSERT INTO pages(id,category,name,sort_order) VALUES('runtime-page','runtime-section','Runtime page',0)",
+          );
+          await runtime.query(
+            "INSERT INTO collection_permanent_pages(page_id) VALUES('runtime-page')",
+          );
+          assert.deepEqual(
+            (
+              await runtime.query(
+                'SELECT page_id FROM collection_permanent_pages',
+              )
+            ).rows,
+            [{ page_id: 'runtime-page' }],
+          );
+          await runtime.query(
+            "DELETE FROM collection_permanent_pages WHERE page_id='runtime-page'",
           );
           await runtime.query(
             "INSERT INTO page_items(page_id,item_id,slot) VALUES('runtime-page',1000001,0)",

@@ -44,19 +44,28 @@ export function AdminScheduling({
   const [endLocal, setEndLocal] = useState('');
   const [pageIds, setPageIds] = useState<string[]>([]);
   const [pageSearch, setPageSearch] = useState('');
+  const [permanentDraft, setPermanentDraft] = useState<string[]>();
+  const [permanentSearch, setPermanentSearch] = useState('');
+  const [permanentFeedback, setPermanentFeedback] = useState(false);
   const [removing, setRemoving] = useState<CollectionSchedule>();
   const deleteDialog = useRef<HTMLDialogElement>(null);
   const [now, setNow] = useState(() => new Date().toISOString());
   const action = useAdminAction(onAccessLost);
+  const permanentIds = permanentDraft ?? state?.permanentlyOpenPageIds ?? [];
+  const permanentDirty =
+    permanentDraft !== undefined &&
+    JSON.stringify(permanentDraft.slice().sort()) !==
+      JSON.stringify(state?.permanentlyOpenPageIds ?? []);
   const edited = state?.schedules.find((schedule) => schedule.id === editingId);
   useAdminDraft(
-    edited
-      ? title !== edited.title ||
+    permanentDirty ||
+      (edited
+        ? title !== edited.title ||
           startLocal !== localScheduleInput(edited.startsAt) ||
           endLocal !== localScheduleInput(edited.endsAt) ||
           JSON.stringify(pageIds.slice().sort()) !==
             JSON.stringify(edited.pageIds.slice().sort())
-      : !!(title || startLocal || endLocal || pageIds.length),
+        : !!(title || startLocal || endLocal || pageIds.length)),
     action.busy,
   );
   useEffect(() => {
@@ -114,6 +123,7 @@ export function AdminScheduling({
       setState(state);
       setCatalog(catalog);
       reset();
+      setPermanentDraft(undefined);
       setRemoving(undefined);
     }
   };
@@ -164,6 +174,7 @@ export function AdminScheduling({
               onClick={() => {
                 if (!state) return;
                 const enabled = !state.enabled;
+                setPermanentFeedback(false);
                 void action.execute(async (signal) => {
                   const saved = await client.setSchedulingEnabled(
                     enabled,
@@ -192,9 +203,140 @@ export function AdminScheduling({
         )}
         {state?.enabled && (
           <p className="admin-note">
-            Pages are closed outside their scheduled windows. No active windows
-            means submissions are closed.
+            Pages are open during their scheduled windows or while selected as
+            permanently open. Hardcore collections are always open.
           </p>
+        )}
+      </section>
+      <section
+        className="admin-panel scheduling-panel"
+        aria-labelledby="permanent-pages-title"
+      >
+        <h2 id="permanent-pages-title">Permanently open pages</h2>
+        <p>
+          Keep these pages open regardless of timed schedules. Hardcore
+          collections are always open separately.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!state || !permanentDirty) return;
+            setPermanentFeedback(true);
+            void action.execute(async (signal) => {
+              const saved = await client.setPermanentPages(
+                permanentIds,
+                state.revision,
+                session.csrfToken,
+                signal,
+              );
+              if (!signal.aborted) {
+                setState(saved);
+                setPermanentDraft(undefined);
+                action.setMessage('Permanently open pages saved.');
+              }
+            }, reload);
+          }}
+        >
+          <fieldset className="admin-fieldset" disabled={busy}>
+            <label htmlFor="permanent-pages-search">
+              Find permanently open pages
+              <input
+                id="permanent-pages-search"
+                type="search"
+                value={permanentSearch}
+                onChange={(event) => setPermanentSearch(event.target.value)}
+              />
+            </label>
+            <fieldset className="schedule-page-list catalog-picker">
+              <legend>Pages to keep open</legend>
+              <div className="catalog-choice-list">
+                {!catalog && <p>Loading pages…</p>}
+                {catalog?.pages
+                  .filter((p) =>
+                    (p.name + ' ' + p.category)
+                      .toLowerCase()
+                      .includes(permanentSearch.toLowerCase()),
+                  )
+                  .map((page) => (
+                    <label className="admin-checkbox" key={page.id}>
+                      <input
+                        type="checkbox"
+                        checked={permanentIds.includes(page.id)}
+                        onChange={(event) => {
+                          setPermanentDraft(
+                            event.target.checked
+                              ? [...permanentIds, page.id]
+                              : permanentIds.filter((id) => id !== page.id),
+                          );
+                          action.setMessage(undefined);
+                        }}
+                      />
+                      {page.name} ({page.category})
+                    </label>
+                  ))}
+                {catalog &&
+                  !catalog.pages.some((p) =>
+                    (p.name + ' ' + p.category)
+                      .toLowerCase()
+                      .includes(permanentSearch.toLowerCase()),
+                  ) && <p>No matching pages.</p>}
+              </div>
+            </fieldset>
+            <p className="admin-note">{permanentIds.length} pages selected.</p>
+            {permanentIds.length > 0 && (
+              <ul className="permanent-page-list">
+                {permanentIds.map((id) => {
+                  const page = catalog?.pages.find((p) => p.id === id);
+                  const name = page?.name ?? 'Unavailable page: ' + id;
+                  return (
+                    <li key={id}>
+                      <span>
+                        {name}
+                        {page
+                          ? ' (' + page.category + ')'
+                          : ' (remove before saving)'}
+                      </span>
+                      <button
+                        type="button"
+                        className="site-button"
+                        aria-label={'Remove ' + name}
+                        onClick={() => {
+                          setPermanentDraft(
+                            permanentIds.filter((value) => value !== id),
+                          );
+                          action.setMessage(undefined);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="admin-actions">
+              <button className="site-button" disabled={!permanentDirty}>
+                Save changes
+              </button>
+              <button
+                type="button"
+                className="site-button"
+                disabled={!permanentDirty}
+                onClick={() => {
+                  setPermanentDraft(undefined);
+                  action.setMessage(undefined);
+                }}
+              >
+                Discard changes
+              </button>
+            </div>
+          </fieldset>
+        </form>
+        {permanentFeedback && action.error && (
+          <p role="alert">{action.error}</p>
+        )}
+        {permanentFeedback && action.message && (
+          <p role="status">{action.message}</p>
         )}
       </section>
       <section className="admin-panel scheduling-panel">
@@ -214,6 +356,7 @@ export function AdminScheduling({
           onSubmit={(event) => {
             event.preventDefault();
             if (!state) return;
+            setPermanentFeedback(false);
             void action.execute(async (signal) => {
               const input = parseCollectionScheduleInput({
                 title,
@@ -440,6 +583,7 @@ export function AdminScheduling({
                 disabled={busy}
                 onClick={() => {
                   if (!state) return;
+                  setPermanentFeedback(false);
                   void action.execute(async (signal) => {
                     const saved = await client.deleteSchedule(
                       removing.id,
@@ -469,8 +613,12 @@ export function AdminScheduling({
             </div>
           </dialog>
         )}
-        {action.error && <p role="alert">{action.error}</p>}
-        {action.message && <p role="status">{action.message}</p>}
+        {!permanentFeedback && action.error && (
+          <p role="alert">{action.error}</p>
+        )}
+        {!permanentFeedback && action.message && (
+          <p role="status">{action.message}</p>
+        )}
       </section>
     </>
   );

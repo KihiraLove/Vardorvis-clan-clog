@@ -43,7 +43,12 @@ and submission history. Section, page and item order stays local until you click
 ## Scheduling and competitions
 
 When scheduling is off, normal intake rules apply. When on, a regular item needs
-at least one associated page open in a saved window. Windows overlap as a union
+at least one associated page open in a saved window or selected under
+**Permanently open pages**. Search and select pages there, then click **Save changes**;
+**Discard changes** restores the saved selection. These selections survive changes
+to timed windows and the scheduling switch. Removing a catalog page removes its
+permanent opening too. Moderators with Scheduling access can manage selections;
+only the administrator changes the scheduling switch. Windows overlap as a union
 and use UTC on the server. The UI accepts local times and shows UTC alongside.
 Hardcore pages remain open. Manual staff intake bypasses closed windows.
 

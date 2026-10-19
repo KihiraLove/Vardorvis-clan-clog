@@ -21,6 +21,7 @@ import {
   type RuneLiteSettings,
   type RuneLiteSettingsUpdate,
   parseCollectionScheduleInput,
+  parsePermanentPageIds,
   type SchedulingState,
   type CollectionScheduleInput,
 } from '@clog/domain';
@@ -151,6 +152,7 @@ export class MemoryAdminClient implements AdminClient {
     revision: 'schedules-1',
     enabled: false,
     schedules: [],
+    permanentlyOpenPageIds: [],
   };
   async scheduling(signal: AbortSignal) {
     this.access(signal);
@@ -174,6 +176,20 @@ export class MemoryAdminClient implements AdminClient {
   ) {
     this.checkScheduleRevision(revision, signal);
     this.schedulingState.enabled = enabled;
+    this.nextScheduleRevision();
+    return this.scheduling(signal);
+  }
+  async setPermanentPages(
+    pageIds: string[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkScheduleRevision(revision, signal);
+    const ids = parsePermanentPageIds(pageIds);
+    if (ids.some((id) => !this.data.pages.some((p) => p.id === id)))
+      throw new AdminRequestError(422);
+    this.schedulingState.permanentlyOpenPageIds = ids;
     this.nextScheduleRevision();
     return this.scheduling(signal);
   }
@@ -594,6 +610,13 @@ export class MemoryAdminClient implements AdminClient {
     if (revision !== this.data.revision) throw new AdminRequestError(409);
     const page = this.data.pages.find((p) => p.id === id);
     if (!page || page.version !== version) throw new AdminRequestError(409);
+    if (this.schedulingState.permanentlyOpenPageIds.includes(id)) {
+      this.schedulingState.permanentlyOpenPageIds =
+        this.schedulingState.permanentlyOpenPageIds.filter(
+          (value) => value !== id,
+        );
+      this.nextScheduleRevision();
+    }
     this.data.pages = this.data.pages.filter((p) => p.id !== id);
     const retiredItemIds: number[] = [];
     this.pageVersions.delete(id);

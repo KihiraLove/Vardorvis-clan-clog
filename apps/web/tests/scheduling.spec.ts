@@ -142,6 +142,7 @@ test('moderators can create windows but cannot see or write the administrator en
     revision: 'schedules-1',
     enabled: true,
     schedules: [],
+    permanentlyOpenPageIds: [],
   };
   let created = false;
   await page.route('**/api/v1/**', async (route) => {

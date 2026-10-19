@@ -13,6 +13,23 @@ export interface SchedulingState {
   revision: string;
   enabled: boolean;
   schedules: CollectionSchedule[];
+  permanentlyOpenPageIds: string[];
+}
+export function parsePermanentPageIds(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > 2000 ||
+    value.some(
+      (id) =>
+        typeof id !== 'string' ||
+        !id.trim() ||
+        id.length > 100 ||
+        id !== id.trim(),
+    ) ||
+    new Set(value).size !== value.length
+  )
+    throw new Error('Choose up to 2,000 distinct collection log pages.');
+  return [...(value as string[])].sort();
 }
 export const scheduleIdPattern =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
@@ -91,16 +108,27 @@ export function parseSchedulingState(value: unknown): SchedulingState {
     new Set(schedules.map((schedule) => schedule.id)).size !== schedules.length
   )
     throw new Error('Duplicate schedule IDs.');
-  return { revision: row.revision, enabled: row.enabled, schedules };
+  return {
+    revision: row.revision,
+    enabled: row.enabled,
+    schedules,
+    permanentlyOpenPageIds: parsePermanentPageIds(
+      row.permanentlyOpenPageIds === undefined
+        ? []
+        : row.permanentlyOpenPageIds,
+    ),
+  };
 }
 /** Windows include their start and exclude their end. Shared items need any open page. */
 export function scheduledItemOpen(
-  state: Pick<SchedulingState, 'enabled' | 'schedules'>,
+  state: Pick<SchedulingState, 'enabled' | 'schedules'> &
+    Partial<Pick<SchedulingState, 'permanentlyOpenPageIds'>>,
   pageIds: readonly string[],
   now: string,
 ): boolean {
   return (
     !state.enabled ||
+    state.permanentlyOpenPageIds?.some((id) => pageIds.includes(id)) ||
     state.schedules.some(
       (schedule) =>
         schedule.startsAt <= now &&

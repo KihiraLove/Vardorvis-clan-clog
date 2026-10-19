@@ -2592,3 +2592,20 @@ main {
   gap: 1rem;
   padding: 0.5rem 0;
 }
+.permanent-page-list {
+  list-style: none;
+  padding: 0;
+}
+.permanent-page-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.permanent-page-list span {
+  overflow-wrap: anywhere;
+}
+.permanent-page-list button {
+  flex-shrink: 0;
+}

@@ -36,6 +36,7 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   clan_logo_assets: append,
   collection_log_schedule_pages: replace,
   collection_log_schedules: mutable,
+  collection_permanent_pages: replace,
   collection_schedule_audit: append,
   collection_scheduling: update,
   competition_import_history: append,
