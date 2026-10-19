@@ -5,10 +5,14 @@
   font-display: swap;
 }
 :root {
+  --site-background: #171612;
+  --site-background-highlight: #29271e;
+  --site-shell-width: 1336px;
+  --site-gutter: 24px;
   font-family: system-ui, sans-serif;
   color-scheme: dark;
   color: #c9c2b2;
-  background: #171612;
+  background: var(--site-background);
   font-synthesis: none;
 }
 * {
@@ -20,12 +24,14 @@ html {
 body {
   margin: 0;
   min-width: 280px;
-  background: radial-gradient(ellipse at 50% 30%, #29271e 0, #171612 65%);
-  min-height: 100vh;
-}
-/* Admin content loads asynchronously; keep its gradient anchored to the viewport. */
-body:has(.admin-page) {
+  background: radial-gradient(
+    ellipse at 50% 30%,
+    var(--site-background-highlight) 0,
+    var(--site-background) 65%
+  );
+  /* Route length and scrolling must not change the shared viewport backdrop. */
   background-attachment: fixed;
+  min-height: 100vh;
 }
 button,
 input,
@@ -47,9 +53,9 @@ select:focus-visible {
   outline-offset: 3px;
 }
 .site-shell {
-  max-width: 920px;
+  max-width: var(--site-shell-width);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 var(--site-gutter);
 }
 .site-header {
   display: flex;
@@ -563,9 +569,6 @@ main {
   top: 12px;
 }
 @media (max-width: 600px) {
-  .site-shell {
-    padding: 0 14px;
-  }
   .site-header {
     padding: 22px 0;
   }
@@ -1782,11 +1785,7 @@ html:has(.submission-review-dialog[open]) {
   }
 }
 
-/* Mockup layout: one centered public log with the event tracker below it. */
-.site-shell {
-  max-width: 1056px;
-  padding: 0 24px;
-}
+/* Shared header and public navigation across normal, hardcore and XP views. */
 .site-header {
   border: 0;
   padding: 18px 4px 12px;
@@ -2090,8 +2089,8 @@ main {
   color: #a99f82;
 }
 @media (max-width: 740px) {
-  .site-shell {
-    padding: 0 12px;
+  :root {
+    --site-gutter: 12px;
   }
   .site-header {
     min-height: 96px;
@@ -2450,13 +2449,14 @@ main {
   overflow-wrap: anywhere;
 }
 /* Competitions accompany the log while preserving its established frame proportions. */
-.site-shell {
-  max-width: 1336px;
-}
 .public-log-layout {
   --log-frame-height: calc(314px * var(--log-scale));
   /* Expand into the left gutter, up to 30%, without moving the log frame. */
-  --activity-expansion: clamp(0px, calc((100vw - 1336px) / 2), 72px);
+  --activity-expansion: clamp(
+    0px,
+    calc((100vw - var(--site-shell-width)) / 2),
+    72px
+  );
   margin-left: calc(-1 * var(--activity-expansion));
   display: grid;
   grid-template-columns: calc(240px + var(--activity-expansion)) minmax(
