@@ -1,3 +1,5 @@
+import { screenshotRecord } from './tests/screenshot.js';
+import { insertImage } from './proof-store.js';
 /** Database-backed REVIEW-01 / HC-01 integration, with no live Discord credentials. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -74,11 +76,23 @@ test(
         proof = 'https://m.imgur.com/acceptable',
       ) => {
         const id = randomUUID();
+        const image =
+          proof === 'https://m.imgur.com/acceptable'
+            ? screenshotRecord()
+            : undefined;
+        if (image) await insertImage(pool, image);
         await pool.query(
           'INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,' +
-            'raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore)' +
-            " VALUES($1,$2,'user','guild','Vardorvis item',$3,'Collector','2026-10-05','submission_default',$4,$5)",
-          [id, randomUUID(), itemId, proof, hardcore],
+            'raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,hardcore,proof_image_id)' +
+            " VALUES($1,$2,'user','guild','Vardorvis item',$3,'Collector','2026-10-05','submission_default',$4,$5,$6)",
+          [
+            id,
+            randomUUID(),
+            itemId,
+            image ? '' : proof,
+            hardcore,
+            image?.id ?? null,
+          ],
         );
         return id;
       };

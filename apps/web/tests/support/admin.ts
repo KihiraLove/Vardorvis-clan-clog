@@ -29,7 +29,7 @@ import {
 } from '@clog/domain';
 import { defaultBranding, type Branding } from '../../src/branding.ts';
 import {
-  safeProof,
+  safeScreenshotPath,
   validateCorrection,
   validateIconFile,
   validateItem,
@@ -429,7 +429,9 @@ export class MemoryAdminClient implements AdminClient {
       collectedOn: '2026-10-05',
       dateSource: 'submission',
       submittedAt: '2026-10-05T12:00:00Z',
-      proofUrl: 'https://imgur.com/a/test-proof',
+      proofUrl: '',
+      screenshotPath:
+        '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp',
       reviewNote: '',
       reviewReason: null,
     }));
@@ -489,7 +491,7 @@ export class MemoryAdminClient implements AdminClient {
       throw new AdminRequestError(422);
     if (fields.approve)
       this.ensureUnique('', item.id, fields.hardcore, collectionType);
-    if (fields.proofUrl && !safeProof(fields.proofUrl))
+    if (fields.proofUrl !== undefined && fields.proofUrl !== '')
       throw new AdminRequestError(422);
     const id = crypto.randomUUID();
     const row: Submission = {
@@ -1205,7 +1207,7 @@ export class MemoryAdminClient implements AdminClient {
       (action === 'approve'
         ? !this.data.items.some((item) => item.id === row.itemId) ||
           (row.source !== 'manual' &&
-            !safeProof(row.proofUrl) &&
+            !safeScreenshotPath(row.screenshotPath) &&
             !(row.source === 'runelite' && row.chatMessage?.trim()))
         : !reason.trim())
     )

@@ -60,7 +60,7 @@ export function reviewBlockers(
       ? 'Select and save an active canonical item before approving.'
       : null) ??
     (!x.validProof
-      ? 'A valid proof link, chat message or saved screenshot is required for approval.'
+      ? 'A saved screenshot or RuneLite chat message is required for approval.'
       : null);
   const approve =
     proof ??

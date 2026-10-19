@@ -74,7 +74,10 @@ function validateSubmission(fields: RuneLiteFields, rules: RuneLiteRules) {
     );
   return runeLiteDecision(fields.worldTypes, fields.username, rules);
 }
-export async function insertImage(client: pg.PoolClient, image: IconRecord) {
+export async function insertImage(
+  client: Pick<pg.PoolClient, 'query'>,
+  image: IconRecord,
+) {
   await client.query(
     'INSERT INTO submission_images(id,sha256,byte_size,width,height) VALUES($1,$2,$3,$4,$5)',
     [image.id, image.sha256, image.byteSize, image.width, image.height],

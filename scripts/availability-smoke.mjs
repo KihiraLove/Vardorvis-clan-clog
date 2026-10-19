@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { databaseUrl as runtimeDatabaseUrl } from '@clog/database/dist/secrets.js';
 /** Real supervisor/proxy/API with a local gateway-health fixture; never connects to Discord. */
 import assert from 'node:assert/strict';
@@ -23,6 +24,18 @@ import { HttpBotApi } from './apps/bot/dist/api.js';
 import { wireGateway } from './apps/bot/dist/runtime.js';
 if (process.env.AVAILABILITY_SMOKE_DISPOSABLE !== 'true')
   throw Error('Disposable stack only.');
+const screenshotBytes = await sharp({
+  create: { width: 16, height: 16, channels: 4, background: 'blue' },
+})
+  .png()
+  .toBuffer();
+const screenshot = {
+  id: '456789012345678901',
+  name: 'proof.png',
+  size: screenshotBytes.length,
+  contentType: 'image/png',
+  url: 'https://cdn.discordapp.com/attachments/234567890123456789/456789012345678901/proof.png',
+};
 const token = process.env.BOT_API_TOKEN,
   guild = process.env.DISCORD_GUILD_ID;
 assert.ok(token && guild);
@@ -179,16 +192,22 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
           response.end('{}');
           return;
         }
-        let body = '';
-        for await (const chunk of request) body += chunk;
-        posted = JSON.parse(body);
+        const chunks = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        const body = Buffer.concat(chunks);
+        const form = await new Request('https://api.example', {
+          method: 'POST',
+          headers: { 'Content-Type': request.headers['content-type'] },
+          body,
+        }).formData();
+        posted = JSON.parse(String(form.get('submission')));
         const upstream = await fetch(
           'http://127.0.0.1:3000/api/v1/bot/submissions',
           {
             method: 'POST',
             headers: {
               Authorization: 'Bearer ' + token,
-              'Content-Type': 'application/json',
+              'Content-Type': request.headers['content-type'],
             },
             body,
           },
@@ -220,7 +239,14 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
       messages = [];
     const runtime = wireGateway(
       client,
-      new HttpBotApi('http://127.0.0.1:' + proxy.address().port, token),
+      new HttpBotApi(
+        'http://127.0.0.1:' + proxy.address().port,
+        token,
+        undefined,
+        undefined,
+        undefined,
+        async () => screenshotBytes,
+      ),
       guild,
       undefined,
       {
@@ -242,12 +268,8 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
       isChatInputCommand: () => true,
       options: {
         getSubcommand: () => 'submit',
-        getString: (key) =>
-          key === 'item'
-            ? 'item:' + item.id
-            : key === 'proof'
-              ? 'https://imgur.com/a/shutdown-fixture'
-              : null,
+        getString: (key) => (key === 'item' ? 'item:' + item.id : null),
+        getAttachment: () => screenshot,
         getBoolean: () => false,
       },
       deferReply: async () => {},
@@ -299,7 +321,11 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
       const replay = await new HttpBotApi(
         'http://127.0.0.1:3000',
         token,
-      ).submit(posted);
+        undefined,
+        undefined,
+        undefined,
+        async () => screenshotBytes,
+      ).submit(posted, screenshot);
       assert.equal(replay.submissionId, stored.submissionId);
       assert.equal(
         (

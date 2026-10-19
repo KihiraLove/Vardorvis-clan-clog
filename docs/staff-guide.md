@@ -35,7 +35,7 @@ corrections to an approved credit require a reason. The revision prevents
 concurrent reviewers from overwriting each other; reload after a conflict.
 
 Manual submission accepts a collector, catalog item, collection date and optional
-PNG/proof URL/note. Choose **Regular collection** or **Event collection**;
+PNG screenshot and note. External proof links are no longer accepted. Choose **Regular collection** or **Event collection**;
 Approve immediately is on by default. Hardcore forces Regular and has independent
 credit. Its checkbox appears when hardcore worlds are enabled.
 

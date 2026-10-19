@@ -24,6 +24,18 @@ Successful replay returns the saved receipt. Auth failures are 401/403; stale
 state is 409; malformed or unsupported input is 400/422. A timeout cannot prove
 rollback: preserve the retry key and reconcile the original operation.
 
+`POST /bot/submissions` requires the bot credential and multipart fields
+`submission` (JSON) and `screenshot` (one PNG, up to 10 MiB). JSON contains
+`interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, `collectorName`,
+optional canonical `itemId` and optional `hardcore` (default false). Caller dates,
+decision fields and external proof URLs are rejected. The image is fully decoded,
+bounded to 8192 pixels per side/32 megapixels, and saved only as private lossless
+WebP. The Discord interaction ID binds metadata and image content: exact replay
+returns the original receipt with 200; new intake returns 201; changed data conflicts.
+Staff manual entry keeps optional PNG upload and RuneLite keeps chat proof.
+The former manual `proofUrl` field accepts only an empty compatibility value;
+historical URL data remains in audit/receipt records and is not new proof.
+
 `GET /settings` publishes `howToSubmitMarkdown`, shared by all public views.
 Administrator-only `PUT /admin/settings` accepts this optional field alongside
 `hardcoreEnabled` and `expectedRevision`. Omission preserves saved content; an

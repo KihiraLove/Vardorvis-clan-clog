@@ -8,7 +8,7 @@ import type { AdminCatalog, SubmissionDetail } from '../src/admin-model.ts';
 
 const editor = (page: Page) => page.locator('.submission-editor');
 const proofCheck = (page: Page) =>
-  editor(page).getByLabel(/^I checked the linked proof/);
+  editor(page).getByLabel(/^I checked the screenshot/);
 const review = (page: Page, collector: string) =>
   page.getByRole('button', { name: new RegExp('^Review ' + collector + ' ·') });
 const itemIcon = resolve('public/skills/sailing.webp');
@@ -82,6 +82,11 @@ async function mockAdmin(page: Page) {
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    if (path === state.detail.submission.screenshotPath)
+      return route.fulfill({
+        path: resolve('public/skills/sailing.webp'),
+        contentType: 'image/webp',
+      });
     if (path === '/api/v1/settings')
       return route.fulfill({
         json: {
@@ -674,6 +679,7 @@ test('unsafe proof cannot approve but an unmatched or malformed claim can be rej
   const state = await mockAdmin(page);
   state.detail.submission.itemId = null;
   state.detail.submission.proofUrl = 'javascript:alert(1)';
+  state.detail.submission.screenshotPath = null;
   let calls = 0;
   await page.route(
     '**/api/v1/admin/submissions/sample-hardcore/reject',
@@ -1023,6 +1029,7 @@ test('ADMIN-01 live HTTP view shows claim date provenance and permits verified p
   state.detail.submission = {
     ...state.detail.submission,
     source: 'manual',
+    screenshotPath: null,
     status: 'pending',
     proofUrl: '',
     dateSource: 'admin',
@@ -1096,10 +1103,11 @@ test('ADMIN-01 occupied-credit conflict retains the precise reason and reloads f
   ).toBeDisabled();
 });
 
-test('mobile Imgur proof remains reviewable and can be approved', async ({
+test('mobile screenshot proof can be approved while historical external links stay hidden', async ({
   page,
 }) => {
   const state = await mockAdmin(page);
+  await page.setViewportSize({ width: 320, height: 850 });
   state.detail.submission.proofUrl = 'https://m.imgur.com/a/evidence';
   await page.route(
     '**/api/v1/admin/submissions/sample-hardcore/approve',
@@ -1116,7 +1124,7 @@ test('mobile Imgur proof remains reviewable and can be approved', async ({
   await review(page, 'KihiraVD').click();
   await expect(
     editor(page).locator('a[href="https://m.imgur.com/a/evidence"]'),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(proofCheck(page)).toBeEnabled();
   await proofCheck(page).check();
   await editor(page)

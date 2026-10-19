@@ -1,3 +1,4 @@
+import { screenshotRecord } from './tests/screenshot.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -275,7 +276,7 @@ test(
             rawItemText: 'Two',
             itemId: 2,
             collectorName: 'Discord Player',
-            proofUrl: 'https://imgur.com/proof',
+            image: screenshotRecord(),
             hardcore: false,
           },
           'hash',
@@ -291,7 +292,7 @@ test(
         rawItemText: 'Three',
         itemId: 3,
         collectorName: 'Discord winner',
-        proofUrl: 'https://imgur.com/proof',
+        image: screenshotRecord(),
         hardcore: false,
       };
       const winnerHash = 'c'.repeat(64);

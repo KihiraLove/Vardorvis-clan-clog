@@ -22,6 +22,17 @@ export async function mockApi(
   if (options.xpSamples) await xp.samples();
   const signal = new AbortController().signal;
   const assets = new Map<string, { body: Buffer; contentType: string }>();
+  assets.set(
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp',
+    {
+      body: await sharp({
+        create: { width: 320, height: 180, channels: 4, background: '#443322' },
+      })
+        .webp({ lossless: true })
+        .toBuffer(),
+      contentType: 'image/webp',
+    },
+  );
   const logos: Branding[] = [{ ...defaultBranding }, { ...defaultBranding }];
   const previews = new Map<
     string,

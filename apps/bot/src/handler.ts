@@ -1,6 +1,5 @@
 /** Discord is an adapter; only an API 200/201 may produce a saved receipt. */
 import {
-  validateProofUrl,
   collectionTypeLabel,
   WorkloadError,
   type OperationalDiagnostics,
@@ -20,15 +19,8 @@ import {
   type Receipt,
 } from './api.js';
 import { closedCollectionPageMessage } from '@clog/domain';
+import { ScreenshotError, validateScreenshot } from './screenshot.js';
 
-export function validProof(value: string): boolean {
-  try {
-    validateProofUrl(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
 export function collectorSnapshot(
   member: ChatInputCommandInteraction['member'],
   username: string,
@@ -95,6 +87,8 @@ function unconfirmedMessage(interactionId?: string): string {
 }
 
 export function failureMessage(error: unknown, interactionId?: string): string {
+  if (error instanceof ScreenshotError)
+    return error.message + ' Nothing was sent to the submission service.';
   if (error instanceof UnconfirmedSubmissionError)
     return unconfirmedMessage(error.interactionId);
   if (error instanceof BotApiError) {
@@ -102,7 +96,7 @@ export function failureMessage(error: unknown, interactionId?: string): string {
       return closedCollectionPageMessage;
     if (error.status === 409)
       return 'This Discord interaction ID was already submitted with different details. Nothing new was saved.';
-    if (error.status === 422 || error.status === 400)
+    if ([400, 413, 415, 422].includes(error.status))
       return 'The submitted item, date or proof was rejected by the API. Nothing was saved.';
     if (error.status === 403 || error.status === 401)
       return 'The submission service rejected the configured bot credentials or guild. Nothing was saved.';
@@ -201,7 +195,12 @@ export async function handleSubmission(
       );
       return;
     }
-    const proofUrl = interaction.options.getString('proof', true);
+    const screenshot = interaction.options.getAttachment('screenshot');
+    if (!screenshot)
+      throw new ScreenshotError(
+        'Attach a PNG screenshot. If this option is missing, ask an administrator to register /cc-clog again.',
+      );
+    validateScreenshot(screenshot);
     const collectorName = collectorSnapshot(
       interaction.member,
       interaction.user.username,
@@ -212,11 +211,10 @@ export async function handleSubmission(
       !rawItemText.trim() ||
       rawItemText.length > 200 ||
       !collectorName ||
-      collectorName.length > 80 ||
-      !validProof(proofUrl)
+      collectorName.length > 80
     ) {
       await interaction.editReply(
-        'Invalid item, collector name or proof. Use a nonblank item and an HTTPS Imgur/Gyazo link.',
+        'Use a nonblank item and a collector name up to 80 characters.',
       );
       return;
     }
@@ -231,16 +229,18 @@ export async function handleSubmission(
       );
       return;
     }
-    const receipt = await api.submit({
-      interactionId: interaction.id,
-      guildId,
-      actorDiscordId: interaction.user.id,
-      rawItemText,
-      ...(itemId === undefined ? {} : { itemId }),
-      collectorName,
-      proofUrl,
-      hardcore,
-    });
+    const receipt = await api.submit(
+      {
+        interactionId: interaction.id,
+        guildId,
+        actorDiscordId: interaction.user.id,
+        rawItemText,
+        ...(itemId === undefined ? {} : { itemId }),
+        collectorName,
+        hardcore,
+      },
+      screenshot,
+    );
     saved = receipt;
     diagnostics?.record('receipt', {
       operation: 'submission',

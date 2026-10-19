@@ -3,7 +3,6 @@ import { AdminRequestError } from './admin-api.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { useState } from 'react';
 import {
-  safeProof,
   type AdminCatalog,
   type AdminClient,
   type ManualSubmissionInput,
@@ -38,7 +37,6 @@ export function ManualSubmissionForm({
   const [collectionType, setCollectionType] = useState<'regular' | 'event'>(
     'regular',
   );
-  const [proofUrl, setProofUrl] = useState('');
   const [screenshot, setScreenshot] = useState<File>();
   const [formVersion, setFormVersion] = useState(0);
   const [approve, setApprove] = useState(true);
@@ -51,14 +49,7 @@ export function ManualSubmissionForm({
     screenshot?: File | undefined;
   }>();
   useAdminDraft(
-    !!(
-      (open && itemId) ||
-      collectorName ||
-      proofUrl ||
-      screenshot ||
-      reason ||
-      pending
-    ),
+    !!((open && itemId) || collectorName || screenshot || reason || pending),
     busy,
   );
   const options = catalog.items.filter(
@@ -79,10 +70,6 @@ export function ManualSubmissionForm({
       setError('Select a specific item, collector and collection date.');
       return;
     }
-    if (proofUrl.trim() && !safeProof(proofUrl.trim())) {
-      setError('Proof must be a supported HTTPS Imgur or Gyazo link.');
-      return;
-    }
     if (
       screenshot &&
       (screenshot.type !== 'image/png' || screenshot.size > 10 * 1024 * 1024)
@@ -99,7 +86,6 @@ export function ManualSubmissionForm({
           hardcore: hardcoreEnabled && hardcore,
           collectionType:
             hardcoreEnabled && hardcore ? 'regular' : collectionType,
-          proofUrl: proofUrl.trim(),
           approve,
           reason: reason.trim(),
         },
@@ -137,7 +123,6 @@ export function ManualSubmissionForm({
       setCollectedOn('');
       setHardcore(false);
       setCollectionType('regular');
-      setProofUrl('');
       setScreenshot(undefined);
       setFormVersion((value) => value + 1);
       setApprove(true);
@@ -192,15 +177,6 @@ export function ManualSubmissionForm({
                     onChange={(event) => setScreenshot(event.target.files?.[0])}
                   />
                   <span className="admin-note">Up to 10 MiB.</span>
-                </label>
-                <label>
-                  Proof URL (optional)
-                  <input
-                    type="url"
-                    value={proofUrl}
-                    placeholder="https://imgur.com/…"
-                    onChange={(event) => setProofUrl(event.target.value)}
-                  />
                 </label>
                 <label>
                   Reason or note (optional)

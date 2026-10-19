@@ -6,8 +6,9 @@ are private. All bundled and stored images use WebP. PNG uploads are decoded and
 converted losslessly before storage; original PNGs are not saved. Icons retain
 their native dimensions and transparency, and screenshots retain readable text.
 Source/WOM links may point elsewhere, but rendering does not depend
-on third-party image hosting. External Imgur evidence remains a submitted proof
-link; RuneLite can upload the screenshot directly.
+on third-party image hosting. Discord submissions require a PNG attachment;
+RuneLite and staff can also upload screenshots directly. External proof links
+are no longer accepted.
 
 - [Catalog provenance](../catalog/provenance.json) and [asset manifest](../catalog/assets.json)
   identify pinned TempleOSRS, OSRS Wiki and RuneLite inputs, hashes and dimensions.

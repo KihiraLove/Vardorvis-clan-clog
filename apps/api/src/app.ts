@@ -300,7 +300,12 @@ export function createApp(
     };
   });
   if (store && (options.botConfiguration || options.bot))
-    botRoutes(app, store, options.botConfiguration ?? options.bot!);
+    botRoutes(
+      app,
+      store,
+      options.botConfiguration ?? options.bot!,
+      options.proofs,
+    );
   const requireAdmin =
     store && options.auth
       ? authRoutes(

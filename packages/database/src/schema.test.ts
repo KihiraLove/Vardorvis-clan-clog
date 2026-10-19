@@ -29,6 +29,7 @@ test(
           '006_collection_types.sql',
           '007_submission_help.sql',
           '008_webp_assets.sql',
+          '009_screenshot_proof.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

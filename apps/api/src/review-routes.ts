@@ -98,7 +98,7 @@ export function reviewRoutes(
               pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$',
             },
             hardcore: { type: 'boolean' },
-            proofUrl: { type: 'string', maxLength: 2048 },
+            proofUrl: { type: 'string', const: '' },
             approve: { type: 'boolean' },
             reason,
           },

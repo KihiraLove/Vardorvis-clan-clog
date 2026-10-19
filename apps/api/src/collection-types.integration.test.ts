@@ -1,3 +1,4 @@
+import { screenshotRecord } from './tests/screenshot.js';
 /** Exercise real classification, independent credits and races across all write paths. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -84,7 +85,7 @@ test(
         rawItemText:
           itemId === undefined ? 'Unrecognized item' : 'Item ' + itemId,
         collectorName: 'Collector',
-        proofUrl: 'https://imgur.com/example',
+        image: screenshotRecord(),
         hardcore,
         ...(itemId === undefined ? {} : { itemId }),
       };

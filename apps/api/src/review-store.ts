@@ -9,7 +9,7 @@ import {
 import { transaction } from './transaction.js';
 import type { IconRecord } from './icon-storage.js';
 import { insertImage, screenshotPath } from './proof-store.js';
-import { validCollectionDate, validProofUrl } from './intake.js';
+import { validCollectionDate } from './intake.js';
 import { ApiError, type BackendStore } from './types.js';
 import {
   readSubmissionFilters,
@@ -209,7 +209,7 @@ export class PgReviewStore implements ReviewStore {
       typeof fields.hardcore !== 'boolean' ||
       typeof fields.approve !== 'boolean' ||
       (typeof fields.proofUrl !== 'string' && fields.proofUrl !== undefined) ||
-      (fields.proofUrl && !validProofUrl(fields.proofUrl)) ||
+      (fields.proofUrl !== undefined && fields.proofUrl !== '') ||
       (typeof fields.reason !== 'string' && fields.reason !== undefined) ||
       (fields.reason?.trim().length ?? 0) > 1000
     )
@@ -534,8 +534,7 @@ export class PgReviewStore implements ReviewStore {
               !row.collectorName.trim() ||
               (row.source !== 'manual' &&
                 !row.proofImageId &&
-                !(row.source === 'runelite' && row.chatMessage?.trim()) &&
-                !validProofUrl(row.proofUrl))
+                !(row.source === 'runelite' && row.chatMessage?.trim()))
             )
               throw new ApiError(
                 422,

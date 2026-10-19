@@ -4,6 +4,7 @@ import {
   safeFailure,
   WorkloadError,
 } from '@clog/domain';
+import { downloadScreenshot, type ScreenshotAttachment } from './screenshot.js';
 export interface Candidate {
   id: number;
   name: string;
@@ -15,7 +16,6 @@ export interface Claim {
   rawItemText: string;
   itemId?: number;
   collectorName: string;
-  proofUrl: string;
   hardcore: boolean;
 }
 export interface Receipt {
@@ -34,7 +34,7 @@ export interface Receipt {
 }
 export interface BotApi {
   search(query: string): Promise<Candidate[]>;
-  submit(claim: Claim): Promise<Receipt>;
+  submit(claim: Claim, screenshot: ScreenshotAttachment): Promise<Receipt>;
 }
 export class BotApiError extends Error {
   get category() {
@@ -128,6 +128,7 @@ export class HttpBotApi implements BotApi {
     private readonly request: typeof fetch = fetch,
     private readonly searchTimeoutMs = 1900,
     private readonly submitTimeoutMs = 6500,
+    private readonly download = downloadScreenshot,
   ) {}
 
   /** Readiness verifies the authenticated bot route and database-backed catalog. */
@@ -179,11 +180,28 @@ export class HttpBotApi implements BotApi {
     return body.items;
   }
 
-  async submit(claim: Claim): Promise<Receipt> {
+  async submit(
+    claim: Claim,
+    screenshot: ScreenshotAttachment,
+  ): Promise<Receipt> {
     // Both attempts must have exactly the same idempotency key and body.
     // Network/5xx failures can happen AFTER commit. A later 4xx response
     // cannot prove an earlier attempt was rolled back.
-    const body = JSON.stringify(claim);
+    const bytes = await this.download(screenshot);
+    const form = new FormData();
+    form.set('submission', JSON.stringify(claim));
+    form.set(
+      'screenshot',
+      new Blob([new Uint8Array(bytes)], { type: 'image/png' }),
+      'proof.png',
+    );
+    const encoded = new Request(
+      new URL('/api/v1/bot/submissions', this.origin),
+      { method: 'POST', body: form },
+    );
+    const contentType = encoded.headers.get('content-type')!;
+    // Freeze the complete body, including boundary and PNG bytes, for identical retries.
+    const body = await encoded.arrayBuffer();
     let uncertain = false;
     for (let attempt = 0; attempt < 2; attempt++) {
       let accepted = false;
@@ -197,7 +215,7 @@ export class HttpBotApi implements BotApi {
             signal: AbortSignal.timeout(this.submitTimeoutMs),
             headers: {
               Authorization: 'Bearer ' + this.token,
-              'Content-Type': 'application/json',
+              'Content-Type': contentType,
             },
             body,
           },

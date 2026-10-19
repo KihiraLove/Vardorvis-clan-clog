@@ -32,7 +32,7 @@ test('saved ordinary/hardcore claims can be approved with proof acknowledgement'
     );
     assert.equal(
       reviewBlockers({ ...ready, validProof: false }).approve?.includes(
-        'proof',
+        'screenshot',
       ),
       true,
     );

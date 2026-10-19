@@ -19,6 +19,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   const form = page
     .locator('form')
     .filter({ has: page.getByLabel('Collector name', { exact: true }) });
+  await expect(form.getByLabel('Proof URL (optional)')).toHaveCount(0);
   await form.getByLabel('Canonical item').selectOption({ index: 1 });
   await form
     .getByLabel('Collector name', { exact: true })
@@ -65,10 +66,18 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),
   ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('screenshot-proof-review.png'),
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 320, height: 800 });
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),
   ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('screenshot-proof-mobile.png'),
+    fullPage: true,
+  });
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
 });
@@ -135,7 +144,7 @@ test('moderators can review stored RuneLite screenshots without access to clan s
   await expect(
     editor.getByRole('link', { name: 'View screenshot' }),
   ).toHaveAttribute('href', path);
-  await editor.getByLabel(/^I checked the linked proof/).check();
+  await editor.getByLabel(/^I checked the screenshot/).check();
   await expect(
     editor.getByRole('button', { name: 'Approve submission', exact: true }),
   ).toBeEnabled();

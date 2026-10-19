@@ -1,3 +1,4 @@
+import { botRequest, png as botPng } from './tests/screenshot.js';
 /** Real multipart intake, private storage, staff review and transactional replay in disposable PostgreSQL. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -46,6 +47,7 @@ test(
       () => backend.settings(),
       {
         store: backend,
+        bot: { token: 'd'.repeat(64), guildId: '234567890123456789' },
         review,
         proofs,
         proofStore: store,
@@ -401,7 +403,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.webp'))
           .length,
-        6, // Replay/conflict uploads are retained until reference-checked maintenance.
+        5, // The confirmed manual replay removes its unused upload.
       );
       const noImage = await app.inject({
         method: 'POST',
@@ -871,6 +873,40 @@ test(
           });
           assert.equal(json.statusCode, 201, json.body);
           assert.equal(json.json().collectionType, 'event');
+          const external = await app.inject({
+            method: 'POST',
+            url: '/api/v1/admin/submissions',
+            headers: { ...moderator, 'idempotency-key': randomUUID() },
+            payload: {
+              ...input,
+              proofUrl: 'https://imgur.com/no-longer-accepted',
+            },
+          });
+          assert.equal(external.statusCode, 400);
+          const externalUpload = multipart([
+            [
+              'submission',
+              JSON.stringify({
+                ...input,
+                proofUrl: 'https://gyazo.com/no-longer-accepted',
+              }),
+            ],
+          ]);
+          assert.equal(
+            (
+              await app.inject({
+                method: 'POST',
+                url: '/api/v1/admin/submissions/upload',
+                ...externalUpload,
+                headers: {
+                  ...externalUpload.headers,
+                  ...moderator,
+                  'idempotency-key': randomUUID(),
+                },
+              })
+            ).statusCode,
+            400,
+          );
           const upload = await app.inject({
             method: 'POST',
             url: '/api/v1/admin/submissions/upload',
@@ -891,6 +927,179 @@ test(
             payload: { ...input, hardcore: true },
           });
           assert.equal(invalid.statusCode, 422);
+        },
+      );
+      await t.test(
+        'Discord PNG intake stores private WebP and replays one immutable receipt across concurrent deliveries',
+        async () => {
+          await pool.query(
+            "INSERT INTO items(id,name) VALUES(84,'Discord screenshot item')",
+          );
+          const metadata = {
+            interactionId: '345678901234567890',
+            guildId: '234567890123456789',
+            actorDiscordId: '123456789012345678',
+            rawItemText: 'Discord screenshot item',
+            itemId: 84,
+            collectorName: 'Discord collector',
+            hardcore: false,
+          };
+          const botHeaders = { authorization: 'Bearer ' + 'd'.repeat(64) };
+          const send = async (
+            value: unknown = metadata,
+            headers = botHeaders,
+            bytes: Buffer | null = botPng,
+          ) => app.inject(await botRequest(value, headers, bytes));
+          const before = (await readdir(directory)).filter((file) =>
+            file.endsWith('.webp'),
+          ).length;
+          const images = (
+            await pool.query('SELECT count(*)::int n FROM submission_images')
+          ).rows[0].n;
+          assert.equal(
+            (await send(metadata, {} as typeof botHeaders, Buffer.from('bad')))
+              .statusCode,
+            401,
+          );
+          assert.equal(
+            (await send({ ...metadata, guildId: '999999999999999999' }))
+              .statusCode,
+            403,
+          );
+          assert.equal(
+            (await send({ ...metadata, proofUrl: 'https://imgur.com/new' }))
+              .statusCode,
+            400,
+          );
+          assert.equal(
+            (
+              await app.inject({
+                method: 'POST',
+                url: '/api/v1/bot/submissions',
+                headers: botHeaders,
+                payload: { ...metadata, proofUrl: 'https://imgur.com/new' },
+              })
+            ).statusCode,
+            400,
+          );
+          assert.equal(
+            (await send(metadata, botHeaders, null)).statusCode,
+            400,
+          );
+          assert.equal(
+            (await send(metadata, botHeaders, Buffer.from('invalid PNG')))
+              .statusCode,
+            400,
+          );
+          assert.equal(
+            (await send(metadata, botHeaders, botPng.subarray(0, 30)))
+              .statusCode,
+            400,
+          );
+          assert.equal(
+            (
+              await send(
+                metadata,
+                botHeaders,
+                Buffer.alloc(MAX_SCREENSHOT_BYTES + 1),
+              )
+            ).statusCode,
+            413,
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submission_images'))
+              .rows[0].n,
+            images,
+          );
+          assert.equal(
+            (await readdir(directory)).filter((file) => file.endsWith('.webp'))
+              .length,
+            before,
+          );
+          const responses = await Promise.all(
+            Array.from({ length: 6 }, () => send()),
+          );
+          assert.deepEqual(
+            responses.map((value) => value.statusCode).sort(),
+            [200, 200, 200, 200, 200, 201],
+          );
+          for (const response of responses)
+            assert.deepEqual(response.json(), responses[0]!.json());
+          const receipt = responses[0]!.json();
+          const detail = (
+            await app.inject({
+              url: '/api/v1/admin/submissions/' + receipt.submissionId,
+              headers: moderator,
+            })
+          ).json().submission;
+          assert.equal(detail.proofUrl, '');
+          assert.match(detail.screenshotPath, /\.webp$/u);
+          assert.equal(
+            (await app.inject(detail.screenshotPath)).statusCode,
+            401,
+          );
+          const image = await app.inject({
+            url: detail.screenshotPath,
+            headers: moderator,
+          });
+          assert.equal(image.statusCode, 200);
+          assert.equal(image.headers['content-type'], 'image/webp');
+          assert.match(image.headers['cache-control']!, /private, no-store/u);
+          assert.equal(
+            (await sharp(image.rawPayload).metadata()).format,
+            'webp',
+          );
+          assert.equal(
+            (await pool.query('SELECT count(*)::int n FROM submission_images'))
+              .rows[0].n,
+            images + 1,
+          );
+          assert.equal(
+            (await readdir(directory)).filter((file) => file.endsWith('.webp'))
+              .length,
+            before + 1,
+          );
+          assert.equal(
+            (await send({ ...metadata, collectorName: 'Changed' })).statusCode,
+            409,
+          );
+          const changed = await sharp({
+            create: { width: 36, height: 32, channels: 4, background: 'red' },
+          })
+            .png()
+            .toBuffer();
+          assert.equal(
+            (await send(metadata, botHeaders, changed)).statusCode,
+            409,
+          );
+          assert.equal(
+            (await readdir(directory)).filter((file) => file.endsWith('.webp'))
+              .length,
+            before + 1,
+          );
+          const approved = await app.inject({
+            method: 'POST',
+            url:
+              '/api/v1/admin/submissions/' + receipt.submissionId + '/approve',
+            headers: moderator,
+            payload: { expectedVersion: detail.version },
+          });
+          assert.equal(approved.statusCode, 200, approved.body);
+          assert.deepEqual((await send()).json(), receipt);
+          const unknown = await send({
+            ...metadata,
+            interactionId: '345678901234567891',
+            itemId: undefined,
+            rawItemText: 'Unmatched screenshot item',
+          });
+          assert.equal(unknown.statusCode, 201, unknown.body);
+          assert.equal(unknown.json().resolution, 'needs_match');
+          assert.equal(
+            (await readdir(directory)).some(
+              (file) => file.endsWith('.png') || file.endsWith('.tmp'),
+            ),
+            false,
+          );
         },
       );
       for (let i = 0; i < 10; i++)

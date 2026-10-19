@@ -29,6 +29,7 @@ export interface ManualSubmissionInput {
   collectorName: string;
   collectedOn: string;
   hardcore: boolean;
+  /** Compatibility with old clients: empty only; proof is uploaded separately. */
   proofUrl?: string;
   approve: boolean;
   reason?: string;

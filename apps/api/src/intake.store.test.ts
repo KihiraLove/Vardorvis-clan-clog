@@ -1,3 +1,8 @@
+import {
+  botRequest,
+  memoryProofFiles,
+  screenshotRecord,
+} from './tests/screenshot.js';
 /** PostgreSQL intake verifies uniqueness, concurrency, durability and rollback. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -32,6 +37,7 @@ test(
       () => store.settings(),
       {
         store,
+        proofs: memoryProofFiles(),
         bot: { token, guildId },
         logger: false,
       },
@@ -43,16 +49,10 @@ test(
       actorDiscordId: '123456789012345678',
       rawItemText: 'mYsTiC   aXe',
       collectorName: 'Snapshot',
-      proofUrl: 'https://gyazo.com/record',
       hardcore: false,
     };
-    const submit = (body: BotSubmissionInput) =>
-      app.inject({
-        url: '/api/v1/bot/submissions',
-        method: 'POST',
-        headers,
-        payload: body,
-      });
+    const submit = async (body: BotSubmissionInput) =>
+      app.inject(await botRequest(body, headers));
     try {
       const migrations = new URL(
         '../../../packages/database/migrations/',
@@ -162,7 +162,7 @@ test(
       assert.deepEqual(persisted, {
         raw_item_text: 'Shared axe',
         collector_name: 'Snapshot',
-        proof_url: 'https://gyazo.com/record',
+        proof_url: '',
         hardcore: false,
         status: 'pending',
       });
@@ -211,7 +211,10 @@ test(
       assert.equal(recovered.statusCode, 201);
       const restarted = new PgStore(pool);
       const { claimHash } = await import('./intake.js');
-      const retry = await restarted.submitClaim(claim, claimHash(claim));
+      const retry = await restarted.submitClaim(
+        { ...claim, image: screenshotRecord() },
+        claimHash({ ...claim, image: screenshotRecord() }),
+      );
       assert.equal(retry.created, false);
       assert.deepEqual(retry.receipt, first.json());
       assert.equal(

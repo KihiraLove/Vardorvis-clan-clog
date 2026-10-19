@@ -31,6 +31,7 @@ test('release bundle binds exact infrastructure and migration bytes without copy
       '006_collection_types.sql',
       '007_submission_help.sql',
       '008_webp_assets.sql',
+      '009_screenshot_proof.sql',
     ],
   );
   assert.deepEqual(

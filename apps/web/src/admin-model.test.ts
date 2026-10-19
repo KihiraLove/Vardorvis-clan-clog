@@ -9,7 +9,6 @@ import {
   parseDetail,
   parseQueue,
   parseSubmission,
-  safeProof,
   safeScreenshotPath,
   validateCorrection,
   validateIconFile,
@@ -228,25 +227,6 @@ test('admin payloads validate identities, view boundaries, dates and source meta
       }),
     /calendar/,
   );
-});
-
-test('proof links block spoofed/unsafe origins without requiring an external fetch', () => {
-  assert.equal(
-    safeProof('https://imgur.com/a/proof'),
-    'https://imgur.com/a/proof',
-  );
-  assert.equal(
-    safeProof('https://i.gyazo.com/proof.png'),
-    'https://i.gyazo.com/proof.png',
-  );
-  for (const input of [
-    'javascript:alert(1)',
-    'https://imgur.com.evil.test/proof',
-    'http://imgur.com/proof',
-    '***imgur.com/proof',
-    'https://imgur.com:444/proof',
-  ])
-    assert.equal(safeProof(input), undefined);
 });
 
 test('corrections require a canonical item and valid collector/calendar date', async () => {

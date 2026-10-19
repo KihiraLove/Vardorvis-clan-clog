@@ -1,19 +1,57 @@
 /** Dedicated service-token boundary for Discord bot intake; no admin authority. */
-import { validateProofUrl } from '@clog/domain';
+import multipart from '@fastify/multipart';
+import { screenshotParts, screenshotLimits } from './screenshot-multipart.js';
+import type { ProofFiles } from './route-services.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { BotStore } from './route-services.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BotConfig } from './config.js';
 import { ApiError, type BotSubmissionInput } from './types.js';
 
-const snowflake = '^\\d{17,20}$';
-export function validProofUrl(value: string): boolean {
+const snowflake = /^\d{17,20}$/u;
+export function botSubmission(json: string): BotSubmissionInput {
+  let value: unknown;
   try {
-    validateProofUrl(value);
-    return true;
+    value = JSON.parse(json);
   } catch {
-    return false;
+    throw new ApiError(400, 'Invalid submission JSON.');
   }
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new ApiError(400, 'Invalid submission fields.');
+  const input = value as Record<string, unknown>;
+  if (
+    Object.keys(input).some(
+      (key) =>
+        ![
+          'interactionId',
+          'guildId',
+          'actorDiscordId',
+          'rawItemText',
+          'itemId',
+          'collectorName',
+          'hardcore',
+        ].includes(key),
+    ) ||
+    !['interactionId', 'guildId', 'actorDiscordId'].every(
+      (key) => typeof input[key] === 'string' && snowflake.test(input[key]),
+    ) ||
+    typeof input.rawItemText !== 'string' ||
+    !input.rawItemText.trim() ||
+    input.rawItemText.length > 200 ||
+    typeof input.collectorName !== 'string' ||
+    !input.collectorName.trim() ||
+    input.collectorName.length > 80 ||
+    (input.hardcore !== undefined && typeof input.hardcore !== 'boolean') ||
+    (input.itemId !== undefined &&
+      (!Number.isSafeInteger(input.itemId) ||
+        Number(input.itemId) < 1 ||
+        Number(input.itemId) > 2147483647))
+  )
+    throw new ApiError(400, 'Invalid submission fields.');
+  return {
+    ...input,
+    hardcore: input.hardcore ?? false,
+  } as unknown as BotSubmissionInput;
 }
 export function validCollectionDate(value: string, today: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
@@ -35,9 +73,10 @@ export function claimHash(input: BotSubmissionInput): string {
         input.rawItemText,
         input.itemId ?? null,
         input.collectorName,
-        input.proofUrl,
+        input.proofUrl ?? '',
         null, // Preserve the legacy hash field position for existing retries.
         input.hardcore,
+        ...(input.image ? [{ screenshot: input.image.sha256 }] : []),
       ]),
     )
     .digest('hex');
@@ -58,6 +97,7 @@ export function botRoutes(
   app: FastifyInstance,
   store: BotStore,
   configuration: BotConfig | (() => Promise<BotConfig | undefined>),
+  storage?: ProofFiles,
 ) {
   const authorized = new WeakMap<FastifyRequest, BotConfig>();
   const check = async (request: FastifyRequest) => {
@@ -91,55 +131,36 @@ export function botRoutes(
       ),
     }),
   );
-  app.post<{ Body: BotSubmissionInput }>(
-    '/api/v1/bot/submissions',
-    {
-      onRequest: check,
-      schema: {
-        body: {
-          type: 'object',
-          additionalProperties: false,
-          required: [
-            'interactionId',
-            'guildId',
-            'actorDiscordId',
-            'rawItemText',
-            'collectorName',
-            'proofUrl',
-          ],
-          properties: {
-            interactionId: { type: 'string', pattern: snowflake },
-            guildId: { type: 'string', pattern: snowflake },
-            actorDiscordId: { type: 'string', pattern: snowflake },
-            rawItemText: { type: 'string', minLength: 1, maxLength: 200 },
-            itemId: { type: 'integer', minimum: 1, maximum: 2147483647 },
-            collectorName: { type: 'string', minLength: 1, maxLength: 80 },
-            proofUrl: { type: 'string', minLength: 1, maxLength: 2048 },
-            hardcore: { type: 'boolean' },
-          },
-        },
+  void app.register(async (scope) => {
+    await scope.register(multipart, { limits: screenshotLimits });
+    scope.post(
+      '/api/v1/bot/submissions',
+      { onRequest: check },
+      async (request, reply) => {
+        if (!storage)
+          throw new ApiError(503, 'Screenshot storage is unavailable.');
+        const { fields, file } = await screenshotParts(request, ['submission']);
+        const input = botSubmission(fields.submission!);
+        if (input.guildId !== authorized.get(request)!.guildId)
+          throw new ApiError(
+            403,
+            'Submissions are restricted to the configured guild.',
+          );
+        const image = await storage.save(file!.bytes, file!.mime);
+        try {
+          const claim = { ...input, image };
+          const result = await store.submitClaim(claim, claimHash(claim));
+          if (result.imageId !== undefined && result.imageId !== image.id)
+            await storage.remove?.(image.id).catch(() => {});
+          return reply.code(result.created ? 201 : 200).send(result.receipt);
+        } catch (error) {
+          // A deterministic rejection rolls this upload back; an uncertain commit
+          // retains WebP evidence for reference-checked maintenance.
+          if (error instanceof ApiError && error.status < 500)
+            await storage.remove?.(image.id).catch(() => {});
+          throw error;
+        }
       },
-    },
-    async (request, reply) => {
-      const body = request.body;
-      if (body.guildId !== authorized.get(request)!.guildId)
-        throw new ApiError(
-          403,
-          'Submissions are restricted to the configured guild.',
-        );
-      if (
-        !body.rawItemText.trim() ||
-        !body.collectorName.trim() ||
-        !validProofUrl(body.proofUrl)
-      )
-        throw new ApiError(
-          422,
-          'Item, collector name or HTTPS proof URL is invalid.',
-        );
-      // The strict schema rejects caller dates; only the database assigns a receipt date.
-      const input = { ...body, hardcore: body.hardcore ?? false };
-      const result = await store.submitClaim(input, claimHash(input));
-      return reply.code(result.created ? 201 : 200).send(result.receipt);
-    },
-  );
+    );
+  });
 }

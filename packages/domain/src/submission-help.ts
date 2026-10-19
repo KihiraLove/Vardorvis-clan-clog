@@ -3,7 +3,7 @@ export const submissionHelpMaxBytes = 32 * 1024;
 export const defaultSubmissionHelp = `## Submit a collection
 
 1. Follow your clan's RuneLite submission setup, or send your proof to a moderator.
-2. Include the item, collector name, collection date and a screenshot or proof link.
+2. Include the item, collector name, collection date and a PNG screenshot. RuneLite submissions can use their chat proof.
 3. Your collection appears in the log once the submission is approved.
 
 Ask your clan staff for setup instructions and submission rules.`;

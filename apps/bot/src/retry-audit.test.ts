@@ -1,3 +1,45 @@
+const png = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==',
+  'base64',
+);
+const screenshot = {
+  id: '456789012345678901',
+  name: 'proof.png',
+  size: png.length,
+  contentType: 'image/png',
+  url: 'https://cdn.discordapp.com/attachments/234567890123456789/456789012345678901/proof.png?ex=test&hm=signed',
+};
+class TestBotApi extends HttpBotApi {
+  constructor(
+    origin: string,
+    token: string,
+    request: typeof fetch = fetch,
+    searchTimeoutMs?: number,
+    submitTimeoutMs?: number,
+  ) {
+    super(
+      origin,
+      token,
+      request,
+      searchTimeoutMs,
+      submitTimeoutMs,
+      async () => png,
+    );
+  }
+}
+async function bodyClaim(options: RequestInit | undefined) {
+  const form = await new Request('https://api.example/api/v1/bot/submissions', {
+    method: 'POST',
+    headers: options!.headers!,
+    body: options!.body!,
+  }).formData();
+  assert.deepEqual(
+    Buffer.from(await (form.get('screenshot') as File).arrayBuffer()),
+    png,
+  );
+  return String(form.get('submission'));
+}
+
 /** Uncertain first-attempt outcomes must survive rejection of an identical retry. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -16,7 +58,7 @@ const claim: Claim = {
   actorDiscordId: '123456789012345678',
   rawItemText: 'Dragon axe',
   collectorName: 'Audit fixture',
-  proofUrl: 'https://imgur.com/a/fixture',
+
   hardcore: false,
 };
 const receipt: Receipt = {
@@ -60,11 +102,11 @@ function assertUnconfirmed(
 test('permanent first-attempt failures are rejected once and retain their authoritative message', async () => {
   for (const status of [400, 401, 403, 409, 422, 429]) {
     let calls = 0;
-    const api = new HttpBotApi(origin, token, async () => {
+    const api = new TestBotApi(origin, token, async () => {
       calls++;
       return Response.json({ error: 'private fixture response' }, { status });
     });
-    await assert.rejects(api.submit(claim), (error: unknown) => {
+    await assert.rejects(api.submit(claim, screenshot), (error: unknown) => {
       assert.ok(error instanceof BotApiError);
       assert.equal(error.status, status);
       assert.ok(!(error instanceof UnconfirmedSubmissionError));
@@ -80,12 +122,12 @@ test('permanent first-attempt failures are rejected once and retain their author
 test('transport timeout followed by a durable 200 replay confirms exactly one pending receipt', async () => {
   const bodies: string[] = [];
   let calls = 0;
-  const api = new HttpBotApi(origin, token, async (_url, options) => {
-    bodies.push(String(options?.body));
+  const api = new TestBotApi(origin, token, async (_url, options) => {
+    bodies.push(await bodyClaim(options));
     if (++calls === 1) throw new Error('Lost acknowledgement after commit');
     return Response.json(receipt, { status: 200 });
   });
-  assert.deepEqual(await api.submit(claim), receipt);
+  assert.deepEqual(await api.submit(claim, screenshot), receipt);
   assert.deepEqual(bodies, [expectedBody, expectedBody]);
 });
 
@@ -94,9 +136,9 @@ test('transport/5xx uncertainty followed by 401, 403 or 422 cannot claim nothing
     for (const status of [400, 401, 403, 409, 422, 429]) {
       let calls = 0;
       const bodies: string[] = [];
-      const api = new HttpBotApi(origin, token, async (_url, options) => {
+      const api = new TestBotApi(origin, token, async (_url, options) => {
         calls++;
-        bodies.push(String(options?.body));
+        bodies.push(await bodyClaim(options));
         if (calls === 1) {
           if (initial === 'transport')
             throw new Error('private connection error with password');
@@ -104,7 +146,7 @@ test('transport/5xx uncertainty followed by 401, 403 or 422 cannot claim nothing
         }
         return Response.json({ error: 'Credentials rotated' }, { status });
       });
-      await assert.rejects(api.submit(claim), (error: unknown) =>
+      await assert.rejects(api.submit(claim, screenshot), (error: unknown) =>
         assertUnconfirmed(error, 'retry-rejected'),
       );
       assert.deepEqual(bodies, [expectedBody, expectedBody]);
@@ -115,7 +157,7 @@ test('closed-page 403 after an uncertain write is still unconfirmed; initial clo
   const { closedCollectionPageMessage } = await import('@clog/domain');
   for (const afterTimeout of [false, true]) {
     let calls = 0;
-    const api = new HttpBotApi(origin, token, async () => {
+    const api = new TestBotApi(origin, token, async () => {
       if (afterTimeout && ++calls === 1)
         throw new Error('Lost acknowledgement after commit');
       if (!afterTimeout) calls++;
@@ -125,11 +167,11 @@ test('closed-page 403 after an uncertain write is still unconfirmed; initial clo
       );
     });
     if (afterTimeout)
-      await assert.rejects(api.submit(claim), (error: unknown) =>
+      await assert.rejects(api.submit(claim, screenshot), (error: unknown) =>
         assertUnconfirmed(error, 'retry-rejected'),
       );
     else
-      await assert.rejects(api.submit(claim), (error: unknown) => {
+      await assert.rejects(api.submit(claim, screenshot), (error: unknown) => {
         assert.ok(error instanceof BotApiError);
         assert.equal(failureMessage(error), closedCollectionPageMessage);
         return true;
@@ -141,13 +183,13 @@ test('closed-page 403 after an uncertain write is still unconfirmed; initial clo
 test('repeated transport and server errors stop after exactly two identical attempts and remain uncertain', async () => {
   for (const kind of ['transport', 'server'] as const) {
     const bodies: string[] = [];
-    const api = new HttpBotApi(origin, token, async (_url, options) => {
-      bodies.push(String(options?.body));
+    const api = new TestBotApi(origin, token, async (_url, options) => {
+      bodies.push(await bodyClaim(options));
       if (kind === 'transport')
         throw new Error('Connection lost after possible commit');
       return Response.json({ error: 'temporary failure' }, { status: 503 });
     });
-    await assert.rejects(api.submit(claim), (error: unknown) =>
+    await assert.rejects(api.submit(claim, screenshot), (error: unknown) =>
       assertUnconfirmed(error, 'retries-exhausted'),
     );
     assert.deepEqual(bodies, [expectedBody, expectedBody]);
@@ -173,11 +215,11 @@ test('malformed, mismatched and unreadable successful receipts cannot confirm su
     ],
   ] as const) {
     let calls = 0;
-    const api = new HttpBotApi(origin, token, async () => {
+    const api = new TestBotApi(origin, token, async () => {
       calls++;
       return response;
     });
-    await assert.rejects(api.submit(claim), (error: unknown) =>
+    await assert.rejects(api.submit(claim, screenshot), (error: unknown) =>
       assertUnconfirmed(error, 'invalid-receipt'),
     );
     assert.equal(
@@ -188,12 +230,13 @@ test('malformed, mismatched and unreadable successful receipts cannot confirm su
     assert.equal(response.status, status);
   }
   let calls = 0;
-  const secondInvalid = new HttpBotApi(origin, token, async () => {
+  const secondInvalid = new TestBotApi(origin, token, async () => {
     if (++calls === 1) throw new Error('timeout after commit');
     return Response.json({ status: 'not-a-durable-receipt' }, { status: 200 });
   });
-  await assert.rejects(secondInvalid.submit(claim), (error: unknown) =>
-    assertUnconfirmed(error, 'invalid-receipt'),
+  await assert.rejects(
+    secondInvalid.submit(claim, screenshot),
+    (error: unknown) => assertUnconfirmed(error, 'invalid-receipt'),
   );
   assert.equal(calls, 2);
 });

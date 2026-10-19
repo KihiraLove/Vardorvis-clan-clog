@@ -5,7 +5,6 @@ import { useAdminDraft } from './admin-route-data.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
-  safeProof,
   safeScreenshotPath,
   dateSourceLabel,
   validateCorrection,
@@ -202,7 +201,6 @@ export function SubmissionEditor({
   const noteDirty = reviewNote.trim() !== row.reviewNote;
   const locked = action.busy || disabled || Boolean(readError),
     proof =
-      safeProof(row.proofUrl) ||
       safeScreenshotPath(row.screenshotPath) ||
       (row.source === 'runelite' && Boolean(row.chatMessage?.trim()));
   const change = (fields: Partial<Correction>) => {
@@ -221,7 +219,7 @@ export function SubmissionEditor({
             !activeItem)
         )
           throw new Error(
-            'Save a specific item match and check the linked proof before approving.',
+            'Save a specific item match and check the screenshot before approving.',
           );
         if (decision && decision !== 'approve' && !draft.reason.trim())
           throw new Error('Enter a reason for this decision.');
@@ -429,7 +427,6 @@ export function SubmissionEditor({
                 <dt>Proof</dt>
                 <dd>
                   <ProofLink
-                    url={row.proofUrl}
                     source={row.source}
                     screenshot={row.screenshotPath}
                     chatMessage={row.chatMessage}
@@ -704,7 +701,7 @@ export function SubmissionEditor({
                   ? 'I verified this manual claim and its item, collector, date and world.'
                   : row.chatMessage
                     ? 'I checked the chat message and any attached proof for the saved item, collector, date and hardcore claim.'
-                    : 'I checked the linked proof for the saved item, collector, date and hardcore claim.'}
+                    : 'I checked the screenshot for the saved item, collector, date and hardcore claim.'}
               </label>
             )}
             {row.status === 'pending' && explanations(['acknowledge'])}

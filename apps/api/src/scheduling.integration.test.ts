@@ -1,3 +1,4 @@
+import { botRequest } from './tests/screenshot.js';
 /** Public intake obeys schedules; authorized staff can record manual claims afterward. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -288,26 +289,25 @@ test(
             approve,
           },
         });
-      const discord = (
+      const discord = async (
         itemId: number | undefined = 1,
         id = String(interaction++),
         hardcore = false,
       ) =>
-        app.inject({
-          method: 'POST',
-          url: '/api/v1/bot/submissions',
-          headers: { authorization: 'Bearer ' + bot.token },
-          payload: {
-            interactionId: id,
-            guildId: bot.guildId,
-            actorDiscordId: '100000000000000002',
-            rawItemText: itemId ? 'Fixture ' + itemId : 'unmatched thing',
-            ...(itemId ? { itemId } : {}),
-            collectorName: 'Bot Player',
-            proofUrl: 'https://imgur.com/proof',
-            hardcore,
-          },
-        });
+        app.inject(
+          await botRequest(
+            {
+              interactionId: id,
+              guildId: bot.guildId,
+              actorDiscordId: '100000000000000002',
+              rawItemText: itemId ? 'Fixture ' + itemId : 'unmatched thing',
+              ...(itemId ? { itemId } : {}),
+              collectorName: 'Bot Player',
+              hardcore,
+            },
+            { authorization: 'Bearer ' + bot.token },
+          ),
+        );
       const runeKey = randomUUID(),
         manualKey = randomUUID(),
         botId = String(interaction++);
@@ -325,7 +325,7 @@ test(
         )
       ).rows[0];
       const filesBefore = (await readdir(directory)).filter((name) =>
-        name.endsWith('.png'),
+        name.endsWith('.webp'),
       ).length;
       for (const response of [
         await runelite(1, randomUUID(), 'Closed Collector'),
@@ -353,13 +353,13 @@ test(
         ).rows[0],
         {
           submissions: beforeCounts.submissions + 4,
-          images: beforeCounts.images + 2,
+          images: beforeCounts.images + 4,
         },
       );
       assert.equal(
-        (await readdir(directory)).filter((name) => name.endsWith('.png'))
+        (await readdir(directory)).filter((name) => name.endsWith('.webp'))
           .length,
-        filesBefore + 2, // Accepted RuneLite submissions retain their proof.
+        filesBefore + 4, // Both automatic sources retain screenshot proof.
       );
       // Closed regular pages and unpaged items stay open for hardcore intake.
       for (const id of [1, 4]) {

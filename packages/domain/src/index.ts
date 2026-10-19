@@ -86,41 +86,6 @@ export function validateCatalog(
   }
 }
 
-const proofHosts = new Set([
-  'imgur.com',
-  'www.imgur.com',
-  'm.imgur.com',
-  'i.imgur.com',
-  'gyazo.com',
-  'www.gyazo.com',
-  'i.gyazo.com',
-]);
-
-/** Validate links only. Do not fetch arbitrary user-supplied URLs on the server. */
-export function validateProofUrl(input: string): string {
-  if (
-    input.length > 2048 ||
-    /\s/u.test(input) ||
-    [...input].some(
-      (character) =>
-        character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
-    )
-  )
-    throw new Error('Invalid proof URL');
-  const url = new URL(input);
-  if (
-    url.protocol !== 'https:' ||
-    !proofHosts.has(url.hostname) ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.pathname === '/'
-  ) {
-    throw new Error('Proof must be an HTTPS Imgur or Gyazo link');
-  }
-  return url.toString();
-}
-
 /** Round-trip through UTC to reject normalized invalid dates such as February 30. */
 export function validateCollectionDate(input: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(input)) throw new Error('Use YYYY-MM-DD');

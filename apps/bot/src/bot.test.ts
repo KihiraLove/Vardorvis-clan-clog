@@ -1,3 +1,45 @@
+const png = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==',
+  'base64',
+);
+const screenshot = {
+  id: '456789012345678901',
+  name: 'proof.png',
+  size: png.length,
+  contentType: 'image/png',
+  url: 'https://cdn.discordapp.com/attachments/234567890123456789/456789012345678901/proof.png?ex=test&hm=signed',
+};
+class TestBotApi extends HttpBotApi {
+  constructor(
+    origin: string,
+    token: string,
+    request: typeof fetch = fetch,
+    searchTimeoutMs?: number,
+    submitTimeoutMs?: number,
+  ) {
+    super(
+      origin,
+      token,
+      request,
+      searchTimeoutMs,
+      submitTimeoutMs,
+      async () => png,
+    );
+  }
+}
+async function bodyClaim(options: RequestInit | undefined) {
+  const form = await new Request('https://api.example/api/v1/bot/submissions', {
+    method: 'POST',
+    headers: options!.headers!,
+    body: options!.body!,
+  }).formData();
+  assert.deepEqual(
+    Buffer.from(await (form.get('screenshot') as File).arrayBuffer()),
+    png,
+  );
+  return String(form.get('submission'));
+}
+
 /** Discord interaction and API tests need no live gateway credentials. */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -20,7 +62,6 @@ import {
   handleAutocomplete,
   handleSubmission,
   receiptMessage,
-  validProof,
 } from './handler.js';
 import { registerFromEnv, registerGuildCommand } from './register.js';
 import { wireGateway } from './runtime.js';
@@ -65,14 +106,17 @@ test('Discord receipts show collection type and validate new types without requi
     actorDiscordId: userId,
     rawItemText: 'Dragon axe',
     collectorName: 'Collector',
-    proofUrl: 'https://imgur.com/proof',
+
     hardcore: false,
   };
   for (const invalid of ['unknown', 42]) {
-    const api = new HttpBotApi('https://clog.example', token, async () =>
+    const api = new TestBotApi('https://clog.example', token, async () =>
       Response.json({ ...receipt, collectionType: invalid }, { status: 201 }),
     );
-    await assert.rejects(api.submit(claim), UnconfirmedSubmissionError);
+    await assert.rejects(
+      api.submit(claim, screenshot),
+      UnconfirmedSubmissionError,
+    );
   }
 });
 function fakeCommand(
@@ -80,7 +124,7 @@ function fakeCommand(
     guild?: string | null;
     member?: object | null;
     item?: string;
-    proof?: string;
+    screenshot?: typeof screenshot | null;
     name?: string | null;
     hardcore?: boolean | null;
   } = {},
@@ -97,9 +141,10 @@ function fakeCommand(
       getString: (key: string) =>
         ({
           item: options.item ?? 'Dragon axe',
-          proof: options.proof ?? 'https://imgur.com/a/abc',
           'submitter-name': options.name ?? null,
-        })[key as 'item' | 'proof' | 'submitter-name'] ?? null,
+        })[key as 'item' | 'submitter-name'] ?? null,
+      getAttachment: () =>
+        options.screenshot === undefined ? screenshot : options.screenshot,
       getBoolean: (key: string) =>
         key === 'hardcore' ? (options.hardcore ?? null) : null,
     },
@@ -177,24 +222,6 @@ test('collector name prefers explicit, guild nickname/displayName, then username
   assert.equal(collectorSnapshot(null, 'Username', null), 'Username');
   assert.equal(collectorSnapshot(null, 'Username', ' Personal '), 'Personal');
 });
-test('proof validation mirrors HTTPS host allowlist and does not perform any fetch', () => {
-  for (const value of [
-    'https://imgur.com/a/yes',
-    'https://i.imgur.com/x.png',
-    'https://gyazo.com/abc',
-  ])
-    assert.equal(validProof(value), true);
-  for (const value of [
-    'http://imgur.com/a/no',
-    'https://gyazo.com.evil.test/x',
-    'https://user@imgur.com/a/no',
-    'https://imgur.com/',
-    'https://imgur.com/x\n',
-    'https://imgur.com:8443/x',
-    'javascript:alert(1)',
-  ])
-    assert.equal(validProof(value), false);
-});
 test('submission defers ephemerally before persistence and forwards selected item, actor and hardcore', async () => {
   const { command, deferOptions, messages } = fakeCommand({
     item: 'item:42',
@@ -212,7 +239,7 @@ test('submission defers ephemerally before persistence and forwards selected ite
       rawItemText: 'item:42',
       itemId: 42,
       collectorName: 'Guild Member',
-      proofUrl: 'https://imgur.com/a/abc',
+
       hardcore: true,
     },
   ]);
@@ -251,7 +278,9 @@ test('free text and omitted hardcore default false; unmatched and occupied recei
 });
 test('invalid proof, unconfigured guild and invalid IDs never call intake API', async () => {
   for (const input of [
-    fakeCommand({ proof: 'https://imgur.com.attacker.com/1' }),
+    fakeCommand({
+      screenshot: { ...screenshot, url: 'https://imgur.com.attacker.com/1' },
+    }),
     fakeCommand({ guild: null }),
     fakeCommand({ guild: '999999999999999999' }),
     fakeCommand({ item: 'item:9999999999999999999999' }),
@@ -262,6 +291,18 @@ test('invalid proof, unconfigured guild and invalid IDs never call intake API', 
     assert.equal(input.deferOptions.length, 1);
     assert.ok(input.messages[0]);
   }
+});
+test('an old registered command without the screenshot option explains registration and never implies a saved claim', async () => {
+  const input = fakeCommand({ screenshot: null });
+  const { api, submitted } = mockApi();
+  await handleSubmission(input.command, api, guildId);
+  assert.equal(submitted.length, 0);
+  assert.match(input.messages[0]!, /register \/cc-clog again/u);
+  assert.match(input.messages[0]!, /Nothing was sent/u);
+  assert.doesNotMatch(
+    input.messages[0]!,
+    /might have reached|Saved for admin review/u,
+  );
 });
 test('failed/unconfirmed API submissions are never acknowledged as saved', async () => {
   for (const error of [
@@ -344,11 +385,11 @@ test('HTTP adapter only fetches fixed bot routes, retries timeout using identica
     if (input.pathname.endsWith('/items'))
       return Response.json({ items: [{ id: 42, name: 'Dragon axe' }] });
     submitCalls++;
-    bodies.push(String(options.body));
+    bodies.push(await bodyClaim(options));
     if (submitCalls === 1) throw new Error('socket disconnected after commit');
     return Response.json(receipt, { status: 200 });
   }) as typeof fetch;
-  const api = new HttpBotApi('http://api:3000', token, request);
+  const api = new TestBotApi('http://api:3000', token, request);
   assert.deepEqual(await api.search('dragon axe'), [
     { id: 42, name: 'Dragon axe' },
   ]);
@@ -358,10 +399,10 @@ test('HTTP adapter only fetches fixed bot routes, retries timeout using identica
     actorDiscordId: userId,
     rawItemText: 'Dragon axe',
     collectorName: 'User',
-    proofUrl: 'https://imgur.com/a/abc',
+
     hardcore: false,
   };
-  assert.deepEqual(await api.submit(claim), receipt);
+  assert.deepEqual(await api.submit(claim, screenshot), receipt);
   assert.equal(submitCalls, 2);
   assert.equal(bodies[0], bodies[1]);
   assert.equal(
@@ -377,11 +418,11 @@ test('closed-page rejections explain scheduling without retrying or exposing arb
     actorDiscordId: userId,
     rawItemText: 'Dragon axe',
     collectorName: 'User',
-    proofUrl: 'https://imgur.com/a/abc',
+
     hardcore: false,
   };
   let calls = 0;
-  const api = new HttpBotApi('http://api:3000', token, async () => {
+  const api = new TestBotApi('http://api:3000', token, async () => {
     calls++;
     return Response.json(
       { error: closedCollectionPageMessage },
@@ -389,7 +430,7 @@ test('closed-page rejections explain scheduling without retrying or exposing arb
     );
   });
   await assert.rejects(
-    api.submit(claim),
+    api.submit(claim, screenshot),
     (error: unknown) =>
       error instanceof BotApiError &&
       error.status === 403 &&
@@ -409,26 +450,26 @@ test('HTTP conflicts and malformed API responses fail rather than inventing a re
     actorDiscordId: userId,
     rawItemText: 'Dragon axe',
     collectorName: 'User',
-    proofUrl: 'https://imgur.com/a/abc',
+
     hardcore: false,
   };
   let calls = 0;
-  const conflict = new HttpBotApi('http://api:3000', token, (async () => {
+  const conflict = new TestBotApi('http://api:3000', token, (async () => {
     calls++;
     return Response.json({ error: 'conflict' }, { status: 409 });
   }) as typeof fetch);
-  await assert.rejects(conflict.submit(claim), { status: 409 });
+  await assert.rejects(conflict.submit(claim, screenshot), { status: 409 });
   assert.equal(calls, 1);
-  const corrupt = new HttpBotApi('http://api:3000', token, (async () =>
+  const corrupt = new TestBotApi('http://api:3000', token, (async () =>
     Response.json({ status: 'approved' }, { status: 201 })) as typeof fetch);
-  await assert.rejects(corrupt.submit(claim), (error: unknown) => {
+  await assert.rejects(corrupt.submit(claim, screenshot), (error: unknown) => {
     assert.ok(error instanceof UnconfirmedSubmissionError);
     assert.equal(error.reason, 'invalid-receipt');
     assert.equal(error.interactionId, claim.interactionId);
     assert.doesNotMatch(failureMessage(error), /Saved for admin review/u);
     return true;
   });
-  const badSearch = new HttpBotApi('http://api:3000', token, (async () =>
+  const badSearch = new TestBotApi('http://api:3000', token, (async () =>
     Response.json({ items: [{ id: 'bad', name: 'x' }] })) as typeof fetch);
   await assert.rejects(badSearch.search('x'), { status: 502 });
 });
@@ -499,7 +540,7 @@ test('gateway handlers survive reconnect; stop prevents new interactions and des
 
 test('bot readiness probes authenticated intake and rejects unavailable or malformed responses', async () => {
   const routes: string[] = [];
-  const healthy = new HttpBotApi('http://api:3000', token, (async (
+  const healthy = new TestBotApi('http://api:3000', token, (async (
     url: URL,
     init: RequestInit,
   ) => {
@@ -512,15 +553,15 @@ test('bot readiness probes authenticated intake and rejects unavailable or malfo
   }) as typeof fetch);
   assert.equal(await healthy.checkReady(), true);
   assert.equal(routes[0], 'http://api:3000/api/v1/bot/items?q=&limit=1');
-  const unavailable = new HttpBotApi('http://api:3000', token, (async () =>
+  const unavailable = new TestBotApi('http://api:3000', token, (async () =>
     Response.json({ error: 'disabled' }, { status: 503 })) as typeof fetch);
   assert.equal(await unavailable.checkReady(), false);
-  const malformed = new HttpBotApi('http://api:3000', token, (async () =>
+  const malformed = new TestBotApi('http://api:3000', token, (async () =>
     Response.json({
       items: [{ id: 'not-an-id', name: 'Bad' }],
     })) as typeof fetch);
   assert.equal(await malformed.checkReady(), false);
-  const refused = new HttpBotApi('http://api:3000', token, (async () => {
+  const refused = new TestBotApi('http://api:3000', token, (async () => {
     throw Error('Connection refused');
   }) as typeof fetch);
   assert.equal(await refused.checkReady(), false);

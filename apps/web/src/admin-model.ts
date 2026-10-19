@@ -1,9 +1,5 @@
 /** Private API contracts and form validation; server authorization remains mandatory. */
-import {
-  validateCollectionDate,
-  validateProofUrl,
-  parseSubmissionFilters,
-} from '@clog/domain';
+import { validateCollectionDate, parseSubmissionFilters } from '@clog/domain';
 import { parseCatalog, type Catalog, type Item, type Page } from './model.ts';
 import {
   identity,
@@ -51,6 +47,7 @@ export interface ManualSubmissionInput {
   collectorName: string;
   collectedOn: string;
   hardcore: boolean;
+  /** Compatibility with old clients: empty only; proof is uploaded separately. */
   proofUrl?: string;
   approve: boolean;
   reason?: string;
@@ -410,13 +407,6 @@ export interface AdminClient {
 }
 
 /** Keep malformed claims reviewable/rejectable while withholding an unsafe proof link. */
-export function safeProof(input: string): string | undefined {
-  try {
-    return validateProofUrl(input);
-  } catch {
-    return undefined;
-  }
-}
 function choice<T extends string>(value: unknown, allowed: readonly T[]): T {
   if (!allowed.includes(value as T)) throw new Error('Invalid admin response.');
   return value as T;

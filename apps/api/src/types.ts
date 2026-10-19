@@ -51,7 +51,9 @@ export interface BotSubmissionInput {
   rawItemText: string;
   itemId?: number;
   collectorName: string;
-  proofUrl: string;
+  /** Only read for immutable pre-screenshot request hashes; never accepted by new intake. */
+  proofUrl?: string;
+  image?: import('./icon-storage.js').IconRecord;
   hardcore: boolean;
 }
 export interface BotReceipt {
@@ -101,7 +103,11 @@ export interface BackendStore {
   submitClaim(
     input: BotSubmissionInput,
     payloadHash: string,
-  ): Promise<{ created: boolean; receipt: BotReceipt }>;
+  ): Promise<{
+    created: boolean;
+    receipt: BotReceipt;
+    imageId?: string | null;
+  }>;
   ready(): Promise<void>;
   catalog(): Promise<CatalogData>;
   collections(): Promise<PublicCredit[]>;

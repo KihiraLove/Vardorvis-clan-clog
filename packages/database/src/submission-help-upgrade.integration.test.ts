@@ -73,7 +73,7 @@ test(
     assert.deepEqual(await snapshot(), before);
     const settings = (await client.query('SELECT * FROM site_settings'))
       .rows[0];
-    assert.equal(settings.version, 13);
+    assert.equal(settings.version, 14);
     assert.equal(settings.how_to_submit_markdown, defaultSubmissionHelp);
     const audit = (await client.query('SELECT * FROM site_settings_audit'))
       .rows[0];

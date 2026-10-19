@@ -1,3 +1,4 @@
+import { insertImage } from './proof-store.js';
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
@@ -286,16 +287,22 @@ export class PgStore implements BackendStore {
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock_shared(74261005)');
       const schedulingEnabled = await lockScheduling(client, input.hardcore);
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+        ['discord:' + input.interactionId],
+      );
       const readReceipt = async (): Promise<{
         hash: string | null;
         receipt: BotReceipt | null;
+        imageId: string | null;
       } | null> => {
         const row = (
           await client.query<{
             hash: string | null;
             receipt: BotReceipt | null;
+            imageId: string | null;
           }>(
-            'SELECT intake_payload_hash AS hash, intake_receipt AS receipt FROM submissions WHERE discord_interaction_id=$1',
+            'SELECT intake_payload_hash AS hash, intake_receipt AS receipt,proof_image_id::text AS "imageId" FROM submissions WHERE discord_interaction_id=$1',
             [input.interactionId],
           )
         ).rows[0];
@@ -304,13 +311,18 @@ export class PgStore implements BackendStore {
       const replay = (prior: {
         hash: string | null;
         receipt: BotReceipt | null;
+        imageId: string | null;
       }) => {
         if (prior.hash !== payloadHash || !prior.receipt)
           throw new ApiError(
             409,
             'Discord interaction ID was used for a different claim.',
           );
-        return { created: false, receipt: prior.receipt };
+        return {
+          created: false,
+          receipt: prior.receipt,
+          imageId: prior.imageId,
+        };
       };
       const prior = await readReceipt();
       if (prior) {
@@ -318,6 +330,8 @@ export class PgStore implements BackendStore {
         await client.query('COMMIT');
         return result;
       }
+      if (!input.image || input.proofUrl)
+        throw new ApiError(422, 'Supply a PNG screenshot as proof.');
       const submittedAt = (
         await client.query<{ timestamp: Date }>(
           'SELECT clock_timestamp() AS timestamp',
@@ -395,12 +409,14 @@ export class PgStore implements BackendStore {
       };
       // Unique interaction IDs serialize concurrent retries in PostgreSQL. ON CONFLICT
       // waits for the winner, after which readReceipt observes the committed receipt.
+      await client.query('SAVEPOINT discord_image');
+      await insertImage(client, input.image);
       const inserted = await client.query(
         `INSERT INTO submissions (
           id, discord_interaction_id, discord_user_id, discord_guild_id,
           raw_item_text, item_id, collector_name, collected_on, date_source,
-          proof_url, hardcore, intake_payload_hash, intake_receipt, submitted_at, intake_scheduling, collection_type, collection_reason
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+          proof_url, hardcore, intake_payload_hash, intake_receipt, submitted_at, intake_scheduling, collection_type, collection_reason, proof_image_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         ON CONFLICT (discord_interaction_id) DO NOTHING RETURNING id`,
         [
           receipt.submissionId,
@@ -412,7 +428,7 @@ export class PgStore implements BackendStore {
           input.collectorName,
           receipt.collectedOn,
           receipt.dateSource,
-          input.proofUrl,
+          '',
           input.hardcore,
           payloadHash,
           JSON.stringify(receipt),
@@ -420,9 +436,11 @@ export class PgStore implements BackendStore {
           JSON.stringify(evidence),
           classification.collectionType,
           classification.collectionReason,
+          input.image.id,
         ],
       );
       if (inserted.rowCount !== 1) {
+        await client.query('ROLLBACK TO SAVEPOINT discord_image');
         const winner = await readReceipt();
         if (!winner)
           throw new ApiError(503, 'Claim receipt is temporarily unavailable.');
@@ -431,7 +449,7 @@ export class PgStore implements BackendStore {
         return result;
       }
       await client.query('COMMIT');
-      return { created: true, receipt };
+      return { created: true, receipt, imageId: input.image.id };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

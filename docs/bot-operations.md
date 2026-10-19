@@ -16,16 +16,18 @@ Registration upserts `/cc-clog` without replacing unrelated commands and never
 runs automatically. The equivalent local command is
 `docker compose exec --user 1000 clan-clog node apps/bot/dist/register.js test` (or `guild`).
 
-Members use `/cc-clog submit item proof [submitter-name] [hardcore]`. Choose an
-autocomplete match where possible; unmatched text remains reviewable. Proof
-must use an accepted HTTPS Imgur or Gyazo host. The server records the collection date.
+Members use `/cc-clog submit item screenshot [submitter-name] [hardcore]`. Choose an
+autocomplete match where possible; unmatched text remains reviewable. Attach one
+PNG screenshot up to 10 MiB. The app stores a private lossless WebP copy; external
+proof links are not accepted. The server records the collection date.
 The private response identifies the saved submission; pending status grants no credit.
 The receipt labels Regular or Event collection using the server's saved timing.
 Closed pages remain collectable as Regular; hardcore is always Regular. Unmatched
 normal claims wait for a canonical match before resolving their type.
 
-The Discord interaction ID is the retry identity. The bot retries uncertain
-transport/server failures with the same payload and key. If confirmation remains
+The Discord interaction ID is the retry identity. The bot downloads the supplied
+Discord attachment once, then retries uncertain transport/server failures with
+the same multipart payload and key. If confirmation remains
 uncertain, it does not claim nothing was saved: staff should reconcile by that ID.
 First-attempt validation/authorization failures remain authoritative.
 

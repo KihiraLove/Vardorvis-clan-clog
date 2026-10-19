@@ -6,7 +6,6 @@ import {
   formatCollectionDate,
   validateCatalog,
   validateCollectionDate,
-  validateProofUrl,
   type CollectionCredit,
 } from './index.js';
 
@@ -72,28 +71,6 @@ test('catalog rejects ambiguous mappings and dangling page references', () => {
   assert.throws(() => validateCatalog([item], [{ id: 'a', itemIds: [1, 1] }]));
 });
 
-test('proof links reject spoofed domains, credentials, scripts and unsupported ports', () => {
-  for (const value of [
-    'http://imgur.com/a',
-    'https://imgur.com.evil.test/a',
-    'https://evil.test/imgur.com/a',
-    'https://user@imgur.com/a',
-    'https://gyazo.com:444/a',
-    'javascript:alert(1)',
-    'https://imgur.com/',
-    'https://imgur.com/a b',
-  ])
-    assert.throws(() => validateProofUrl(value));
-  assert.equal(
-    validateProofUrl('https://i.imgur.com/test.png'),
-    'https://i.imgur.com/test.png',
-  );
-  assert.equal(
-    validateProofUrl('https://gyazo.com/abc123'),
-    'https://gyazo.com/abc123',
-  );
-});
-
 test('dates are calendar dates, independent of server timezone', () => {
   assert.equal(formatCollectionDate('2026-10-16'), '16/10/26');
   assert.equal(validateCollectionDate('2024-02-29'), '2024-02-29');
@@ -106,19 +83,4 @@ test('manual canonical items may have no external game aliases', () => {
     [{ id: 1, name: 'Clan trophy', gameItemIds: [] }],
     [{ id: 'clan', itemIds: [1] }],
   );
-});
-
-test('mobile Imgur uses the shared proof policy', () => {
-  assert.equal(
-    validateProofUrl('https://m.imgur.com/a/proof'),
-    'https://m.imgur.com/a/proof',
-  );
-  for (const value of [
-    'https://m.imgur.com.evil.test/proof',
-    'https://m.imgur.com@evil.test/proof',
-    'http://m.imgur.com/proof',
-    'https://m.imgur.com/',
-    'https://m.imgur.com:8443/proof',
-  ])
-    assert.throws(() => validateProofUrl(value));
 });

@@ -1,21 +1,14 @@
-/** Show only validated external evidence links, without sending referrer or opener access. */
-import {
-  safeProof,
-  safeScreenshotPath,
-  type Submission,
-} from './admin-model.ts';
+/** Saved screenshots stay on the private backend; external proof URLs are historical data only. */
+import { safeScreenshotPath, type Submission } from './admin-model.ts';
 export function ProofLink({
-  url,
   source,
   screenshot,
   chatMessage,
 }: {
-  url: string;
   source: Submission['source'];
   screenshot?: string | null | undefined;
   chatMessage?: string | undefined;
 }) {
-  const safe = safeProof(url);
   if (safeScreenshotPath(screenshot))
     return (
       <div className="submission-proof">
@@ -28,29 +21,15 @@ export function ProofLink({
           <img src={screenshot} alt="Submission screenshot" loading="lazy" />
           View screenshot
         </a>
-        {safe && (
-          <a href={safe} target="_blank" rel="noopener noreferrer">
-            Open external proof
-          </a>
-        )}
       </div>
     );
-  if (source === 'runelite' && chatMessage?.trim() && !safe)
+  if (source === 'runelite' && chatMessage?.trim())
     return <span>Chat message proof</span>;
-  if (source === 'manual' && !url.trim())
+  if (source === 'manual')
     return <span className="admin-note">No proof supplied (manual entry)</span>;
-  return safe ? (
-    <a
-      href={safe}
-      target="_blank"
-      rel="noopener noreferrer"
-      referrerPolicy="no-referrer"
-    >
-      Open proof on {new URL(safe).hostname}
-    </a>
-  ) : (
+  return (
     <span className="admin-error">
-      Invalid proof link — cannot approve this claim.
+      No screenshot supplied — cannot approve this claim.
     </span>
   );
 }
