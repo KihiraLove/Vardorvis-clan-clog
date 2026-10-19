@@ -306,11 +306,11 @@ process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
         assert.match(messages[0], /could not be confirmed/u);
         assert.doesNotMatch(
           messages[0],
-          /Nothing was saved|Saved for admin review/u,
+          /Nothing was saved|Item submitted to review/u,
         );
         assert.ok(records.some((r) => r.category === 'uncertain'));
       } else {
-        assert.match(messages[0], new RegExp(stored.submissionId, 'u'));
+        assert.equal(messages[0], 'Item submitted to review');
         assert.ok(
           records.some(
             (r) =>

@@ -20,8 +20,10 @@ Members use `/cc-clog submit item screenshot [submitter-name] [hardcore]`. Choos
 autocomplete match where possible; unmatched text remains reviewable. Attach one
 PNG screenshot up to 10 MiB. The app stores a private lossless WebP copy; external
 proof links are not accepted. The server records the collection date.
-The private response identifies the saved submission; pending status grants no credit.
-The receipt labels Regular or Event collection using the server's saved timing.
+New active catalog items appear in autocomplete automatically; no bot restart or
+command registration is needed.
+The private confirmation is “Item submitted to review”; pending status grants no credit.
+The server records Regular or Event collection using the saved timing.
 Closed pages remain collectable as Regular; hardcore is always Regular. Unmatched
 normal claims wait for a canonical match before resolving their type.
 

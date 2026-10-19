@@ -55,9 +55,15 @@ function command(
       getString: (key: string) =>
         ({
           item: 'Item',
-          proof: 'https://imgur.com/a/private',
           'submitter-name': null,
         })[key as 'item'],
+      getAttachment: () => ({
+        id: '456789012345678901',
+        name: 'proof.png',
+        size: 64,
+        contentType: 'image/png',
+        url: 'https://cdn.discordapp.com/attachments/234567890123456789/456789012345678901/proof.png',
+      }),
       getBoolean: () => false,
     },
   } as unknown as Interaction;
@@ -188,13 +194,16 @@ test('gateway stop drains a committed receipt and delayed Discord acknowledgemen
   finish();
   assert.equal(await stop, true);
   assert.equal(client.destroyed, 1);
-  assert.match(messages[0]!, new RegExp(receipt.submissionId, 'u'));
+  assert.deepEqual(messages, ['Item submitted to review']);
   assert.ok(
     records.some(
       (r) => r.code === 'RECEIPT_KNOWN' && r.receipt === receipt.submissionId,
     ),
   );
-  assert.doesNotMatch(JSON.stringify(records), /imgur|private/iu);
+  assert.doesNotMatch(
+    JSON.stringify(records),
+    /cdn\.discordapp\.com|private/iu,
+  );
 });
 test('forced interaction deadline records pending identity without claiming rollback or sending a false receipt', async () => {
   const client = new Gateway(),
@@ -245,7 +254,7 @@ test('known receipt acknowledgement failures retain the receipt, and unexpected 
   await flush();
   assert.equal(messages.length, 2);
   assert.equal(messages[0], messages[1]);
-  assert.match(messages[1]!, /Saved for admin review/u);
+  assert.equal(messages[1], 'Item submitted to review');
   client.emit(
     Events.InteractionCreate,
     command(

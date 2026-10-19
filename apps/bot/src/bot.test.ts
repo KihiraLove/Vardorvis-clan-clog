@@ -61,7 +61,6 @@ import {
   failureMessage,
   handleAutocomplete,
   handleSubmission,
-  receiptMessage,
 } from './handler.js';
 import { registerFromEnv, registerGuildCommand } from './register.js';
 import { wireGateway } from './runtime.js';
@@ -82,24 +81,30 @@ const receipt: Receipt = {
   candidates: [{ id: 42, name: 'Dragon axe' }],
   creditOccupied: false,
 };
-test('Discord receipts show collection type and validate new types without requiring them on legacy replies', async () => {
-  assert.match(
-    receiptMessage({ ...receipt, collectionType: 'event' }),
-    /Event collection/u,
-  );
-  assert.match(
-    receiptMessage({ ...receipt, collectionType: 'regular', hardcore: true }),
-    /Regular collection/u,
-  );
-  assert.match(
-    receiptMessage({
+test('confirmed Discord submissions use the same concise reply for every saved receipt', async () => {
+  for (const saved of [
+    receipt,
+    { ...receipt, collectionType: 'event' },
+    { ...receipt, collectionType: 'regular', hardcore: true },
+    { ...receipt, creditOccupied: true, hardcore: true },
+    {
       ...receipt,
       collectionType: null,
       itemId: null,
       resolution: 'needs_match',
-    }),
-    /Awaiting item match/u,
-  );
+    },
+  ]) {
+    for (const status of [200, 201]) {
+      const api = new TestBotApi('https://clog.example', token, async () =>
+        Response.json(saved, { status }),
+      );
+      const input = fakeCommand();
+      await handleSubmission(input.command, api, guildId);
+      assert.deepEqual(input.messages, ['Item submitted to review']);
+    }
+  }
+});
+test('receipt collection types are validated without requiring them on legacy replies', async () => {
   const claim: Claim = {
     interactionId: receipt.interactionId,
     guildId,
@@ -243,11 +248,9 @@ test('submission defers ephemerally before persistence and forwards selected ite
       hardcore: true,
     },
   ]);
-  assert.match(messages[0]!, /Saved for admin review/u);
-  assert.match(messages[0]!, /No collection credit is awarded/u);
-  assert.match(messages[0]!, /Mode: hardcore/u);
+  assert.deepEqual(messages, ['Item submitted to review']);
 });
-test('free text and omitted hardcore default false; unmatched and occupied receipts are explicit', async () => {
+test('free text and omitted hardcore default false; unmatched claims receive the concise confirmation', async () => {
   const { api, submitted } = mockApi({
     submit: async (claim) => {
       submitted.push(claim);
@@ -266,15 +269,7 @@ test('free text and omitted hardcore default false; unmatched and occupied recei
   assert.equal(submitted[0]?.itemId, undefined);
   assert.equal(submitted[0]?.hardcore, false);
   assert.equal(submitted[0]?.collectorName, 'DiscordUsername');
-  assert.match(input.messages[0]!, /needs manual matching/u);
-  const warning = receiptMessage({
-    ...receipt,
-    creditOccupied: true,
-    hardcore: true,
-  });
-  assert.match(warning, /already exists/u);
-  assert.match(warning, /will not add another credit/u);
-  assert.doesNotMatch(warning, /approved your claim/u);
+  assert.deepEqual(input.messages, ['Item submitted to review']);
 });
 test('invalid proof, unconfigured guild and invalid IDs never call intake API', async () => {
   for (const input of [
@@ -301,7 +296,7 @@ test('an old registered command without the screenshot option explains registrat
   assert.match(input.messages[0]!, /Nothing was sent/u);
   assert.doesNotMatch(
     input.messages[0]!,
-    /might have reached|Saved for admin review/u,
+    /might have reached|Item submitted to review/u,
   );
 });
 test('failed/unconfirmed API submissions are never acknowledged as saved', async () => {
@@ -321,7 +316,7 @@ test('failed/unconfirmed API submissions are never acknowledged as saved', async
       }).api,
       guildId,
     );
-    assert.doesNotMatch(input.messages[0]!, /Saved for admin review/u);
+    assert.doesNotMatch(input.messages[0]!, /Item submitted to review/u);
     assert.match(
       input.messages[0]!,
       /Nothing new was saved|Nothing was saved|could not be confirmed/u,
@@ -466,7 +461,7 @@ test('HTTP conflicts and malformed API responses fail rather than inventing a re
     assert.ok(error instanceof UnconfirmedSubmissionError);
     assert.equal(error.reason, 'invalid-receipt');
     assert.equal(error.interactionId, claim.interactionId);
-    assert.doesNotMatch(failureMessage(error), /Saved for admin review/u);
+    assert.doesNotMatch(failureMessage(error), /Item submitted to review/u);
     return true;
   });
   const badSearch = new TestBotApi('http://api:3000', token, (async () =>

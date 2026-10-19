@@ -91,7 +91,7 @@ function assertUnconfirmed(
   assert.match(message, /Discord interaction ID: 345678901234567890/u);
   assert.match(message, /new interaction ID/u);
   assert.match(message, /admin to check/u);
-  assert.doesNotMatch(message, /Nothing was saved|Saved for admin review/u);
+  assert.doesNotMatch(message, /Nothing was saved|Item submitted to review/u);
   assert.doesNotMatch(
     message,
     /Bearer|secret|Connection lost|Credentials rotated/u,
