@@ -5,24 +5,32 @@ preview it, inspect the changes and apply. Administrators and moderators can
 import. WOM's metrics determine SKILL or ACTIVITY; a saved identity cannot
 silently change kind or supported scope.
 
-| Kind and state        | Saved result                    | Page window              |
-| --------------------- | ------------------------------- | ------------------------ |
-| SKILL, future/running | Metadata with unavailable gains | None                     |
-| ACTIVITY, future      | Metadata                        | Source start to end      |
-| ACTIVITY, running     | Metadata                        | Apply time to source end |
-| Either, finished      | Validated final results         | None created             |
+| Kind and state                 | Saved result                    | Page window              |
+| ------------------------------ | ------------------------------- | ------------------------ |
+| SKILL/computed, future/running | Metadata with unavailable gains | None                     |
+| ACTIVITY, future               | Metadata                        | Source start to end      |
+| ACTIVITY, running              | Metadata                        | Apply time to source end |
+| Either, finished               | Validated final results         | None created             |
 
-The DB clock sets boundaries. Imports never turn on scheduling. Activity pages
-are suggested from the metric; inspect or correct them before applying.
+The DB clock sets boundaries. Imports never turn on scheduling. Boss/activity pages
+are suggested from the union of all selected metrics, without duplicates; inspect
+or correct them before applying. Computed competitions do not require page windows.
 Ambiguous metrics require explicit pages. Re-importing preserves existing
 staff-edited windows and deliberate deletions. Hardcore pages stay fully open.
 
-SKILL supports individual/multiple skills and overall, expanded into the 24
-canonical skills without counting aggregate XP twice. Unsupported mixed scopes,
-weighted/multiple activities, EHP/EHB and invalid/partial results are rejected.
+Imports support multiple skills, bosses, activities and computed EHP/EHB metrics,
+including metric weights. WOM requires every selected metric to share a type;
+unknown metrics and mixed types are rejected. Overall expands into the 24 canonical
+skills without counting raw XP twice, including when a skill is also selected.
 Live participant data is discarded for metadata-only imports.
 
-Finished imports retain stable player IDs and exact integer gains. Zero-gain
+Metric definitions and weights appear in the preview and public competition scope.
+Finished previews retain individual metric gains and WOM's combined score. Selected
+XP competition podiums use those standings; the Total podium and XP skill totals
+use actual unweighted XP. Computed hours and weighted scores never become skill XP.
+Scores and weights use decimal strings; ordinary counters and raw XP remain integers.
+
+Finished imports retain stable player IDs and exact gains. Zero-score
 participants are excluded after validation. Refresh replaces the competition's
 previous contribution, so repeated imports cannot add XP twice. Negative XP
 corrections need acknowledgement. Failed imports preserve published data.
@@ -32,7 +40,8 @@ Preview tokens expire, bind staff and revisions, and need refreshing if a
 metadata-only event finishes before apply. Request-key replay retains the saved
 receipt even after expiry. Review the preview again after a conflict.
 
-The public regular log shows stored activity metadata and skill XP/podiums.
+The public regular log shows stored activity scope/metadata and skill XP/podiums;
+full activity standings and metric breakdowns are available in the staff preview.
 It never queries WOM directly. XP is hidden in hardcore mode. Up to 2,000 current
 competitions and 2,000 all-time XP contributions are supported; archive ended
 metadata to free current slots, without erasing earned XP. See [maintenance](maintenance.md).

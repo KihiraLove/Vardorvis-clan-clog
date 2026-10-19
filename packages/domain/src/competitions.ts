@@ -1,4 +1,10 @@
 import { isSkill, skillIds, type Skill } from './skills.js';
+import {
+  womMetricType,
+  type CompetitionMetric,
+  type CompetitionStanding,
+} from './competition-metrics.js';
+export * from './competition-metrics.js';
 /** Kind is derived from canonical WOM metadata, never from a caller's selection. */
 export type CompetitionKind = 'SKILL' | 'ACTIVITY';
 export interface CompetitionPreviewInput {
@@ -20,19 +26,22 @@ export function competitionScope(metrics: readonly string[]): {
     throw new Error('Invalid or duplicate WOM metric scope.');
   const aggregate = (metric: string) =>
     metric === 'overall' || metric === 'total';
-  if (metrics.length === 1 && aggregate(metrics[0]!))
+  if (
+    (metrics.every((metric) => isSkill(metric) || metric === 'overall') &&
+      metrics.includes('overall')) ||
+    (metrics.length === 1 && aggregate(metrics[0]!))
+  )
     return { kind: 'SKILL', skills: [...skillIds] };
   if (metrics.every(isSkill))
     return {
       kind: 'SKILL',
       skills: skillIds.filter((skill) => metrics.includes(skill)),
     };
-  if (metrics.some((metric) => isSkill(metric) || aggregate(metric)))
-    throw new Error(
-      'Mixed skill, aggregate or activity scopes are unsupported.',
-    );
-  if (metrics.length !== 1)
-    throw new Error('Multiple activity metrics are unsupported.');
+  const types = new Set(metrics.map(womMetricType));
+  if (types.has(undefined))
+    throw new Error('Unknown WOM metrics are unsupported.');
+  if (types.size !== 1 || types.has('SKILL'))
+    throw new Error('Mixed metric types are unsupported by WOM.');
   return { kind: 'ACTIVITY', skills: [] };
 }
 export type CompetitionLifecycle = 'future' | 'running' | 'finished';
@@ -47,9 +56,10 @@ export function competitionImportAction(
   lifecycle: CompetitionLifecycle,
   scheduleCreated = false,
   scheduleExists = false,
+  opensPages = kind === 'ACTIVITY',
 ): CompetitionImportAction {
   if (lifecycle === 'finished') return 'import-results';
-  if (kind === 'SKILL') return 'import-metadata';
+  if (!opensPages) return 'import-metadata';
   return scheduleCreated
     ? scheduleExists
       ? 'preserve-schedule'
@@ -62,6 +72,9 @@ export interface WomCompetition {
   title: string;
   sourceUrl: string;
   metrics: string[];
+  metricDefinitions?: CompetitionMetric[];
+  /** Finished public results contain only the top three; import snapshots retain all. */
+  standings?: CompetitionStanding[];
   startsAt: string;
   endsAt: string;
 }

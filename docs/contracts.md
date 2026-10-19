@@ -35,6 +35,10 @@ automatic rejection by duplicate, scheduling or world-review policy. Structural,
 authentication and excluded-world failures remain errors. Private chat proof and
 screenshots never appear in public credits. See [RuneLite](runelite-submissions.md).
 
-XP gains are nonnegative decimal strings, never floating-point numbers. Imports
+XP gains are nonnegative integer strings, never floating-point numbers. WOM metric
+weights and combined/computed scores use canonical decimal strings. Competition
+metadata can include `metricDefinitions`; finished previews include `standings`
+with per-metric `deltas`. Public XP events include a `competition` summary with at
+most three standings; public activity reads expose metadata only. Imports
 are previewed and applied transactionally; refreshing replaces a prior event's
 contribution. [Competition rules](wom-competitions.md) define lifecycle and corrections.

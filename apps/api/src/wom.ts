@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { competitionScope } from '@clog/domain';
 import { ApiError } from './types.js';
 import {
+  womCompetitionMetadata,
+  womCompetitionStandings,
+} from './wom-competition-data.js';
+import {
   skillIds,
   type Gains,
   type Skill,
@@ -198,10 +202,13 @@ export function parseWomSnapshot(
     skills: scope,
     participants,
   };
+  const competition = womCompetitionMetadata(source, expectedId);
+  competition.standings = womCompetitionStandings(source, competition);
   const sourceHash = createHash('sha256')
-    .update(JSON.stringify(canonical))
+    .update(JSON.stringify({ ...canonical, competition }))
     .digest('hex');
   return {
+    competition,
     event: {
       id: expectedId,
       title: source.title.trim(),

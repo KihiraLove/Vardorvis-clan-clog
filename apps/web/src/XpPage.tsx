@@ -9,7 +9,11 @@ import { XpAmount } from './XpAmount.tsx';
 import { XpPodium } from './XpPodium.tsx';
 import { skills, type XpClient } from './xp-model.ts';
 import { eventTotals, sumXp, type XpTracker } from './xp-tracker.ts';
-import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
+import { defaultSiteCopy, competitionUnit, type SiteCopy } from '@clog/domain';
+import {
+  CompetitionMetrics,
+  CompetitionBreakdown,
+} from './CompetitionMetrics.tsx';
 export function XpPage({
   client,
   copy = defaultSiteCopy,
@@ -90,6 +94,9 @@ export function XpPage({
           </div>
         </nav>
         <div className="event-skills">
+          {event?.competition && (
+            <CompetitionMetrics competition={event.competition} />
+          )}
           <div className="skill-panel">
             <div
               className="skill-grid"
@@ -118,13 +125,25 @@ export function XpPage({
               </p>
             </div>
           )}
+          {event?.competition?.standings && (
+            <CompetitionBreakdown players={event.competition.standings} />
+          )}
         </div>
         <XpPodium
           players={
-            missing ? [] : event ? (event.podium ?? []) : (data?.podium ?? [])
+            missing
+              ? []
+              : event
+                ? (event.competition?.standings ?? event.podium ?? [])
+                : (data?.podium ?? [])
           }
           title={event?.title ?? (missing ? 'Unavailable event' : 'Total')}
           sourceUrl={event?.sourceUrl}
+          unit={
+            event?.competition?.standings
+              ? competitionUnit(event.competition)
+              : 'XP'
+          }
         />
       </div>
     </section>

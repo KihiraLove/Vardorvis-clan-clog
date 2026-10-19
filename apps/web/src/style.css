@@ -2484,6 +2484,18 @@ main {
 .competition-import {
   margin-bottom: 24px;
 }
+.competition-metrics,
+.competition-breakdown {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.competition-breakdown ul {
+  padding-left: 20px;
+}
+.activity-competition .competition-metrics {
+  margin: 6px 0;
+}
 .competition-import p {
   font-size: 12px;
   line-height: 1.6;

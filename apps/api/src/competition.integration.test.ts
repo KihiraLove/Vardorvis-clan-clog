@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 import { PgCompetitionStore } from './competition-store.js';
 import { PgXpStore } from './xp-store.js';
@@ -141,9 +141,10 @@ test(
         '../../../packages/database/migrations/',
         import.meta.url,
       );
-      await pool.query(
-        await readFile(new URL('001_baseline.sql', migrations), 'utf8'),
-      );
+      for (const file of (await readdir(migrations))
+        .filter((file) => file.endsWith('.sql'))
+        .sort())
+        await pool.query(await readFile(new URL(file, migrations), 'utf8'));
       const initial = await snapshot(
         99,
         'SKILL',

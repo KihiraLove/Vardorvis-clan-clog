@@ -1,5 +1,5 @@
 /** XP aggregates and private preview data have no Discord-auth or browser dependencies. */
-import { skillIds, type Skill } from '@clog/domain';
+import { skillIds, type Skill, type WomCompetition } from '@clog/domain';
 export { skillIds, type Skill } from '@clog/domain';
 export type Gains = Partial<Record<Skill, string>>;
 export interface XpParticipant {
@@ -13,8 +13,10 @@ export interface XpEvent {
   sourceUrl: string;
   skills: Skill[];
   gains: Gains;
+  competition?: WomCompetition;
 }
 export interface XpSnapshot {
+  competition?: WomCompetition;
   event: XpEvent;
   participants: XpParticipant[];
   startsAt: string;

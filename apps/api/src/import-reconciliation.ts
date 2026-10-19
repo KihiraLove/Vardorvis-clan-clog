@@ -6,6 +6,8 @@ import {
   competitionImportAction,
   competitionLifecycle,
   competitionScope,
+  competitionDefinitions,
+  competitionUsesPages,
   type WomCompetition,
 } from '@clog/domain';
 import { ApiError } from './types.js';
@@ -32,19 +34,22 @@ export function requireXpCapacity(count: number, existing: boolean) {
     );
 }
 export function legacyCompetition(snapshot: XpSnapshot): CompetitionSnapshot {
+  const metadata: Partial<WomCompetition> = snapshot.competition ?? {};
+  const { standings, ...competition } = metadata;
   return {
     competition: {
+      ...competition,
       id: snapshot.event.id,
       title: snapshot.event.title,
       sourceUrl: snapshot.event.sourceUrl,
       kind: 'SKILL',
-      metrics: snapshot.event.skills,
+      metrics: competition.metrics ?? snapshot.event.skills,
       startsAt: snapshot.startsAt,
       endsAt: snapshot.endsAt,
     },
     skills: snapshot.event.skills,
     lifecycle: 'finished',
-    results: { xp: snapshot, participants: [] },
+    results: { xp: snapshot, participants: standings ?? [] },
   };
 }
 function requireSnapshot(snapshot: CompetitionSnapshot) {
@@ -87,6 +92,8 @@ type Stored = WomCompetition & {
   resultsImportedAt: Date | null;
   activityResults:
     NonNullable<CompetitionSnapshot['results']>['participants'] | null;
+  competitionResults:
+    NonNullable<CompetitionSnapshot['results']>['participants'] | null;
 };
 async function stored(
   client: pg.PoolClient,
@@ -94,7 +101,7 @@ async function stored(
 ): Promise<Stored | undefined> {
   const row = (
     await client.query<Stored & { startsAt: Date; endsAt: Date }>(
-      'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,skills,starts_at AS "startsAt",ends_at AS "endsAt",schedule_id AS "scheduleId",schedule_created AS "scheduleCreated",(SELECT archived_at IS NOT NULL FROM collection_log_schedules WHERE id=wom_competitions.schedule_id) IS TRUE AS "scheduleArchived",source_hash AS "sourceHash",archived_at AS "archivedAt",results_imported_at AS "resultsImportedAt",activity_results AS "activityResults" FROM wom_competitions WHERE competition_id=$1',
+      'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,metric_definitions AS "metricDefinitions",skills,starts_at AS "startsAt",ends_at AS "endsAt",schedule_id AS "scheduleId",schedule_created AS "scheduleCreated",(SELECT archived_at IS NOT NULL FROM collection_log_schedules WHERE id=wom_competitions.schedule_id) IS TRUE AS "scheduleArchived",source_hash AS "sourceHash",archived_at AS "archivedAt",results_imported_at AS "resultsImportedAt",activity_results AS "activityResults",competition_results AS "competitionResults" FROM wom_competitions WHERE competition_id=$1',
       [id],
     )
   ).rows[0];
@@ -124,7 +131,7 @@ function requireScope(
   const old = prior.kind === 'SKILL' ? prior.skills : prior.metrics;
   const next =
     prior.kind === 'SKILL' ? snapshot.skills : snapshot.competition.metrics;
-  if (JSON.stringify(old) !== JSON.stringify(next))
+  if (JSON.stringify([...old].sort()) !== JSON.stringify([...next].sort()))
     throw new ApiError(
       422,
       'WOM metric scope changed; manual reconciliation is required.',
@@ -157,7 +164,7 @@ export class ImportReconciliation {
   private async loadActivities(client: pg.PoolClient) {
     const rows = (
       await client.query<WomCompetition & { startsAt: Date; endsAt: Date }>(
-        'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,starts_at AS "startsAt",ends_at AS "endsAt" FROM wom_competitions WHERE kind=\'ACTIVITY\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
+        'SELECT competition_id::float8 AS id,kind,title,source_url AS "sourceUrl",metrics,metric_definitions AS "metricDefinitions",starts_at AS "startsAt",ends_at AS "endsAt" FROM wom_competitions WHERE kind=\'ACTIVITY\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
       )
     ).rows;
     if (rows.length > 2000)
@@ -228,11 +235,11 @@ export class ImportReconciliation {
           'Competition time state changed. Preview again.',
         );
       snapshot = { ...snapshot, lifecycle };
-      const skill = snapshot.competition.kind === 'SKILL';
-      if (skill && pageIds?.length)
+      const metadataOnly = !competitionUsesPages(snapshot.competition.metrics);
+      if (metadataOnly && pageIds?.length)
         throw new ApiError(
           422,
-          'SKILL imports do not open collection log pages. Import the competition metadata without page selections.',
+          'These competition metrics do not open collection log pages. Import the metadata without page selections.',
         );
       const prior = await stored(client, snapshot.competition.id);
       requireScope(prior, snapshot);
@@ -250,7 +257,7 @@ export class ImportReconciliation {
         )
       ).rows[0]!.count;
       requireXpCapacity(count, !!prior);
-      const pages = skill
+      const pages = metadataOnly
         ? []
         : (
             await client.query<{ id: string; name: string }>(
@@ -264,7 +271,7 @@ export class ImportReconciliation {
         (s) => s.id === prior?.scheduleId,
       );
       const selected =
-        skill || lifecycle === 'finished'
+        metadataOnly || lifecycle === 'finished'
           ? []
           : (linked?.pageIds ?? pageIds ?? proposed);
       if (
@@ -280,6 +287,7 @@ export class ImportReconciliation {
         lifecycle,
         prior?.scheduleCreated,
         !!linked,
+        !metadataOnly,
       );
       const events = snapshot.results?.xp ? await xpEvents(client) : [];
       if (snapshot.results?.xp)
@@ -347,11 +355,11 @@ export class ImportReconciliation {
         warnings.push(
           'The linked staff schedule is archived and retained. This import will not restore or reopen it; manage its lifecycle separately.',
         );
-      else if (skill && prior?.scheduleCreated)
+      else if (metadataOnly && prior?.scheduleCreated)
         warnings.push(
           linked
-            ? 'The previously linked staff schedule is preserved. This SKILL import will not edit or open pages; manage that schedule in Scheduling.'
-            : 'The previously linked schedule was deleted. This SKILL import will not recreate it.',
+            ? 'The previously linked staff schedule is preserved. This import will not edit or open pages; manage that schedule in Scheduling.'
+            : 'The previously linked schedule was deleted. This import will not recreate it.',
         );
       if (
         snapshot.competition.metrics
@@ -373,7 +381,7 @@ export class ImportReconciliation {
         warnings.push(
           'Choose at least one active page before applying. This metric has no automatic page mapping.',
         );
-      if (!skill && !schedules.enabled && lifecycle !== 'finished')
+      if (!metadataOnly && !schedules.enabled && lifecycle !== 'finished')
         warnings.push(
           'Scheduling is disabled. This import will not enable enforcement.',
         );
@@ -399,7 +407,7 @@ export class ImportReconciliation {
         pages,
         action,
         scheduleStartsAt:
-          skill || lifecycle === 'finished'
+          metadataOnly || lifecycle === 'finished'
             ? null
             : (linked?.startsAt ??
               (lifecycle === 'running'
@@ -411,6 +419,9 @@ export class ImportReconciliation {
           [],
         changes,
         warnings,
+        ...(snapshot.results
+          ? { standings: snapshot.results.participants }
+          : {}),
       };
     });
   }
@@ -569,10 +580,10 @@ export class ImportReconciliation {
       const snapshot = row.snapshot,
         c = snapshot.competition;
       requireSnapshot(snapshot);
-      if (c.kind === 'SKILL' && row.page_ids.length)
+      if (!competitionUsesPages(c.metrics) && row.page_ids.length)
         throw new ApiError(
           409,
-          'SKILL import behavior changed. Preview again to import without opening pages.',
+          'Competition page-opening behavior changed. Preview again to import without opening pages.',
         );
       const lifecycle = competitionLifecycle(c, now.getTime());
       if ((lifecycle === 'finished') !== !!snapshot.results)
@@ -597,6 +608,7 @@ export class ImportReconciliation {
         lifecycle,
         prior?.scheduleCreated,
         schedules.schedules.some((s) => s.id === scheduleId),
+        competitionUsesPages(c.metrics),
       );
       const createSchedule = action === 'create-schedule';
       if (createSchedule) {
@@ -674,7 +686,7 @@ export class ImportReconciliation {
         );
       if (changed) {
         await client.query(
-          'INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at,schedule_id,schedule_created,results_imported_at,activity_results,source_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(competition_id) DO UPDATE SET title=EXCLUDED.title,source_url=EXCLUDED.source_url,metrics=EXCLUDED.metrics,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,schedule_id=EXCLUDED.schedule_id,schedule_created=EXCLUDED.schedule_created,results_imported_at=EXCLUDED.results_imported_at,activity_results=EXCLUDED.activity_results,source_hash=EXCLUDED.source_hash',
+          'INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at,schedule_id,schedule_created,results_imported_at,activity_results,source_hash,metric_definitions,competition_results) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(competition_id) DO UPDATE SET title=EXCLUDED.title,source_url=EXCLUDED.source_url,metrics=EXCLUDED.metrics,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,schedule_id=EXCLUDED.schedule_id,schedule_created=EXCLUDED.schedule_created,results_imported_at=EXCLUDED.results_imported_at,activity_results=EXCLUDED.activity_results,source_hash=EXCLUDED.source_hash,metric_definitions=EXCLUDED.metric_definitions,competition_results=EXCLUDED.competition_results',
           [
             c.id,
             c.kind,
@@ -691,6 +703,8 @@ export class ImportReconciliation {
               ? JSON.stringify(snapshot.results.participants)
               : null,
             sourceHash,
+            JSON.stringify(competitionDefinitions(c)),
+            JSON.stringify(snapshot.results?.participants ?? []),
           ],
         );
         if (xp)
@@ -757,6 +771,7 @@ export class ImportReconciliation {
             resultsImported: !!snapshot.results,
             changes,
             resultsEvidenceVersion: 1,
+            competitionResults: snapshot.results?.participants ?? null,
             activityResults:
               c.kind === 'ACTIVITY'
                 ? (snapshot.results?.participants ?? null)

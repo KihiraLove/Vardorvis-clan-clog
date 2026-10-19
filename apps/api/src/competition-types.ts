@@ -2,6 +2,7 @@ import type {
   CompetitionImportAction,
   CompetitionLifecycle,
   WomCompetition,
+  CompetitionStanding,
 } from '@clog/domain';
 import type { XpChange, XpParticipant, XpSnapshot, Skill } from './xp-types.js';
 export interface CompetitionSnapshot {
@@ -10,7 +11,7 @@ export interface CompetitionSnapshot {
   lifecycle: CompetitionLifecycle;
   // Only finished competitions may have results. Never retain the raw WOM response.
   results?: {
-    participants: { playerId: number; displayName: string; gained: string }[];
+    participants: CompetitionStanding[];
     xp?: XpSnapshot;
   };
 }
@@ -30,6 +31,7 @@ export interface CompetitionPreview {
   )[];
   changes: XpChange[];
   warnings: string[];
+  standings?: CompetitionStanding[];
 }
 export interface CompetitionReceipt {
   outcome: 'applied' | 'unchanged';

@@ -1,5 +1,7 @@
 /** Transactional snapshots; retries survive process restarts and preview expiry. */
 import type pg from 'pg';
+import type { WomCompetition } from '@clog/domain';
+import { competitionPublicColumns } from './competition-projection.js';
 import { transaction } from './transaction.js';
 import {
   ImportReconciliation,
@@ -85,6 +87,16 @@ const event = (row: Row): XpEvent => ({
   skills: row.skills,
   gains: row.gains,
 });
+type CompetitionMetadata = Pick<
+  XpEvent,
+  'id' | 'title' | 'sourceUrl' | 'skills'
+> & {
+  metrics: string[];
+  metricDefinitions: WomCompetition['metricDefinitions'] | null;
+  standings: WomCompetition['standings'];
+  startsAt: Date;
+  endsAt: Date;
+};
 export class PgXpStore implements XpStore {
   private readonly trackerCache = new ProjectionCache<
     Awaited<ReturnType<XpStore['tracker']>>
@@ -119,13 +131,10 @@ export class PgXpStore implements XpStore {
     const totals = sumTotals(rows.map(event));
     const byIdentity = new Map(rows.map((row) => [row.competition_id, row]));
     const currentMetadata = (
-      await client.query<{
-        id: number;
-        title: string;
-        sourceUrl: string;
-        skills: XpEvent['skills'];
-      }>(
-        'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills FROM wom_competitions WHERE kind=\'SKILL\' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001',
+      await client.query<CompetitionMetadata>(
+        'SELECT competition_id::float8 AS id,title,source_url AS "sourceUrl",skills,metrics,starts_at AS "startsAt",ends_at AS "endsAt",' +
+          competitionPublicColumns +
+          " FROM wom_competitions WHERE kind='SKILL' AND archived_at IS NULL ORDER BY ends_at DESC,competition_id DESC LIMIT 2001",
       )
     ).rows;
     if (currentMetadata.length > maxEvents)
@@ -133,13 +142,10 @@ export class PgXpStore implements XpStore {
     // Archived contributions stay in all-time totals and event browsing. Both
     // branches are independently bounded; archived metadata without XP is paged separately.
     const archivedMetadata = (
-      await client.query<{
-        id: number;
-        title: string;
-        sourceUrl: string;
-        skills: XpEvent['skills'];
-      }>(
-        'SELECT c.competition_id::float8 AS id,c.title,c.source_url AS "sourceUrl",c.skills FROM (SELECT competition_id FROM xp_events ORDER BY competition_id LIMIT 2001) e CROSS JOIN LATERAL (SELECT competition_id,title,source_url,skills,ends_at FROM wom_competitions WHERE competition_id=e.competition_id AND archived_at IS NOT NULL LIMIT 1) c ORDER BY c.ends_at DESC,c.competition_id DESC LIMIT 2001',
+      await client.query<CompetitionMetadata>(
+        'SELECT c.competition_id::float8 AS id,c.title,c.source_url AS "sourceUrl",c.skills,c.metrics,c.starts_at AS "startsAt",c.ends_at AS "endsAt",' +
+          competitionPublicColumns +
+          ' FROM (SELECT competition_id FROM xp_events ORDER BY competition_id LIMIT 2001) e CROSS JOIN LATERAL (SELECT competition_id,title,source_url,skills,metrics,metric_definitions,competition_results,activity_results,starts_at,ends_at FROM wom_competitions WHERE competition_id=e.competition_id AND archived_at IS NOT NULL LIMIT 1) c ORDER BY c.ends_at DESC,c.competition_id DESC LIMIT 2001',
       )
     ).rows;
     if (archivedMetadata.length > maxEvents)
@@ -172,7 +178,25 @@ export class PgXpStore implements XpStore {
     const events = metadata.map((m) => {
       const r = byIdentity.get(String(m.id));
       return {
-        ...m,
+        id: m.id,
+        title: m.title,
+        sourceUrl: m.sourceUrl,
+        skills: m.skills,
+        competition: {
+          id: m.id,
+          title: m.title,
+          sourceUrl: m.sourceUrl,
+          kind: 'SKILL' as const,
+          metrics: m.metrics,
+          startsAt: m.startsAt.toISOString(),
+          endsAt: m.endsAt.toISOString(),
+          ...(m.metricDefinitions
+            ? {
+                metricDefinitions: m.metricDefinitions,
+                standings: m.standings ?? [],
+              }
+            : {}),
+        },
         gains: r?.gains ?? Object.fromEntries(m.skills.map((s) => [s, null])),
         podium: r
           ? rankPodium(

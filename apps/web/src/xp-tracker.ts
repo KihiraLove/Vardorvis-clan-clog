@@ -1,4 +1,6 @@
 /** Public events need only identity/link, name, skill scope and aggregate gained XP. */
+import { competitionScope, type WomCompetition } from '@clog/domain';
+import { parseWomCompetition } from './competition-api.ts';
 import {
   amount,
   competitionUrl,
@@ -20,6 +22,7 @@ export interface XpEvent {
   skills: SkillId[];
   gains: Partial<Record<SkillId, Xp | null>>;
   podium?: PodiumPlayer[];
+  competition?: WomCompetition;
 }
 export interface PodiumPlayer {
   playerId: number;
@@ -77,6 +80,20 @@ export function parseTracker(value: unknown): XpTracker {
     unique(ids);
     if (!ids.length) throw new Error('An event needs supported skills.');
     const gains = object(row.gains);
+    const competition =
+      row.competition === undefined
+        ? undefined
+        : parseWomCompetition(row.competition);
+    if (
+      competition &&
+      (competition.id !== id ||
+        competition.kind !== 'SKILL' ||
+        JSON.stringify(competitionScope(competition.metrics).skills) !==
+          JSON.stringify(ids))
+    )
+      throw new Error(
+        'XP competition metadata does not match its identity and skill scope.',
+      );
     if (
       Object.keys(gains).length !== ids.length ||
       Object.keys(gains).some((key) => !ids.includes(skill(key)))
@@ -91,6 +108,7 @@ export function parseTracker(value: unknown): XpTracker {
         ids.map((id) => [id, gains[id] === null ? null : amount(gains[id])]),
       ),
       ...(row.podium === undefined ? {} : { podium: parsePodium(row.podium) }),
+      ...(competition ? { competition } : {}),
     };
   });
   unique(events.map((event) => event.id));

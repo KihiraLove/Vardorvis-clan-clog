@@ -127,7 +127,11 @@ test(
           'SELECT name,checksum FROM schema_migrations ORDER BY name',
         )
       ).rows.map((row) => row.name),
-      ['001_baseline.sql', '002_staff_page_access.sql'],
+      [
+        '001_baseline.sql',
+        '002_staff_page_access.sql',
+        '003_wom_multi_metric.sql',
+      ],
     );
     assert.equal(
       (
