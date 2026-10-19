@@ -162,7 +162,7 @@ test('page names distinguish zero, partial and complete collections in the curre
   );
 });
 
-test('homepage uses the supplied default branding, 2x log, inline XP and an admin entry link', async ({
+test('homepage uses the supplied default branding, 2x log, separate XP navigation and an admin entry link', async ({
   page,
 }) => {
   await mockApi(page);
@@ -185,8 +185,10 @@ test('homepage uses the supplied default branding, 2x log, inline XP and an admi
   const log = await page.locator('.game-window').boundingBox();
   expect(log!.width).toBe(1000);
   expect(log!.height).toBe(628);
-  const xp = await page.locator('.event-tracker').boundingBox();
-  expect(xp!.y).toBeGreaterThan(log!.y + log!.height);
+  await expect(page.locator('.event-tracker')).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: 'Xp tracker', exact: true }),
+  ).toHaveAttribute('href', '/xp');
   await page.getByRole('tab', { name: 'Bosses', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(
@@ -301,6 +303,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
     fullPage: true,
   });
   await page.goBack();
+  await page.getByRole('link', { name: 'Admin panel', exact: true }).click();
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();

@@ -85,6 +85,10 @@ function ItemSlot({
   );
 }
 
+export interface CollectionLogView {
+  category?: Category;
+  selection: Partial<Record<Category, string>>;
+}
 export function CollectionLog({
   data,
   loading = false,
@@ -93,6 +97,10 @@ export function CollectionLog({
   hardcore = false,
   copy = defaultSiteCopy,
   activity,
+  view,
+  onViewChange,
+  requestedPage,
+  captions,
 }: {
   data?: LogData | undefined;
   loading?: boolean;
@@ -101,17 +109,15 @@ export function CollectionLog({
   hardcore?: boolean;
   copy?: SiteCopy;
   activity: ReactNode;
+  view: CollectionLogView;
+  onViewChange: (view: CollectionLogView, pageId?: string) => void;
+  requestedPage?: string | null | undefined;
+  captions: { normal: string; hardcore: string };
 }) {
-  const requestedPage = new URLSearchParams(window.location.search).get('page');
   const firstPage =
     data?.catalog.pages.find((page) => page.id === requestedPage) ??
-    data?.catalog.pages.find((page) => page.id === 'vardorvis');
-  const [category, setCategory] = useState<Category>(
-    firstPage?.category ?? 'bosses',
-  );
-  const [selection, setSelection] = useState<Partial<Record<Category, string>>>(
-    firstPage ? { [firstPage.category]: firstPage.id } : {},
-  );
+    data?.catalog.pages.find((page) => page.id === 'vardorvis') ??
+    data?.catalog.pages[0];
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const scale = 2;
@@ -122,29 +128,22 @@ export function CollectionLog({
   const hideTimer = useRef<number | undefined>(undefined);
   const catalog = data?.catalog;
   const categories = catalogSections(catalog);
-  useEffect(() => {
-    if (catalog && !categories.some((section) => section.id === category))
-      setCategory(categories[0]?.id ?? '');
-  }, [catalog, categories, category]);
-  // Resolve deep links once asynchronous live data arrives without resetting later choices.
-  const initialized = useRef(Boolean(catalog));
-  useEffect(() => {
-    if (!catalog || initialized.current) return;
-    initialized.current = true;
-    const initial =
-      catalog.pages.find((entry) => entry.id === requestedPage) ??
-      catalog.pages.find((entry) => entry.id === 'vardorvis') ??
-      catalog.pages[0];
-    if (initial) {
-      setCategory(initial.category);
-      setSelection({ [initial.category]: initial.id });
-    }
-  }, [catalog, requestedPage]);
+  const linkedPage = catalog?.pages.find((entry) => entry.id === requestedPage);
+  const preferredCategory =
+    linkedPage?.category ?? view.category ?? firstPage?.category;
+  const category = categories.some(
+    (section) => section.id === preferredCategory,
+  )
+    ? preferredCategory!
+    : (categories[0]?.id ?? 'bosses');
   const credits = modeCredits(data?.collections.credits ?? [], hardcore);
   const pages =
     catalog?.pages.filter((page) => page.category === category) ?? [];
   const page =
-    pages.find((entry) => entry.id === selection[category]) ?? pages[0];
+    linkedPage ??
+    pages.find((entry) => entry.id === view.selection[category]) ??
+    pages.find((entry) => entry.id === firstPage?.id) ??
+    pages[0];
   const visiblePages = pages.filter((entry) =>
     entry.name.toLowerCase().includes(query.toLowerCase().trim()),
   );
@@ -178,7 +177,21 @@ export function CollectionLog({
   }, [searching]);
   const chooseCategory = (next: Category) => {
     close();
-    setCategory(next);
+    const nextPage =
+      catalog?.pages.find(
+        (entry) => entry.category === next && entry.id === view.selection[next],
+      ) ?? catalog?.pages.find((entry) => entry.category === next);
+    onViewChange(
+      {
+        category: next,
+        selection: {
+          ...view.selection,
+          ...(page ? { [category]: page.id } : {}),
+          ...(nextPage ? { [next]: nextPage.id } : {}),
+        },
+      },
+      nextPage?.id,
+    );
     setQuery('');
     pageListRef.current?.scrollTo(0, 0);
     gridRef.current?.scrollTo(0, 0);
@@ -204,9 +217,17 @@ export function CollectionLog({
       aria-label="Clan collection log"
       style={{ '--log-scale': scale } as CSSProperties}
     >
-      <h1 className="log-help">
-        {copy.collectionCaption}
-        {hardcore && ' Hardcore worlds'}
+      <h1 className="log-help" data-page-heading>
+        <span
+          className="log-caption-sizer"
+          aria-hidden="true"
+          data-normal={captions.normal}
+          data-hardcore={captions.hardcore}
+        />
+        <span>
+          {copy.collectionCaption}
+          {hardcore && ' Hardcore worlds'}
+        </span>
       </h1>
       {activity}
       <div className="log-viewport">
@@ -313,10 +334,16 @@ export function CollectionLog({
                         }
                         onClick={() => {
                           close();
-                          setSelection((current) => ({
-                            ...current,
-                            [category]: entry.id,
-                          }));
+                          onViewChange(
+                            {
+                              category,
+                              selection: {
+                                ...view.selection,
+                                [category]: entry.id,
+                              },
+                            },
+                            entry.id,
+                          );
                           gridRef.current?.scrollTo(0, 0);
                         }}
                       >

@@ -151,6 +151,10 @@ for (const path of ['/admin/xp', '/admin/schedules']) {
       ),
     ).toBeVisible();
     await page.locator('.clan-brand').click();
+    await expect(
+      page.getByRole('complementary', { name: 'Activity competitions' }),
+    ).not.toContainText('Sample skill competition');
+    await page.getByRole('link', { name: 'Xp tracker', exact: true }).click();
     await page
       .getByRole('button', { name: 'Sample skill competition', exact: true })
       .click();
@@ -166,7 +170,7 @@ for (const path of ['/admin/xp', '/admin/schedules']) {
     ).toBeVisible();
     await expect(
       page.getByRole('complementary', { name: 'Activity competitions' }),
-    ).not.toContainText('Sample skill competition');
+    ).toHaveCount(0);
     await page.getByRole('button', { name: 'Total', exact: true }).click();
     await expect(
       page
@@ -311,7 +315,7 @@ test('XP podium follows Total and selected SKILL events, preserves 2–1–3 geo
       json: { revision: 'xp-1', totals: zeroTotals(), events, podium },
     }),
   );
-  await page.goto('/');
+  await page.goto('/xp');
   const total = page.getByRole('complementary', {
     name: 'XP podium for Total',
   });
@@ -489,6 +493,10 @@ test('public competition viewer and podium fit 320px and retain desktop log prop
 }) => {
   await mockApi(page, { xpSamples: true });
   await page.goto('/');
+  const log = await page.locator('.game-window').boundingBox();
+  expect(log!.width).toBe(1000);
+  expect(log!.height).toBe(628);
+  await page.getByRole('link', { name: 'Xp tracker', exact: true }).click();
   await expect(
     page
       .getByRole('complementary', { name: 'XP podium for Total' })
@@ -511,7 +519,7 @@ test('public competition viewer and podium fit 320px and retain desktop log prop
   ).toBeLessThanOrEqual(320);
   await expect(
     page.getByRole('complementary', { name: 'Activity competitions' }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page.getByRole('complementary', { name: 'XP podium for Total' }),
   ).toBeVisible();

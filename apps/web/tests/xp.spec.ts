@@ -29,7 +29,7 @@ test('Total and event sidebar display exact event gains and links with four-digi
   await page.route('**/api/v1/xp/tracker', (route) =>
     route.fulfill({ json: tracker }),
   );
-  await page.goto('/');
+  await page.goto('/xp');
   await expect(
     page
       .getByRole('navigation', { name: 'XP events' })
@@ -85,7 +85,7 @@ test('event list scrolls while Total stays above it', async ({ page }) => {
   await page.route('**/api/v1/xp/tracker', (route) =>
     route.fulfill({ json: { ...tracker, events } }),
   );
-  await page.goto('/');
+  await page.goto('/xp');
   await expect(
     page.getByRole('button', { name: 'Event 20', exact: true }),
   ).toBeAttached();
@@ -108,7 +108,7 @@ test('touch exact values and skill cells fit at 320px', async ({ browser }) => {
   await page.route('**/api/v1/xp/tracker', (route) =>
     route.fulfill({ json: tracker }),
   );
-  await page.goto('/');
+  await page.goto('/xp');
   await page.getByLabel('Attack: 1,234,567,890 XP', { exact: true }).tap();
   await expect(page.getByRole('tooltip')).toContainText('1,234,567,890 XP');
   expect(
@@ -126,7 +126,7 @@ test('stored results switch by event changes totals without showing member table
   page,
 }) => {
   await mockApi(page, { xpSamples: true });
-  await page.goto('/');
+  await page.goto('/xp');
   const attack = page.getByLabel('Attack: 18,345,678 XP', { exact: true });
   await expect(attack).toBeVisible();
   await expect(attack).toBeVisible();
@@ -154,7 +154,7 @@ test('failed or malformed refresh retains the last exact snapshot', async ({
       ? route.fulfill({ json: { ...tracker, totals: { attack: 'bad' } } })
       : route.fulfill({ json: tracker }),
   );
-  await page.goto('/');
+  await page.goto('/xp');
   await expect(
     page.getByLabel('Attack: 1,234,567,890 XP', { exact: true }),
   ).toBeVisible();

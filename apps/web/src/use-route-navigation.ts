@@ -11,14 +11,17 @@ import { withAbort } from './with-abort.ts';
 import { RouteCodeError } from './route-code.ts';
 
 export interface SiteNavigation {
-  route: { path: string };
+  route: { path: string; search?: string };
   navigate: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+  visit: (href: string, replace?: boolean) => void;
+  replaceSearch: (search: string) => void;
   register: (navigator: AdminNavigator | null) => void;
 }
 
 function location() {
   return {
     path: window.location.pathname,
+    search: window.location.search,
   };
 }
 function position() {
@@ -137,6 +140,7 @@ export function useRouteNavigation<T>(
         const target = new URL(href);
         setRoute({
           path: target.pathname,
+          search: target.search,
           resources,
         });
         apply();
@@ -192,6 +196,7 @@ export function useRouteNavigation<T>(
     if (!scroll) return;
     focusRequest.current = undefined;
     const heading =
+      document.querySelector<HTMLElement>('main [data-page-heading]') ??
       document.querySelector<HTMLElement>('main h2') ??
       document.querySelector<HTMLElement>('main h1');
     if (heading) {
@@ -261,6 +266,23 @@ export function useRouteNavigation<T>(
       loading.current?.abort();
     };
   }, [request]);
+  const visit = useCallback(
+    (href: string, replace = false) => {
+      const url = new URL(href, window.location.href);
+      if (url.origin === window.location.origin)
+        request(url.href, replace ? 'replace' : 'push');
+    },
+    [request],
+  );
+  // A selection updates its shareable URL without remounting, scrolling or refocusing the page.
+  const replaceSearch = useCallback((search: string) => {
+    if (window.location.href !== visible.current.href) return;
+    const url = new URL(visible.current.href);
+    url.search = search;
+    window.history.replaceState(window.history.state, '', url.href);
+    visible.current.href = url.href;
+    setRoute((current) => ({ ...current, search: url.search }));
+  }, []);
   const navigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (
       event.button !== 0 ||
@@ -274,7 +296,7 @@ export function useRouteNavigation<T>(
     const url = new URL(event.currentTarget.href);
     if (url.origin !== window.location.origin) return;
     event.preventDefault();
-    request(url.href);
+    visit(url.href);
   };
-  return { route, navigate, register, pending };
+  return { route, navigate, visit, replaceSearch, register, pending };
 }

@@ -1,9 +1,9 @@
-/** Public log and event tracker share one page; admin routes remain directly addressable. */
+/** Public collection/XP routes share their branding, world controls and navigation. */
 import { useCallback, useMemo, useEffect, useState } from 'react';
 import { XpPage } from './XpPage.tsx';
 import { ActivityCompetitions } from './ActivityCompetitions.tsx';
 import type { CompetitionClient } from './competition-api.ts';
-import { CollectionLog } from './CollectionLog.tsx';
+import { CollectionLog, type CollectionLogView } from './CollectionLog.tsx';
 import { usePublicLog } from './use-public-log.ts';
 import { type SiteSettings } from './site-settings.ts';
 import { defaultBranding } from './branding.ts';
@@ -21,10 +21,18 @@ function LiveLog({
   hardcore,
   copy,
   competitionClient,
+  view,
+  onViewChange,
+  requestedPage,
+  captions,
 }: {
   hardcore: boolean;
   copy: SiteCopy;
   competitionClient: CompetitionClient;
+  view: CollectionLogView;
+  onViewChange: (view: CollectionLogView, pageId?: string) => void;
+  requestedPage?: string | null;
+  captions: { normal: string; hardcore: string };
 }) {
   const state = usePublicLog();
   return (
@@ -33,8 +41,22 @@ function LiveLog({
       hardcore={hardcore}
       copy={copy}
       activity={<ActivityCompetitions client={competitionClient} />}
+      view={view}
+      onViewChange={onViewChange}
+      requestedPage={requestedPage}
+      captions={captions}
     />
   );
+}
+function publicHref(
+  path: '/' | '/xp',
+  pageId?: string | null,
+  hardcore = false,
+) {
+  const query = new URLSearchParams();
+  if (pageId && pageId.length <= 100) query.set('page', pageId);
+  if (hardcore && path === '/') query.set('hardcore', '1');
+  return path + (query.size ? '?' + query.toString() : '');
 }
 function Skull({
   enabled,
@@ -67,14 +89,23 @@ export function SiteApp({
   navigation: SiteNavigation;
   resources: RouteResources;
 }) {
-  const { route, navigate, register } = navigation;
+  const { route, navigate, visit, replaceSearch, register } = navigation;
+  const admin = route.path === '/admin' || route.path.startsWith('/admin/');
+  const [publicSearch, setPublicSearch] = useState(
+    admin ? '' : (route.search ?? ''),
+  );
+  const [logView, setLogView] = useState<CollectionLogView>({ selection: {} });
+  const params = new URLSearchParams(admin ? publicSearch : route.search);
+  const requestedPage = params.get('page');
+  const pageId =
+    requestedPage ??
+    (logView.category ? logView.selection[logView.category] : undefined);
   const { runtime, AdminEntry } = resources;
   const {
     admin: adminClient,
     xp: xpClient,
     competition: competitionClient,
   } = runtime;
-  const [hardcore, setHardcore] = useState(false);
   const [liveEnabled, setLiveEnabled] = useState(false);
   const [liveClanName, setLiveClanName] = useState('');
   const [liveCopy, setLiveCopy] = useState<SiteCopy>(defaultSiteCopy);
@@ -138,9 +169,17 @@ export function SiteApp({
         copy: value.copy ?? defaultSiteCopy,
       },
     );
-    if (!value.hardcoreEnabled) setHardcore(false);
   }, [settings.data]);
-  const admin = route.path === '/admin' || route.path.startsWith('/admin/');
+  useEffect(() => {
+    if (!admin) setPublicSearch(route.search ?? '');
+  }, [admin, route.search]);
+  const hardcore = liveEnabled && params.get('hardcore') === '1';
+  const xp = route.path === '/xp' && !hardcore;
+  const collectionHref = publicHref('/', pageId, hardcore);
+  const xpHref = publicHref('/xp', pageId);
+  useEffect(() => {
+    if (!admin && route.path === '/xp' && hardcore) visit(collectionHref, true);
+  }, [admin, route.path, hardcore, collectionHref, visit]);
   const hardcoreAppearance = hardcore && !admin;
   const appearance = hardcoreAppearance
     ? liveHardcoreAppearance
@@ -168,11 +207,16 @@ export function SiteApp({
     );
     setLiveClanName(value.clanName);
     setLiveEnabled(value.hardcoreEnabled);
-    if (!value.hardcoreEnabled) setHardcore(false);
   };
   useEffect(() => {
-    document.title = (clanName ? clanName + ' · ' : '') + copy.collectionTitle;
-  }, [clanName, copy.collectionTitle]);
+    document.title =
+      (clanName ? clanName + ' · ' : '') +
+      (admin
+        ? 'Clan administration'
+        : xp
+          ? copy.xpTitle
+          : copy.collectionTitle);
+  }, [clanName, copy.collectionTitle, copy.xpTitle, admin, xp]);
   return (
     <>
       <svg
@@ -211,14 +255,32 @@ export function SiteApp({
           </filter>
         </defs>
       </svg>
-      <a className="skip-link" href={admin ? '#admin-main' : '#collection-log'}>
-        Skip to {admin ? 'clan administration' : 'collection log'}
+      <a
+        className="skip-link"
+        href={admin ? '#admin-main' : xp ? '#xp-main' : '#collection-log'}
+        onClick={(event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          )
+            return;
+          event.preventDefault();
+          const main = document.querySelector('main');
+          main?.focus();
+          main?.scrollIntoView();
+        }}
+      >
+        Skip to{' '}
+        {admin ? 'clan administration' : xp ? 'XP tracker' : 'collection log'}
       </a>
       <div className="site-shell">
         <header className="site-header">
           <a
             className="clan-brand"
-            href="/"
+            href={collectionHref}
             onClick={navigate}
             aria-label={
               (clanName ? clanName + ' ' : '') + 'clan collection log'
@@ -235,13 +297,13 @@ export function SiteApp({
               {!admin && liveEnabled && (
                 <Skull
                   enabled={hardcore}
-                  onChange={() => setHardcore(!hardcore)}
+                  onChange={() => visit(publicHref('/', pageId, !hardcore))}
                 />
               )}
             </div>
             <a
               className="site-button site-header-link"
-              href={admin ? '/' : '/admin'}
+              href={admin ? collectionHref : '/admin'}
               onClick={navigate}
               aria-label={admin ? 'Main site' : 'Admin panel'}
               title={admin ? 'Main site' : 'Admin panel'}
@@ -272,7 +334,40 @@ export function SiteApp({
             </a>
           </div>
         </header>
-        <main id={admin ? 'admin-main' : 'collection-log'}>
+        {!admin && (
+          <div className="public-navigation-bar">
+            <nav
+              className={
+                'public-navigation' +
+                (hardcore ? ' public-navigation--hidden' : '')
+              }
+              aria-label="Public pages"
+              aria-hidden={hardcore || undefined}
+              inert={hardcore}
+            >
+              <a
+                className="site-button"
+                href={collectionHref}
+                onClick={navigate}
+                aria-current={!xp ? 'page' : undefined}
+              >
+                Collection log
+              </a>
+              <a
+                className="site-button"
+                href={xpHref}
+                onClick={navigate}
+                aria-current={xp ? 'page' : undefined}
+              >
+                Xp tracker
+              </a>
+            </nav>
+          </div>
+        )}
+        <main
+          id={admin ? 'admin-main' : xp ? 'xp-main' : 'collection-log'}
+          tabIndex={-1}
+        >
           {admin && AdminEntry ? (
             <AdminEntry
               competitionClient={competitionClient}
@@ -290,15 +385,27 @@ export function SiteApp({
               onNavigate={navigate}
               takeEntry={resources.takeEntry}
             />
+          ) : xp ? (
+            <XpPage client={xpClient} copy={copy} />
           ) : (
-            <>
-              <LiveLog
-                hardcore={hardcore}
-                copy={copy}
-                competitionClient={competitionClient}
-              />
-              {!hardcore && <XpPage client={xpClient} copy={copy} />}
-            </>
+            <LiveLog
+              hardcore={hardcore}
+              copy={copy}
+              competitionClient={competitionClient}
+              view={logView}
+              requestedPage={requestedPage}
+              captions={{
+                normal: liveCopy.collectionCaption,
+                hardcore:
+                  (liveHardcoreAppearance?.copy ?? liveCopy).collectionCaption +
+                  ' Hardcore worlds',
+              }}
+              onViewChange={(view, selectedPageId) => {
+                setLogView(view);
+                const href = publicHref('/', selectedPageId, hardcore);
+                replaceSearch(new URL(href, window.location.origin).search);
+              }}
+            />
           )}
         </main>
         <footer className="site-footer">

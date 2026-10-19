@@ -86,7 +86,7 @@ for (const width of [1440, 740, 580, 390, 320]) {
       await entry.focus();
       await entry.press('Enter');
       await expect(page).toHaveURL(/\/admin$/);
-      await expect(home).toHaveAttribute('href', '/');
+      await expect(home).toHaveAttribute('href', '/?hardcore=1');
       await expect(skull).toHaveCount(0);
       expect(await geometry(home)).toEqual(original);
       await page
@@ -108,7 +108,7 @@ for (const width of [1440, 740, 580, 390, 320]) {
         path: test.info().outputPath('header-login-' + width + '.png'),
       });
       await home.click();
-      await expect(page).toHaveURL(/\/$/);
+      await expect(page).toHaveURL(/\/\?hardcore=1$/);
       await expect(skull).toHaveAttribute('aria-pressed', 'true');
       expect(await geometry(entry)).toEqual(original);
       await entry.click();

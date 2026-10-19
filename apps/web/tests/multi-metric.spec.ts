@@ -181,7 +181,7 @@ for (const width of [1440, 320])
           },
         }),
       );
-      await page.goto('/');
+      await page.goto('/xp');
       await page
         .getByRole('button', { name: competition.title, exact: true })
         .click();

@@ -62,7 +62,7 @@ export function XpPage({
       id="xp-tracker"
       aria-label={copy.xpTitle}
     >
-      <h1>{copy.xpTitle}</h1>
+      <h1 data-page-heading>{copy.xpTitle}</h1>
       {error && (
         <p role="alert">
           {error}{' '}

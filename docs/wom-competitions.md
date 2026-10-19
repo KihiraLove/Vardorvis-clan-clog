@@ -40,8 +40,9 @@ Preview tokens expire, bind staff and revisions, and need refreshing if a
 metadata-only event finishes before apply. Request-key replay retains the saved
 receipt even after expiry. Review the preview again after a conflict.
 
-The public regular log shows stored activity scope/metadata and skill XP/podiums;
-full activity standings and metric breakdowns are available in the staff preview.
+The public collection log (`/`) shows stored activity scope/metadata; the XP
+tracker (`/xp`) shows skill XP and podiums. Full activity standings and metric
+breakdowns are available in the staff preview.
 It never queries WOM directly. XP is hidden in hardcore mode. Up to 2,000 current
 competitions and 2,000 all-time XP contributions are supported; archive ended
 metadata to free current slots, without erasing earned XP. See [maintenance](maintenance.md).

@@ -16,6 +16,12 @@ submission and scheduling tools. Access control, account management and existing
 administrator-only actions cannot be delegated. Granted Site settings, Hardcore worlds
 and Discord bot pages are read-only for moderators; secrets are never redisplayed.
 
+The public **Collection log** is at `/`; **Xp tracker** at `/xp` contains skill
+competitions and XP results. The buttons preserve the selected catalog page.
+Hardcore mode has its own collection log and hides the public page buttons;
+switching to hardcore from XP opens that log. Page links use `?page=<page-id>`;
+`hardcore=1` selects hardcore only when the feature is enabled in settings.
+
 ## Submissions
 
 The Pending and Reviewed queues show 20 submissions per page. Next appears when
