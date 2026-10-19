@@ -6,6 +6,10 @@ Database passwords and the session key are generated automatically in protected
 subdirectories of that volume. No separate secret or admin setup step is needed.
 Discord is configured in **Administration → Discord bot**.
 
+If initial setup is interrupted, startup reuses the same temporary administrator
+password. Once you change it, startup neither prints nor replaces it. Existing
+accounts are never reset during an update.
+
 ## All supported settings
 
 The table includes ordinary settings, advanced host-process inputs and internal
