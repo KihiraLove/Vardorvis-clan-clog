@@ -20,6 +20,9 @@ Members use `/cc-clog submit item proof [submitter-name] [hardcore]`. Choose an
 autocomplete match where possible; unmatched text remains reviewable. Proof
 must use an accepted HTTPS Imgur or Gyazo host. The server records the collection date.
 The private response identifies the saved submission; pending status grants no credit.
+The receipt labels Regular or Event collection using the server's saved timing.
+Closed pages remain collectable as Regular; hardcore is always Regular. Unmatched
+normal claims wait for a canonical match before resolving their type.
 
 The Discord interaction ID is the retry identity. The bot retries uncertain
 transport/server failures with the same payload and key. If confirmation remains

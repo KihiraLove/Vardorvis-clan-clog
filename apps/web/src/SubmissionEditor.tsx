@@ -1,5 +1,6 @@
 /** Review saved claims, stage corrections separately and display before/after audit history. */
 import { useEffect, useId, useRef, useState } from 'react';
+import { collectionTypeLabel } from '@clog/domain';
 import { useAdminDraft } from './admin-route-data.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
@@ -34,12 +35,20 @@ const hiddenHints = new Set([
   'Enter a reason before revoking a credit.',
 ]);
 
+const usesSavedTiming = (row: Submission) =>
+  row.source !== 'manual' &&
+  row.collectionReason !== 'staff_correction' &&
+  !(row.collectionReason === 'legacy' && row.itemId !== null);
 const draftOf = (row: Submission): Correction => ({
   itemId: row.itemId ?? 0,
   collectorName: row.collectorName,
   collectedOn: row.collectedOn,
   hardcore: row.hardcore,
+  ...(!usesSavedTiming(row)
+    ? { collectionType: row.collectionType ?? 'regular' }
+    : {}),
   reason: '',
+  useIntakeTiming: usesSavedTiming(row),
 });
 function ReviewWindow({
   children,
@@ -140,6 +149,8 @@ export function SubmissionEditor({
       draft.collectorName.trim() !== detail.submission.collectorName ||
       draft.collectedOn !== detail.submission.collectedOn ||
       draft.hardcore !== detail.submission.hardcore ||
+      draft.collectionType !== draftOf(detail.submission).collectionType ||
+      draft.useIntakeTiming !== draftOf(detail.submission).useIntakeTiming ||
       reviewNote.trim() !== detail.submission.reviewNote ||
       !!draft.reason);
   useAdminDraft(dirty, action.busy);
@@ -185,7 +196,9 @@ export function SubmissionEditor({
     draft.itemId !== (row.itemId ?? 0) ||
     draft.collectorName.trim() !== row.collectorName ||
     draft.collectedOn !== row.collectedOn ||
-    draft.hardcore !== row.hardcore;
+    draft.hardcore !== row.hardcore ||
+    draft.collectionType !== draftOf(row).collectionType ||
+    draft.useIntakeTiming !== draftOf(row).useIntakeTiming;
   const noteDirty = reviewNote.trim() !== row.reviewNote;
   const locked = action.busy || disabled || Boolean(readError),
     proof =
@@ -372,6 +385,10 @@ export function SubmissionEditor({
           <div className="submission-review-evidence">
             <h3>Submission details</h3>
             <dl className="submission-facts">
+              <div>
+                <dt>Collection type</dt>
+                <dd>{collectionTypeLabel(row.collectionType)}</dd>
+              </div>
               <div>
                 <dt>
                   {row.source === 'runelite'
@@ -564,12 +581,40 @@ export function SubmissionEditor({
                   resolving this submission.
                 </p>
               )}
+              {!draft.hardcore && (
+                <label>
+                  Collection type
+                  <select
+                    aria-label="Collection type"
+                    value={draft.collectionType ?? 'automatic'}
+                    onChange={(event) =>
+                      change({
+                        useIntakeTiming: event.target.value === 'automatic',
+                        collectionType:
+                          event.target.value === 'automatic'
+                            ? undefined
+                            : (event.target.value as 'regular' | 'event'),
+                      })
+                    }
+                  >
+                    {row.source !== 'manual' && (
+                      <option value="automatic">Use saved intake timing</option>
+                    )}
+                    <option value="regular">Regular collection</option>
+                    <option value="event">Event collection</option>
+                  </select>
+                </label>
+              )}
               <label className="admin-checkbox">
                 <input
                   type="checkbox"
                   checked={draft.hardcore}
                   onChange={(event) =>
-                    change({ hardcore: event.target.checked })
+                    change({
+                      hardcore: event.target.checked,
+                      collectionType: 'regular',
+                      useIntakeTiming: false,
+                    })
                   }
                 />
                 Collected on hardcore worlds

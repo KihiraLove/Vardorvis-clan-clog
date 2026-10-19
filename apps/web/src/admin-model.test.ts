@@ -30,6 +30,7 @@ test('unmatched RuneLite provenance remains available after canonical resolution
     ...seed,
     source: 'runelite',
     itemId: null,
+    hardcore: false,
     rawItemText: 'Unlisted variant',
     gameItemId: 987654,
     chatMessage: 'Valuable drop: Unlisted variant',
@@ -37,6 +38,16 @@ test('unmatched RuneLite provenance remains available after canonical resolution
   const unmatched = parseSubmission(original);
   assert.equal(unmatched.itemId, null);
   assert.equal(unmatched.gameItemId, 987654);
+  assert.equal(
+    parseSubmission({ ...original, collectionType: null }).collectionType,
+    null,
+  );
+  assert.throws(() =>
+    parseSubmission({ ...original, itemId: 42, collectionType: null }),
+  );
+  assert.throws(() =>
+    parseSubmission({ ...original, hardcore: true, collectionType: 'event' }),
+  );
   assert.equal(
     parseSubmission({ ...original, itemId: 42 }).rawItemText,
     'Unlisted variant',

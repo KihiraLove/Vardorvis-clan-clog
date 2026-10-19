@@ -1,12 +1,13 @@
 /** Frozen catalog membership is essential when an unmatched claim is reviewed later. */
 import type pg from 'pg';
+import type { IntakeSchedulingEvidence } from '@clog/domain';
 
 export async function intakeScheduling(
   client: pg.PoolClient,
   enabled: boolean,
   hardcore: boolean,
   receivedAt: Date,
-) {
+): Promise<IntakeSchedulingEvidence> {
   const state = (
     await client.query<{ version: number }>(
       'SELECT version FROM collection_scheduling WHERE singleton',

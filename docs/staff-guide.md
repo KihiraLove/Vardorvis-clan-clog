@@ -35,9 +35,15 @@ corrections to an approved credit require a reason. The revision prevents
 concurrent reviewers from overwriting each other; reload after a conflict.
 
 Manual submission accepts a collector, catalog item, collection date and optional
-PNG/proof URL/note. Approve immediately is on by default. Hardcore claims have
-independent credit; the checkbox appears when hardcore worlds are enabled.
-Duplicate filtering rejects a new claim for an item already credited in that mode.
+PNG/proof URL/note. Choose **Regular collection** or **Event collection**;
+Approve immediately is on by default. Hardcore forces Regular and has independent
+credit. Its checkbox appears when hardcore worlds are enabled.
+
+Normal-world items can have one approved Event collection and independent Regular
+collections. **Filter out regular duplicates** blocks another Regular credit in
+the same world mode when on. When off, Regular collections can repeat, including
+the same collector. Re-enabling it preserves existing history. Staff approval and
+corrections enforce the same rules. Revoke a credit to remove that entry only.
 
 ## Catalog
 
@@ -56,15 +62,24 @@ Catalog items and game-ID aliases are managed separately in **Items catalog**.
 
 ## Scheduling and competitions
 
-When scheduling is off, normal intake rules apply. When on, a regular item needs
-at least one associated page open in a saved window or selected under
-**Permanently open pages**. Search and select pages there, then click **Save changes**;
-**Discard changes** restores the saved selection. These selections survive changes
-to timed windows and the scheduling switch. Removing a catalog page removes its
-permanent opening too. Moderators with Scheduling access can manage selections;
-only the administrator changes the scheduling switch. Windows overlap as a union
-and use UTC on the server. The UI accepts local times and shows UTC alongside.
-Hardcore pages remain open. Manual staff intake bypasses closed windows.
+Every page accepts submissions. With scheduling enabled, a normal-world drop is
+an **Event collection** when at least one associated active page has a timed
+window covering its server receipt time and is not permanently open. Otherwise
+it is **Regular collection**. Starts are inclusive and ends exclusive, in UTC.
+The date picker accepts local time and shows UTC alongside.
+
+**Permanently open pages** always produce Regular collections, including when a
+window overlaps. Another timed page can still qualify a shared item for Event.
+Search/select pages and click **Save changes**; **Discard changes** restores saved
+selections. Only the administrator changes the global scheduling switch.
+Disabled scheduling and all hardcore claims are Regular.
+
+Intake saves timing and page membership. Later schedule/catalog changes cannot
+reclassify a claim. Unmatched claims resolve from that saved evidence when staff
+save a canonical match. **Use saved intake timing** keeps that behavior; an explicit
+Regular/Event correction is audited. Manual date-only claims use the selected type.
+Approved Event credit has a gold item outline and a gold-bordered history block.
+The hover/tap menu shows Event first, then every Regular credit oldest first.
 
 [WOM imports](wom-competitions.md) can create activity windows or publish skill
 results. Importing does not enable scheduling automatically. RuneLite stores

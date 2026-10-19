@@ -24,8 +24,10 @@ flowchart LR
 | `catalog`           | Pinned catalog inputs, identity mapping and asset provenance      |
 
 PostgreSQL is authoritative. An item has one canonical ID across every page.
-Approval grants one active credit per item per world mode; rejection and
-revocation grant none. Claims, receipts and audit records remain private.
+Approval grants Regular or Event credit. Normal-world items can have one Event
+credit and independent Regular credits; the regular duplicate filter controls
+Regular repeats in each world mode. Hardcore supports Regular only. Rejection
+and revocation grant no credit. Claims, receipts and audits remain private.
 Revisions prevent one staff edit from overwriting another. Request keys let
 clients retry uncertain writes without creating a second submission or import.
 

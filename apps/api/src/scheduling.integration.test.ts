@@ -20,7 +20,7 @@ import { hashPassword } from './passwords.js';
 import { PgCatalogStore } from './catalog-store.js';
 
 test(
-  'scheduling gates public intake atomically while staff manual claims can record closed-page achievements',
+  'scheduling classifies public intake atomically while staff can record historical achievements',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
     const connectionString = process.env.TEST_DATABASE_URL!;
@@ -332,18 +332,19 @@ test(
         await runelite(4, randomUUID(), 'Closed Unpaged Collector'),
       ]) {
         assert.equal(response.statusCode, 201, response.body);
-        assert.equal(response.json().status, 'rejected');
+        assert.equal(response.json().status, 'pending');
+        assert.equal(response.json().collectionType, 'regular');
         const detail = (
           await app.inject({
             url: '/api/v1/admin/submissions/' + response.json().submissionId,
             headers: moderator,
           })
         ).json();
-        assert.match(detail.submission.reviewReason, /closed/u);
-        assert.equal(detail.audit[0].action, 'reject');
+        assert.equal(detail.submission.reviewReason, null);
+        assert.equal(detail.audit.length, 0);
       }
       for (const response of [await discord(), await discord(0)])
-        assert.equal(response.statusCode, 403, response.body);
+        assert.equal(response.statusCode, 201, response.body);
       assert.deepEqual(
         (
           await pool.query(
@@ -351,14 +352,14 @@ test(
           )
         ).rows[0],
         {
-          submissions: beforeCounts.submissions + 2,
+          submissions: beforeCounts.submissions + 4,
           images: beforeCounts.images + 2,
         },
       );
       assert.equal(
         (await readdir(directory)).filter((name) => name.endsWith('.png'))
           .length,
-        filesBefore + 2, // Rejected RuneLite submissions retain their proof.
+        filesBefore + 2, // Accepted RuneLite submissions retain their proof.
       );
       // Closed regular pages and unpaged items stay open for hardcore intake.
       for (const id of [1, 4]) {
@@ -400,7 +401,7 @@ test(
       );
       assert.equal(
         (await manual(2, randomUUID(), '2000-01-01', true)).statusCode,
-        409,
+        201,
       );
       assert.deepEqual((await runelite(1, runeKey)).json(), initialRune.json());
       assert.deepEqual(
@@ -428,7 +429,8 @@ test(
       );
       const closedTrusted = await runelite(2, randomUUID(), 'Trusted Player');
       assert.equal(closedTrusted.statusCode, 201, closedTrusted.body);
-      assert.equal(closedTrusted.json().status, 'rejected');
+      assert.equal(closedTrusted.json().status, 'approved');
+      assert.equal(closedTrusted.json().collectionType, 'regular');
       assert.equal(
         (await runelite(1, randomUUID(), 'Trusted Player')).json().status,
         'approved',
@@ -457,7 +459,7 @@ test(
       });
       assert.equal(edited.statusCode, 200, edited.body);
       state = edited.json();
-      assert.equal((await discord(1)).statusCode, 403); // Past window is closed without a background task.
+      assert.equal((await discord(1)).json().collectionType, 'regular');
       const restore = await write('PUT', path + '/' + both.id, {
         expectedRevision: state.revision,
         title: both.title,
@@ -482,7 +484,8 @@ test(
       await pool.query("UPDATE pages SET active=true WHERE id='page-b'");
       const closedUnpaged = await runelite(4, randomUUID(), 'Still Closed');
       assert.equal(closedUnpaged.statusCode, 201, closedUnpaged.body);
-      assert.equal(closedUnpaged.json().status, 'rejected');
+      assert.equal(closedUnpaged.json().status, 'approved');
+      assert.equal(closedUnpaged.json().collectionType, 'regular');
       const stale = state.revision;
       const races = await Promise.all([
         write('POST', path, {

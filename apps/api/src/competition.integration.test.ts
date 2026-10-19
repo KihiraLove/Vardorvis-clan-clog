@@ -5,11 +5,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 import { PgCompetitionStore } from './competition-store.js';
 import { PgXpStore } from './xp-store.js';
-import {
-  PgSchedulingStore,
-  lockScheduling,
-  requireScheduledItem,
-} from './scheduling-store.js';
+import { PgSchedulingStore, lockScheduling } from './scheduling-store.js';
+import { intakeScheduling } from './intake-scheduling.js';
+import { classifyCollection } from '@clog/domain';
 import { PgStore } from './store.js';
 import { createApp } from './app.js';
 import { hashPassword } from './passwords.js';
@@ -400,7 +398,16 @@ test(
       try {
         await gate.query('BEGIN');
         const enabled = await lockScheduling(gate);
-        await requireScheduledItem(gate, enabled, 1);
+        const evidence = await intakeScheduling(
+          gate,
+          enabled,
+          false,
+          new Date(),
+        );
+        assert.equal(
+          classifyCollection(evidence, 1, false).collectionType,
+          enabled ? 'event' : 'regular',
+        );
         await gate.query('ROLLBACK');
       } finally {
         gate.release();

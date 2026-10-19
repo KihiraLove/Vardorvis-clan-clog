@@ -481,7 +481,11 @@ export class MemoryAdminClient implements AdminClient {
     }
     const item = this.data.items.find((row) => row.id === fields.itemId);
     if (!item) throw new AdminRequestError(422);
-    if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
+    const collectionType = fields.collectionType ?? 'regular';
+    if (fields.hardcore && collectionType === 'event')
+      throw new AdminRequestError(422);
+    if (fields.approve)
+      this.ensureUnique('', item.id, fields.hardcore, collectionType);
     if (fields.proofUrl && !safeProof(fields.proofUrl))
       throw new AdminRequestError(422);
     const id = crypto.randomUUID();
@@ -492,6 +496,8 @@ export class MemoryAdminClient implements AdminClient {
         : {}),
       version: 1,
       source: 'manual',
+      collectionType,
+      collectionReason: 'manual',
       itemId: item.id,
       rawItemText: item.name,
       collectorName: fields.collectorName.trim(),
@@ -776,17 +782,30 @@ export class MemoryAdminClient implements AdminClient {
     this.changed(false);
     return this.publicSettings();
   }
-  private ensureUnique(id: string, itemId: number, hardcore: boolean) {
+  private ensureUnique(
+    id: string,
+    itemId: number,
+    hardcore: boolean,
+    type: 'regular' | 'event' = 'regular',
+  ) {
+    if (type === 'regular' && !this.submissionFilterState.filterCollected)
+      return;
     if (
       this.rows.some(
         (row) =>
           row.id !== id &&
           row.status === 'approved' &&
           row.itemId === itemId &&
-          row.hardcore === hardcore,
+          row.hardcore === hardcore &&
+          (row.collectionType ?? 'regular') === type,
       )
     )
-      throw new AdminRequestError(409);
+      throw new AdminRequestError(
+        409,
+        type === 'event'
+          ? 'An approved Event collection already exists for this item. Revoke it before approving another Event collection.'
+          : 'Filter out regular duplicates is on and this item already has a Regular collection in this world mode.',
+      );
   }
   async logout(_csrf: string, signal: AbortSignal) {
     this.access(signal);
@@ -1003,6 +1022,7 @@ export class MemoryAdminClient implements AdminClient {
                   collectorName: row.collectorName,
                   collectedOn: row.collectedOn,
                   hardcore: row.hardcore,
+                  collectionType: row.collectionType ?? 'regular',
                   status: 'approved',
                 })),
             }
@@ -1131,14 +1151,27 @@ export class MemoryAdminClient implements AdminClient {
       (row.status === 'approved' && !clean.reason)
     )
       throw new AdminRequestError(422);
-    if (row.status === 'approved')
-      this.ensureUnique(id, clean.itemId, clean.hardcore);
+    const collectionType = clean.hardcore
+      ? 'regular'
+      : (clean.collectionType ?? row.collectionType ?? 'regular');
+    if (
+      row.status === 'approved' &&
+      (row.itemId !== clean.itemId ||
+        row.hardcore !== clean.hardcore ||
+        (row.collectionType ?? 'regular') !== collectionType)
+    )
+      this.ensureUnique(id, clean.itemId, clean.hardcore, collectionType);
     const before = structuredClone(row);
     Object.assign(row, {
       itemId: clean.itemId,
       collectorName: clean.collectorName,
       collectedOn: clean.collectedOn,
       hardcore: clean.hardcore,
+      collectionType,
+      collectionReason:
+        clean.collectionType === undefined
+          ? (row.collectionReason ?? 'legacy')
+          : 'staff_correction',
       dateSource:
         clean.collectedOn === before.collectedOn ? before.dateSource : 'admin',
       version: version + 1,
@@ -1169,7 +1202,13 @@ export class MemoryAdminClient implements AdminClient {
         : !reason.trim())
     )
       throw new AdminRequestError(422);
-    if (action === 'approve') this.ensureUnique(id, row.itemId!, row.hardcore);
+    if (action === 'approve')
+      this.ensureUnique(
+        id,
+        row.itemId!,
+        row.hardcore,
+        row.collectionType ?? 'regular',
+      );
     const before = structuredClone(row);
     row.status = (
       { approve: 'approved', reject: 'rejected', revoke: 'revoked' } as const

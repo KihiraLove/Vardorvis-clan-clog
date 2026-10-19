@@ -384,6 +384,10 @@ main {
   border: 2px solid #bd2926;
   box-shadow: 0 0 0 1px #3d0b0a;
 }
+.item-slot--event {
+  border: 2px solid #e7bd52;
+  box-shadow: 0 0 0 1px #6b4d16;
+}
 .item-slot:hover {
   background: #ffffff0a;
 }
@@ -489,6 +493,22 @@ main {
 }
 .item-menu__empty {
   color: #bab7a9;
+}
+.item-menu__event {
+  border: 2px solid #e7bd52;
+  margin: 3px;
+}
+.item-menu__event > strong,
+.item-menu__regular > strong {
+  display: block;
+  padding: 5px 8px;
+  font-weight: normal;
+}
+.item-menu__event > strong {
+  color: #e7bd52;
+}
+.item-menu__regular > strong {
+  color: #bcb49f;
 }
 .skull {
   width: 16px;

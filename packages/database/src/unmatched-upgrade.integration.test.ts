@@ -69,7 +69,7 @@ test(
     const snapshot = async () => ({
       submissions: (
         await client.query(
-          "SELECT to_jsonb(s)-'intake_scheduling' row FROM submissions s",
+          "SELECT to_jsonb(s)-'intake_scheduling'-'collection_type'-'collection_reason' row FROM submissions s",
         )
       ).rows,
       requests: (
@@ -80,7 +80,11 @@ test(
           "SELECT to_jsonb(e)-'game_item_id' row FROM runelite_drop_events e",
         )
       ).rows,
-      credits: (await client.query('SELECT * FROM collection_credits')).rows,
+      credits: (
+        await client.query(
+          "SELECT to_jsonb(c)-'collection_type' row FROM collection_credits c",
+        )
+      ).rows,
     });
     const before = await snapshot();
     await migrate(url.href);
@@ -107,7 +111,7 @@ test(
     assert.equal(
       (await client.query('SELECT count(*)::int n FROM schema_migrations'))
         .rows[0].n,
-      5,
+      6,
     );
     const unknown = randomUUID();
     await client.query(

@@ -97,6 +97,53 @@ test('manual items need no external game ID; malformed catalog relationships fai
     }),
   );
 });
+test('typed public histories retain repeated Regular credits, one Event and independent hardcore data', () => {
+  const regular = { ...normal, collectionType: 'regular' as const };
+  const event = {
+    ...normal,
+    submissionId: 'event',
+    collectionType: 'event' as const,
+    collectedOn: '2026-10-18',
+  };
+  const credits = parseCollections({
+    revision: 'typed',
+    credits: [
+      event,
+      { ...regular, submissionId: 'a', collectedOn: '2026-10-01' },
+      { ...regular, submissionId: 'b', collectedOn: '2026-10-02' },
+      hardcore,
+    ],
+  }).credits;
+  const state = itemState(1, modeCredits(credits, false));
+  assert.equal(state.eventCollected, true);
+  assert.deepEqual(
+    state.collectors.map((c) => c.submissionId),
+    ['event', 'a', 'b'],
+  );
+  assert.deepEqual(progress([1, 1], credits), { collected: 1, total: 1 });
+  assert.equal(itemState(1, modeCredits(credits, true)).eventCollected, false);
+  assert.equal(
+    itemState(
+      1,
+      credits.filter((c) => c.submissionId !== 'event'),
+    ).eventCollected,
+    false,
+  );
+  for (const invalid of [
+    { ...event, hardcore: true },
+    { ...event, collectionType: 'invalid' },
+  ])
+    assert.throws(() =>
+      parseCollections({ revision: 'invalid', credits: [invalid] }),
+    );
+  assert.throws(() =>
+    parseCollections({
+      revision: 'duplicate-event',
+      credits: [event, { ...event, submissionId: 'another-event' }],
+    }),
+  );
+});
+
 test('defaults are uncollected and queue statuses never produce public credit', () => {
   const data = parseCollections({
     revision: 'one',
@@ -110,6 +157,7 @@ test('defaults are uncollected and queue statuses never produce public credit', 
     collected: false,
     collectors: [],
     hardcoreCollected: false,
+    eventCollected: false,
   });
   assert.equal(
     parseCollections({
@@ -156,11 +204,12 @@ test('normal and hardcore credits are independent; one collector is displayed in
     'Collected by KihiraVD on 05/10/26 on hardcore worlds',
   );
   assert.equal(itemState(1, modeCredits([credits[1]!], true)).collected, false);
-  assert.throws(() =>
+  assert.equal(
     parseCollections({
       revision: 'one',
       credits: [normal, { ...normal, submissionId: 'duplicate' }],
-    }),
+    }).credits.length,
+    2,
   );
   assert.throws(() =>
     parseCollections({

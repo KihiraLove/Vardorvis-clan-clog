@@ -4,6 +4,8 @@ export interface ReviewSubmission {
   version: number;
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
+  collectionType?: import('@clog/domain').CollectionType | null;
+  collectionReason?: string;
   rawItemText: string;
   /** Original RuneLite provenance, retained through canonical corrections. */
   gameItemId?: number;
@@ -22,6 +24,7 @@ export interface ReviewSubmission {
   reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
+  collectionType?: import('@clog/domain').CollectionType;
   itemId: number;
   collectorName: string;
   collectedOn: string;
@@ -31,6 +34,8 @@ export interface ManualSubmissionInput {
   reason?: string;
 }
 export interface ReviewCorrection {
+  useIntakeTiming?: boolean;
+  collectionType?: import('@clog/domain').CollectionType;
   itemId: number;
   collectorName: string;
   collectedOn: string;

@@ -25,7 +25,7 @@ test('collected-item filtering sits between manual entry and the queue and survi
   await mockApi(page);
   await page.goto('/admin/submissions');
   const filter = page.getByRole('switch', {
-    name: 'Filter out duplicates',
+    name: 'Filter out regular duplicates',
     exact: true,
   });
   await expect(filter).toBeEnabled();
@@ -981,6 +981,9 @@ test('manual entry reports duplicate item and world rather than a stale-version 
   await mockApi(page);
   await page.goto('/admin');
   const add = page.getByRole('button', { name: 'Add manual submission' });
+  await page
+    .getByRole('switch', { name: 'Filter out regular duplicates', exact: true })
+    .click();
   await add.click();
   await page.getByLabel('Search catalog items').fill('Virtus mask');
   const catalog = await adminFixtures();
@@ -1009,9 +1012,8 @@ test('manual entry reports duplicate item and world rather than a stale-version 
     .fill('Second collector');
   await page.getByRole('button', { name: 'Create manual submission' }).click();
   await expect(page.getByRole('alert')).toContainText(
-    'Virtus mask is already collected in ordinary worlds.',
+    'Filter out regular duplicates is on',
   );
-  await expect(page.getByRole('alert')).toContainText('Revoke or edit');
 });
 
 test('ADMIN-01 live HTTP view shows claim date provenance and permits verified proofless manual review', async ({

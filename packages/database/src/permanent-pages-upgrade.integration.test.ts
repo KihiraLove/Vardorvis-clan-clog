@@ -50,6 +50,9 @@ test(
       INSERT INTO collection_schedule_audit(actor_id,actor_name,action,version,old_values,new_values) VALUES('owner','Owner','create',7,'{}','{"preserved":true}');
       INSERT INTO submissions(id,discord_interaction_id,discord_user_id,discord_guild_id,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,status,reviewed_by,reviewed_at)
       VALUES('00000000-0000-4000-8000-000000000002','existing','1','2','Existing item',1,'Collector','2026-10-18','admin','https://imgur.com/example','approved','owner',now());`);
+    await client.query(
+      "UPDATE site_settings SET version=2,public_copy=jsonb_set(public_copy,'{collectionCaption}','\"Custom caption\"')",
+    );
     const tables = [
       'collection_scheduling',
       'collection_log_schedules',
@@ -66,7 +69,7 @@ test(
         rows.push(
           (
             await client.query(
-              "SELECT to_jsonb(t)-'intake_scheduling' AS row FROM " +
+              "SELECT to_jsonb(t)-'intake_scheduling'-'collection_type'-'collection_reason' AS row FROM " +
                 table +
                 ' t ORDER BY to_jsonb(t)::text',
             )
@@ -84,7 +87,7 @@ test(
     );
     assert.equal(
       (await client.query('SELECT * FROM schema_migrations')).rowCount,
-      5,
+      6,
     );
     await assert.rejects(
       client.query(

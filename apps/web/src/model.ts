@@ -37,6 +37,7 @@ export interface Catalog {
   pages: Page[];
 }
 export interface Credit {
+  collectionType?: import('@clog/domain').CollectionType;
   submissionId: string;
   itemId: number;
   collectorName: string;
@@ -147,6 +148,14 @@ export function parseCollections(value: unknown): Collections {
     validateCollectionDate(collectedOn);
     if (credit.hardcore !== undefined && typeof credit.hardcore !== 'boolean')
       throw new Error('Invalid hardcore credit');
+    if (
+      credit.collectionType !== undefined &&
+      credit.collectionType !== 'regular' &&
+      credit.collectionType !== 'event'
+    )
+      throw new Error('Invalid collection type');
+    if (credit.hardcore && credit.collectionType === 'event')
+      throw new Error('Hardcore cannot have Event collections');
     credits.push({
       submissionId: text(credit.submissionId),
       itemId: id(credit.itemId),
@@ -154,14 +163,14 @@ export function parseCollections(value: unknown): Collections {
       collectedOn,
       hardcore: credit.hardcore === true,
       status: 'approved',
+      ...(credit.collectionType === undefined
+        ? {}
+        : { collectionType: credit.collectionType as 'regular' | 'event' }),
     });
   }
   unique(credits.map((credit) => credit.submissionId));
-  // One active collection per canonical item in each independent world mode.
   unique(
-    credits.map(
-      (credit) => String(credit.itemId) + ':' + String(credit.hardcore),
-    ),
+    credits.filter((c) => c.collectionType === 'event').map((c) => c.itemId),
   );
   return { revision: text(data.revision), credits };
 }
@@ -190,6 +199,9 @@ export function itemState(itemId: number, credits: readonly Credit[]) {
     collected: state.collected,
     collectors,
     hardcoreCollected: collectors.some((credit) => credit.hardcore),
+    eventCollected: collectors.some(
+      (credit) => !credit.hardcore && credit.collectionType === 'event',
+    ),
   };
 }
 /** Count each canonical item once, even if callers combine overlapping page lists. */

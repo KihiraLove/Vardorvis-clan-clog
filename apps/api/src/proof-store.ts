@@ -7,11 +7,11 @@ import {
   parseRuneLiteWorldTypes,
   runeLiteDecision,
   normalizePlayerName,
-  closedCollectionPageMessage,
+  classifyCollection,
   type RuneLiteRules,
 } from '@clog/domain';
 import { readRuneLiteSettings } from './runelite-settings.js';
-import { lockScheduling, isScheduledItem } from './scheduling-store.js';
+import { lockScheduling } from './scheduling-store.js';
 import { requireClanKey } from './clan-api-key.js';
 import {
   readSubmissionFilters,
@@ -95,6 +95,7 @@ export interface RuneLiteReceipt {
   itemId: number | null;
   /** Original game ID; omitted only on immutable receipts from older releases. */
   gameItemId?: number;
+  collectionType?: import('@clog/domain').CollectionType | null;
   submittedAt: string;
   collectedOn: string;
   hardcore?: boolean;
@@ -255,6 +256,17 @@ export class PgProofStore implements ProofStore {
         await client.query('COMMIT');
         return { receipt, imageId: duplicate.imageId };
       }
+      const schedulingEvidence = await intakeScheduling(
+        client,
+        schedulingEnabled,
+        world.hardcore,
+        receivedAt,
+      );
+      const classification = classifyCollection(
+        schedulingEvidence,
+        item?.id ?? null,
+        world.hardcore,
+      );
       const collectedDuplicate =
         item &&
         (await isCollectedDuplicate(
@@ -262,26 +274,19 @@ export class PgProofStore implements ProofStore {
           filters.filterCollected,
           item.id,
           world.hardcore,
+          classification.collectionType,
         ));
       const rejection = collectedDuplicate
-        ? 'Automatically rejected: Filter out duplicates is on and this item is already collected in this world mode.'
+        ? 'Automatically rejected: Filter out regular duplicates is on and this item already has a Regular collection in this world mode.'
         : decision.action === 'reject'
           ? decision.reason
-          : item && !(await isScheduledItem(client, schedulingEnabled, item.id))
-            ? closedCollectionPageMessage
-            : undefined;
+          : undefined;
       if (image) await insertImage(client, image);
       const rawItemText = runeLiteItemName(fields, item?.name);
-      const schedulingEvidence = await intakeScheduling(
-        client,
-        schedulingEnabled,
-        world.hardcore,
-        receivedAt,
-      );
       const id = randomUUID();
       const row = (
         await client.query<{ submitted_at: Date; collected_on: string }>(
-          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types,chat_message,submitted_at,intake_scheduling) VALUES($1,'runelite',$2,$3,$4,($11::timestamptz AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9,$10,$11,$12) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
+          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types,chat_message,submitted_at,intake_scheduling,collection_type,collection_reason) VALUES($1,'runelite',$2,$3,$4,($11::timestamptz AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
           [
             id,
             rawItemText,
@@ -295,6 +300,8 @@ export class PgProofStore implements ProofStore {
             fields.chatMessage,
             receivedAt,
             JSON.stringify(schedulingEvidence),
+            classification.collectionType,
+            classification.collectionReason,
           ],
         )
       ).rows[0]!;
@@ -322,7 +329,7 @@ export class PgProofStore implements ProofStore {
               !('code' in error) ||
               error.code !== '23505' ||
               !('constraint' in error) ||
-              error.constraint !== 'submissions_one_credit_per_world'
+              error.constraint !== 'submissions_one_event_credit'
             )
               throw error;
             await client.query('ROLLBACK TO SAVEPOINT automatic_approval');
@@ -335,6 +342,7 @@ export class PgProofStore implements ProofStore {
           source: 'runelite',
           itemId: item?.id ?? null,
           gameItemId: fields.itemId,
+          ...classification,
           rawItemText,
           collectorName: fields.username.trim(),
           collectedOn: row.collected_on,
@@ -360,7 +368,7 @@ export class PgProofStore implements ProofStore {
             rejection ??
               (status === 'approved'
                 ? decision.reason
-                : 'Automatic approval deferred: an approved credit already exists for this item and world mode.'),
+                : 'Automatic approval deferred: an approved Event collection already exists for this item.'),
             JSON.stringify(before),
             JSON.stringify({
               ...before,
@@ -375,6 +383,7 @@ export class PgProofStore implements ProofStore {
         status,
         itemId: item?.id ?? null,
         gameItemId: fields.itemId,
+        collectionType: classification.collectionType,
         submittedAt: row.submitted_at.toISOString(),
         collectedOn: row.collected_on,
         hardcore: world.hardcore,

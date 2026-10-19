@@ -263,7 +263,7 @@ test(
       for (const row of rejected.rows) {
         assert.equal(row.version, 2);
         assert.equal(row.action, 'reject');
-        assert.match(row.review_reason, /Filter out duplicates is on/u);
+        assert.match(row.review_reason, /Filter out regular duplicates is on/u);
         assert.equal(row.reason, row.review_reason);
       }
       await assert.rejects(
@@ -381,7 +381,7 @@ test(
             apiKey,
           )
         ).receipt.status,
-        'pending',
+        'approved',
       );
       await pool.query(
         "CREATE FUNCTION fail_filter_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit failed'; END $$; CREATE TRIGGER fail_filter_audit BEFORE INSERT ON submission_filter_audit FOR EACH ROW EXECUTE FUNCTION fail_filter_audit()",

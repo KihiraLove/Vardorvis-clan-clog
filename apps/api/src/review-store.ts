@@ -1,12 +1,20 @@
-/** Transactional review: one current approved credit per item/world, private audits. */
+/** Transactional Regular/Event credits, explicit corrections and private audit history. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import {
+  classifyCollection,
+  type CollectionType,
+  type IntakeSchedulingEvidence,
+} from '@clog/domain';
 import { transaction } from './transaction.js';
 import type { IconRecord } from './icon-storage.js';
 import { insertImage, screenshotPath } from './proof-store.js';
 import { validCollectionDate, validProofUrl } from './intake.js';
 import { ApiError, type BackendStore } from './types.js';
-import { readSubmissionFilters } from './submission-filters.js';
+import {
+  readSubmissionFilters,
+  requireCreditAvailable,
+} from './submission-filters.js';
 import type {
   ReviewAction,
   ManualSubmissionInput,
@@ -22,6 +30,9 @@ type Row = {
   version: number;
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
+  collectionType: CollectionType | null;
+  collectionReason: string;
+  intakeScheduling: IntakeSchedulingEvidence | null;
   rawItemText: string;
   gameItemId: number | null;
   collectorName: string;
@@ -38,6 +49,7 @@ type Row = {
 };
 const selection =
   'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",game_item_id AS "gameItemId",' +
+  'collection_type AS "collectionType",collection_reason AS "collectionReason",intake_scheduling AS "intakeScheduling",' +
   'collector_name AS "collectorName",to_char(collected_on,\'YYYY-MM-DD\') AS "collectedOn",' +
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
   'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",chat_message AS "chatMessage",hardcore,status,' +
@@ -47,6 +59,8 @@ const view = (row: Row): ReviewSubmission => ({
   version: row.version,
   source: row.source,
   itemId: row.itemId,
+  collectionType: row.collectionType,
+  collectionReason: row.collectionReason,
   rawItemText: row.rawItemText,
   ...(row.gameItemId === null ? {} : { gameItemId: row.gameItemId }),
   collectorName: row.collectorName,
@@ -77,7 +91,7 @@ const conflict = () =>
 const occupied = () =>
   new ApiError(
     409,
-    'An approved credit already exists for this item and world mode. Revoke the existing credit or select a different item or mode.',
+    'An approved Event collection already exists for this item. Revoke it before approving another Event collection.',
   );
 function requireId(id: string) {
   if (!uuid.test(id)) throw new ApiError(404, 'Submission not found.');
@@ -95,6 +109,13 @@ function reasonOf(input: unknown, required: boolean) {
   return input.trim();
 }
 type Cursor = { revision: string; key: string[] | null };
+function manualType(value: unknown, hardcore: boolean): CollectionType {
+  if (value !== undefined && value !== 'regular' && value !== 'event')
+    throw new ApiError(422, 'Select Regular collection or Event collection.');
+  if (hardcore && value === 'event')
+    throw new ApiError(422, 'Hardcore supports Regular collections only.');
+  return value ?? 'regular';
+}
 const cursorError = () =>
   new ApiError(
     409,
@@ -178,6 +199,7 @@ export class PgReviewStore implements ReviewStore {
     if (!uuid.test(requestKey))
       throw new ApiError(400, 'A UUID Idempotency-Key is required.');
     const key = requestKey.toLowerCase();
+    const collectionType = manualType(fields.collectionType, fields.hardcore);
     if (
       !Number.isSafeInteger(fields.itemId) ||
       fields.itemId <= 0 ||
@@ -202,10 +224,15 @@ export class PgReviewStore implements ReviewStore {
         fields.approve,
         fields.reason?.trim() ?? '',
         ...(image ? [image.sha256] : []),
+        ...(fields.collectionType === undefined
+          ? []
+          : [{ collectionType: fields.collectionType }]),
       ]),
     );
     try {
       return await transaction(this.pool, 'write', async (client) => {
+        // Catalog bulk writers take the exclusive gate before canonical locks.
+        await client.query('SELECT pg_advisory_xact_lock_shared(74261005)');
         // Serialize this actor/key across API processes before checking receipts.
         await client.query(
           'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
@@ -230,7 +257,7 @@ export class PgReviewStore implements ReviewStore {
           return replay.response;
         }
         const validItem = await client.query<{ name: string }>(
-          'SELECT name FROM items WHERE id=$1 AND active FOR SHARE',
+          'SELECT name FROM items WHERE id=$1 AND active FOR UPDATE',
           [fields.itemId],
         );
         if (validItem.rowCount !== 1)
@@ -246,15 +273,22 @@ export class PgReviewStore implements ReviewStore {
             422,
             'Collection date is invalid or in the future.',
           );
+        if (fields.approve)
+          await requireCreditAvailable(
+            client,
+            fields.itemId,
+            fields.hardcore,
+            collectionType,
+          );
         if (image) await insertImage(client, image);
         const id = randomUUID();
         const row = (
           await client.query<Row>(
             'INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,' +
               'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
-              "reviewed_by,review_reason,proof_image_id) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
+              "reviewed_by,review_reason,proof_image_id,collection_type,collection_reason) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
               "$6,$7,$8,CASE WHEN $8='approved' THEN now() ELSE NULL END," +
-              "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11) RETURNING " +
+              "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11,$12,'manual') RETURNING " +
               selection,
             [
               id,
@@ -268,6 +302,7 @@ export class PgReviewStore implements ReviewStore {
               actorId,
               fields.reason?.trim() || null,
               image?.id ?? null,
+              collectionType,
             ],
           )
         ).rows[0]!;
@@ -298,14 +333,9 @@ export class PgReviewStore implements ReviewStore {
         'code' in e &&
         e.code === '23505' &&
         'constraint' in e &&
-        e.constraint === 'submissions_one_credit_per_world'
+        e.constraint === 'submissions_one_event_credit'
       )
-        throw new ApiError(
-          409,
-          'This item already has an approved ' +
-            (fields.hardcore ? 'hardcore' : 'ordinary') +
-            ' collection log entry. Revoke or edit it instead.',
-        );
+        throw occupied();
       throw e;
     }
   }
@@ -480,6 +510,7 @@ export class PgReviewStore implements ReviewStore {
     requireId(id);
     try {
       return await transaction(this.pool, 'write', async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock_shared(74261005)');
         const row = (
           await client.query<Row>(
             'SELECT ' + selection + ' FROM submissions WHERE id=$1 FOR UPDATE',
@@ -499,6 +530,7 @@ export class PgReviewStore implements ReviewStore {
             if (
               row.status !== 'pending' ||
               row.itemId === null ||
+              row.collectionType === null ||
               !row.collectorName.trim() ||
               (row.source !== 'manual' &&
                 !row.proofImageId &&
@@ -510,7 +542,7 @@ export class PgReviewStore implements ReviewStore {
                 'Resolve a canonical item and validate proof before approval.',
               );
             const active = await client.query(
-              'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+              'SELECT 1 FROM items WHERE id=$1 AND active FOR UPDATE',
               [row.itemId],
             );
             if (active.rowCount !== 1)
@@ -525,6 +557,12 @@ export class PgReviewStore implements ReviewStore {
                 422,
                 'Collection date is invalid or in the future.',
               );
+            await requireCreditAvailable(
+              client,
+              row.itemId,
+              row.hardcore,
+              row.collectionType!,
+            );
           } else if (
             action === 'reject'
               ? row.status !== 'pending'
@@ -577,6 +615,45 @@ export class PgReviewStore implements ReviewStore {
             throw conflict();
           reason = reasonOf(fields.reason, row.status === 'approved');
           if (
+            fields.useIntakeTiming !== undefined &&
+            typeof fields.useIntakeTiming !== 'boolean'
+          )
+            throw new ApiError(422, 'Invalid intake timing choice.');
+          if (fields.useIntakeTiming && fields.collectionType !== undefined)
+            throw new ApiError(
+              422,
+              'Choose saved intake timing or an explicit collection type.',
+            );
+          if (fields.useIntakeTiming && row.source === 'manual')
+            throw new ApiError(
+              422,
+              'Manual historical claims require an explicit collection type.',
+            );
+          if (fields.collectionType !== undefined)
+            manualType(fields.collectionType, fields.hardcore);
+          const automatic = classifyCollection(
+            row.intakeScheduling,
+            fields.itemId,
+            fields.hardcore,
+          );
+          const preserveType =
+            !fields.useIntakeTiming &&
+            (row.source === 'manual' ||
+              row.collectionReason === 'staff_correction' ||
+              (row.collectionReason === 'legacy' && row.itemId !== null));
+          const collectionType = fields.hardcore
+            ? 'regular'
+            : (fields.collectionType ??
+              (preserveType
+                ? (row.collectionType ?? 'regular')
+                : (automatic.collectionType ?? 'regular')));
+          const collectionReason =
+            fields.collectionType !== undefined
+              ? 'staff_correction'
+              : preserveType
+                ? row.collectionReason
+                : automatic.collectionReason;
+          if (
             !Number.isSafeInteger(fields.itemId) ||
             fields.itemId <= 0 ||
             typeof fields.hardcore !== 'boolean' ||
@@ -599,7 +676,7 @@ export class PgReviewStore implements ReviewStore {
               'Collection date is invalid or in the future.',
             );
           const active = await client.query(
-            'SELECT 1 FROM items WHERE id=$1 AND active FOR SHARE',
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR UPDATE',
             [fields.itemId],
           );
           if (active.rowCount !== 1)
@@ -607,13 +684,28 @@ export class PgReviewStore implements ReviewStore {
           if (
             row.itemId === fields.itemId &&
             row.hardcore === fields.hardcore &&
+            row.collectionType === collectionType &&
+            row.collectionReason === collectionReason &&
             row.collectorName === fields.collectorName.trim() &&
             row.collectedOn === fields.collectedOn
           )
             throw new ApiError(422, 'There are no changes to save.');
+          if (
+            row.status === 'approved' &&
+            (row.itemId !== fields.itemId ||
+              row.hardcore !== fields.hardcore ||
+              row.collectionType !== collectionType)
+          )
+            await requireCreditAvailable(
+              client,
+              fields.itemId,
+              fields.hardcore,
+              collectionType,
+              row.id,
+            );
           result = (
             await client.query<Row>(
-              'UPDATE submissions SET item_id=$2,collector_name=$3,collected_on=$4,' +
+              'UPDATE submissions SET item_id=$2,collector_name=$3,collected_on=$4,collection_type=$8,collection_reason=$9,' +
                 "hardcore=$5,date_source=CASE WHEN collected_on<>$4::date THEN 'admin' ELSE date_source END," +
                 "version=version+1,reviewed_at=CASE WHEN status='approved' THEN now() ELSE reviewed_at END," +
                 "reviewed_by=CASE WHEN status='approved' THEN $6 ELSE reviewed_by END," +
@@ -628,6 +720,8 @@ export class PgReviewStore implements ReviewStore {
                 fields.hardcore,
                 actorId,
                 reason || null,
+                collectionType,
+                collectionReason,
               ],
             )
           ).rows[0]!;
@@ -653,7 +747,7 @@ export class PgReviewStore implements ReviewStore {
       if (e && typeof e === 'object' && 'code' in e && e.code === '23505') {
         if (
           'constraint' in e &&
-          e.constraint === 'submissions_one_credit_per_world'
+          e.constraint === 'submissions_one_event_credit'
         )
           throw occupied();
         throw conflict();

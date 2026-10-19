@@ -53,7 +53,7 @@ function ItemSlot({
   return (
     <button
       type="button"
-      className={`item-slot${state.collected ? ' item-slot--collected' : ''}${state.hardcoreCollected ? ' item-slot--hardcore' : ''}`}
+      className={`item-slot${state.collected ? ' item-slot--collected' : ''}${state.hardcoreCollected ? ' item-slot--hardcore' : ''}${state.eventCollected ? ' item-slot--event' : ''}`}
       aria-label={`${item.name}: ${state.collected ? 'collected' : 'not collected'}${state.hardcoreCollected ? ', hardcore' : ''}`}
       aria-describedby={active ? `item-menu-${item.id}` : undefined}
       onPointerEnter={(event) => {

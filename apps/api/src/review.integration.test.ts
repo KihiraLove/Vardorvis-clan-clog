@@ -18,7 +18,7 @@ const auth: AuthConfig = {
   secure: true,
 };
 test(
-  'review APIs atomically preserve one credit per world, audits, CSRF and conflict safety',
+  'review APIs enforce regular credit filtering, audits, CSRF and conflict safety',
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
     const connectionString = process.env.TEST_DATABASE_URL!;
@@ -55,6 +55,9 @@ test(
       );
       const backend = new PgStore(pool),
         review = new PgReviewStore(pool, backend);
+      await pool.query(
+        'UPDATE submission_filter_settings SET filter_collected=true',
+      );
       app = createApp(
         () => backend.ready(),
         () => backend.settings(),
@@ -130,8 +133,7 @@ test(
         ),
         {
           status: 409,
-          message:
-            /An approved credit already exists for this item and world mode/,
+          message: /Filter out regular duplicates is on/,
         },
       );
       assert.equal((await review.detail(second))?.submission.status, 'pending');
@@ -298,7 +300,7 @@ test(
       const filterState = (
         await app.inject({ url: filterUrl, headers: { cookie } })
       ).json();
-      assert.equal(filterState.filterCollected, false);
+      assert.equal(filterState.filterCollected, true);
       const filterPayload = {
         filterCollected: true,
         expectedRevision: filterState.revision,
@@ -453,6 +455,9 @@ test(
       const manualAudit = await review.detail(manualId);
       assert.equal(manualAudit?.audit[0]?.action, 'create');
       assert.equal(manualAudit?.audit[0]?.actorName, 'admin');
+      await pool.query(
+        'UPDATE submission_filter_settings SET filter_collected=true',
+      );
       const collision = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/submissions',
@@ -473,7 +478,7 @@ test(
       assert.equal(collision.statusCode, 409);
       assert.match(
         collision.json().error,
-        /already has an approved ordinary collection log entry/,
+        /Filter out regular duplicates is on/,
       );
       const pendingManual = await app.inject({
         method: 'POST',

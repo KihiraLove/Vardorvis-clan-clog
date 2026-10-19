@@ -1,6 +1,7 @@
 /** Discord is an adapter; only an API 200/201 may produce a saved receipt. */
 import {
   validateProofUrl,
+  collectionTypeLabel,
   WorkloadError,
   type OperationalDiagnostics,
 } from '@clog/domain';
@@ -65,6 +66,9 @@ export function receiptMessage(receipt: Receipt): string {
     state +
     '\n' +
     occupied +
+    (receipt.collectionType === undefined
+      ? ''
+      : '\n' + collectionTypeLabel(receipt.collectionType) + '.') +
     '\nMode: ' +
     mode +
     '. Receipt: ' +

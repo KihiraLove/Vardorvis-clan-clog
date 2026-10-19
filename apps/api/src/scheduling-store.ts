@@ -5,7 +5,6 @@ import {
   parseCollectionScheduleInput,
   parsePermanentPageIds,
   scheduleIdPattern,
-  closedCollectionPageMessage,
   type CollectionScheduleInput,
   type SchedulingState,
 } from '@clog/domain';
@@ -51,34 +50,6 @@ export async function lockScheduling(
   ).rows[0];
   if (!row) throw new ApiError(503, 'Scheduling settings unavailable.');
   return row.enabled;
-}
-export async function isScheduledItem(
-  client: pg.PoolClient,
-  enabled: boolean,
-  itemId: number | null,
-) {
-  if (!enabled) return true;
-  return (
-    itemId !== null &&
-    (
-      await client.query(
-        'SELECT 1 FROM page_items pi JOIN pages p ON p.id=pi.page_id AND p.active ' +
-          'WHERE pi.item_id=$1 AND (' +
-          'EXISTS(SELECT 1 FROM collection_permanent_pages pp WHERE pp.page_id=p.id) OR ' +
-          'EXISTS(SELECT 1 FROM collection_log_schedule_pages sp JOIN collection_log_schedules s ON s.id=sp.schedule_id ' +
-          'WHERE sp.page_id=p.id AND s.archived_at IS NULL AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at)) LIMIT 1',
-        [itemId],
-      )
-    ).rowCount === 1
-  );
-}
-export async function requireScheduledItem(
-  client: pg.PoolClient,
-  enabled: boolean,
-  itemId: number | null,
-) {
-  if (!(await isScheduledItem(client, enabled, itemId)))
-    throw new ApiError(403, closedCollectionPageMessage);
 }
 export async function readState(
   client: pg.PoolClient,

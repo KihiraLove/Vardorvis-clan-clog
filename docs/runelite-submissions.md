@@ -47,8 +47,8 @@ comparison uses the separate **In-game clan name for matching** setting; it does
 not authenticate clan membership. All world policies default to staff review.
 Configured auto allow policies and the player whitelist can grant automatic
 approval. Valid claims always receive **201** and a durable submission receipt
-with `status: "pending"`, `"approved"` or `"rejected"`. Configured world-policy,
-closed-schedule and collected-item duplicate rejections are saved with their
+with `status: "pending"`, `"approved"` or `"rejected"`. Configured world-policy
+and regular-duplicate rejections are saved with their
 proof, rejection reason and a **RuneLite auto review** audit entry. They appear
 in the staff **Reviewed** queue and grant no collection credit.
 
@@ -57,8 +57,8 @@ item. Variant IDs can resolve to the same item. Unknown, unmapped and inactive
 items are accepted as **unmatched** submissions with a nullable canonical ID,
 not added to the catalog automatically. They stay pending for staff even under
 auto-allow policies; unrelated world-policy rejections still apply. Unmatched
-claims are not rejected for closed pages or filtered as collected items. The original received time and
-schedule/page membership are retained for later classification.
+claims are not rejected for closed pages or filtered as collected items. Original
+receipt time and schedule/page membership determine their type when staff save a match.
 
 `itemName` is preserved as evidence, never used for automatic name matching.
 Older clients can omit it: known items use the catalog name; unknown items use
@@ -95,6 +95,7 @@ Success returns **201**, for example:
   "status": "pending",
   "itemId": 42,
   "gameItemId": 4151,
+  "collectionType": "regular",
   "submittedAt": "2026-10-11T12:00:00.000Z",
   "collectedOn": "2026-10-11",
   "hardcore": false
@@ -132,14 +133,16 @@ Adding a mapping between deliveries also reuses the original receipt and proof;
 it does not silently match the saved submission. A supplied `itemName` participates
 in request-key conflict checks. Legacy requests without it retain their original hashes.
 
-The **Filter out duplicates** toggle on **Submissions**, between manual
-submission and the queue, checks items already credited in that world mode.
+The **Filter out regular duplicates** toggle on **Submissions**, between manual
+submission and the queue, checks approved **Regular** credits in that world mode.
 New RuneLite claims return **201** with `status: "rejected"` and are stored with
 a reason explaining that the duplicate filter is on. Discord intake continues
 to reject these claims with **403**. The filter defaults to off and
 can be changed only by the administrator; moderators can view its current state.
-Manual staff entry remains available
-for backfilling achievements. Replays and recognized five-second duplicates
+Staff approvals, approved manual entry and credit-moving corrections enforce
+the same policy. When off, repeated Regular credits are allowed, even for the
+same collector. Re-enabling preserves history. Event credits are independent:
+one approved Event credit per normal-world canonical item overall. Replays and recognized five-second duplicates
 retain their successful receipt. CSRF-protected
 `PUT /api/v1/admin/submission-filters` accepts `{ filterCollected,
 expectedRevision }` using the `submission-filters-N` revision supplied by the
@@ -208,12 +211,12 @@ case, surrounding/repeated spaces and the difference between underscores,
 nonbreaking spaces and ordinary spaces. The list supports up to 200 names, one
 per line. Neither whitelisting nor auto allow bypasses clan/key, catalog or PNG
 validation. Auto approvals grant collection credit immediately and append an
-audit attributed to **RuneLite auto review**. If an approved credit already
-exists for the canonical item and world mode, the new claim remains pending
+audit attributed to **RuneLite auto review**. If an approved Event credit already
+exists for the canonical item, another Event claim remains pending
 with an audit explaining why approval was deferred. Replays retain their
 original pending/approved/rejected receipt after policy, filter or whitelist
-changes. With **Filter out duplicates** enabled, already-credited items create
-a rejected submission instead of another pending claim.
+changes. With **Filter out regular duplicates** enabled, a new Regular claim for
+an item with an approved Regular credit in that mode creates a rejected submission.
 
 Staff-only `GET /api/v1/admin/runelite-settings` returns private rules with a
 `runelite-N` revision. CSRF-protected `PUT` replaces the complete rules and
@@ -241,11 +244,16 @@ rules PUT. Its key revision is `clan-key-N`; a stale key revision rolls back the
 entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
 Older clients can omit this field to preserve the existing key requirement.
 
-When [collection log scheduling](staff-guide.md) is enabled, a new
-regular-world RuneLite claim must also belong to at least one currently open active page.
-Whitelist and world auto allow settings cannot bypass closed pages. Previously
-saved retries still return their original receipt after a page closes.
-Hardcore claims bypass scheduling; all active hardcore pages remain open.
+Scheduling classifies collection type and never closes intake. An active timed
+normal-world page qualifies a drop as `collectionType: "event"`, excluding pages
+selected permanently open. Closed/unscheduled pages, disabled scheduling,
+permanent pages and all hardcore claims use `"regular"`. A shared item qualifies
+if another associated nonpermanent page has an active timed window. Start is
+inclusive and end exclusive, using one server receipt time in UTC. Unmatched
+normal claims can have `collectionType: null` while waiting for a canonical match.
+Frozen evidence determines their type on resolution; staff can make an audited
+explicit correction. Receipts never change on retry, including legacy receipts
+that omit `collectionType`.
 
 Staff-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
 Administrator-only, CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts

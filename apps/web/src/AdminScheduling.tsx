@@ -160,8 +160,7 @@ export function AdminScheduling({
         {session.role === 'admin' ? (
           <div className="scheduling-toggle">
             <h3 id="scheduling-toggle-title">
-              Enable scheduled opening windows for log pages (submissions to
-              closed pages are automatically rejected)
+              Track Event collections during scheduled windows
             </h3>
             <button
               type="button"
@@ -203,8 +202,9 @@ export function AdminScheduling({
         )}
         {state?.enabled && (
           <p className="admin-note">
-            Pages are open during their scheduled windows or while selected as
-            permanently open. Hardcore collections are always open.
+            Timed windows mark eligible normal-world drops as Event collections.
+            Other drops are Regular collections. Every page accepts submissions;
+            permanently open pages and hardcore are always Regular.
           </p>
         )}
       </section>
@@ -214,8 +214,9 @@ export function AdminScheduling({
       >
         <h2 id="permanent-pages-title">Permanently open pages</h2>
         <p>
-          Keep these pages open regardless of timed schedules. Hardcore
-          collections are always open separately.
+          These pages produce Regular collections even during an overlapping
+          timed window. Another associated event page can still qualify a shared
+          item for Event collection. Hardcore is always Regular separately.
         </p>
         <form
           onSubmit={(event) => {

@@ -35,13 +35,25 @@ Scheduling reads include `permanentlyOpenPageIds`, independently from timed wind
 2,000 distinct active pages; an empty array clears it) and `expectedRevision`.
 Selections, windows and the scheduling switch share a revision and audit history.
 The Scheduling page permission allows selection edits; enabling/disabling scheduling
-remains administrator-only. Selected active pages stay open outside timed windows;
-hardcore intake stays independently open.
+remains administrator-only. Scheduling classifies collection type; every page
+accepts intake. Timed nonpermanent normal-world pages qualify Event collections;
+permanent pages, disabled scheduling and hardcore produce Regular collections.
 
 Valid RuneLite intake returns 201 with a durable submission receipt, including
-automatic rejection by duplicate, scheduling or world-review policy. Structural,
+automatic rejection by regular-duplicate or world-review policy. Structural,
 authentication and excluded-world failures remain errors. Private chat proof and
 screenshots never appear in public credits. See [RuneLite](runelite-submissions.md).
+
+Submissions and new receipts include `collectionType` (`regular`, `event`, or
+`null` for unmatched normal claims awaiting classification). Manual creation and
+claim corrections accept an optional explicit Regular/Event type. Automatic claims
+resolve from frozen intake evidence; `useIntakeTiming: true` restores this after
+a staff override. Omitted fields preserve an existing explicit override. Hardcore rejects Event.
+Approved public credits include a nonnullable type. Public history contains every
+approved credit; progress counts distinct items. One normal-world Event credit is
+allowed per item. The regular duplicate switch governs Regular credits in each
+world mode. Existing receipts/audits keep their original JSON; older omitted
+types display as Regular. See [staff rules](staff-guide.md).
 
 XP gains are nonnegative integer strings, never floating-point numbers. WOM metric
 weights and combined/computed scores use canonical decimal strings. Competition

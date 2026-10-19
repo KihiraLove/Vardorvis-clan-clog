@@ -4,13 +4,15 @@ import { unlink } from 'node:fs/promises';
 import {
   parseSiteCopy,
   parseHardcoreAppearance,
+  classifyCollection,
   type SiteCopy,
   type HardcoreAppearance,
 } from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import { ProjectionCache, projection } from './projection-cache.js';
-import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
+import { lockScheduling } from './scheduling-store.js';
+import { intakeScheduling } from './intake-scheduling.js';
 import {
   readSubmissionFilters,
   requireUncollected,
@@ -281,6 +283,7 @@ export class PgStore implements BackendStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock_shared(74261005)');
       const schedulingEnabled = await lockScheduling(client, input.hardcore);
       const readReceipt = async (): Promise<{
         hash: string | null;
@@ -315,7 +318,9 @@ export class PgStore implements BackendStore {
         return result;
       }
       const submittedAt = (
-        await client.query<{ timestamp: Date }>('SELECT now() AS timestamp')
+        await client.query<{ timestamp: Date }>(
+          'SELECT clock_timestamp() AS timestamp',
+        )
       ).rows[0]!.timestamp;
       const today = submittedAt.toISOString().slice(0, 10);
       const matches = await this.matchItems(client);
@@ -344,20 +349,33 @@ export class PgStore implements BackendStore {
         await client.query('COMMIT');
         return result;
       }
-      await requireScheduledItem(client, schedulingEnabled, itemId);
+      const evidence = await intakeScheduling(
+        client,
+        schedulingEnabled,
+        input.hardcore,
+        submittedAt,
+      );
+      const classification = classifyCollection(
+        evidence,
+        itemId,
+        input.hardcore,
+      );
       const filters = await readSubmissionFilters(client, true);
       await requireUncollected(
         client,
         filters.filterCollected,
         itemId,
         input.hardcore,
+        classification.collectionType,
       );
       const creditOccupied =
+        (classification.collectionType === 'event' ||
+          filters.filterCollected) &&
         itemId !== null &&
         (
           await client.query(
-            "SELECT 1 FROM submissions WHERE item_id=$1 AND hardcore=$2 AND status='approved' LIMIT 1",
-            [itemId, input.hardcore],
+            "SELECT 1 FROM submissions WHERE item_id=$1 AND hardcore=$2 AND collection_type=$3 AND status='approved' LIMIT 1",
+            [itemId, input.hardcore, classification.collectionType],
           )
         ).rowCount === 1;
       const receipt: BotReceipt = {
@@ -372,6 +390,7 @@ export class PgStore implements BackendStore {
         itemId,
         candidates: matched.candidates,
         creditOccupied,
+        collectionType: classification.collectionType,
       };
       // Unique interaction IDs serialize concurrent retries in PostgreSQL. ON CONFLICT
       // waits for the winner, after which readReceipt observes the committed receipt.
@@ -379,8 +398,8 @@ export class PgStore implements BackendStore {
         `INSERT INTO submissions (
           id, discord_interaction_id, discord_user_id, discord_guild_id,
           raw_item_text, item_id, collector_name, collected_on, date_source,
-          proof_url, hardcore, intake_payload_hash, intake_receipt
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          proof_url, hardcore, intake_payload_hash, intake_receipt, submitted_at, intake_scheduling, collection_type, collection_reason
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
         ON CONFLICT (discord_interaction_id) DO NOTHING RETURNING id`,
         [
           receipt.submissionId,
@@ -396,6 +415,10 @@ export class PgStore implements BackendStore {
           input.hardcore,
           payloadHash,
           JSON.stringify(receipt),
+          submittedAt,
+          JSON.stringify(evidence),
+          classification.collectionType,
+          classification.collectionReason,
         ],
       );
       if (inserted.rowCount !== 1) {
@@ -521,14 +544,9 @@ export class PgStore implements BackendStore {
   ): Promise<PublicCredit[]> {
     const rows = (
       await client.query<PublicCredit>(
-        `SELECT c.submission_id AS "submissionId", c.item_id AS "itemId", c.collector_name AS "collectorName", to_char(c.collected_on, 'YYYY-MM-DD') AS "collectedOn", c.hardcore FROM collection_credits c JOIN items i ON i.id=c.item_id WHERE i.active ORDER BY c.item_id, c.hardcore LIMIT 20001`,
+        `SELECT c.submission_id AS "submissionId", c.item_id AS "itemId", c.collector_name AS "collectorName", to_char(c.collected_on, 'YYYY-MM-DD') AS "collectedOn", c.hardcore,c.collection_type AS "collectionType" FROM collection_credits c JOIN items i ON i.id=c.item_id WHERE i.active ORDER BY c.item_id,c.hardcore,c.collected_on,c.submission_id`,
       )
     ).rows;
-    if (rows.length > 20000)
-      throw new ApiError(
-        503,
-        'Collection snapshot exceeds the supported size.',
-      );
     return rows;
   }
   async collections(): Promise<PublicCredit[]> {

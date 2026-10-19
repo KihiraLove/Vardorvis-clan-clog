@@ -48,7 +48,7 @@ test('pending, rejected and revoked submissions never grant collection credit', 
   }
 });
 
-test('legacy duplicate approvals display only the earliest collection', () => {
+test('all regular approvals remain visible, ordered oldest first', () => {
   const credits: CollectionCredit[] = ['2026-10-16', '2026-10-01'].map(
     (collectedOn, index) => ({
       submissionId: String(index),
@@ -62,7 +62,7 @@ test('legacy duplicate approvals display only the earliest collection', () => {
     collectionState(1, credits).collectors[0]?.collectedOn,
     '2026-10-01',
   );
-  assert.equal(collectionState(1, credits).collectors.length, 1);
+  assert.equal(collectionState(1, credits).collectors.length, 2);
 });
 
 test('catalog rejects ambiguous mappings and dangling page references', () => {

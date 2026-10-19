@@ -161,7 +161,7 @@ export function AdminQueue({
         />
       )}
       <section className="admin-panel submission-filter-panel">
-        <h2 id="submission-filter-title">Filter out duplicates</h2>
+        <h2 id="submission-filter-title">Filter out regular duplicates</h2>
         {session.role === 'admin' ? (
           <button
             type="button"
@@ -195,7 +195,7 @@ export function AdminQueue({
           </button>
         ) : (
           <p>
-            Duplicate filtering is{' '}
+            Regular duplicate filtering is{' '}
             <strong>
               {filters
                 ? filters.filterCollected
@@ -320,6 +320,13 @@ export function AdminQueue({
                         <time dateTime={row.submittedAt}>
                           {formatUtcTime(row.submittedAt)}
                         </time>
+                        <span>
+                          {row.collectionType === null
+                            ? 'Awaiting item match'
+                            : row.collectionType === 'event'
+                              ? 'Event collection'
+                              : 'Regular collection'}
+                        </span>
                       </span>
                       {safeScreenshotPath(row.screenshotPath) && (
                         <img

@@ -4,6 +4,7 @@ export interface CollectionScheduleInput {
   endsAt: string;
   pageIds: string[];
 }
+/** Legacy API reply retained by client adapters; current intake never rejects closed pages. */
 export const closedCollectionPageMessage =
   'Submissions are closed for this item. At least one associated collection log page must be open.';
 export interface CollectionSchedule extends CollectionScheduleInput {

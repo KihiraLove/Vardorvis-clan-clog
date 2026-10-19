@@ -589,7 +589,7 @@ test('real moderator setup, role denial and server-side access revocation clear 
     await staff.getByRole('link', { name: 'Submissions', exact: true }).click();
     await expect(
       staff.getByRole('switch', {
-        name: 'Filter out duplicates',
+        name: 'Filter out regular duplicates',
         exact: true,
       }),
     ).toHaveCount(0);

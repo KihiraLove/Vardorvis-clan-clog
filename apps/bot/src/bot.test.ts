@@ -41,6 +41,40 @@ const receipt: Receipt = {
   candidates: [{ id: 42, name: 'Dragon axe' }],
   creditOccupied: false,
 };
+test('Discord receipts show collection type and validate new types without requiring them on legacy replies', async () => {
+  assert.match(
+    receiptMessage({ ...receipt, collectionType: 'event' }),
+    /Event collection/u,
+  );
+  assert.match(
+    receiptMessage({ ...receipt, collectionType: 'regular', hardcore: true }),
+    /Regular collection/u,
+  );
+  assert.match(
+    receiptMessage({
+      ...receipt,
+      collectionType: null,
+      itemId: null,
+      resolution: 'needs_match',
+    }),
+    /Awaiting item match/u,
+  );
+  const claim: Claim = {
+    interactionId: receipt.interactionId,
+    guildId,
+    actorDiscordId: userId,
+    rawItemText: 'Dragon axe',
+    collectorName: 'Collector',
+    proofUrl: 'https://imgur.com/proof',
+    hardcore: false,
+  };
+  for (const invalid of ['unknown', 42]) {
+    const api = new HttpBotApi('https://clog.example', token, async () =>
+      Response.json({ ...receipt, collectionType: invalid }, { status: 201 }),
+    );
+    await assert.rejects(api.submit(claim), UnconfirmedSubmissionError);
+  }
+});
 function fakeCommand(
   options: {
     guild?: string | null;

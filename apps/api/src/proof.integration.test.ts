@@ -753,7 +753,7 @@ test(
           assert.equal(stored.submission.version, 2);
           assert.match(
             stored.submission.reviewReason,
-            /Filter out duplicates is on/u,
+            /Filter out regular duplicates is on/u,
           );
           assert.equal(stored.submission.chatMessage, input[4]![1]);
           assert.equal(stored.audit[0].action, 'reject');
@@ -850,6 +850,47 @@ test(
             ).rows[0].n,
             1,
           );
+        },
+      );
+      await t.test(
+        'manual JSON and PNG requests preserve explicit type and reject hardcore Event',
+        async () => {
+          const input = {
+            itemId: 42,
+            collectorName: 'Manual type',
+            collectedOn: '2026-10-18',
+            hardcore: false,
+            collectionType: 'event',
+            approve: false,
+          };
+          const json = await app.inject({
+            method: 'POST',
+            url: '/api/v1/admin/submissions',
+            headers: { ...moderator, 'idempotency-key': randomUUID() },
+            payload: input,
+          });
+          assert.equal(json.statusCode, 201, json.body);
+          assert.equal(json.json().collectionType, 'event');
+          const upload = await app.inject({
+            method: 'POST',
+            url: '/api/v1/admin/submissions/upload',
+            ...multipart([['submission', JSON.stringify(input)]]),
+            headers: {
+              ...multipart([]).headers,
+              ...moderator,
+              'idempotency-key': randomUUID(),
+            },
+          });
+          assert.equal(upload.statusCode, 201, upload.body);
+          assert.equal(upload.json().collectionType, 'event');
+          assert.ok(upload.json().screenshotPath);
+          const invalid = await app.inject({
+            method: 'POST',
+            url: '/api/v1/admin/submissions',
+            headers: { ...moderator, 'idempotency-key': randomUUID() },
+            payload: { ...input, hardcore: true },
+          });
+          assert.equal(invalid.statusCode, 422);
         },
       );
       for (let i = 0; i < 10; i++)

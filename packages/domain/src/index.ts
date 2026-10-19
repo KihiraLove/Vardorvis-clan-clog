@@ -1,6 +1,7 @@
 /** Pure collection-log rules shared by the browser and future service handlers. */
 export * from './competitions.js';
 export * from './skills.js';
+export * from './collection-types.js';
 export interface CatalogItem {
   id: number;
   name: string;
@@ -19,6 +20,7 @@ export interface CollectionCredit {
   collectedOn: string;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
   hardcore?: boolean;
+  collectionType?: import('./collection-types.js').CollectionType;
 }
 
 /** Collection state belongs to the canonical item, never to a page occurrence. */
@@ -36,11 +38,11 @@ export function collectionState(
     )
     .sort(
       (a, b) =>
+        Number(b.collectionType === 'event') -
+          Number(a.collectionType === 'event') ||
         a.collectedOn.localeCompare(b.collectedOn) ||
         a.submissionId.localeCompare(b.submissionId),
-    )
-    // Legacy duplicate inputs display only the earliest credit; writes must enforce uniqueness.
-    .slice(0, 1);
+    );
   return { collected: collectors.length > 0, collectors };
 }
 

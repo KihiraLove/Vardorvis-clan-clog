@@ -35,6 +35,9 @@ export function ManualSubmissionForm({
     new Date().toISOString().slice(0, 10),
   );
   const [hardcore, setHardcore] = useState(false);
+  const [collectionType, setCollectionType] = useState<'regular' | 'event'>(
+    'regular',
+  );
   const [proofUrl, setProofUrl] = useState('');
   const [screenshot, setScreenshot] = useState<File>();
   const [formVersion, setFormVersion] = useState(0);
@@ -94,6 +97,8 @@ export function ManualSubmissionForm({
           collectorName: collectorName.trim(),
           collectedOn,
           hardcore: hardcoreEnabled && hardcore,
+          collectionType:
+            hardcoreEnabled && hardcore ? 'regular' : collectionType,
           proofUrl: proofUrl.trim(),
           approve,
           reason: reason.trim(),
@@ -121,14 +126,6 @@ export function ManualSubmissionForm({
           ![408, 429].includes(failure.status)
         ) {
           setPending(undefined);
-          if (failure.status === 409 && request.fields.approve)
-            throw new Error(
-              chosen.name +
-                ' is already collected in ' +
-                (hardcore ? 'hardcore' : 'ordinary') +
-                ' worlds. Revoke or edit the existing approved entry instead.',
-              { cause: failure },
-            );
         }
         throw failure;
       }
@@ -139,6 +136,7 @@ export function ManualSubmissionForm({
       setCollectorName('');
       setCollectedOn('');
       setHardcore(false);
+      setCollectionType('regular');
       setProofUrl('');
       setScreenshot(undefined);
       setFormVersion((value) => value + 1);
@@ -254,12 +252,32 @@ export function ManualSubmissionForm({
               </div>
             </div>
             <div className="manual-submission-options">
+              {!(hardcoreEnabled && hardcore) && (
+                <label>
+                  Collection type
+                  <select
+                    aria-label="Collection type"
+                    value={collectionType}
+                    onChange={(event) =>
+                      setCollectionType(
+                        event.target.value as 'regular' | 'event',
+                      )
+                    }
+                  >
+                    <option value="regular">Regular collection</option>
+                    <option value="event">Event collection</option>
+                  </select>
+                </label>
+              )}
               {hardcoreEnabled && (
                 <label className="admin-checkbox">
                   <input
                     type="checkbox"
                     checked={hardcore}
-                    onChange={(event) => setHardcore(event.target.checked)}
+                    onChange={(event) => {
+                      setHardcore(event.target.checked);
+                      setCollectionType('regular');
+                    }}
                   />
                   Collected on hardcore worlds
                 </label>

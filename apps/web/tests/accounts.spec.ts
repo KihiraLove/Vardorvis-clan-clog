@@ -228,7 +228,10 @@ test('moderators retain review tools, have no owner controls and can update thei
     page.getByRole('button', { name: 'Add manual submission' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('switch', { name: 'Filter out duplicates', exact: true }),
+    page.getByRole('switch', {
+      name: 'Filter out regular duplicates',
+      exact: true,
+    }),
   ).toHaveCount(0);
   await expect(page.locator('.submission-filter-panel')).toContainText(
     'Only the administrator can change this.',

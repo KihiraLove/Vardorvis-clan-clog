@@ -130,7 +130,7 @@ test(
         interactionId: '678901234567890123',
       });
       assert.equal(occupied.statusCode, 201);
-      assert.equal(occupied.json().creditOccupied, true);
+      assert.equal(occupied.json().creditOccupied, false); // Regular repeats are allowed while filtering is off.
       const hc = await submit({
         ...claim,
         interactionId: '789012345678901234',

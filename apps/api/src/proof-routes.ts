@@ -70,6 +70,7 @@ function manualFields(json: string): ManualSubmissionInput {
       (k) =>
         ![
           'itemId',
+          'collectionType',
           'collectorName',
           'collectedOn',
           'hardcore',
@@ -88,6 +89,9 @@ function manualFields(json: string): ManualSubmissionInput {
     !/^\d{4}-\d{2}-\d{2}$/u.test(row.collectedOn) ||
     typeof row.hardcore !== 'boolean' ||
     typeof row.approve !== 'boolean' ||
+    (row.collectionType !== undefined &&
+      row.collectionType !== 'regular' &&
+      row.collectionType !== 'event') ||
     (row.proofUrl !== undefined &&
       (typeof row.proofUrl !== 'string' || row.proofUrl.length > 2048)) ||
     (row.reason !== undefined &&

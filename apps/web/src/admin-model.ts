@@ -25,6 +25,8 @@ export function dateSourceLabel(source: Submission['dateSource']): string {
       : 'Admin correction';
 }
 export interface Submission {
+  collectionType?: import('@clog/domain').CollectionType | null;
+  collectionReason?: string;
   id: string;
   version: number;
   source: 'discord' | 'manual' | 'runelite';
@@ -44,6 +46,7 @@ export interface Submission {
   reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
+  collectionType?: import('@clog/domain').CollectionType;
   itemId: number;
   collectorName: string;
   collectedOn: string;
@@ -53,6 +56,8 @@ export interface ManualSubmissionInput {
   reason?: string;
 }
 export interface Correction {
+  useIntakeTiming?: boolean;
+  collectionType?: import('@clog/domain').CollectionType | undefined;
   itemId: number;
   collectorName: string;
   collectedOn: string;
@@ -433,6 +438,9 @@ export function parseSubmission(value: unknown): Submission {
     typeof row.hardcore !== 'boolean' ||
     typeof row.rawItemText !== 'string' ||
     typeof row.proofUrl !== 'string' ||
+    (row.collectionType === 'event' && row.hardcore === true) ||
+    (row.collectionType === null &&
+      (row.itemId !== null || row.hardcore === true)) ||
     (row.gameItemId !== undefined &&
       (row.source !== 'runelite' ||
         !Number.isInteger(row.gameItemId) ||
@@ -454,6 +462,18 @@ export function parseSubmission(value: unknown): Submission {
         : choice(row.source, ['discord', 'manual', 'runelite']),
     itemId: row.itemId === null ? null : identity(row.itemId),
     rawItemText: row.rawItemText,
+    ...(row.collectionType === undefined
+      ? {}
+      : {
+          collectionType:
+            row.collectionType === null
+              ? null
+              : (choice(row.collectionType, ['regular', 'event']) as
+                  'regular' | 'event'),
+        }),
+    ...(row.collectionReason === undefined
+      ? {}
+      : { collectionReason: text(row.collectionReason) }),
     ...(row.gameItemId === undefined
       ? {}
       : { gameItemId: identity(row.gameItemId) }),
@@ -625,6 +645,14 @@ export function validateCorrection(
     throw new Error('Keep the review reason to 1,000 characters.');
   if (typeof fields.hardcore !== 'boolean')
     throw new Error('Invalid hardcore claim.');
+  if (
+    fields.collectionType !== undefined &&
+    fields.collectionType !== 'regular' &&
+    fields.collectionType !== 'event'
+  )
+    throw new Error('Select a valid collection type.');
+  if (fields.hardcore && fields.collectionType === 'event')
+    throw new Error('Hardcore supports Regular collections only.');
   return {
     ...fields,
     collectorName,

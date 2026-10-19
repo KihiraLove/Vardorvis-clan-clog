@@ -91,6 +91,7 @@ export function reviewRoutes(
           ],
           properties: {
             itemId: version,
+            collectionType: { type: 'string', enum: ['regular', 'event'] },
             collectorName: { type: 'string', minLength: 1, maxLength: 80 },
             collectedOn: {
               type: 'string',
@@ -197,6 +198,8 @@ export function reviewRoutes(
       ],
       properties: {
         expectedVersion: version,
+        useIntakeTiming: { type: 'boolean' },
+        collectionType: { type: 'string', enum: ['regular', 'event'] },
         itemId: version,
         collectorName: { type: 'string', minLength: 1, maxLength: 80 },
         collectedOn: {
@@ -221,6 +224,12 @@ export function reviewRoutes(
         req.body.expectedVersion,
         {
           itemId: req.body.itemId,
+          ...(req.body.useIntakeTiming === undefined
+            ? {}
+            : { useIntakeTiming: req.body.useIntakeTiming }),
+          ...(req.body.collectionType === undefined
+            ? {}
+            : { collectionType: req.body.collectionType }),
           collectorName: req.body.collectorName,
           collectedOn: req.body.collectedOn,
           hardcore: req.body.hardcore,

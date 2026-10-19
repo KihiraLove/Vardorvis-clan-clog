@@ -7,7 +7,9 @@ import pg from 'pg';
 import { PgLifecycleStore } from '@clog/database/dist/lifecycle.js';
 import { PgCompetitionStore } from './competition-store.js';
 import { PgXpStore } from './xp-store.js';
-import { PgSchedulingStore, requireScheduledItem } from './scheduling-store.js';
+import { PgSchedulingStore } from './scheduling-store.js';
+import { intakeScheduling } from './intake-scheduling.js';
+import { classifyCollection } from '@clog/domain';
 import { PgStore } from './store.js';
 import { createApp } from './app.js';
 import { hashPassword } from './passwords.js';
@@ -408,7 +410,16 @@ test(
       );
       const client = await pool.connect();
       try {
-        await requireScheduledItem(client, true, 42);
+        const evidence = await intakeScheduling(
+          client,
+          true,
+          false,
+          new Date(),
+        );
+        assert.equal(
+          classifyCollection(evidence, 42, false).collectionType,
+          'event',
+        );
       } finally {
         client.release();
       }

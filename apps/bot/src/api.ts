@@ -19,6 +19,7 @@ export interface Claim {
   hardcore: boolean;
 }
 export interface Receipt {
+  collectionType?: 'regular' | 'event' | null;
   submissionId: string;
   interactionId: string;
   status: 'pending';
@@ -109,6 +110,11 @@ function parseReceipt(value: unknown, interactionId: string): Receipt {
     !Array.isArray(value.candidates) ||
     !value.candidates.every(candidate) ||
     typeof value.creditOccupied !== 'boolean' ||
+    (value.collectionType !== undefined &&
+      value.collectionType !== null &&
+      value.collectionType !== 'regular' &&
+      value.collectionType !== 'event') ||
+    (value.hardcore && value.collectionType === 'event') ||
     (value.resolution === 'resolved') !== (value.itemId !== null) ||
     (value.itemId === null && value.creditOccupied)
   )

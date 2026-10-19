@@ -4,6 +4,7 @@ import type { AdminClient, SubmissionDetail } from './admin-model.ts';
 import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { formatUtcTime } from './format-time.ts';
+import { collectionTypeLabel } from '@clog/domain';
 export function ReviewAuditHistory({
   initial,
   client,
@@ -105,6 +106,11 @@ export function ReviewAuditHistory({
         {detail.audit.map((entry) => {
           const fields: [string, string, string][] = [
             ['Status', entry.before.status, entry.after.status],
+            [
+              'Collection type',
+              collectionTypeLabel(entry.before.collectionType),
+              collectionTypeLabel(entry.after.collectionType),
+            ],
             [
               'Submitted item name',
               entry.before.rawItemText,

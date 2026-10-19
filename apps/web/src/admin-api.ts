@@ -61,6 +61,8 @@ export class AdminRequestError extends Error {
       [400, 409].includes(status) &&
         serverConflict &&
         [
+          'An approved Event collection already exists for this item. Revoke it before approving another Event collection.',
+          'Filter out regular duplicates is on and this item already has a Regular collection in this world mode.',
           'That username is already in use.',
           'The current password is incorrect.',
           'Choose a new password to finish account setup.',
@@ -647,6 +649,8 @@ export class LiveAdminClient implements AdminClient {
       (screenshot && !safeScreenshotPath(result.screenshotPath)) ||
       result.itemId !== fields.itemId ||
       result.hardcore !== fields.hardcore ||
+      (fields.collectionType !== undefined &&
+        result.collectionType !== fields.collectionType) ||
       result.status !== (fields.approve ? 'approved' : 'pending')
     )
       throw new Error('Unexpected manual submission receipt.');
@@ -947,7 +951,12 @@ export class LiveAdminClient implements AdminClient {
         this.write(csrf, { ...fields, expectedVersion: version }, 'PATCH'),
       ),
     );
-    if (result.id !== id || result.version <= version)
+    if (
+      result.id !== id ||
+      result.version <= version ||
+      (fields.collectionType !== undefined &&
+        result.collectionType !== fields.collectionType)
+    )
       throw new Error('Unexpected correction receipt.');
     return result;
   }

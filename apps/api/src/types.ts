@@ -13,6 +13,7 @@ export interface CatalogData {
   pages: { id: string; name: string; category: string; itemIds: number[] }[];
 }
 export interface PublicCredit {
+  collectionType?: import('@clog/domain').CollectionType;
   submissionId: string;
   itemId: number;
   collectorName: string;
@@ -53,6 +54,7 @@ export interface BotSubmissionInput {
   hardcore: boolean;
 }
 export interface BotReceipt {
+  collectionType?: import('@clog/domain').CollectionType | null;
   submissionId: string;
   interactionId: string;
   status: 'pending';

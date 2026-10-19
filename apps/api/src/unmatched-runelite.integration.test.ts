@@ -574,12 +574,8 @@ test(
         );
         const alias = await accepted(base(900002, 'known_collector'));
         assert.deepEqual(alias, { ...known, duplicate: true });
-        // The earlier approved credit prevents another automatic credit, not intake.
-        assert.equal(known.status, 'pending');
-        const conflict = await change(known.submissionId, '/approve', {
-          expectedVersion: 1,
-        });
-        assert.equal(conflict.statusCode, 409);
+        // Independent Regular collections can repeat while the filter is off.
+        assert.equal(known.status, 'approved');
       },
     );
   },
