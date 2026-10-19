@@ -48,6 +48,12 @@ Use the inspector to edit names, icons and memberships. Deletion retains audit
 and submission history. Section, page and item order stays local until you click
 **Save changes**. Leaving a page with unsaved edits asks whether to discard them.
 
+RuneLite items missing from the catalog appear in **Submissions → Unmatched**.
+Check the submitted name, original **Game item ID**, chat message and optional
+screenshot. Select the correct canonical item and **Save corrections**, then
+review and approve separately. Notes and rejection do not require a match.
+Catalog items and game-ID aliases are managed separately in **Items catalog**.
+
 ## Scheduling and competitions
 
 When scheduling is off, normal intake rules apply. When on, a regular item needs

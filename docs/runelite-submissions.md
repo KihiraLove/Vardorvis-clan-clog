@@ -3,21 +3,22 @@
 `POST /api/v1/runelite/submissions` accepts `multipart/form-data` with exactly
 these fields (their order does not matter):
 
-| Field         | Value                                                        |
-| ------------- | ------------------------------------------------------------ |
-| `username`    | Collector name, 1–80 characters                              |
-| `clanName`    | In-game clan name, 1–80 characters                           |
-| `itemId`      | Positive OSRS game item ID, as decimal text                  |
-| `worldType`   | World type identifier or JSON array of identifiers           |
-| `chatMessage` | Required full chat message, nonempty, up to 8192 UTF-8 bytes |
-| `screenshot`  | Optional PNG file, MIME `image/png`, up to 10 MiB            |
+| Field         | Value                                                           |
+| ------------- | --------------------------------------------------------------- |
+| `username`    | Collector name, 1–80 characters                                 |
+| `clanName`    | In-game clan name, 1–80 characters                              |
+| `itemId`      | Positive OSRS game item ID, as decimal text                     |
+| `itemName`    | Optional submitted name, nonempty, up to 200 characters, no NUL |
+| `worldType`   | World type identifier or JSON array of identifiers              |
+| `chatMessage` | Required full chat message, nonempty, up to 8192 UTF-8 bytes    |
+| `screenshot`  | Optional PNG file, MIME `image/png`, up to 10 MiB               |
 
 ```bash
 curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
   -H 'X-Clan-API-Key: YOUR_CLAN_SHARED_KEY' \
   -H 'Idempotency-Key: 00000000-0000-4000-8000-000000000001' \
   -F 'username=Collector' -F 'clanName=Clan name' -F 'itemId=4151' \
-  -F 'worldType=["MEMBERS"]' \
+  -F 'itemName=Abyssal whip' -F 'worldType=["MEMBERS"]' \
   -F 'chatMessage=Collector received a drop: Abyssal whip'
 ```
 
@@ -52,10 +53,25 @@ proof, rejection reason and a **RuneLite auto review** audit entry. They appear
 in the staff **Reviewed** queue and grant no collection credit.
 
 The game ID resolves through `game_item_ids` to an active canonical catalog
-item. Variant IDs can resolve to the same item; unknown/inactive IDs return
-**422**. A canonical item without a game-ID mapping cannot be submitted by
-RuneLite. Receipt `itemId` is the **canonical** ID. The server records receipt
-time and UTC collection date. `worldType` is required. Use a single enum name
+item. Variant IDs can resolve to the same item. Unknown, unmapped and inactive
+items are accepted as **unmatched** submissions with a nullable canonical ID,
+not added to the catalog automatically. They stay pending for staff even under
+auto-allow policies; unrelated world-policy rejections still apply. Unmatched
+claims are not rejected for closed pages or filtered as collected items. The original received time and
+schedule/page membership are retained for later classification.
+
+`itemName` is preserved as evidence, never used for automatic name matching.
+Older clients can omit it: known items use the catalog name; unknown items use
+a name recovered only from recognized drop/collection messages, or the explicit
+**Name not supplied — game item #123** fallback. Staff can save notes or reject
+an unmatched claim, but must select and save an active canonical item before
+approving. Matching does not approve, create a catalog item or add a game-ID alias.
+The submitted name and original **Game item ID** remain in Submission details
+and review audits after corrections.
+
+Receipt `itemId` is the **canonical** ID, or `null` when unmatched. `gameItemId`
+is the original submitted OSRS ID. Older saved receipts remain unchanged.
+The server records receipt time and UTC collection date. `worldType` is required. Use a single enum name
 such as `MEMBERS`, or a JSON array containing all world flags reported by
 [RuneLite](https://static.runelite.net/runelite-api/apidocs/net/runelite/api/WorldType.html).
 Use `[]` for a world without flags. Names are uppercase identifiers; up to 32
@@ -78,6 +94,7 @@ Success returns **201**, for example:
   "submissionId": "00000000-0000-4000-8000-000000000002",
   "status": "pending",
   "itemId": 42,
+  "gameItemId": 4151,
   "submittedAt": "2026-10-11T12:00:00.000Z",
   "collectedOn": "2026-10-11",
   "hardcore": false
@@ -97,7 +114,8 @@ retry using a newly rotated key can recover its original receipt. A future plugi
 key, payload and optional PNG until it receives the receipt. Changing the chat
 message or adding/removing a screenshot under the same key returns **409**.
 
-Independent clients observing the same player and canonical item in the same
+Independent clients observing the same player and canonical item (or the same
+original game ID when unmatched) in the same
 world mode within five seconds share the first submission. This applies even when
 their request keys, game-item variants, chat messages or screenshots differ. Player matching
 normalizes case, underscores, nonbreaking spaces and repeated whitespace.
@@ -110,6 +128,9 @@ It creates no extra claim, credit or review entry. Regular and hardcore events
 are separate. A new key after five seconds can create a new claim; retrying an
 existing key always retains its original receipt. Staff corrections do not
 change the recorded event identity.
+Adding a mapping between deliveries also reuses the original receipt and proof;
+it does not silently match the saved submission. A supplied `itemName` participates
+in request-key conflict checks. Legacy requests without it retain their original hashes.
 
 The **Filter out duplicates** toggle on **Submissions**, between manual
 submission and the queue, checks items already credited in that world mode.

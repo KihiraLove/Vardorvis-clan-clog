@@ -136,6 +136,68 @@ async function mockAdmin(page: Page) {
   return state;
 }
 
+test('unmatched RuneLite review displays submitted provenance before and after canonical resolution', async ({
+  page,
+}) => {
+  const state = await mockAdmin(page);
+  Object.assign(state.detail.submission, {
+    source: 'runelite',
+    itemId: null,
+    rawItemText: 'Unlisted rare variant',
+    gameItemId: 987654,
+    hardcore: false,
+    proofUrl: '',
+    chatMessage: 'Valuable drop: Unlisted rare variant',
+  });
+  await page.goto('/admin/submissions');
+  const card = page.locator('.submission-card');
+  await expect(card).toContainText('Unlisted rare variant');
+  await expect(card).toContainText('Unmatched · Game item ID 987654');
+  await expect(card.locator('.submission-card__icon-fallback')).toBeVisible();
+  await review(page, state.detail.submission.collectorName).click();
+  await expect(
+    editor(page).getByText('Submitted item name', { exact: true }),
+  ).toBeVisible();
+  await expect(editor(page).getByText('987654', { exact: true })).toBeVisible();
+  await expect(
+    editor(page).getByText('Unlisted rare variant', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor(page).getByText('Unmatched', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor(page).getByRole('button', {
+      name: 'Approve submission',
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: test.info().outputPath('unmatched-review-desktop.png'),
+  });
+  await page.getByRole('button', { name: 'Close review', exact: true }).click();
+  state.detail.submission.itemId = state.catalog.items[0]!.id;
+  state.detail.submission.version++;
+  await page
+    .getByRole('button', { name: 'Refresh submissions', exact: true })
+    .click();
+  await expect(card).toContainText(state.catalog.items[0]!.name);
+  await review(page, state.detail.submission.collectorName).click();
+  await expect(editor(page).getByText('987654', { exact: true })).toBeVisible();
+  await expect(
+    editor(page).getByText('Unlisted rare variant', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor(page).getByText('Unmatched', { exact: true }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    editor(page).getByText('987654', { exact: true }),
+  ).toBeInViewport();
+  await page.screenshot({
+    path: test.info().outputPath('matched-review-mobile.png'),
+  });
+});
+
 test('review filters reuse the authorized catalog until an explicit refresh', async ({
   page,
 }) => {
@@ -256,8 +318,8 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     }),
   ).toBeVisible();
-  await page.goBack();
-  if (page.url().includes('/admin/catalog'))
+  await page.getByRole('link', { name: 'Admin panel', exact: true }).click();
+  if (!page.url().includes('/admin/submissions'))
     await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
   await review(page, 'Matched collector').click();

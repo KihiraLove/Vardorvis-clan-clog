@@ -66,7 +66,7 @@ test(
         rows.push(
           (
             await client.query(
-              'SELECT to_jsonb(t) AS row FROM ' +
+              "SELECT to_jsonb(t)-'intake_scheduling' AS row FROM " +
                 table +
                 ' t ORDER BY to_jsonb(t)::text',
             )
@@ -84,7 +84,7 @@ test(
     );
     assert.equal(
       (await client.query('SELECT * FROM schema_migrations')).rowCount,
-      4,
+      5,
     );
     await assert.rejects(
       client.query(

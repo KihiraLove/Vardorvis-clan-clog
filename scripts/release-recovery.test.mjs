@@ -27,6 +27,7 @@ test('release bundle binds exact infrastructure and migration bytes without copy
       '002_staff_page_access.sql',
       '003_wom_multi_metric.sql',
       '004_permanently_open_pages.sql',
+      '005_unmatched_runelite.sql',
     ],
   );
   assert.deepEqual(

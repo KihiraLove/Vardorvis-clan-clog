@@ -268,7 +268,7 @@ test(
         400,
       );
       assert.equal(
-        (await runelite(fields.map(([k, v]) => [k, k === 'itemId' ? '42' : v])))
+        (await runelite(fields.map(([k, v]) => [k, k === 'itemId' ? '0' : v])))
           .statusCode,
         422,
       );
@@ -280,7 +280,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        1, // The rejected clan write leaves an unreferenced file for maintenance.
+        0, // Malformed IDs and rejected clan names fail before storing proof.
       );
       assert.equal(
         (await pool.query('SELECT count(*)::int AS n FROM submission_images'))
@@ -305,7 +305,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        3, // Both concurrent uploads survive; the durable receipt is still unique.
+        2, // Both concurrent uploads survive; the durable receipt is still unique.
       );
       assert.equal(
         (
@@ -401,7 +401,7 @@ test(
       assert.equal(
         (await readdir(directory)).filter((file) => file.endsWith('.png'))
           .length,
-        7, // Replay/conflict uploads are retained until reference-checked maintenance.
+        6, // Replay/conflict uploads are retained until reference-checked maintenance.
       );
       const noImage = await app.inject({
         method: 'POST',

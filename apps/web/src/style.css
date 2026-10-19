@@ -1073,12 +1073,19 @@ main {
   margin-top: 4px;
 }
 .submission-card__item img,
+.submission-card__icon-fallback,
 .admin-created img {
   width: 32px;
   height: 32px;
   object-fit: contain;
   image-rendering: pixelated;
   flex-shrink: 0;
+}
+.submission-card__item .submission-card__icon-fallback {
+  display: grid;
+  place-items: center;
+  border: 1px solid #6b5c42;
+  color: #b4a78d;
 }
 .submission-facts {
   display: grid;

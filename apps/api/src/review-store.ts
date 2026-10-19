@@ -23,6 +23,7 @@ type Row = {
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
+  gameItemId: number | null;
   collectorName: string;
   collectedOn: string;
   dateSource: string;
@@ -36,7 +37,7 @@ type Row = {
   reviewReason: string | null;
 };
 const selection =
-  'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",' +
+  'id::text,version,source,item_id AS "itemId",raw_item_text AS "rawItemText",game_item_id AS "gameItemId",' +
   'collector_name AS "collectorName",to_char(collected_on,\'YYYY-MM-DD\') AS "collectedOn",' +
   'date_source AS "dateSource",submitted_at AS "submittedAt",' +
   'proof_url AS "proofUrl",proof_image_id::text AS "proofImageId",chat_message AS "chatMessage",hardcore,status,' +
@@ -47,6 +48,7 @@ const view = (row: Row): ReviewSubmission => ({
   source: row.source,
   itemId: row.itemId,
   rawItemText: row.rawItemText,
+  ...(row.gameItemId === null ? {} : { gameItemId: row.gameItemId }),
   collectorName: row.collectorName,
   collectedOn: row.collectedOn,
   proofUrl: row.proofUrl,

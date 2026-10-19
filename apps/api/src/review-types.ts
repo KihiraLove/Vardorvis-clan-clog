@@ -5,6 +5,8 @@ export interface ReviewSubmission {
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
+  /** Original RuneLite provenance, retained through canonical corrections. */
+  gameItemId?: number;
   collectorName: string;
   collectedOn: string;
   dateSource: 'submission' | 'claim' | 'admin';

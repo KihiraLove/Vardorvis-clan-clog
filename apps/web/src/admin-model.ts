@@ -30,6 +30,7 @@ export interface Submission {
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
+  gameItemId?: number;
   collectorName: string;
   collectedOn: string;
   dateSource: 'submission' | 'claim' | 'admin';
@@ -432,6 +433,11 @@ export function parseSubmission(value: unknown): Submission {
     typeof row.hardcore !== 'boolean' ||
     typeof row.rawItemText !== 'string' ||
     typeof row.proofUrl !== 'string' ||
+    (row.gameItemId !== undefined &&
+      (row.source !== 'runelite' ||
+        !Number.isInteger(row.gameItemId) ||
+        Number(row.gameItemId) < 1 ||
+        Number(row.gameItemId) > 2147483647)) ||
     (row.chatMessage !== undefined &&
       (row.source !== 'runelite' ||
         typeof row.chatMessage !== 'string' ||
@@ -448,6 +454,9 @@ export function parseSubmission(value: unknown): Submission {
         : choice(row.source, ['discord', 'manual', 'runelite']),
     itemId: row.itemId === null ? null : identity(row.itemId),
     rawItemText: row.rawItemText,
+    ...(row.gameItemId === undefined
+      ? {}
+      : { gameItemId: identity(row.gameItemId) }),
     collectorName: text(row.collectorName),
     collectedOn: validateCollectionDate(text(row.collectedOn)),
     dateSource: choice(row.dateSource, ['submission', 'claim', 'admin']),

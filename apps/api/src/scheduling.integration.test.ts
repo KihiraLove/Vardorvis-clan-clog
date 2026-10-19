@@ -374,10 +374,15 @@ test(
         assert.equal(hcDiscord.statusCode, 201, hcDiscord.body);
         assert.equal(hcDiscord.json().hardcore, true);
       }
-      assert.equal(
-        (await runelite(999, randomUUID(), 'HC Unknown', true)).statusCode,
-        422,
+      const unmatchedRuneHC = await runelite(
+        999,
+        randomUUID(),
+        'HC Unknown',
+        true,
       );
+      assert.equal(unmatchedRuneHC.statusCode, 201, unmatchedRuneHC.body);
+      assert.equal(unmatchedRuneHC.json().itemId, null);
+      assert.equal(unmatchedRuneHC.json().status, 'pending');
       const unmatchedHC = await discord(0, String(interaction++), true);
       assert.equal(unmatchedHC.statusCode, 201, unmatchedHC.body);
       assert.equal(unmatchedHC.json().resolution, 'needs_match');

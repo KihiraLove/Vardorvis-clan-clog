@@ -106,6 +106,16 @@ export function ReviewAuditHistory({
           const fields: [string, string, string][] = [
             ['Status', entry.before.status, entry.after.status],
             [
+              'Submitted item name',
+              entry.before.rawItemText,
+              entry.after.rawItemText,
+            ],
+            [
+              'Game item ID',
+              String(entry.before.gameItemId ?? 'Not supplied'),
+              String(entry.after.gameItemId ?? 'Not supplied'),
+            ],
+            [
               'Item',
               entry.before.itemId === null
                 ? 'Unmatched'

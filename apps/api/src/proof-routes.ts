@@ -135,8 +135,8 @@ export function proofRoutes(
       limits: {
         fileSize: MAX_SCREENSHOT_BYTES,
         files: 1,
-        fields: 5,
-        parts: 6,
+        fields: 6,
+        parts: 7,
         fieldSize: 8193,
       },
     });
@@ -157,7 +157,7 @@ export function proofRoutes(
         const { fields, file } = await parts(
           req,
           ['username', 'clanName', 'itemId', 'worldType'],
-          ['chatMessage'],
+          ['chatMessage', 'itemName'],
           false,
         );
         if (
@@ -177,6 +177,9 @@ export function proofRoutes(
           username: fields.username!,
           clanName: fields.clanName!,
           itemId: Number(fields.itemId),
+          ...(fields.itemName === undefined
+            ? {}
+            : { itemName: fields.itemName }),
           worldTypes: world.worldTypes,
           ...(fields.chatMessage === undefined
             ? {}

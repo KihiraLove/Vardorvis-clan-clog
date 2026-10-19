@@ -22,6 +22,32 @@ import { MemoryAdminClient } from '../tests/support/admin.ts';
 
 const signal = () => new AbortController().signal;
 
+test('unmatched RuneLite provenance remains available after canonical resolution', async () => {
+  const seed = (
+    await new MemoryAdminClient().queue('pending', undefined, signal())
+  ).submissions[0]!;
+  const original = {
+    ...seed,
+    source: 'runelite',
+    itemId: null,
+    rawItemText: 'Unlisted variant',
+    gameItemId: 987654,
+    chatMessage: 'Valuable drop: Unlisted variant',
+  };
+  const unmatched = parseSubmission(original);
+  assert.equal(unmatched.itemId, null);
+  assert.equal(unmatched.gameItemId, 987654);
+  assert.equal(
+    parseSubmission({ ...original, itemId: 42 }).rawItemText,
+    'Unlisted variant',
+  );
+  for (const gameItemId of [null, 0, -1, '987654', 1.5, 2147483648])
+    assert.throws(() => parseSubmission({ ...original, gameItemId }));
+  const { gameItemId: _oldClient, ...legacy } = original;
+  assert.equal(_oldClient, 987654);
+  assert.equal(parseSubmission(legacy).gameItemId, undefined);
+});
+
 test('RuneLite chat proof preserves full text and rejects malformed private evidence', async () => {
   const seed = (
     await new MemoryAdminClient().queue('pending', undefined, signal())

@@ -291,7 +291,16 @@ export function AdminQueue({
                     >
                       <span className="submission-card__summary">
                         <span className="submission-card__item">
-                          {item && <img src={item.iconPath} alt="" />}
+                          {item ? (
+                            <img src={item.iconPath} alt="" />
+                          ) : (
+                            <span
+                              className="submission-card__icon-fallback"
+                              aria-hidden="true"
+                            >
+                              ?
+                            </span>
+                          )}
                           <strong>
                             {item?.name ??
                               (row.rawItemText || 'Needs item match')}
@@ -300,6 +309,14 @@ export function AdminQueue({
                         <span className="submission-card__collector">
                           {row.collectorName}
                         </span>
+                        {row.itemId === null && (
+                          <span>
+                            Unmatched
+                            {row.gameItemId === undefined
+                              ? ''
+                              : ` · Game item ID ${row.gameItemId}`}
+                          </span>
+                        )}
                         <time dateTime={row.submittedAt}>
                           {formatUtcTime(row.submittedAt)}
                         </time>

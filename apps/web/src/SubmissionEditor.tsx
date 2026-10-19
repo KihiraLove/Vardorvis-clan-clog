@@ -373,9 +373,25 @@ export function SubmissionEditor({
             <h3>Submission details</h3>
             <dl className="submission-facts">
               <div>
-                <dt>Raw item input</dt>
+                <dt>
+                  {row.source === 'runelite'
+                    ? 'Submitted item name'
+                    : 'Raw item input'}
+                </dt>
                 <dd>{row.rawItemText || 'No raw text supplied'}</dd>
               </div>
+              {row.gameItemId !== undefined && (
+                <div>
+                  <dt>Game item ID</dt>
+                  <dd>{row.gameItemId}</dd>
+                </div>
+              )}
+              {row.itemId === null && (
+                <div>
+                  <dt>Catalog match</dt>
+                  <dd>Unmatched</dd>
+                </div>
+              )}
               <div>
                 <dt>Date source</dt>
                 <dd>{dateSourceLabel(row.dateSource)}</dd>

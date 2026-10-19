@@ -19,6 +19,11 @@ import {
 } from './submission-filters.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
+import {
+  validateRuneLiteItemName,
+  runeLiteItemName,
+} from './runelite-item-name.js';
+import { intakeScheduling } from './intake-scheduling.js';
 export const screenshotPath = (id: string) =>
   `/api/v1/admin/submission-images/${id}.png`;
 export const uuidPattern =
@@ -51,6 +56,7 @@ export function runeLiteWorld(value: unknown) {
   };
 }
 function validateSubmission(fields: RuneLiteFields, rules: RuneLiteRules) {
+  validateRuneLiteItemName(fields.itemName);
   if (
     fields.chatMessage === undefined ||
     !fields.chatMessage.trim() ||
@@ -78,6 +84,7 @@ export interface RuneLiteFields {
   username: string;
   clanName: string;
   itemId: number;
+  itemName?: string;
   worldTypes: string[];
   /** Runtime validation requires the complete original chat message. */
   chatMessage?: string;
@@ -85,7 +92,9 @@ export interface RuneLiteFields {
 export interface RuneLiteReceipt {
   submissionId: string;
   status: 'pending' | 'approved' | 'rejected';
-  itemId: number;
+  itemId: number | null;
+  /** Original game ID; omitted only on immutable receipts from older releases. */
+  gameItemId?: number;
   submittedAt: string;
   collectedOn: string;
   hardcore?: boolean;
@@ -158,12 +167,18 @@ export class PgProofStore implements ProofStore {
           ...payload,
           world.worldTypes,
           ...(fields.chatMessage === undefined ? [] : [fields.chatMessage]),
+          ...(fields.itemName === undefined
+            ? []
+            : [{ itemName: fields.itemName }]),
         ]),
       )
       .digest('hex');
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // Catalog writes take this gate before scheduling/item locks. Hold a
+      // shared gate so lookup and frozen page membership use the same catalog.
+      await client.query('SELECT pg_advisory_xact_lock_shared(74261005)');
       const schedulingEnabled = await lockScheduling(client, world.hardcore);
       // Settings and key rotation cannot race validation, approval or a replay.
       const rules = await readRuneLiteSettings(client, true);
@@ -194,19 +209,20 @@ export class PgProofStore implements ProofStore {
       }
       if (fields.chatMessage === undefined)
         throw new ApiError(422, 'Supply the full chat message as proof.');
+      const playerKey = normalizePlayerName(fields.username);
+      // Serialize observers even before a canonical item exists. One lock per
+      // player/world also covers aliases mapped between two deliveries.
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+        [JSON.stringify(['runelite-player', playerKey, world.hardcore])],
+      );
       const item = (
         await client.query<{ id: number; name: string }>(
           'SELECT i.id,i.name FROM game_item_ids g JOIN items i ON i.id=g.item_id WHERE g.game_item_id=$1 AND i.active FOR UPDATE OF i',
           [fields.itemId],
         )
       ).rows[0];
-      if (!item)
-        throw new ApiError(
-          422,
-          'Item ID is not in the active collection-log catalog.',
-        );
       const filters = await readSubmissionFilters(client, true);
-      const playerKey = normalizePlayerName(fields.username);
       const receivedAt = (
         await client.query<{ at: Date }>('SELECT clock_timestamp() AS at')
       ).rows[0]!.at;
@@ -217,8 +233,17 @@ export class PgProofStore implements ProofStore {
           receipt: RuneLiteReceipt;
           imageId: string | null;
         }>(
-          'SELECT e.receipt,s.proof_image_id::text AS "imageId" FROM runelite_drop_events e JOIN submissions s ON s.id=e.submission_id WHERE e.player_key=$1 AND e.item_id=$2 AND e.hardcore=$3 AND e.first_received_at > $4::timestamptz - interval \'5 seconds\' ORDER BY e.first_received_at LIMIT 1',
-          [playerKey, item.id, world.hardcore, receivedAt],
+          'SELECT e.receipt,s.proof_image_id::text AS "imageId" FROM runelite_drop_events e JOIN submissions s ON s.id=e.submission_id ' +
+            'WHERE e.player_key=$1 AND (e.game_item_id=$5 OR ($2::integer IS NOT NULL AND (e.item_id=$2 OR ' +
+            'EXISTS(SELECT 1 FROM game_item_ids g WHERE g.game_item_id=e.game_item_id AND g.item_id=$2)))) ' +
+            "AND e.hardcore=$3 AND e.first_received_at > $4::timestamptz - interval '5 seconds' ORDER BY e.first_received_at LIMIT 1",
+          [
+            playerKey,
+            item?.id ?? null,
+            world.hardcore,
+            receivedAt,
+            fields.itemId,
+          ],
         )
       ).rows[0];
       if (duplicate) {
@@ -230,28 +255,37 @@ export class PgProofStore implements ProofStore {
         await client.query('COMMIT');
         return { receipt, imageId: duplicate.imageId };
       }
-      const collectedDuplicate = await isCollectedDuplicate(
-        client,
-        filters.filterCollected,
-        item.id,
-        world.hardcore,
-      );
+      const collectedDuplicate =
+        item &&
+        (await isCollectedDuplicate(
+          client,
+          filters.filterCollected,
+          item.id,
+          world.hardcore,
+        ));
       const rejection = collectedDuplicate
         ? 'Automatically rejected: Filter out duplicates is on and this item is already collected in this world mode.'
         : decision.action === 'reject'
           ? decision.reason
-          : !(await isScheduledItem(client, schedulingEnabled, item.id))
+          : item && !(await isScheduledItem(client, schedulingEnabled, item.id))
             ? closedCollectionPageMessage
             : undefined;
       if (image) await insertImage(client, image);
+      const rawItemText = runeLiteItemName(fields, item?.name);
+      const schedulingEvidence = await intakeScheduling(
+        client,
+        schedulingEnabled,
+        world.hardcore,
+        receivedAt,
+      );
       const id = randomUUID();
       const row = (
         await client.query<{ submitted_at: Date; collected_on: string }>(
-          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types,chat_message) VALUES($1,'runelite',$2,$3,$4,(now() AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9,$10) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
+          "INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,proof_image_id,submitted_clan_name,game_item_id,hardcore,submitted_world_types,chat_message,submitted_at,intake_scheduling) VALUES($1,'runelite',$2,$3,$4,($11::timestamptz AT TIME ZONE 'UTC')::date,'submission_default','',$5,$6,$7,$8,$9,$10,$11,$12) RETURNING submitted_at,to_char(collected_on,'YYYY-MM-DD') AS collected_on",
           [
             id,
-            item.name,
-            item.id,
+            rawItemText,
+            item?.id ?? null,
             fields.username.trim(),
             image?.id ?? null,
             fields.clanName.trim(),
@@ -259,11 +293,13 @@ export class PgProofStore implements ProofStore {
             world.hardcore,
             world.worldTypes,
             fields.chatMessage,
+            receivedAt,
+            JSON.stringify(schedulingEvidence),
           ],
         )
       ).rows[0]!;
       let status: RuneLiteReceipt['status'] = 'pending';
-      if (rejection || decision.action === 'allow') {
+      if (rejection || (item && decision.action === 'allow')) {
         if (rejection) {
           await client.query(
             "UPDATE submissions SET status='rejected',version=version+1,reviewed_at=now(),reviewed_by='system:runelite-auto-review',review_reason=$2 WHERE id=$1",
@@ -297,8 +333,9 @@ export class PgProofStore implements ProofStore {
           id,
           version: 1,
           source: 'runelite',
-          itemId: item.id,
-          rawItemText: item.name,
+          itemId: item?.id ?? null,
+          gameItemId: fields.itemId,
+          rawItemText,
           collectorName: fields.username.trim(),
           collectedOn: row.collected_on,
           dateSource: 'submission',
@@ -336,7 +373,8 @@ export class PgProofStore implements ProofStore {
       const receipt: RuneLiteReceipt = {
         submissionId: id,
         status,
-        itemId: item.id,
+        itemId: item?.id ?? null,
+        gameItemId: fields.itemId,
         submittedAt: row.submitted_at.toISOString(),
         collectedOn: row.collected_on,
         hardcore: world.hardcore,
@@ -346,14 +384,15 @@ export class PgProofStore implements ProofStore {
         [key, hash, id, JSON.stringify(receipt)],
       );
       await client.query(
-        'INSERT INTO runelite_drop_events(submission_id,player_key,item_id,hardcore,first_received_at,receipt) VALUES($1,$2,$3,$4,$5,$6)',
+        'INSERT INTO runelite_drop_events(submission_id,player_key,item_id,hardcore,first_received_at,receipt,game_item_id) VALUES($1,$2,$3,$4,$5,$6,$7)',
         [
           id,
           playerKey,
-          item.id,
+          item?.id ?? null,
           world.hardcore,
           receivedAt,
           JSON.stringify(receipt),
+          fields.itemId,
         ],
       );
       await client.query('COMMIT');
