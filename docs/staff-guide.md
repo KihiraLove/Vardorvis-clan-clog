@@ -1,6 +1,8 @@
 # Staff guide
 
-Open `/admin` directly. The administrator can create moderator accounts; each
+Use **Admin panel** in the website header, or open `/admin` directly. **Main site**
+returns to the collection log; leaving unsaved edits asks for confirmation.
+The administrator can create moderator accounts; each
 person changes their temporary password at first login. By default, moderators can review
 submissions, enter manual claims, manage the catalog and import competitions.
 Only the administrator changes site settings, shared keys and enforcement switches,

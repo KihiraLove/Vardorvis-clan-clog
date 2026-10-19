@@ -230,13 +230,47 @@ export function SiteApp({
               <span className="clan-subtitle">{copy.collectionTitle}</span>
             </div>
           </a>
-          {!admin &&
-            (liveEnabled ? (
-              <Skull
-                enabled={hardcore}
-                onChange={() => setHardcore(!hardcore)}
-              />
-            ) : null)}
+          <div className="site-header-controls">
+            <div className="site-header-world">
+              {!admin && liveEnabled && (
+                <Skull
+                  enabled={hardcore}
+                  onChange={() => setHardcore(!hardcore)}
+                />
+              )}
+            </div>
+            <a
+              className="site-button site-header-link"
+              href={admin ? '/' : '/admin'}
+              onClick={navigate}
+              aria-label={admin ? 'Main site' : 'Admin panel'}
+              title={admin ? 'Main site' : 'Admin panel'}
+            >
+              <svg
+                className="site-header-link__icon"
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinejoin="round"
+              >
+                {admin ? (
+                  <path d="M3 11 12 3l9 8M5 9v12h5v-7h4v7h5V9" />
+                ) : (
+                  <>
+                    <rect x="3" y="3" width="18" height="18" rx="1" />
+                    <path d="M9 3v18M9 9h12M13 13h4M13 17h4" />
+                  </>
+                )}
+              </svg>
+              <span className="site-header-link__label">
+                {admin ? 'Main site' : 'Admin panel'}
+              </span>
+            </a>
+          </div>
         </header>
         <main id={admin ? 'admin-main' : 'collection-log'}>
           {admin && AdminEntry ? (

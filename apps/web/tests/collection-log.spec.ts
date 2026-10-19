@@ -162,7 +162,7 @@ test('page names distinguish zero, partial and complete collections in the curre
   );
 });
 
-test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({
+test('homepage uses the supplied default branding, 2x log, inline XP and an admin entry link', async ({
   page,
 }) => {
   await mockApi(page);
@@ -179,8 +179,8 @@ test('homepage uses the supplied default branding, 2x log and inline XP without 
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('link', { name: 'Admin', exact: true }),
-  ).toHaveCount(0);
+    page.getByRole('link', { name: 'Admin panel', exact: true }),
+  ).toHaveAttribute('href', '/admin');
   await expect(page.getByRole('tab')).toHaveCount(5);
   const log = await page.locator('.game-window').boundingBox();
   expect(log!.width).toBe(1000);
