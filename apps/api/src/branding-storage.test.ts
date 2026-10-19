@@ -73,7 +73,7 @@ test('GIF and WebP retain all frames, colours, delays and loop count; durable fa
       assert.deepEqual(Array.from(frames), [255, 0, 0, 255, 0, 0, 255, 255]);
       const favicon = await restarted.favicons.read(record.favicon);
       const icon = await sharp(favicon).metadata();
-      assert.equal(icon.format, 'png');
+      assert.equal(icon.format, 'webp');
       assert.equal(icon.pages ?? 1, 1);
       const pixels = await sharp(favicon).ensureAlpha().raw().toBuffer();
       assert.deepEqual(

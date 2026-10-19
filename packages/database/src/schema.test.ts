@@ -28,6 +28,7 @@ test(
           '005_unmatched_runelite.sql',
           '006_collection_types.sql',
           '007_submission_help.sql',
+          '008_webp_assets.sql',
         ],
       );
       // Roll back fixtures; migrations persist in the disposable test database.

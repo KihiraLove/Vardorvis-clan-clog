@@ -30,6 +30,7 @@ test('release bundle binds exact infrastructure and migration bytes without copy
       '005_unmatched_runelite.sql',
       '006_collection_types.sql',
       '007_submission_help.sql',
+      '008_webp_assets.sql',
     ],
   );
   assert.deepEqual(

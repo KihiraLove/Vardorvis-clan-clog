@@ -9,7 +9,7 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
   await mockApi(page);
   await page.goto('/admin/settings');
   const logo = page.locator('.clan-logo').first();
-  await expect(logo).toHaveAttribute('src', '/brand/clan-logo.png');
+  await expect(logo).toHaveAttribute('src', '/brand/clan-logo.webp');
   const webp = await sharp(Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]), {
     raw: { width: 1, height: 2, pageHeight: 1, channels: 4 },
   })
@@ -50,7 +50,7 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
       }),
       paths,
     );
-    expect(formats).toEqual({ logo: 'image/webp', favicon: 'image/png' });
+    expect(formats).toEqual({ logo: 'image/webp', favicon: 'image/webp' });
   }
   await page.setViewportSize({ width: 320, height: 850 });
   await expect(
@@ -65,9 +65,9 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
     .locator('.clan-logo-settings')
     .screenshot({ path: test.info().outputPath('clan-logo-controls.png') });
   await page.getByRole('button', { name: 'Restore default logo' }).click();
-  await expect(logo).toHaveAttribute('src', '/brand/clan-logo.png');
+  await expect(logo).toHaveAttribute('src', '/brand/clan-logo.webp');
   expect(await page.locator('link[rel="icon"]').getAttribute('href')).toBe(
-    '/favicon.png',
+    '/favicon.webp',
   );
 });
 
@@ -80,7 +80,7 @@ test('live branding changes the public logo and icon; moderator accounts have no
   const branding = {
     revision: 'branding-2',
     logoPath: `/api/v1/branding/${id}.webp`,
-    faviconPath: `/api/v1/branding/${id}/favicon.png`,
+    faviconPath: `/api/v1/branding/${id}/favicon.webp`,
   };
   await page.route('**/api/v1/**', (route) => {
     const path = new URL(route.request().url()).pathname;

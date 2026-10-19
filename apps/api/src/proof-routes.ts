@@ -115,7 +115,7 @@ export function proofRoutes(
   // Never unlink a saved file based on an uncertain database receipt.
   // Offline, reference-checked maintenance reclaims orphaned uploads.
   app.get<{ Params: { id: string } }>(
-    '/api/v1/admin/submission-images/:id.png',
+    '/api/v1/admin/submission-images/:id.webp',
     {
       onRequest: async (req) => {
         await staff(req);
@@ -128,8 +128,8 @@ export function proofRoutes(
       if (!image) throw new ApiError(404, 'Screenshot not found.');
       return reply
         .header('Cache-Control', 'private, no-store')
-        .header('Content-Disposition', 'inline; filename="screenshot.png"')
-        .type('image/png')
+        .header('Content-Disposition', 'inline; filename="screenshot.webp"')
+        .type('image/webp')
         .send(await storage.read(image));
     },
   );

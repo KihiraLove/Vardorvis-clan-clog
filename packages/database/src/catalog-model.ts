@@ -72,7 +72,7 @@ export function validateSnapshot(
       !item.gameItemIds.length ||
       !item.gameItemIds.every(integer) ||
       typeof item.iconPath !== 'string' ||
-      !/^\/catalog\/items\/[1-9]\d*\.png$/u.test(item.iconPath)
+      !/^\/catalog\/items\/[1-9]\d*\.webp$/u.test(item.iconPath)
     )
       throw new Error('Invalid imported item');
   }

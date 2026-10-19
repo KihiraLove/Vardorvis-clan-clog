@@ -318,7 +318,7 @@ main {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background-image: url('/ui/panel.svg');
+  background-image: url('/ui/panel.webp');
 }
 .page-heading {
   height: 46px;
@@ -630,7 +630,7 @@ main {
   font-size: 10px !important;
 }
 .skill-panel {
-  background: #4c4435 url('/ui/panel.svg');
+  background: #4c4435 url('/ui/panel.webp');
   border: 3px solid #25231d;
   outline: 1px solid #72654e;
   box-shadow:
@@ -1710,7 +1710,7 @@ html:has(.submission-review-dialog[open]) {
   padding: 5px;
   object-fit: contain;
   image-rendering: pixelated;
-  background: #453e30 url('/ui/panel.svg');
+  background: #453e30 url('/ui/panel.webp');
   border: 1px solid #756447;
 }
 .admin-created {

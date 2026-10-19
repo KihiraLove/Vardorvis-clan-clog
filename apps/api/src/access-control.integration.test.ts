@@ -418,7 +418,7 @@ test(
     assert.equal(
       (
         await app.inject({
-          url: '/api/v1/admin/submission-images/' + randomUUID() + '.png',
+          url: '/api/v1/admin/submission-images/' + randomUUID() + '.webp',
           headers: modHeaders,
         })
       ).statusCode,

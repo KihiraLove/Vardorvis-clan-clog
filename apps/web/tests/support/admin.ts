@@ -495,7 +495,7 @@ export class MemoryAdminClient implements AdminClient {
     const row: Submission = {
       id,
       ...(screenshot
-        ? { screenshotPath: `/api/v1/admin/submission-images/${id}.png` }
+        ? { screenshotPath: `/api/v1/admin/submission-images/${id}.webp` }
         : {}),
       version: 1,
       source: 'manual',

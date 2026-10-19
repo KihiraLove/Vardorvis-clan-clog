@@ -128,14 +128,14 @@ try {
   const proofPath = (await uploadedProof.json()).screenshotPath;
   assert.match(
     proofPath,
-    /^\/api\/v1\/admin\/submission-images\/[a-f0-9-]+\.png$/u,
+    /^\/api\/v1\/admin\/submission-images\/[a-f0-9-]+\.webp$/u,
   );
   const deniedProof = await request(proofPath);
   assert.equal(deniedProof.status, 401);
   assert.equal(deniedProof.headers.get('cache-control'), 'no-store');
   const privateProof = await request(proofPath, { headers: authorized });
   assert.equal(privateProof.status, 200);
-  assert.equal(privateProof.headers.get('content-type'), 'image/png');
+  assert.equal(privateProof.headers.get('content-type'), 'image/webp');
   assert.equal(privateProof.headers.get('cache-control'), 'private, no-store');
   assert.ok((await privateProof.arrayBuffer()).byteLength > 0);
 

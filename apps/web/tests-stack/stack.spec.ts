@@ -789,7 +789,7 @@ test('slow real reads preserve keyboard navigation; catalog geometry and both pr
       .toBe(true);
     expect(
       (await page.request.get(branding.faviconPath)).headers()['content-type'],
-    ).toBe('image/png');
+    ).toBe('image/webp');
     await page
       .getByRole('button', { name: 'Restore default logo', exact: true })
       .click();

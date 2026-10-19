@@ -79,7 +79,7 @@ test(
       await store.ensureDefaultAdmin(await hashPassword(password));
       await pool.query('UPDATE staff_accounts SET must_change_password=false');
       await pool.query(
-        "INSERT INTO items(id,name,icon_path) VALUES(1000001,'Source one','/catalog/items/1249.png'),(1000002,'Source two','/catalog/items/3140.png')",
+        "INSERT INTO items(id,name,icon_path) VALUES(1000001,'Source one','/catalog/items/1249.webp'),(1000002,'Source two','/catalog/items/3140.webp')",
       );
       await pool.query(
         'INSERT INTO game_item_ids(game_item_id,item_id) VALUES(1249,1000001)',
@@ -275,7 +275,7 @@ test(
       assert.equal(claim.json().status, 'pending');
       const image = await app.inject(created.item.iconPath);
       assert.equal(image.statusCode, 200);
-      assert.equal(image.headers['content-type'], 'image/png');
+      assert.equal(image.headers['content-type'], 'image/webp');
       assert.match(image.headers['cache-control']!, /immutable/u);
       assert.deepEqual(
         await new IconStorage(directory).read(

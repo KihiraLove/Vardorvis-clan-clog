@@ -61,7 +61,7 @@ test(
       );
       await pool.query('UPDATE staff_accounts SET must_change_password=false');
       await pool.query(
-        "INSERT INTO items(id,name,icon_path) VALUES(1,'Unique','/catalog/items/1.png'),(2,'Shared','/catalog/items/2.png')",
+        "INSERT INTO items(id,name,icon_path) VALUES(1,'Unique','/catalog/items/1.webp'),(2,'Shared','/catalog/items/2.webp')",
       );
       await pool.query(
         "INSERT INTO pages(id,name,category,sort_order) VALUES('a','A','bosses',0),('b','B','bosses',1),('c','C','other',2)",

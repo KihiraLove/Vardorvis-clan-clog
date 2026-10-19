@@ -143,17 +143,18 @@ test('fixture audit pagination retains every event, binds scope/revision and val
   );
 });
 
-test('stored evidence accepts only generated private PNG paths and survives RuneLite parsing', async () => {
+test('stored evidence accepts only generated private WebP paths and survives RuneLite parsing', async () => {
   const client = new MemoryAdminClient();
   const fixture = (await client.queue('pending', undefined, signal()))
     .submissions[0]!;
   const path =
-    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
   assert.equal(safeScreenshotPath(path), true);
   for (const value of [
+    path.replace('.webp', '.png'),
     'https://evil.test/proof.png',
     '//evil.test/proof.png',
-    '/api/v1/admin/submission-images/../../proof.png',
+    '/api/v1/admin/submission-images/../../proof.webp',
     path + '?token=secret',
     'data:image/png;base64,AAAA',
   ]) {

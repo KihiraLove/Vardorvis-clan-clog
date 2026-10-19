@@ -1,4 +1,4 @@
-/** Private screenshots: bounded PNG decoding, metadata removal and durable immutable files. */
+/** Private screenshots: bounded PNG decoding and durable, metadata-free WebP files. */
 import sharp from 'sharp';
 import { IconStorage } from './icon-storage.js';
 import { ApiError } from './types.js';
@@ -24,7 +24,7 @@ export async function decodeScreenshot(input: Buffer, mime: string) {
     )
       throw new Error('Invalid screenshot');
     const { data, info } = await decoder
-      .png()
+      .webp({ lossless: true, effort: 2 })
       .toBuffer({ resolveWithObject: true });
     if (data.length > MAX_SCREENSHOT_BYTES)
       throw new Error('Decoded screenshot too large');

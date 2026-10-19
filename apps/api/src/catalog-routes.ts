@@ -39,7 +39,7 @@ export function catalogRoutes(
   };
   catalogEditorRoutes(app, store, icons, admin);
   app.get<{ Params: { id: string } }>(
-    '/api/v1/catalog/icons/:id.png',
+    '/api/v1/catalog/icons/:id.webp',
     async (request, reply) => {
       if (!assetIdPattern.test(request.params.id))
         throw new ApiError(404, 'Icon not found.');
@@ -52,7 +52,7 @@ export function catalogRoutes(
       }
       const bytes = await icons.read(asset);
       return reply
-        .type('image/png')
+        .type('image/webp')
         .header('X-Content-Type-Options', 'nosniff')
         .header(
           'Cache-Control',

@@ -66,7 +66,7 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
     .fill('900007');
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles(await pngFile('public/skills/sailing.png'));
+    .setInputFiles(await pngFile('public/skills/sailing.webp'));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(

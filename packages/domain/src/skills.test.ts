@@ -13,7 +13,7 @@ test('the shared registry preserves all 24 canonical skills, display order and i
   for (const [id, name, icon] of skills) {
     assert.equal(skillName(id), name);
     assert.equal(skillIcon(id), '/skills/' + icon);
-    assert.equal(icon, (id === 'runecrafting' ? 'runecraft' : id) + '.png');
+    assert.equal(icon, (id === 'runecrafting' ? 'runecraft' : id) + '.webp');
     assert.deepEqual(competitionScope([id]), { kind: 'SKILL', skills: [id] });
   }
   assert.equal(skillName('runecrafting'), 'Runecraft');

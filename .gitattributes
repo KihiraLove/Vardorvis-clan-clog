@@ -1,6 +1,7 @@
 # Preserve captured source bytes and deterministic snapshots on every platform.
 catalog/** -text
 *.png binary
+*.webp binary
 
 # Shell helpers must run identically from Windows checkouts and Linux hosts.
 *.sh text eol=lf

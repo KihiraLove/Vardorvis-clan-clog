@@ -52,7 +52,7 @@ jq -e '
    ([ $catalog.pages[] | select(.id=="elite_treasure_trails" or .id=="master_treasure_trails") |
       select(.itemIds | index($ring)) ] | length) == 2)
 ' /tmp/catalog.json
-curl --fail --output /dev/null http://app:8080/catalog/items/1249.png
+curl --fail --output /dev/null http://app:8080/catalog/items/1249.webp
 curl --fail --output /tmp/collections.json http://app:8080/api/v1/collections
 jq -e '.credits == []' /tmp/collections.json
 curl --fail http://app:8080/api/v1/settings
@@ -132,10 +132,10 @@ docker compose exec -T clan-clog clog runtime node --input-type=module -e "
 printf "\nAdmin catalog, durable icons and coordinated backup\n"
 docker compose exec -T -e CATALOG_SMOKE_TEST=1 clan-clog clog runtime node --input-type=module < scripts/catalog-smoke.mjs > /tmp/catalog-created.json
 icon_path="$(jq -r '.iconPath' /tmp/catalog-created.json)"
-curl --fail "http://app:8080$icon_path" --output /tmp/icon-before.png
+curl --fail "http://app:8080$icon_path" --output /tmp/icon-before.webp
 docker compose up -d --no-deps --force-recreate --wait clan-clog
-curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://app:8080$icon_path" --output /tmp/icon-after.png
-cmp /tmp/icon-before.png /tmp/icon-after.png
+curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://app:8080$icon_path" --output /tmp/icon-after.webp
+cmp /tmp/icon-before.webp /tmp/icon-after.webp
 curl --fail --output /tmp/catalog-after.json http://app:8080/api/v1/catalog
 jq -e --slurpfile receipt /tmp/catalog-created.json '
   ([.pages[] | select(.category=="bosses")][0].id == $receipt[0].pageId) and

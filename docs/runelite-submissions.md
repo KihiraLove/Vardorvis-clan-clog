@@ -288,7 +288,9 @@ PNG digest in the manual receipt and retain the original uploaded image.
 
 Screenshots appear in the private queue/review editor and are served only to
 authenticated staff who completed first-login password setup, at
-`/api/v1/admin/submission-images/<generated-uuid>.png` with no-store caching.
+`/api/v1/admin/submission-images/<generated-uuid>.webp` with no-store caching.
+PNG uploads are converted to lossless WebP before storage; only WebP is saved
+and served (`image/webp`). The original PNG is discarded after conversion.
 Public catalog, credits and XP responses contain no proof URLs, image paths or
 uploaded image data. Files remain available after approval/rejection/revocation
 for later review; uploads never grant approval privileges.

@@ -26,7 +26,7 @@ export function ProofLink({
           referrerPolicy="no-referrer"
         >
           <img src={screenshot} alt="Submission screenshot" loading="lazy" />
-          View PNG screenshot
+          View screenshot
         </a>
         {safe && (
           <a href={safe} target="_blank" rel="noopener noreferrer">

@@ -11,7 +11,7 @@ function catalogFixture(pages: number, items: number): AdminCatalog {
   const entries = Array.from({ length: items }, (_, i) => ({
     id: i + 1,
     name: `Item ${String(i + 1).padStart(3, '0')} ${'LongCatalogItemName'.repeat(3)}`,
-    iconPath: '/skills/sailing.png',
+    iconPath: '/skills/sailing.webp',
     origin: 'manual' as const,
     overrides: [],
   }));
@@ -146,6 +146,6 @@ test('new-item editor uses its selected page and requires an in-game ID', async 
   );
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles('public/skills/sailing.png');
+    .setInputFiles('public/skills/sailing.webp');
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
 });

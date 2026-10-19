@@ -2,12 +2,18 @@
 
 The site serves its item icons, skill icons, fonts, frame, default logo and
 favicons locally. Uploaded icons/branding use durable server storage; screenshots
-are private. Source/WOM links may point elsewhere, but rendering does not depend
+are private. All bundled and stored images use WebP. PNG uploads are decoded and
+converted losslessly before storage; original PNGs are not saved. Icons retain
+their native dimensions and transparency, and screenshots retain readable text.
+Source/WOM links may point elsewhere, but rendering does not depend
 on third-party image hosting. External Imgur evidence remains a submitted proof
 link; RuneLite can upload the screenshot directly.
 
 - [Catalog provenance](../catalog/provenance.json) and [asset manifest](../catalog/assets.json)
   identify pinned TempleOSRS, OSRS Wiki and RuneLite inputs, hashes and dimensions.
+  Image entries distinguish the original input hash (`sourceSha256`) from the
+  bundled WebP hash (`sha256`). `npm run catalog:assets` restores pinned artwork
+  as WebP; upstream PNGs are converted in memory.
 - [Skill icon provenance](../apps/web/public/skills/provenance.json) and bundled
   license record the RuneLite skill artwork.
 - [Font license](../apps/web/public/fonts/LICENSE.txt) applies to the bundled font.

@@ -77,7 +77,7 @@ function Skull({
       title={enabled ? 'Switch to normal worlds' : 'Switch to hardcore worlds'}
       onClick={onChange}
     >
-      <img src="/brand/skull.png" alt="" />
+      <img src="/brand/skull.webp" alt="" />
       <span className="sr-only">
         {enabled ? 'Hardcore worlds' : 'Normal worlds'}
       </span>
@@ -197,7 +197,7 @@ export function SiteApp({
         'link[rel="icon"], link[rel="alternate icon"]',
       )
       .forEach((icon) => {
-        icon.type = 'image/png';
+        icon.type = 'image/webp';
         icon.href = branding.faviconPath;
       });
   }, [branding.faviconPath]);
@@ -435,7 +435,12 @@ export function SiteApp({
               target="_blank"
               rel="noopener noreferrer"
             >
-              <img src="/brand/github-mark.svg" alt="" width="22" height="22" />
+              <img
+                src="/brand/github-mark.webp"
+                alt=""
+                width="22"
+                height="22"
+              />
               <span>GitHub</span>
             </a>
             <a
@@ -451,7 +456,7 @@ export function SiteApp({
                 width="26"
                 height="24"
               >
-                <image href="/brand/ko-fi-blue.png" width="980" height="198" />
+                <image href="/brand/ko-fi-blue.webp" width="980" height="198" />
               </svg>
               Support this project
             </a>

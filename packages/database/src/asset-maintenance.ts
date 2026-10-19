@@ -11,7 +11,7 @@ const kinds: Kind[] = ['icons', 'branding', 'proofs'];
 const workerLock = 74261081;
 const writeLock = 74261080;
 const filename =
-  /^([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})\.(png|webp)(\.tmp)?$/u;
+  /^([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})\.webp(\.tmp)?$/u;
 export interface AssetMaintenanceOptions {
   dryRun: boolean;
   graceHours: number;
@@ -121,7 +121,7 @@ export async function runAssetMaintenance(
       AND tgenabled IN ('O','A') AND tgfoid='reject_retired_asset()'::regprocedure`);
     if (guards.rows[0]!.count !== 4)
       throw new Error(
-        'Apply migration 016 and enable its asset write barriers first.',
+        'Apply database migrations and enable the asset write barriers first.',
       );
     const now = (
       await client.query<{ now: Date }>('SELECT clock_timestamp() AS now')
@@ -160,7 +160,7 @@ export async function runAssetMaintenance(
       if (seen.has(kind + ':' + name) || limited()) return;
       seen.add(kind + ':' + name);
       const match = filename.exec(name);
-      if (!match || (kind === 'proofs' && match[2] !== 'png')) {
+      if (!match) {
         report.unknown++;
         return;
       }

@@ -179,7 +179,7 @@ try {
         "SELECT * FROM submission_images WHERE id IN (SELECT proof_image_id FROM submissions WHERE collector_name='Recovery fixture')",
       )
     ).rows[0];
-    const proofPath = '/api/v1/admin/submission-images/' + proof.id + '.png';
+    const proofPath = '/api/v1/admin/submission-images/' + proof.id + '.webp';
     assert.equal((await fetch(url + proofPath)).status, 401);
     const image = await fetch(url + proofPath, { headers });
     assert.equal(image.status, 200);
@@ -189,7 +189,7 @@ try {
         'SELECT id,sha256 FROM catalog_assets WHERE item_id IS NOT NULL',
       )
     ).rows) {
-      const asset = await fetch(url + '/api/v1/catalog/icons/' + id + '.png');
+      const asset = await fetch(url + '/api/v1/catalog/icons/' + id + '.webp');
       assert.equal(asset.status, 200);
       assert.equal(hash(Buffer.from(await asset.arrayBuffer())), sha256);
     }
@@ -198,7 +198,7 @@ try {
     ).rows) {
       for (const [suffix, expected] of [
         ['.webp', sha256],
-        ['/favicon.png', favicon_sha256],
+        ['/favicon.webp', favicon_sha256],
       ]) {
         const asset = await fetch(url + '/api/v1/branding/' + id + suffix);
         assert.equal(asset.status, 200);

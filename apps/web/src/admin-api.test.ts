@@ -496,7 +496,7 @@ test('manual PNG uploads use multipart with CSRF and a stable retry key', async 
     { type: 'image/png' },
   );
   const path =
-    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
   const client = new LiveAdminClient(async (url, options) => {
     assert.equal(url, '/api/v1/admin/submissions/upload');
     assert.equal(

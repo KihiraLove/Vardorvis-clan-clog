@@ -169,11 +169,11 @@ test('homepage uses the supplied default branding, 2x log, separate XP navigatio
   await page.goto('/');
   await expect(page.locator('.clan-logo')).toHaveAttribute(
     'src',
-    '/brand/clan-logo.png',
+    '/brand/clan-logo.webp',
   );
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
     'href',
-    '/favicon.png',
+    '/favicon.webp',
   );
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),

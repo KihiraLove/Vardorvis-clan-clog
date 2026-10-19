@@ -181,7 +181,7 @@ test('hardcore appearance can be configured while disabled and switches independ
     .fill('Hardcore training');
   await page
     .getByLabel('Logo image')
-    .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
+    .setInputFiles(await pngFile(resolve('public/skills/sailing.webp')));
   await page
     .getByRole('button', { name: 'Save clan logo', exact: true })
     .click();

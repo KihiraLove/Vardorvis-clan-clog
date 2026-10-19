@@ -184,7 +184,7 @@ test(
         icon = await app.inject(saved.faviconPath);
       assert.equal(logo.statusCode, 200);
       assert.equal(logo.headers['content-type'], 'image/webp');
-      assert.equal(icon.headers['content-type'], 'image/png');
+      assert.equal(icon.headers['content-type'], 'image/webp');
       {
         const metadata = await sharp(logo.rawPayload, {
           animated: true,

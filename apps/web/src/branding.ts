@@ -6,8 +6,8 @@ export interface Branding {
 }
 export const defaultBranding: Branding = {
   revision: 'branding-1',
-  logoPath: '/brand/clan-logo.png',
-  faviconPath: '/favicon.png',
+  logoPath: '/brand/clan-logo.webp',
+  faviconPath: '/favicon.webp',
 };
 export function parseBranding(value: unknown): Branding {
   if (!value || typeof value !== 'object')
@@ -28,7 +28,8 @@ export function parseBranding(value: unknown): Branding {
     !(
       (data.logoPath === defaultBranding.logoPath &&
         data.faviconPath === defaultBranding.faviconPath) ||
-      (match && data.faviconPath === `/api/v1/branding/${match[1]}/favicon.png`)
+      (match &&
+        data.faviconPath === `/api/v1/branding/${match[1]}/favicon.webp`)
     )
   )
     throw new Error('Invalid clan branding.');

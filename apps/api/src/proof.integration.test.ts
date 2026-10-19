@@ -278,7 +278,7 @@ test(
         413,
       );
       assert.equal(
-        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+        (await readdir(directory)).filter((file) => file.endsWith('.webp'))
           .length,
         0, // Malformed IDs and rejected clan names fail before storing proof.
       );
@@ -303,7 +303,7 @@ test(
         1,
       );
       assert.equal(
-        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+        (await readdir(directory)).filter((file) => file.endsWith('.webp'))
           .length,
         2, // Both concurrent uploads survive; the durable receipt is still unique.
       );
@@ -332,7 +332,7 @@ test(
       assert.equal((await app.inject(imagePath)).statusCode, 401);
       const image = await app.inject({ url: imagePath, headers: moderator });
       assert.equal(image.statusCode, 200, image.body);
-      assert.equal(image.headers['content-type'], 'image/png');
+      assert.equal(image.headers['content-type'], 'image/webp');
       assert.match(image.headers['cache-control']!, /no-store/u);
       await new ProofStorage(directory).initialize();
       assert.equal(
@@ -399,7 +399,7 @@ test(
       assert.equal(created.statusCode, 201, created.body);
       assert.deepEqual((await create()).json(), created.json());
       assert.equal(
-        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+        (await readdir(directory)).filter((file) => file.endsWith('.webp'))
           .length,
         6, // Replay/conflict uploads are retained until reference-checked maintenance.
       );
@@ -493,7 +493,7 @@ test(
       // Rotate after onRequest but before transaction validation: no claim/image
       // metadata commits, while the file remains for reference-checked maintenance.
       const filesBeforeRotation = (await readdir(directory)).filter((file) =>
-        file.endsWith('.png'),
+        file.endsWith('.webp'),
       ).length;
       const createRuneLite = store.createRuneLite.bind(store);
       store.createRuneLite = async (...args) => {
@@ -527,7 +527,7 @@ test(
           !JSON.stringify(audit).includes(apiKey),
       );
       assert.equal(
-        (await readdir(directory)).filter((file) => file.endsWith('.png'))
+        (await readdir(directory)).filter((file) => file.endsWith('.webp'))
           .length,
         filesBeforeRotation + 1,
       );

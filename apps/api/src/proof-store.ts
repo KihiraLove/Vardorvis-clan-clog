@@ -1,4 +1,4 @@
-/** PNG evidence, automatic review, audit and RuneLite receipts commit together. */
+/** Screenshot metadata, automatic review, audit and RuneLite receipts commit together. */
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import {
@@ -25,7 +25,7 @@ import {
 } from './runelite-item-name.js';
 import { intakeScheduling } from './intake-scheduling.js';
 export const screenshotPath = (id: string) =>
-  `/api/v1/admin/submission-images/${id}.png`;
+  `/api/v1/admin/submission-images/${id}.webp`;
 export const uuidPattern =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 export const clanMatches = (a: string, b: string) =>

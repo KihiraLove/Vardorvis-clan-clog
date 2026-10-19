@@ -98,7 +98,7 @@ export async function mockApi(
               bytes = Buffer.from(await file.arrayBuffer()),
               id = crypto.randomUUID();
             const logoPath = `/api/v1/branding/${id}.webp`,
-              faviconPath = `/api/v1/branding/${id}/favicon.png`;
+              faviconPath = `/api/v1/branding/${id}/favicon.webp`;
             assets.set(logoPath, {
               body: await sharp(bytes, { animated: true }).webp().toBuffer(),
               contentType: 'image/webp',
@@ -106,9 +106,9 @@ export async function mockApi(
             assets.set(faviconPath, {
               body: await sharp(bytes)
                 .resize(64, 64, { fit: 'contain' })
-                .png()
+                .webp({ lossless: true })
                 .toBuffer(),
-              contentType: 'image/png',
+              contentType: 'image/webp',
             });
             logos[mode] = {
               revision: 'branding-' + next,
@@ -230,10 +230,12 @@ export async function mockApi(
         result = await admin.catalog(signal);
       else if (path === '/api/v1/admin/catalog/icons') {
         const file = form!.get('icon') as File,
-          iconPath = `/api/v1/catalog/icons/${crypto.randomUUID()}.png`;
+          iconPath = `/api/v1/catalog/icons/${crypto.randomUUID()}.webp`;
         assets.set(iconPath, {
-          body: Buffer.from(await file.arrayBuffer()),
-          contentType: file.type,
+          body: await sharp(Buffer.from(await file.arrayBuffer()))
+            .webp({ lossless: true })
+            .toBuffer(),
+          contentType: 'image/webp',
         });
         result = await admin.upload(file, csrf, signal, iconPath);
       } else if (path === '/api/v1/admin/catalog/sections') {
@@ -384,8 +386,10 @@ export async function mockApi(
           );
           if (screenshot) {
             assets.set(row.screenshotPath!, {
-              body: Buffer.from(await screenshot.arrayBuffer()),
-              contentType: 'image/png',
+              body: await sharp(Buffer.from(await screenshot.arrayBuffer()))
+                .webp({ lossless: true })
+                .toBuffer(),
+              contentType: 'image/webp',
             });
           }
           result = row;

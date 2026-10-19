@@ -11,7 +11,7 @@ const proofCheck = (page: Page) =>
   editor(page).getByLabel(/^I checked the linked proof/);
 const review = (page: Page, collector: string) =>
   page.getByRole('button', { name: new RegExp('^Review ' + collector + ' ·') });
-const itemIcon = resolve('public/skills/sailing.png');
+const itemIcon = resolve('public/skills/sailing.webp');
 async function closeReviewIfOpen(page: Page) {
   if (await page.getByRole('dialog', { name: 'Submission review' }).count())
     await page
@@ -738,7 +738,7 @@ test('invalid icons do not upload; an uncertain create retries identical payload
     return route.fulfill({
       json: {
         assetId: 'staged-icon',
-        iconPath: '/skills/sailing.png',
+        iconPath: '/skills/sailing.webp',
         expiresAt: '2099-01-01T00:00:00Z',
       },
     });
@@ -751,7 +751,7 @@ test('invalid icons do not upload; an uncertain create retries identical payload
     const item = {
       id: 50001,
       name: 'New live drop',
-      iconPath: '/skills/sailing.png',
+      iconPath: '/skills/sailing.webp',
       origin: 'manual' as const,
       overrides: ['name', 'icon', 'pages'] as ('name' | 'icon' | 'pages')[],
     };

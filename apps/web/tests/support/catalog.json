@@ -4,1302 +4,1302 @@
     {
       "id": 1,
       "name": "Abyssal orphan",
-      "iconPath": "/fixture-items/1.png"
+      "iconPath": "/fixture-items/1.webp"
     },
     {
       "id": 2,
       "name": "Unsired",
-      "iconPath": "/fixture-items/2.png"
+      "iconPath": "/fixture-items/2.webp"
     },
     {
       "id": 3,
       "name": "Abyssal head",
-      "iconPath": "/fixture-items/3.png"
+      "iconPath": "/fixture-items/3.webp"
     },
     {
       "id": 4,
       "name": "Bludgeon spine",
-      "iconPath": "/fixture-items/4.png"
+      "iconPath": "/fixture-items/4.webp"
     },
     {
       "id": 5,
       "name": "Bludgeon claw",
-      "iconPath": "/fixture-items/5.png"
+      "iconPath": "/fixture-items/5.webp"
     },
     {
       "id": 6,
       "name": "Bludgeon axon",
-      "iconPath": "/fixture-items/6.png"
+      "iconPath": "/fixture-items/6.webp"
     },
     {
       "id": 7,
       "name": "Jar of Miasma",
-      "iconPath": "/fixture-items/7.png"
+      "iconPath": "/fixture-items/7.webp"
     },
     {
       "id": 8,
       "name": "Abyssal dagger",
-      "iconPath": "/fixture-items/8.png"
+      "iconPath": "/fixture-items/8.webp"
     },
     {
       "id": 9,
       "name": "Abyssal whip",
-      "iconPath": "/fixture-items/9.png"
+      "iconPath": "/fixture-items/9.webp"
     },
     {
       "id": 10,
       "name": "Nid",
-      "iconPath": "/fixture-items/10.png"
+      "iconPath": "/fixture-items/10.webp"
     },
     {
       "id": 11,
       "name": "Araxyte venom sac",
-      "iconPath": "/fixture-items/11.png"
+      "iconPath": "/fixture-items/11.webp"
     },
     {
       "id": 12,
       "name": "Spider cave teleport",
-      "iconPath": "/fixture-items/12.png"
+      "iconPath": "/fixture-items/12.webp"
     },
     {
       "id": 13,
       "name": "Araxyte fang",
-      "iconPath": "/fixture-items/13.png"
+      "iconPath": "/fixture-items/13.webp"
     },
     {
       "id": 14,
       "name": "Noxious point",
-      "iconPath": "/fixture-items/14.png"
+      "iconPath": "/fixture-items/14.webp"
     },
     {
       "id": 15,
       "name": "Noxious blade",
-      "iconPath": "/fixture-items/15.png"
+      "iconPath": "/fixture-items/15.webp"
     },
     {
       "id": 16,
       "name": "Noxious pommel",
-      "iconPath": "/fixture-items/16.png"
+      "iconPath": "/fixture-items/16.webp"
     },
     {
       "id": 17,
       "name": "Araxyte head",
-      "iconPath": "/fixture-items/17.png"
+      "iconPath": "/fixture-items/17.webp"
     },
     {
       "id": 18,
       "name": "Jar of Venom",
-      "iconPath": "/fixture-items/18.png"
+      "iconPath": "/fixture-items/18.webp"
     },
     {
       "id": 19,
       "name": "Coagulated venom",
-      "iconPath": "/fixture-items/19.png"
+      "iconPath": "/fixture-items/19.webp"
     },
     {
       "id": 20,
       "name": "Baron",
-      "iconPath": "/fixture-items/20.png"
+      "iconPath": "/fixture-items/20.webp"
     },
     {
       "id": 21,
       "name": "Eye of the Duke",
-      "iconPath": "/fixture-items/21.png"
+      "iconPath": "/fixture-items/21.webp"
     },
     {
       "id": 22,
       "name": "Virtus mask",
-      "iconPath": "/fixture-items/22.png"
+      "iconPath": "/fixture-items/22.webp"
     },
     {
       "id": 23,
       "name": "Virtus robe top",
-      "iconPath": "/fixture-items/23.png"
+      "iconPath": "/fixture-items/23.webp"
     },
     {
       "id": 24,
       "name": "Virtus robe bottom",
-      "iconPath": "/fixture-items/24.png"
+      "iconPath": "/fixture-items/24.webp"
     },
     {
       "id": 25,
       "name": "Magus vestige",
-      "iconPath": "/fixture-items/25.png"
+      "iconPath": "/fixture-items/25.webp"
     },
     {
       "id": 26,
       "name": "Ice quartz",
-      "iconPath": "/fixture-items/26.png"
+      "iconPath": "/fixture-items/26.webp"
     },
     {
       "id": 27,
       "name": "Frozen tablet",
-      "iconPath": "/fixture-items/27.png"
+      "iconPath": "/fixture-items/27.webp"
     },
     {
       "id": 28,
       "name": "Chromium ingot",
-      "iconPath": "/fixture-items/28.png"
+      "iconPath": "/fixture-items/28.webp"
     },
     {
       "id": 29,
       "name": "Awakener's orb",
-      "iconPath": "/fixture-items/29.png"
+      "iconPath": "/fixture-items/29.webp"
     },
     {
       "id": 30,
       "name": "Lil'viathan",
-      "iconPath": "/fixture-items/30.png"
+      "iconPath": "/fixture-items/30.webp"
     },
     {
       "id": 31,
       "name": "Leviathan's lure",
-      "iconPath": "/fixture-items/31.png"
+      "iconPath": "/fixture-items/31.webp"
     },
     {
       "id": 32,
       "name": "Venator vestige",
-      "iconPath": "/fixture-items/32.png"
+      "iconPath": "/fixture-items/32.webp"
     },
     {
       "id": 33,
       "name": "Smoke quartz",
-      "iconPath": "/fixture-items/33.png"
+      "iconPath": "/fixture-items/33.webp"
     },
     {
       "id": 34,
       "name": "Scarred tablet",
-      "iconPath": "/fixture-items/34.png"
+      "iconPath": "/fixture-items/34.webp"
     },
     {
       "id": 35,
       "name": "Butch",
-      "iconPath": "/fixture-items/35.png"
+      "iconPath": "/fixture-items/35.webp"
     },
     {
       "id": 36,
       "name": "Executioner's axe head",
-      "iconPath": "/fixture-items/36.png"
+      "iconPath": "/fixture-items/36.webp"
     },
     {
       "id": 37,
       "name": "Ultor vestige",
-      "iconPath": "/fixture-items/37.png"
+      "iconPath": "/fixture-items/37.webp"
     },
     {
       "id": 38,
       "name": "Blood quartz",
-      "iconPath": "/fixture-items/38.png"
+      "iconPath": "/fixture-items/38.webp"
     },
     {
       "id": 39,
       "name": "Strangled tablet",
-      "iconPath": "/fixture-items/39.png"
+      "iconPath": "/fixture-items/39.webp"
     },
     {
       "id": 40,
       "name": "Wisp",
-      "iconPath": "/fixture-items/40.png"
+      "iconPath": "/fixture-items/40.webp"
     },
     {
       "id": 41,
       "name": "Siren's staff",
-      "iconPath": "/fixture-items/41.png"
+      "iconPath": "/fixture-items/41.webp"
     },
     {
       "id": 42,
       "name": "Bellator vestige",
-      "iconPath": "/fixture-items/42.png"
+      "iconPath": "/fixture-items/42.webp"
     },
     {
       "id": 43,
       "name": "Shadow quartz",
-      "iconPath": "/fixture-items/43.png"
+      "iconPath": "/fixture-items/43.webp"
     },
     {
       "id": 44,
       "name": "Sirenic tablet",
-      "iconPath": "/fixture-items/44.png"
+      "iconPath": "/fixture-items/44.webp"
     },
     {
       "id": 45,
       "name": "Olmlet",
-      "iconPath": "/fixture-items/45.png"
+      "iconPath": "/fixture-items/45.webp"
     },
     {
       "id": 46,
       "name": "Metamorphic dust",
-      "iconPath": "/fixture-items/46.png"
+      "iconPath": "/fixture-items/46.webp"
     },
     {
       "id": 47,
       "name": "Twisted bow",
-      "iconPath": "/fixture-items/47.png"
+      "iconPath": "/fixture-items/47.webp"
     },
     {
       "id": 48,
       "name": "Elder maul",
-      "iconPath": "/fixture-items/48.png"
+      "iconPath": "/fixture-items/48.webp"
     },
     {
       "id": 49,
       "name": "Kodai insignia",
-      "iconPath": "/fixture-items/49.png"
+      "iconPath": "/fixture-items/49.webp"
     },
     {
       "id": 50,
       "name": "Dragon claws",
-      "iconPath": "/fixture-items/50.png"
+      "iconPath": "/fixture-items/50.webp"
     },
     {
       "id": 51,
       "name": "Ancestral hat",
-      "iconPath": "/fixture-items/51.png"
+      "iconPath": "/fixture-items/51.webp"
     },
     {
       "id": 52,
       "name": "Ancestral robe top",
-      "iconPath": "/fixture-items/52.png"
+      "iconPath": "/fixture-items/52.webp"
     },
     {
       "id": 53,
       "name": "Ancestral robe bottom",
-      "iconPath": "/fixture-items/53.png"
+      "iconPath": "/fixture-items/53.webp"
     },
     {
       "id": 54,
       "name": "Dinh's bulwark",
-      "iconPath": "/fixture-items/54.png"
+      "iconPath": "/fixture-items/54.webp"
     },
     {
       "id": 55,
       "name": "Dexterous prayer scroll",
-      "iconPath": "/fixture-items/55.png"
+      "iconPath": "/fixture-items/55.webp"
     },
     {
       "id": 56,
       "name": "Arcane prayer scroll",
-      "iconPath": "/fixture-items/56.png"
+      "iconPath": "/fixture-items/56.webp"
     },
     {
       "id": 57,
       "name": "Dragon hunter crossbow",
-      "iconPath": "/fixture-items/57.png"
+      "iconPath": "/fixture-items/57.webp"
     },
     {
       "id": 58,
       "name": "Twisted buckler",
-      "iconPath": "/fixture-items/58.png"
+      "iconPath": "/fixture-items/58.webp"
     },
     {
       "id": 59,
       "name": "Torn prayer scroll",
-      "iconPath": "/fixture-items/59.png"
+      "iconPath": "/fixture-items/59.webp"
     },
     {
       "id": 60,
       "name": "Dark relic",
-      "iconPath": "/fixture-items/60.png"
+      "iconPath": "/fixture-items/60.webp"
     },
     {
       "id": 61,
       "name": "Onyx",
-      "iconPath": "/fixture-items/61.png"
+      "iconPath": "/fixture-items/61.webp"
     },
     {
       "id": 62,
       "name": "Twisted ancestral colour kit",
-      "iconPath": "/fixture-items/62.png"
+      "iconPath": "/fixture-items/62.webp"
     },
     {
       "id": 63,
       "name": "Xeric's guard",
-      "iconPath": "/fixture-items/63.png"
+      "iconPath": "/fixture-items/63.webp"
     },
     {
       "id": 64,
       "name": "Xeric's warrior",
-      "iconPath": "/fixture-items/64.png"
+      "iconPath": "/fixture-items/64.webp"
     },
     {
       "id": 65,
       "name": "Xeric's sentinel",
-      "iconPath": "/fixture-items/65.png"
+      "iconPath": "/fixture-items/65.webp"
     },
     {
       "id": 66,
       "name": "Xeric's general",
-      "iconPath": "/fixture-items/66.png"
+      "iconPath": "/fixture-items/66.webp"
     },
     {
       "id": 67,
       "name": "Xeric's champion",
-      "iconPath": "/fixture-items/67.png"
+      "iconPath": "/fixture-items/67.webp"
     },
     {
       "id": 68,
       "name": "Tumeken's guardian",
-      "iconPath": "/fixture-items/68.png"
+      "iconPath": "/fixture-items/68.webp"
     },
     {
       "id": 69,
       "name": "Tumeken's shadow (uncharged)",
-      "iconPath": "/fixture-items/69.png"
+      "iconPath": "/fixture-items/69.webp"
     },
     {
       "id": 70,
       "name": "Elidinis' ward",
-      "iconPath": "/fixture-items/70.png"
+      "iconPath": "/fixture-items/70.webp"
     },
     {
       "id": 71,
       "name": "Masori mask",
-      "iconPath": "/fixture-items/71.png"
+      "iconPath": "/fixture-items/71.webp"
     },
     {
       "id": 72,
       "name": "Masori body",
-      "iconPath": "/fixture-items/72.png"
+      "iconPath": "/fixture-items/72.webp"
     },
     {
       "id": 73,
       "name": "Masori chaps",
-      "iconPath": "/fixture-items/73.png"
+      "iconPath": "/fixture-items/73.webp"
     },
     {
       "id": 74,
       "name": "Lightbearer",
-      "iconPath": "/fixture-items/74.png"
+      "iconPath": "/fixture-items/74.webp"
     },
     {
       "id": 75,
       "name": "Osmumten's fang",
-      "iconPath": "/fixture-items/75.png"
+      "iconPath": "/fixture-items/75.webp"
     },
     {
       "id": 76,
       "name": "Thread of Elidinis",
-      "iconPath": "/fixture-items/76.png"
+      "iconPath": "/fixture-items/76.webp"
     },
     {
       "id": 77,
       "name": "Breach of the Scarab",
-      "iconPath": "/fixture-items/77.png"
+      "iconPath": "/fixture-items/77.webp"
     },
     {
       "id": 78,
       "name": "Eye of the Corruptor",
-      "iconPath": "/fixture-items/78.png"
+      "iconPath": "/fixture-items/78.webp"
     },
     {
       "id": 79,
       "name": "Jewel of the Sun",
-      "iconPath": "/fixture-items/79.png"
+      "iconPath": "/fixture-items/79.webp"
     },
     {
       "id": 80,
       "name": "Jewel of Amascut",
-      "iconPath": "/fixture-items/80.png"
+      "iconPath": "/fixture-items/80.webp"
     },
     {
       "id": 81,
       "name": "Menaphite ornament kit",
-      "iconPath": "/fixture-items/81.png"
+      "iconPath": "/fixture-items/81.webp"
     },
     {
       "id": 82,
       "name": "Cursed phalanx",
-      "iconPath": "/fixture-items/82.png"
+      "iconPath": "/fixture-items/82.webp"
     },
     {
       "id": 83,
       "name": "Masori crafting kit",
-      "iconPath": "/fixture-items/83.png"
+      "iconPath": "/fixture-items/83.webp"
     },
     {
       "id": 84,
       "name": "Cache of runes",
-      "iconPath": "/fixture-items/84.png"
+      "iconPath": "/fixture-items/84.webp"
     },
     {
       "id": 85,
       "name": "Icthlarin's shroud (tier 1)",
-      "iconPath": "/fixture-items/85.png"
+      "iconPath": "/fixture-items/85.webp"
     },
     {
       "id": 86,
       "name": "Icthlarin's shroud (tier 2)",
-      "iconPath": "/fixture-items/86.png"
+      "iconPath": "/fixture-items/86.webp"
     },
     {
       "id": 87,
       "name": "Icthlarin's shroud (tier 3)",
-      "iconPath": "/fixture-items/87.png"
+      "iconPath": "/fixture-items/87.webp"
     },
     {
       "id": 88,
       "name": "Icthlarin's shroud (tier 4)",
-      "iconPath": "/fixture-items/88.png"
+      "iconPath": "/fixture-items/88.webp"
     },
     {
       "id": 89,
       "name": "Icthlarin's shroud (tier 5)",
-      "iconPath": "/fixture-items/89.png"
+      "iconPath": "/fixture-items/89.webp"
     },
     {
       "id": 90,
       "name": "Remnant of Akkha",
-      "iconPath": "/fixture-items/90.png"
+      "iconPath": "/fixture-items/90.webp"
     },
     {
       "id": 91,
       "name": "Remnant of Ba-Ba",
-      "iconPath": "/fixture-items/91.png"
+      "iconPath": "/fixture-items/91.webp"
     },
     {
       "id": 92,
       "name": "Remnant of Kephri",
-      "iconPath": "/fixture-items/92.png"
+      "iconPath": "/fixture-items/92.webp"
     },
     {
       "id": 93,
       "name": "Remnant of Zebak",
-      "iconPath": "/fixture-items/93.png"
+      "iconPath": "/fixture-items/93.webp"
     },
     {
       "id": 94,
       "name": "Ancient remnant",
-      "iconPath": "/fixture-items/94.png"
+      "iconPath": "/fixture-items/94.webp"
     },
     {
       "id": 95,
       "name": "Mole slippers",
-      "iconPath": "/fixture-items/95.png"
+      "iconPath": "/fixture-items/95.webp"
     },
     {
       "id": 96,
       "name": "Frog slippers",
-      "iconPath": "/fixture-items/96.png"
+      "iconPath": "/fixture-items/96.webp"
     },
     {
       "id": 97,
       "name": "Bear feet",
-      "iconPath": "/fixture-items/97.png"
+      "iconPath": "/fixture-items/97.webp"
     },
     {
       "id": 98,
       "name": "Demon feet",
-      "iconPath": "/fixture-items/98.png"
+      "iconPath": "/fixture-items/98.webp"
     },
     {
       "id": 99,
       "name": "Jester cape",
-      "iconPath": "/fixture-items/99.png"
+      "iconPath": "/fixture-items/99.webp"
     },
     {
       "id": 100,
       "name": "Shoulder parrot",
-      "iconPath": "/fixture-items/100.png"
+      "iconPath": "/fixture-items/100.webp"
     },
     {
       "id": 101,
       "name": "Monk's robe top (t)",
-      "iconPath": "/fixture-items/101.png"
+      "iconPath": "/fixture-items/101.webp"
     },
     {
       "id": 102,
       "name": "Monk's robe (t)",
-      "iconPath": "/fixture-items/102.png"
+      "iconPath": "/fixture-items/102.webp"
     },
     {
       "id": 103,
       "name": "Amulet of defence (t)",
-      "iconPath": "/fixture-items/103.png"
+      "iconPath": "/fixture-items/103.webp"
     },
     {
       "id": 104,
       "name": "Sandwich lady hat",
-      "iconPath": "/fixture-items/104.png"
+      "iconPath": "/fixture-items/104.webp"
     },
     {
       "id": 105,
       "name": "Sandwich lady top",
-      "iconPath": "/fixture-items/105.png"
+      "iconPath": "/fixture-items/105.webp"
     },
     {
       "id": 106,
       "name": "Sandwich lady bottom",
-      "iconPath": "/fixture-items/106.png"
+      "iconPath": "/fixture-items/106.webp"
     },
     {
       "id": 107,
       "name": "Rune scimitar ornament kit (Guthix)",
-      "iconPath": "/fixture-items/107.png"
+      "iconPath": "/fixture-items/107.webp"
     },
     {
       "id": 108,
       "name": "Rune scimitar ornament kit (Saradomin)",
-      "iconPath": "/fixture-items/108.png"
+      "iconPath": "/fixture-items/108.webp"
     },
     {
       "id": 109,
       "name": "Rune scimitar ornament kit (Zamorak)",
-      "iconPath": "/fixture-items/109.png"
+      "iconPath": "/fixture-items/109.webp"
     },
     {
       "id": 110,
       "name": "Black pickaxe",
-      "iconPath": "/fixture-items/110.png"
+      "iconPath": "/fixture-items/110.webp"
     },
     {
       "id": 111,
       "name": "Pet Penance Queen",
-      "iconPath": "/fixture-items/111.png"
+      "iconPath": "/fixture-items/111.webp"
     },
     {
       "id": 112,
       "name": "Fighter hat",
-      "iconPath": "/fixture-items/112.png"
+      "iconPath": "/fixture-items/112.webp"
     },
     {
       "id": 113,
       "name": "Ranger hat",
-      "iconPath": "/fixture-items/113.png"
+      "iconPath": "/fixture-items/113.webp"
     },
     {
       "id": 114,
       "name": "Runner hat",
-      "iconPath": "/fixture-items/114.png"
+      "iconPath": "/fixture-items/114.webp"
     },
     {
       "id": 115,
       "name": "Healer hat",
-      "iconPath": "/fixture-items/115.png"
+      "iconPath": "/fixture-items/115.webp"
     },
     {
       "id": 116,
       "name": "Fighter torso",
-      "iconPath": "/fixture-items/116.png"
+      "iconPath": "/fixture-items/116.webp"
     },
     {
       "id": 117,
       "name": "Penance skirt",
-      "iconPath": "/fixture-items/117.png"
+      "iconPath": "/fixture-items/117.webp"
     },
     {
       "id": 118,
       "name": "Runner boots",
-      "iconPath": "/fixture-items/118.png"
+      "iconPath": "/fixture-items/118.webp"
     },
     {
       "id": 119,
       "name": "Penance gloves",
-      "iconPath": "/fixture-items/119.png"
+      "iconPath": "/fixture-items/119.webp"
     },
     {
       "id": 120,
       "name": "Granite helm",
-      "iconPath": "/fixture-items/120.png"
+      "iconPath": "/fixture-items/120.webp"
     },
     {
       "id": 121,
       "name": "Granite body",
-      "iconPath": "/fixture-items/121.png"
+      "iconPath": "/fixture-items/121.webp"
     },
     {
       "id": 122,
       "name": "Decorative helm (red)",
-      "iconPath": "/fixture-items/122.png"
+      "iconPath": "/fixture-items/122.webp"
     },
     {
       "id": 123,
       "name": "Decorative full helm (red)",
-      "iconPath": "/fixture-items/123.png"
+      "iconPath": "/fixture-items/123.webp"
     },
     {
       "id": 124,
       "name": "Decorative armour (red platebody)",
-      "iconPath": "/fixture-items/124.png"
+      "iconPath": "/fixture-items/124.webp"
     },
     {
       "id": 125,
       "name": "Decorative sword (red)",
-      "iconPath": "/fixture-items/125.png"
+      "iconPath": "/fixture-items/125.webp"
     },
     {
       "id": 126,
       "name": "Decorative shield (red)",
-      "iconPath": "/fixture-items/126.png"
+      "iconPath": "/fixture-items/126.webp"
     },
     {
       "id": 127,
       "name": "Decorative armour (red platelegs)",
-      "iconPath": "/fixture-items/127.png"
+      "iconPath": "/fixture-items/127.webp"
     },
     {
       "id": 128,
       "name": "Decorative armour (red plateskirt)",
-      "iconPath": "/fixture-items/128.png"
+      "iconPath": "/fixture-items/128.webp"
     },
     {
       "id": 129,
       "name": "Decorative boots (red)",
-      "iconPath": "/fixture-items/129.png"
+      "iconPath": "/fixture-items/129.webp"
     },
     {
       "id": 130,
       "name": "Decorative helm (white)",
-      "iconPath": "/fixture-items/130.png"
+      "iconPath": "/fixture-items/130.webp"
     },
     {
       "id": 131,
       "name": "Decorative full helm (white)",
-      "iconPath": "/fixture-items/131.png"
+      "iconPath": "/fixture-items/131.webp"
     },
     {
       "id": 132,
       "name": "Decorative armour (white platebody)",
-      "iconPath": "/fixture-items/132.png"
+      "iconPath": "/fixture-items/132.webp"
     },
     {
       "id": 133,
       "name": "Decorative sword (white)",
-      "iconPath": "/fixture-items/133.png"
+      "iconPath": "/fixture-items/133.webp"
     },
     {
       "id": 134,
       "name": "Decorative shield (white)",
-      "iconPath": "/fixture-items/134.png"
+      "iconPath": "/fixture-items/134.webp"
     },
     {
       "id": 135,
       "name": "Decorative armour (white platelegs)",
-      "iconPath": "/fixture-items/135.png"
+      "iconPath": "/fixture-items/135.webp"
     },
     {
       "id": 136,
       "name": "Decorative armour (white plateskirt)",
-      "iconPath": "/fixture-items/136.png"
+      "iconPath": "/fixture-items/136.webp"
     },
     {
       "id": 137,
       "name": "Decorative boots (white)",
-      "iconPath": "/fixture-items/137.png"
+      "iconPath": "/fixture-items/137.webp"
     },
     {
       "id": 138,
       "name": "Decorative helm (gold)",
-      "iconPath": "/fixture-items/138.png"
+      "iconPath": "/fixture-items/138.webp"
     },
     {
       "id": 139,
       "name": "Decorative full helm (gold)",
-      "iconPath": "/fixture-items/139.png"
+      "iconPath": "/fixture-items/139.webp"
     },
     {
       "id": 140,
       "name": "Decorative armour (gold platebody)",
-      "iconPath": "/fixture-items/140.png"
+      "iconPath": "/fixture-items/140.webp"
     },
     {
       "id": 141,
       "name": "Decorative sword (gold)",
-      "iconPath": "/fixture-items/141.png"
+      "iconPath": "/fixture-items/141.webp"
     },
     {
       "id": 142,
       "name": "Decorative shield (gold)",
-      "iconPath": "/fixture-items/142.png"
+      "iconPath": "/fixture-items/142.webp"
     },
     {
       "id": 143,
       "name": "Decorative armour (gold platelegs)",
-      "iconPath": "/fixture-items/143.png"
+      "iconPath": "/fixture-items/143.webp"
     },
     {
       "id": 144,
       "name": "Decorative armour (gold plateskirt)",
-      "iconPath": "/fixture-items/144.png"
+      "iconPath": "/fixture-items/144.webp"
     },
     {
       "id": 145,
       "name": "Decorative boots (gold)",
-      "iconPath": "/fixture-items/145.png"
+      "iconPath": "/fixture-items/145.webp"
     },
     {
       "id": 146,
       "name": "Castlewars hood",
-      "iconPath": "/fixture-items/146.png"
+      "iconPath": "/fixture-items/146.webp"
     },
     {
       "id": 147,
       "name": "Castlewars cloak",
-      "iconPath": "/fixture-items/147.png"
+      "iconPath": "/fixture-items/147.webp"
     },
     {
       "id": 148,
       "name": "Castlewars hood",
-      "iconPath": "/fixture-items/148.png"
+      "iconPath": "/fixture-items/148.webp"
     },
     {
       "id": 149,
       "name": "Castlewars cloak",
-      "iconPath": "/fixture-items/149.png"
+      "iconPath": "/fixture-items/149.webp"
     },
     {
       "id": 150,
       "name": "Saradomin banner",
-      "iconPath": "/fixture-items/150.png"
+      "iconPath": "/fixture-items/150.webp"
     },
     {
       "id": 151,
       "name": "Zamorak banner",
-      "iconPath": "/fixture-items/151.png"
+      "iconPath": "/fixture-items/151.webp"
     },
     {
       "id": 152,
       "name": "Decorative armour (magic hat)",
-      "iconPath": "/fixture-items/152.png"
+      "iconPath": "/fixture-items/152.webp"
     },
     {
       "id": 153,
       "name": "Decorative armour (magic top)",
-      "iconPath": "/fixture-items/153.png"
+      "iconPath": "/fixture-items/153.webp"
     },
     {
       "id": 154,
       "name": "Decorative armour (magic legs)",
-      "iconPath": "/fixture-items/154.png"
+      "iconPath": "/fixture-items/154.webp"
     },
     {
       "id": 155,
       "name": "Decorative armour (ranged top)",
-      "iconPath": "/fixture-items/155.png"
+      "iconPath": "/fixture-items/155.webp"
     },
     {
       "id": 156,
       "name": "Decorative armour (ranged legs)",
-      "iconPath": "/fixture-items/156.png"
+      "iconPath": "/fixture-items/156.webp"
     },
     {
       "id": 157,
       "name": "Decorative armour (quiver)",
-      "iconPath": "/fixture-items/157.png"
+      "iconPath": "/fixture-items/157.webp"
     },
     {
       "id": 158,
       "name": "Saradomin halo",
-      "iconPath": "/fixture-items/158.png"
+      "iconPath": "/fixture-items/158.webp"
     },
     {
       "id": 159,
       "name": "Zamorak halo",
-      "iconPath": "/fixture-items/159.png"
+      "iconPath": "/fixture-items/159.webp"
     },
     {
       "id": 160,
       "name": "Guthix halo",
-      "iconPath": "/fixture-items/160.png"
+      "iconPath": "/fixture-items/160.webp"
     },
     {
       "id": 161,
       "name": "Crawling hand",
-      "iconPath": "/fixture-items/161.png"
+      "iconPath": "/fixture-items/161.webp"
     },
     {
       "id": 162,
       "name": "Cockatrice head",
-      "iconPath": "/fixture-items/162.png"
+      "iconPath": "/fixture-items/162.webp"
     },
     {
       "id": 163,
       "name": "Basilisk head",
-      "iconPath": "/fixture-items/163.png"
+      "iconPath": "/fixture-items/163.webp"
     },
     {
       "id": 164,
       "name": "Kurask head",
-      "iconPath": "/fixture-items/164.png"
+      "iconPath": "/fixture-items/164.webp"
     },
     {
       "id": 165,
       "name": "Imbued heart",
-      "iconPath": "/fixture-items/165.png"
+      "iconPath": "/fixture-items/165.webp"
     },
     {
       "id": 166,
       "name": "Eternal gem",
-      "iconPath": "/fixture-items/166.png"
+      "iconPath": "/fixture-items/166.webp"
     },
     {
       "id": 167,
       "name": "Dust battlestaff",
-      "iconPath": "/fixture-items/167.png"
+      "iconPath": "/fixture-items/167.webp"
     },
     {
       "id": 168,
       "name": "Mist battlestaff",
-      "iconPath": "/fixture-items/168.png"
+      "iconPath": "/fixture-items/168.webp"
     },
     {
       "id": 169,
       "name": "Granite maul",
-      "iconPath": "/fixture-items/169.png"
+      "iconPath": "/fixture-items/169.webp"
     },
     {
       "id": 170,
       "name": "Mudskipper hat",
-      "iconPath": "/fixture-items/170.png"
+      "iconPath": "/fixture-items/170.webp"
     },
     {
       "id": 171,
       "name": "Flippers",
-      "iconPath": "/fixture-items/171.png"
+      "iconPath": "/fixture-items/171.webp"
     },
     {
       "id": 172,
       "name": "Brine sabre",
-      "iconPath": "/fixture-items/172.png"
+      "iconPath": "/fixture-items/172.webp"
     },
     {
       "id": 173,
       "name": "Leaf-bladed sword",
-      "iconPath": "/fixture-items/173.png"
+      "iconPath": "/fixture-items/173.webp"
     },
     {
       "id": 174,
       "name": "Necklace of Fangs",
-      "iconPath": "/fixture-items/174.png"
+      "iconPath": "/fixture-items/174.webp"
     },
     {
       "id": 175,
       "name": "Leaf-bladed battleaxe",
-      "iconPath": "/fixture-items/175.png"
+      "iconPath": "/fixture-items/175.webp"
     },
     {
       "id": 176,
       "name": "Black mask",
-      "iconPath": "/fixture-items/176.png"
+      "iconPath": "/fixture-items/176.webp"
     },
     {
       "id": 177,
       "name": "Granite longsword",
-      "iconPath": "/fixture-items/177.png"
+      "iconPath": "/fixture-items/177.webp"
     },
     {
       "id": 178,
       "name": "Granite boots",
-      "iconPath": "/fixture-items/178.png"
+      "iconPath": "/fixture-items/178.webp"
     },
     {
       "id": 179,
       "name": "Wyvern visage",
-      "iconPath": "/fixture-items/179.png"
+      "iconPath": "/fixture-items/179.webp"
     },
     {
       "id": 180,
       "name": "Granite legs",
-      "iconPath": "/fixture-items/180.png"
+      "iconPath": "/fixture-items/180.webp"
     },
     {
       "id": 181,
       "name": "Draconic visage",
-      "iconPath": "/fixture-items/181.png"
+      "iconPath": "/fixture-items/181.webp"
     },
     {
       "id": 182,
       "name": "Bronze boots",
-      "iconPath": "/fixture-items/182.png"
+      "iconPath": "/fixture-items/182.webp"
     },
     {
       "id": 183,
       "name": "Iron boots",
-      "iconPath": "/fixture-items/183.png"
+      "iconPath": "/fixture-items/183.webp"
     },
     {
       "id": 184,
       "name": "Steel boots",
-      "iconPath": "/fixture-items/184.png"
+      "iconPath": "/fixture-items/184.webp"
     },
     {
       "id": 185,
       "name": "Black boots",
-      "iconPath": "/fixture-items/185.png"
+      "iconPath": "/fixture-items/185.webp"
     },
     {
       "id": 186,
       "name": "Mithril boots",
-      "iconPath": "/fixture-items/186.png"
+      "iconPath": "/fixture-items/186.webp"
     },
     {
       "id": 187,
       "name": "Adamant boots",
-      "iconPath": "/fixture-items/187.png"
+      "iconPath": "/fixture-items/187.webp"
     },
     {
       "id": 188,
       "name": "Rune boots",
-      "iconPath": "/fixture-items/188.png"
+      "iconPath": "/fixture-items/188.webp"
     },
     {
       "id": 189,
       "name": "Dragon boots",
-      "iconPath": "/fixture-items/189.png"
+      "iconPath": "/fixture-items/189.webp"
     },
     {
       "id": 190,
       "name": "Uncharged trident",
-      "iconPath": "/fixture-items/190.png"
+      "iconPath": "/fixture-items/190.webp"
     },
     {
       "id": 191,
       "name": "Kraken tentacle",
-      "iconPath": "/fixture-items/191.png"
+      "iconPath": "/fixture-items/191.webp"
     },
     {
       "id": 192,
       "name": "Dark bow",
-      "iconPath": "/fixture-items/192.png"
+      "iconPath": "/fixture-items/192.webp"
     },
     {
       "id": 193,
       "name": "Occult necklace",
-      "iconPath": "/fixture-items/193.png"
+      "iconPath": "/fixture-items/193.webp"
     },
     {
       "id": 194,
       "name": "Dragon chainbody",
-      "iconPath": "/fixture-items/194.png"
+      "iconPath": "/fixture-items/194.webp"
     },
     {
       "id": 195,
       "name": "Dragon thrownaxe",
-      "iconPath": "/fixture-items/195.png"
+      "iconPath": "/fixture-items/195.webp"
     },
     {
       "id": 196,
       "name": "Dragon harpoon",
-      "iconPath": "/fixture-items/196.png"
+      "iconPath": "/fixture-items/196.webp"
     },
     {
       "id": 197,
       "name": "Dragon sword",
-      "iconPath": "/fixture-items/197.png"
+      "iconPath": "/fixture-items/197.webp"
     },
     {
       "id": 198,
       "name": "Dragon knife",
-      "iconPath": "/fixture-items/198.png"
+      "iconPath": "/fixture-items/198.webp"
     },
     {
       "id": 199,
       "name": "Broken dragon hasta",
-      "iconPath": "/fixture-items/199.png"
+      "iconPath": "/fixture-items/199.webp"
     },
     {
       "id": 200,
       "name": "Drake's tooth",
-      "iconPath": "/fixture-items/200.png"
+      "iconPath": "/fixture-items/200.webp"
     },
     {
       "id": 201,
       "name": "Drake's claw",
-      "iconPath": "/fixture-items/201.png"
+      "iconPath": "/fixture-items/201.webp"
     },
     {
       "id": 202,
       "name": "Hydra tail",
-      "iconPath": "/fixture-items/202.png"
+      "iconPath": "/fixture-items/202.webp"
     },
     {
       "id": 203,
       "name": "Hydra's fang",
-      "iconPath": "/fixture-items/203.png"
+      "iconPath": "/fixture-items/203.webp"
     },
     {
       "id": 204,
       "name": "Hydra's eye",
-      "iconPath": "/fixture-items/204.png"
+      "iconPath": "/fixture-items/204.webp"
     },
     {
       "id": 205,
       "name": "Hydra's heart",
-      "iconPath": "/fixture-items/205.png"
+      "iconPath": "/fixture-items/205.webp"
     },
     {
       "id": 206,
       "name": "Mystic hat (light)",
-      "iconPath": "/fixture-items/206.png"
+      "iconPath": "/fixture-items/206.webp"
     },
     {
       "id": 207,
       "name": "Mystic robe top (light)",
-      "iconPath": "/fixture-items/207.png"
+      "iconPath": "/fixture-items/207.webp"
     },
     {
       "id": 208,
       "name": "Mystic robe bottom (light)",
-      "iconPath": "/fixture-items/208.png"
+      "iconPath": "/fixture-items/208.webp"
     },
     {
       "id": 209,
       "name": "Mystic gloves (light)",
-      "iconPath": "/fixture-items/209.png"
+      "iconPath": "/fixture-items/209.webp"
     },
     {
       "id": 210,
       "name": "Mystic boots (light)",
-      "iconPath": "/fixture-items/210.png"
+      "iconPath": "/fixture-items/210.webp"
     },
     {
       "id": 211,
       "name": "Mystic hat (dark)",
-      "iconPath": "/fixture-items/211.png"
+      "iconPath": "/fixture-items/211.webp"
     },
     {
       "id": 212,
       "name": "Mystic robe top (dark)",
-      "iconPath": "/fixture-items/212.png"
+      "iconPath": "/fixture-items/212.webp"
     },
     {
       "id": 213,
       "name": "Mystic robe bottom (dark)",
-      "iconPath": "/fixture-items/213.png"
+      "iconPath": "/fixture-items/213.webp"
     },
     {
       "id": 214,
       "name": "Mystic gloves (dark)",
-      "iconPath": "/fixture-items/214.png"
+      "iconPath": "/fixture-items/214.webp"
     },
     {
       "id": 215,
       "name": "Mystic boots (dark)",
-      "iconPath": "/fixture-items/215.png"
+      "iconPath": "/fixture-items/215.webp"
     },
     {
       "id": 216,
       "name": "Mystic hat (dusk)",
-      "iconPath": "/fixture-items/216.png"
+      "iconPath": "/fixture-items/216.webp"
     },
     {
       "id": 217,
       "name": "Mystic robe top (dusk)",
-      "iconPath": "/fixture-items/217.png"
+      "iconPath": "/fixture-items/217.webp"
     },
     {
       "id": 218,
       "name": "Mystic robe bottom (dusk)",
-      "iconPath": "/fixture-items/218.png"
+      "iconPath": "/fixture-items/218.webp"
     },
     {
       "id": 219,
       "name": "Mystic gloves (dusk)",
-      "iconPath": "/fixture-items/219.png"
+      "iconPath": "/fixture-items/219.webp"
     },
     {
       "id": 220,
       "name": "Mystic boots (dusk)",
-      "iconPath": "/fixture-items/220.png"
+      "iconPath": "/fixture-items/220.webp"
     },
     {
       "id": 221,
       "name": "Basilisk jaw",
-      "iconPath": "/fixture-items/221.png"
+      "iconPath": "/fixture-items/221.webp"
     },
     {
       "id": 222,
       "name": "Aquanite tendon",
-      "iconPath": "/fixture-items/222.png"
+      "iconPath": "/fixture-items/222.webp"
     },
     {
       "id": 223,
       "name": "Dagon'hai hat",
-      "iconPath": "/fixture-items/223.png"
+      "iconPath": "/fixture-items/223.webp"
     },
     {
       "id": 224,
       "name": "Dagon'hai robe top",
-      "iconPath": "/fixture-items/224.png"
+      "iconPath": "/fixture-items/224.webp"
     },
     {
       "id": 225,
       "name": "Dagon'hai robe bottom",
-      "iconPath": "/fixture-items/225.png"
+      "iconPath": "/fixture-items/225.webp"
     },
     {
       "id": 226,
       "name": "Blood shard",
-      "iconPath": "/fixture-items/226.png"
+      "iconPath": "/fixture-items/226.webp"
     },
     {
       "id": 227,
       "name": "Ancient ceremonial mask",
-      "iconPath": "/fixture-items/227.png"
+      "iconPath": "/fixture-items/227.webp"
     },
     {
       "id": 228,
       "name": "Ancient ceremonial top",
-      "iconPath": "/fixture-items/228.png"
+      "iconPath": "/fixture-items/228.webp"
     },
     {
       "id": 229,
       "name": "Ancient ceremonial legs",
-      "iconPath": "/fixture-items/229.png"
+      "iconPath": "/fixture-items/229.webp"
     },
     {
       "id": 230,
       "name": "Ancient ceremonial gloves",
-      "iconPath": "/fixture-items/230.png"
+      "iconPath": "/fixture-items/230.webp"
     },
     {
       "id": 231,
       "name": "Ancient ceremonial boots",
-      "iconPath": "/fixture-items/231.png"
+      "iconPath": "/fixture-items/231.webp"
     },
     {
       "id": 232,
       "name": "Warped sceptre (uncharged)",
-      "iconPath": "/fixture-items/232.png"
+      "iconPath": "/fixture-items/232.webp"
     },
     {
       "id": 233,
       "name": "Sulphur blades",
-      "iconPath": "/fixture-items/233.png"
+      "iconPath": "/fixture-items/233.webp"
     },
     {
       "id": 234,
       "name": "Teleport anchoring scroll",
-      "iconPath": "/fixture-items/234.png"
+      "iconPath": "/fixture-items/234.webp"
     },
     {
       "id": 235,
       "name": "Aranea boots",
-      "iconPath": "/fixture-items/235.png"
+      "iconPath": "/fixture-items/235.webp"
     },
     {
       "id": 236,
       "name": "Glacial temotli",
-      "iconPath": "/fixture-items/236.png"
+      "iconPath": "/fixture-items/236.webp"
     },
     {
       "id": 237,
       "name": "Pendant of Ates (inert)",
-      "iconPath": "/fixture-items/237.png"
+      "iconPath": "/fixture-items/237.webp"
     },
     {
       "id": 238,
       "name": "Frozen tear",
-      "iconPath": "/fixture-items/238.png"
+      "iconPath": "/fixture-items/238.webp"
     },
     {
       "id": 239,
       "name": "Earthbound tecpatl",
-      "iconPath": "/fixture-items/239.png"
+      "iconPath": "/fixture-items/239.webp"
     },
     {
       "id": 240,
       "name": "Antler guard",
-      "iconPath": "/fixture-items/240.png"
+      "iconPath": "/fixture-items/240.webp"
     },
     {
       "id": 241,
       "name": "Alchemist's signet",
-      "iconPath": "/fixture-items/241.png"
+      "iconPath": "/fixture-items/241.webp"
     },
     {
       "id": 242,
       "name": "Broken antler",
-      "iconPath": "/fixture-items/242.png"
+      "iconPath": "/fixture-items/242.webp"
     },
     {
       "id": 243,
       "name": "Dragon metal sheet",
-      "iconPath": "/fixture-items/243.png"
+      "iconPath": "/fixture-items/243.webp"
     },
     {
       "id": 244,
       "name": "Horn of Plenty (empty)",
-      "iconPath": "/fixture-items/244.png"
+      "iconPath": "/fixture-items/244.webp"
     },
     {
       "id": 245,
       "name": "Gryphon feather",
-      "iconPath": "/fixture-items/245.png"
+      "iconPath": "/fixture-items/245.webp"
     },
     {
       "id": 246,
       "name": "Venator tooth",
-      "iconPath": "/fixture-items/246.png"
+      "iconPath": "/fixture-items/246.webp"
     },
     {
       "id": 247,
       "name": "Venator fang",
-      "iconPath": "/fixture-items/247.png"
+      "iconPath": "/fixture-items/247.webp"
     },
     {
       "id": 248,
       "name": "Air diamond",
-      "iconPath": "/fixture-items/248.png"
+      "iconPath": "/fixture-items/248.webp"
     },
     {
       "id": 249,
       "name": "Water sapphire",
-      "iconPath": "/fixture-items/249.png"
+      "iconPath": "/fixture-items/249.webp"
     },
     {
       "id": 250,
       "name": "Earth emerald",
-      "iconPath": "/fixture-items/250.png"
+      "iconPath": "/fixture-items/250.webp"
     },
     {
       "id": 251,
       "name": "Fire ruby",
-      "iconPath": "/fixture-items/251.png"
+      "iconPath": "/fixture-items/251.webp"
     },
     {
       "id": 252,
       "name": "Heron",
-      "iconPath": "/fixture-items/252.png"
+      "iconPath": "/fixture-items/252.webp"
     },
     {
       "id": 253,
       "name": "Rock golem",
-      "iconPath": "/fixture-items/253.png"
+      "iconPath": "/fixture-items/253.webp"
     },
     {
       "id": 254,
       "name": "Beaver",
-      "iconPath": "/fixture-items/254.png"
+      "iconPath": "/fixture-items/254.webp"
     },
     {
       "id": 255,
       "name": "Baby chinchompa",
-      "iconPath": "/fixture-items/255.png"
+      "iconPath": "/fixture-items/255.webp"
     },
     {
       "id": 256,
       "name": "Giant Squirrel",
-      "iconPath": "/fixture-items/256.png"
+      "iconPath": "/fixture-items/256.webp"
     },
     {
       "id": 257,
       "name": "Tangleroot",
-      "iconPath": "/fixture-items/257.png"
+      "iconPath": "/fixture-items/257.webp"
     },
     {
       "id": 258,
       "name": "Rocky",
-      "iconPath": "/fixture-items/258.png"
+      "iconPath": "/fixture-items/258.webp"
     },
     {
       "id": 259,
       "name": "Rift guardian",
-      "iconPath": "/fixture-items/259.png"
+      "iconPath": "/fixture-items/259.webp"
     },
     {
       "id": 260,
       "name": "Soup",
-      "iconPath": "/fixture-items/260.png"
+      "iconPath": "/fixture-items/260.webp"
     }
   ],
   "pages": [

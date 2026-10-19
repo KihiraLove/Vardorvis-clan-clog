@@ -8,8 +8,8 @@ export interface Branding {
 }
 export const defaultBranding: Branding = {
   revision: 'branding-1',
-  logoPath: '/brand/clan-logo.png',
-  faviconPath: '/favicon.png',
+  logoPath: '/brand/clan-logo.webp',
+  faviconPath: '/favicon.webp',
 };
 export interface BrandingStore {
   settings(hardcore?: boolean): Promise<Branding>;
@@ -41,7 +41,7 @@ export class PgBrandingStore implements BrandingStore {
         ? `/api/v1/branding/${row.logo_asset_id}.webp`
         : defaultBranding.logoPath,
       faviconPath: row.logo_asset_id
-        ? `/api/v1/branding/${row.logo_asset_id}/favicon.png`
+        ? `/api/v1/branding/${row.logo_asset_id}/favicon.webp`
         : defaultBranding.faviconPath,
     };
   }
@@ -121,7 +121,7 @@ export class PgBrandingStore implements BrandingStore {
         revision: 'branding-' + version,
         logoPath: id ? `/api/v1/branding/${id}.webp` : defaultBranding.logoPath,
         faviconPath: id
-          ? `/api/v1/branding/${id}/favicon.png`
+          ? `/api/v1/branding/${id}/favicon.webp`
           : defaultBranding.faviconPath,
       };
     } catch (error) {
