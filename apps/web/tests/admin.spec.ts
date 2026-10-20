@@ -323,9 +323,12 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     })
     .hover();
-  await expect(page.getByRole('tooltip')).toContainText(
-    'Collected by Matched collector on 04/10/26 on hardcore worlds',
-  );
+  await expect(page.getByRole('tooltip')).toHaveClass(/item-menu--hardcore/);
+  await expect(
+    page
+      .getByRole('tooltip')
+      .getByText('Collected by Matched collector on 04/10/26', { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Duke Sucellus', exact: true })
     .click();

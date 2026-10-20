@@ -137,9 +137,12 @@ for (const viewport of [
         /hardcore-outline/,
       );
       await hcItem.click();
-      await expect(page.getByRole('tooltip')).toContainText(
-        'on hardcore worlds',
+      await expect(page.getByRole('tooltip')).toHaveClass(
+        /item-menu--hardcore/,
       );
+      await expect(
+        page.getByRole('tooltip').locator('.item-menu__regular p'),
+      ).toHaveText('Collected by KihiraVD on 05/10/26');
       await expect(page.locator('.item-menu__event')).toHaveCount(0);
       await page.keyboard.press('Escape');
       await skull.click();

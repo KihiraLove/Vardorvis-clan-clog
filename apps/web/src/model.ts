@@ -223,5 +223,5 @@ export function progress(
 }
 /** Use the same collector/date wording for every occurrence of a shared item. */
 export function creditLine(credit: Credit): string {
-  return `Collected by ${credit.collectorName} on ${formatCollectionDate(credit.collectedOn)}}`;
+  return `Collected by ${credit.collectorName} on ${formatCollectionDate(credit.collectedOn)}`;
 }

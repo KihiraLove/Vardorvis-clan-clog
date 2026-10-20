@@ -282,9 +282,10 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
     exact: true,
   });
   await item.hover();
-  await expect(page.getByRole('tooltip')).toContainText(
-    '05/10/26 on hardcore worlds',
-  );
+  await expect(page.getByRole('tooltip')).toHaveClass(/item-menu--hardcore/);
+  await expect(
+    page.getByRole('tooltip').locator('.item-menu__regular p'),
+  ).toHaveText('Collected by KihiraVD on 05/10/26');
   await expect(page.getByRole('tooltip')).not.toContainText('03/10/26');
   expect(
     await item
