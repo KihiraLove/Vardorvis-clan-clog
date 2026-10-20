@@ -64,7 +64,7 @@ test('2,000 activities retain stable dates while idle and suspend public work in
     endsAt: '2027-01-01T00:00:00Z',
   }));
   let requests = 0;
-  let conditional = 0;
+  const conditional = new Set<string>();
   const reads: { path: string; etag: string | undefined }[] = [];
   let fail = false;
   await page.route('**/api/v1/**', async (route) => {
@@ -81,7 +81,7 @@ test('2,000 activities retain stable dates while idle and suspend public work in
     )
       return route.fulfill({ status: 503, json: {} });
     if (route.request().headers()['if-none-match'] === headers.ETag) {
-      conditional++;
+      conditional.add(path);
       return route.fulfill({ status: 304, headers });
     }
     const responses: Record<string, unknown> = {
@@ -162,9 +162,18 @@ test('2,000 activities retain stable dates while idle and suspend public work in
     ).projectionPerf.hidden = false;
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect
-    .poll(() => conditional, { message: JSON.stringify(reads) })
-    .toBeGreaterThanOrEqual(7);
+  const collectionResources = [
+    '/api/v1/competitions/activities',
+    '/api/v1/catalog',
+    '/api/v1/collections',
+    '/api/v1/settings',
+    '/api/v1/branding',
+    '/api/v1/branding/hardcore',
+  ].sort();
+  await expect.poll(() => [...conditional].sort()).toEqual(collectionResources);
+  expect([...new Set(reads.map(({ path }) => path))].sort()).toEqual(
+    collectionResources,
+  );
   const world = page.getByRole('button', {
     name: 'Hardcore worlds',
     exact: true,

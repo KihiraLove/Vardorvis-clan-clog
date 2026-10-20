@@ -283,10 +283,22 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   ).toHaveValue('Matched collector');
   await expect(page.getByText('Page 1', { exact: true })).toBeVisible();
   await proofCheck(page).check();
-  const link = editor(page).getByRole('link', { name: /^Open proof on / });
+  const link = editor(page).getByRole('link', { name: /View screenshot/ });
+  await expect(link).toHaveAttribute(
+    'href',
+    /^\/api\/v1\/admin\/submission-images\/[a-f0-9-]+\.webp$/,
+  );
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(link).toHaveAttribute('referrerpolicy', 'no-referrer');
+  await expect
+    .poll(() =>
+      link
+        .getByRole('img', { name: 'Submission screenshot', exact: true })
+        .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  await expect(editor(page).locator('a[href^="https://"]')).toHaveCount(0);
   await capture(page, 'admin-review-desktop.png');
   await editor(page)
     .getByRole('button', { name: 'Approve submission', exact: true })
