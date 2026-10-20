@@ -993,6 +993,13 @@ main {
 .admin-success {
   color: #b4d496 !important;
 }
+.admin-warning {
+  color: #f3dc83 !important;
+}
+.discord-connection-status {
+  font-size: 12px;
+  line-height: 1.6;
+}
 .admin-empty {
   padding: 20px;
   border: 1px dashed #62513a;

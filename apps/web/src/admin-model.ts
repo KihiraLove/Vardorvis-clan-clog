@@ -314,7 +314,7 @@ export interface AdminClient {
   ): Promise<import('@clog/domain').DiscordSettings>;
   discordStatus(
     signal: AbortSignal,
-  ): Promise<{ enabled: boolean; ready: boolean }>;
+  ): Promise<import('@clog/domain').DiscordStatus>;
   saveDiscordSettings(
     fields: import('@clog/domain').DiscordSettingsUpdate,
     csrf: string,

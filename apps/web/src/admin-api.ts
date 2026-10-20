@@ -139,7 +139,33 @@ export class LiveAdminClient implements AdminClient {
       typeof result.ready !== 'boolean'
     )
       throw new Error('Invalid Discord status.');
-    return { enabled: result.enabled, ready: result.ready };
+    const state =
+      result.state === undefined
+        ? !result.enabled
+          ? 'disabled'
+          : result.ready
+            ? 'connected'
+            : 'unavailable'
+        : result.state;
+    if (
+      ![
+        'disabled',
+        'connecting',
+        'connected',
+        'disconnected',
+        'unavailable',
+      ].includes(String(state)) ||
+      (!result.enabled && (result.ready || state !== 'disabled')) ||
+      (result.enabled && state === 'disabled') ||
+      result.ready !== (state === 'connected') ||
+      (!response.ok && result.ready)
+    )
+      throw new Error('Invalid Discord status.');
+    return {
+      enabled: result.enabled,
+      ready: result.ready,
+      state: state as import('@clog/domain').DiscordConnectionState,
+    };
   }
   async discordSettings(signal: AbortSignal) {
     return parseDiscordSettings(

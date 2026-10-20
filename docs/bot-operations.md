@@ -9,7 +9,9 @@ The token is encrypted in the database and never returned to the browser.
 Leave its replacement field empty to retain it, or remove it explicitly while
 disabling the bot. The internal API credential is generated automatically.
 Saving settings or rate limits reloads only the bot within a few seconds; no
-environment edits or website restart are needed. The page shows connection status.
+environment edits or website restart are needed. The status shows green Connected,
+yellow Connecting during gateway startup/reconnects, red Disconnected/Unavailable
+for outages, or neutral Disabled. Connected also requires a working intake API.
 
 Use **Register for test server** or **Register for main server** after saving.
 Registration upserts `/cc-clog` without replacing unrelated commands and never

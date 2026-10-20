@@ -120,6 +120,8 @@ export {
   type DiscordLimits,
   type DiscordSettings,
   type DiscordSettingsUpdate,
+  type DiscordStatus,
+  type DiscordConnectionState,
 } from './discord-settings.js';
 export {
   blockedRuneLiteWorldTypes,

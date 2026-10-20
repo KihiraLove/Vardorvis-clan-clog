@@ -16,11 +16,50 @@ export function wireGateway(
   api: BotApi,
   guildId: string,
   workloads = new BotWorkloads(),
-  options: { deadlineMs?: number; diagnostics?: OperationalDiagnostics } = {},
+  options: {
+    deadlineMs?: number;
+    diagnostics?: OperationalDiagnostics;
+    now?: () => number;
+  } = {},
 ) {
   const work = new WorkDrain(),
     diagnostics = options.diagnostics ?? new OperationalDiagnostics('bot');
   let closing: Promise<boolean> | undefined;
+  let connection: 'starting' | 'connecting' | 'connected' | 'disconnected' =
+    'starting';
+  const now = options.now ?? Date.now;
+  let attemptAt = now();
+  for (const event of [
+    Events.ClientReady,
+    Events.ShardReady,
+    Events.ShardResume,
+  ] as const)
+    client.on(event, () => {
+      connection = 'connected';
+    });
+  client.on(Events.ShardReconnecting, () => {
+    connection = 'connecting';
+    attemptAt = now();
+  });
+  for (const event of [
+    Events.ShardDisconnect,
+    Events.Invalidated,
+    Events.ShardError,
+  ] as const)
+    client.on(event, () => {
+      connection = 'disconnected';
+    });
+  const connectionState = (): 'connecting' | 'connected' | 'disconnected' => {
+    if (work.snapshot().stopping) return 'disconnected';
+    if (connection === 'disconnected') return connection;
+    if (connection === 'connecting')
+      return now() - attemptAt < 60000 ? 'connecting' : 'disconnected';
+    return client.isReady()
+      ? 'connected'
+      : connection === 'starting' && now() - attemptAt < 60000
+        ? 'connecting'
+        : 'disconnected';
+  };
   client.on(Events.InteractionCreate, (interaction: Interaction) => {
     const release = work.enter(interaction.id);
     if (!release) return;
@@ -35,7 +74,8 @@ export function wireGateway(
       .finally(release);
   });
   return {
-    ready: () => !work.snapshot().stopping && client.isReady(),
+    ready: () => connectionState() === 'connected',
+    connectionState,
     snapshot: () => ({
       ...work.snapshot(),
       intake: workloads.intake.snapshot(),

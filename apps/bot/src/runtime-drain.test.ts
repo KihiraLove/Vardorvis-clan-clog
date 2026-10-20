@@ -147,6 +147,60 @@ test('bot diagnostics distinguish local overload, upstream authentication and un
     'uncertain',
   );
 });
+
+test('gateway status distinguishes bounded connection attempts, unrecoverable disconnects, resumes and shutdown', async () => {
+  class StatusGateway extends Gateway {
+    online = false;
+    override isReady() {
+      return this.online;
+    }
+  }
+  const client = new StatusGateway();
+  let time = 0;
+  const runtime = wireGateway(
+    client as unknown as Client,
+    {
+      search: async () => [],
+      submit: async () => receipt,
+    },
+    guild,
+    undefined,
+    { now: () => time },
+  );
+  assert.equal(runtime.connectionState(), 'connecting');
+  time = 60000;
+  assert.equal(runtime.connectionState(), 'disconnected');
+  client.online = true;
+  client.emit(Events.ClientReady);
+  assert.equal(runtime.connectionState(), 'connected');
+  assert.equal(runtime.ready(), true);
+  client.emit(Events.ShardReconnecting);
+  assert.equal(runtime.connectionState(), 'connecting');
+  assert.equal(
+    runtime.ready(),
+    false,
+    'stale discord.js readiness cannot hide a reconnect',
+  );
+  time += 60000;
+  assert.equal(runtime.connectionState(), 'disconnected');
+  client.emit(Events.ShardResume);
+  assert.equal(runtime.ready(), true);
+  client.emit(Events.ShardDisconnect);
+  assert.equal(runtime.connectionState(), 'disconnected');
+  assert.equal(runtime.ready(), false);
+  client.emit(Events.ShardReconnecting);
+  assert.equal(runtime.connectionState(), 'connecting');
+  client.emit(Events.ShardReady);
+  assert.equal(runtime.ready(), true);
+  client.emit(Events.ShardError, Error('private gateway error'));
+  assert.equal(runtime.connectionState(), 'disconnected');
+  client.emit(Events.ClientReady);
+  client.emit(Events.Invalidated);
+  assert.equal(runtime.ready(), false);
+  client.emit(Events.ClientReady);
+  await runtime.stop();
+  assert.equal(runtime.connectionState(), 'disconnected');
+});
 test('gateway stop drains a committed receipt and delayed Discord acknowledgement, rejecting new work until destroy', async () => {
   const client = new Gateway(),
     messages: string[] = [],

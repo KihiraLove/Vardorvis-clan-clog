@@ -10,6 +10,61 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('Discord status accepts explicit phases and legacy replies while rejecting contradictions and malformed states', async () => {
+  for (const state of [
+    'disabled',
+    'connecting',
+    'connected',
+    'disconnected',
+    'unavailable',
+  ] as const) {
+    const value = {
+      enabled: state !== 'disabled',
+      ready: state === 'connected',
+      state,
+    };
+    const client = new LiveAdminClient(
+      async () =>
+        new Response(
+          JSON.stringify({ ...value, token: 'private ignored field' }),
+          { status: value.ready || !value.enabled ? 200 : 503 },
+        ),
+    );
+    assert.deepEqual(await client.discordStatus(signal()), value);
+  }
+  for (const value of [
+    { enabled: false, ready: true, state: 'disabled' },
+    { enabled: true, ready: false, state: 'connected' },
+    { enabled: true, ready: true, state: 'connecting' },
+    { enabled: false, ready: false, state: 'disconnected' },
+    { enabled: true, ready: false, state: 'disabled' },
+    { enabled: true, ready: false, state: 'bad' },
+    { enabled: true, ready: false, state: null },
+    {},
+  ]) {
+    const client = new LiveAdminClient(async () => json(value));
+    await assert.rejects(client.discordStatus(signal()), /Discord status/);
+  }
+  for (const value of [
+    { enabled: false, ready: false },
+    { enabled: true, ready: true },
+  ]) {
+    const client = new LiveAdminClient(async () => json(value));
+    assert.deepEqual(await client.discordStatus(signal()), {
+      ...value,
+      state: value.ready ? 'connected' : 'disabled',
+    });
+  }
+  const unhealthy = new LiveAdminClient(
+    async () =>
+      new Response(
+        JSON.stringify({ enabled: true, ready: true, state: 'connected' }),
+        { status: 503 },
+      ),
+  );
+  await assert.rejects(unhealthy.discordStatus(signal()), /Discord status/);
+});
+
 test('review decisions and separate flag saves send only their selected fields and validate receipts', async () => {
   const row = (await adminFixtures()).detail.submission;
   const flags = { hardcore: false, collectionType: 'event' as const };
@@ -130,6 +185,7 @@ test('Discord settings use CSRF and revision checks; unavailable gateway status 
   assert.deepEqual(await client.discordStatus(signal()), {
     enabled: true,
     ready: false,
+    state: 'unavailable',
   });
   await assert.rejects(
     new LiveAdminClient(async () =>

@@ -5,6 +5,11 @@ settings, branding, activity and XP reads use validated snapshots; projection
 routes return ETags for conditional requests. Private reads are `no-store`.
 See route modules under [apps/api/src](../apps/api/src) for complete wire schemas.
 
+`GET /discord/status` returns only `enabled`, `ready` and a `state` of `disabled`,
+`connecting`, `connected`, `disconnected` or `unavailable`. Connected requires
+both the gateway and intake API. Non-ready enabled states return 503; disabled
+returns 200 without probing the bot. Website readiness is independent.
+
 | Area                | Main routes                                                                         |
 | ------------------- | ----------------------------------------------------------------------------------- |
 | Public log          | `GET /catalog`, `GET /collections`                                                  |

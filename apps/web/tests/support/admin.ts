@@ -105,7 +105,13 @@ export class MemoryAdminClient implements AdminClient {
   }
   async discordStatus(signal: AbortSignal) {
     this.access(signal);
-    return { enabled: this.discordState.enabled, ready: false };
+    return {
+      enabled: this.discordState.enabled,
+      ready: false,
+      state: this.discordState.enabled
+        ? ('disconnected' as const)
+        : ('disabled' as const),
+    };
   }
   async saveDiscordSettings(
     input: import('@clog/domain').DiscordSettingsUpdate,

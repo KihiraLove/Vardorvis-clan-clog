@@ -138,7 +138,7 @@ exec /usr/local/bin/node "$@"
     '/tmp/clog-fake-bot.mjs',
     `import fs from 'node:fs';import {createServer} from 'node:http';
 fs.writeFileSync('/tmp/clog-fake-bot.pid',String(process.pid));
-const server=createServer((req,res)=>{res.writeHead(req.url==='/healthz'||fs.existsSync('/tmp/clog-gateway-ready')?200:503);res.end('{}');});
+const server=createServer((req,res)=>{const ready=fs.existsSync('/tmp/clog-gateway-ready');res.writeHead(req.url==='/healthz'||ready?200:503);res.end(JSON.stringify({status:ready?'ready':'not-ready',discordConfigured:true,discordConnected:ready,apiConnected:ready,connectionState:ready?'connected':'disconnected'}));});
 server.listen(3001,'127.0.0.1');
 setInterval(()=>{if(fs.existsSync('/tmp/clog-gateway-crash')){fs.unlinkSync('/tmp/clog-gateway-crash');process.exit(17);}},50);
 process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
