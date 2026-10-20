@@ -3,8 +3,10 @@ import { gzipSync } from 'node:zlib';
 import { writeFile } from 'node:fs/promises';
 import { loadingFixtures } from './fixtures.ts';
 
-for (const query of ['', '?preview=1']) {
-  test(`cached public assets with an unavailable API expose retry only: ${query || 'default'}`, async ({
+for (const [route, query] of ['/', '/xp'].flatMap((route) =>
+  ['', '?preview=1'].map((query) => [route, query] as const),
+)) {
+  test(`cached public assets with an unavailable API expose retry only: ${route}${query}`, async ({
     page,
   }) => {
     const scripts: string[] = [];
@@ -12,16 +14,28 @@ for (const query of ['', '?preview=1']) {
       if (request.url().endsWith('.js')) scripts.push(request.url());
     });
     await page.route('**/api/v1/**', (route) => route.fulfill({ status: 503 }));
-    await page.goto('/' + query);
-    await expect(
-      page.getByText('Collection log unavailable', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Try again', exact: true }),
-    ).toBeVisible();
+    await page.goto(route + query);
+    if (route === '/') {
+      await expect(
+        page.getByText('Collection log unavailable', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Try again', exact: true }),
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByText('XP could not be refreshed. Try again shortly.', {
+          exact: false,
+        }),
+      ).toBeVisible();
+    }
     await expect(
       page.getByRole('button', { name: 'Retry XP', exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(route === '/xp' ? 1 : 0);
+    if (route === '/xp')
+      await expect(
+        page.getByRole('button', { name: 'Retry XP', exact: true }),
+      ).toBeVisible();
     await expect(
       page.getByRole('button', { name: /preview|sample/i }),
     ).toHaveCount(0);

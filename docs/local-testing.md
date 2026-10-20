@@ -66,7 +66,18 @@ security headers, image inspection, performance and backup/recovery. Full
 acceptance rejects skips and missing required scenarios.
 
 Reports and logs are in `.data/local-checks/<run-id>/`; record the tested commit
-and dirty/clean state. The runner removes its own containers and volumes.
+and dirty/clean state. Independent checks continue after failures. Checks that
+need a failed build or unavailable test service are marked **blocked**, and the
+run still exits with an error. Initial tooling/database setup must succeed before
+the test runner can start.
+
+At the end, open `summary.md` for stage results, failed browser test locations and
+links to retained screenshots and traces. `result.json` contains the same result
+as structured data; `gates.json` tracks stage progress, and each stage has its own
+log. To inspect a trace, run `npx playwright show-trace <path-to-trace.zip>` from
+`apps/web`. Missing reports or failed evidence copying also fail the run.
+
+The runner removes its own containers and volumes.
 After a crash, inspect resources labelled `clog.local-checks` and clean up only
 that run's namespace. Avoid global Docker prune on a shared machine.
 

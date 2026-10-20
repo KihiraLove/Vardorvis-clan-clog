@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { consoleSummary, writeRunReport } from './check-report.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const label = 'clog.local-checks';
@@ -68,6 +69,7 @@ export async function main(args = process.argv.slice(2)) {
   let databaseCreated = false;
   let status = 'failed';
   const cleanupErrors = [];
+  const evidenceErrors = [];
   const env = { ...process.env, ...config.env, COMPOSE_ENV_FILES: emptyEnv };
   const compose = [
     'compose',
@@ -181,17 +183,6 @@ export async function main(args = process.argv.slice(2)) {
     ]);
     if (interrupted) throw new Error('Interrupted');
     await docker([
-      'build',
-      '--target',
-      'app',
-      '--build-arg',
-      `RELEASE_REVISION=${revision}`,
-      '--tag',
-      config.appImage,
-      '.',
-    ]);
-    if (interrupted) throw new Error('Interrupted');
-    await docker([
       'network',
       'create',
       '--label',
@@ -276,7 +267,11 @@ export async function main(args = process.argv.slice(2)) {
       await docker(
         ['cp', `${config.runner}:/app/.data/local-checks/.`, output],
         true,
-      ).catch(() => {});
+      ).catch(() =>
+        evidenceErrors.push(
+          'Could not copy stage logs and reports from the runner.',
+        ),
+      );
       await docker(
         [
           'cp',
@@ -284,7 +279,11 @@ export async function main(args = process.argv.slice(2)) {
           path.join(output, 'browser'),
         ],
         true,
-      ).catch(() => {});
+      ).catch(() =>
+        evidenceErrors.push(
+          'Could not copy browser screenshots and traces from the runner.',
+        ),
+      );
     }
     if (networkCreated)
       await cleanup('Compose cleanup', async () => {
@@ -320,27 +319,28 @@ export async function main(args = process.argv.slice(2)) {
     process.off('SIGINT', interrupt);
     process.off('SIGTERM', interrupt);
     if (cleanupErrors.length) status = 'failed';
-    await writeFile(
-      path.join(output, 'result.json'),
-      JSON.stringify(
-        {
-          project: config.id,
-          revision,
-          status,
-          interrupted,
-          cleanupErrors,
-          finishedAt: new Date().toISOString(),
-          note: 'Tests cover the working tree copied by Docker, including uncommitted files.',
-        },
-        null,
-        2,
-      ) + '\n',
-    );
+    const result = await writeRunReport(output, {
+      project: config.id,
+      revision,
+      status,
+      interrupted,
+      cleanupErrors,
+      evidenceErrors,
+      error: failure?.message,
+      finishedAt: new Date().toISOString(),
+      note: 'Tests cover the working tree copied by Docker, including uncommitted files.',
+    });
+    status = result.status;
+    console.log(consoleSummary(result, output));
     await new Promise((resolve) => log.end(resolve));
   }
   if (failure) throw failure;
   if (cleanupErrors.length)
     throw new Error(`Cleanup incomplete: ${cleanupErrors.join(', ')}`);
+  if (status !== 'passed')
+    throw new Error(
+      `Checks or evidence incomplete; see ${path.join(output, 'summary.md')}`,
+    );
   console.log(`All gates passed. Evidence: ${output}`);
 }
 
