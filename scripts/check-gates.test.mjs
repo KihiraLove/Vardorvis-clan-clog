@@ -86,7 +86,7 @@ test('the real stage plan continues after unit/browser/smoke failures and withho
     report.gates
       .filter(({ status }) => status === 'blocked')
       .map(({ name }) => name),
-    ['release-results'],
+    ['recovery', 'release-results'],
   );
   for (const name of [
     'test-bot',
@@ -97,7 +97,6 @@ test('the real stage plan continues after unit/browser/smoke failures and withho
     'stack',
     'catalog-proxy',
     'installation',
-    'recovery',
   ])
     assert.equal(
       report.gates.find((gate) => gate.name === name).status,
@@ -173,6 +172,43 @@ test('a nominally successful Node command with skipped tests still fails without
   assert.equal(report.gates[0].status, 'failed');
   assert.match(report.gates[0].reason, /skip/);
   assert.equal(report.gates[1].status, 'passed');
+});
+
+test('competition failure blocks only fixture-dependent lifecycle and recovery checks', async (t) => {
+  const options = await fixture(t);
+  const plan = checkPlan({
+    CHECK_REVISION: 'a'.repeat(40),
+    CHECK_APP_IMAGE: 'clog-local-app:fixture',
+  });
+  const selected = new Set([
+    'competitions',
+    'lifecycle',
+    'recovery',
+    'installation',
+    'review',
+    'branding-proxy',
+    'catalog-proxy',
+  ]);
+  const report = await runGates(
+    plan
+      .filter((gate) => selected.has(gate.name))
+      .map((gate) => ({
+        ...gate,
+        needs: gate.needs.filter((name) => selected.has(name)),
+        command: command(gate.name, gate.name === 'competitions' ? 1 : 0),
+      })),
+    options,
+  );
+  assert.deepEqual(
+    report.gates
+      .filter((gate) => gate.status === 'blocked')
+      .map((gate) => gate.name),
+    ['lifecycle', 'recovery'],
+  );
+  assert.equal(
+    report.gates.find((gate) => gate.name === 'installation').status,
+    'passed',
+  );
 });
 
 test('interruption stops the active command and records remaining checks as blocked', async (t) => {

@@ -158,7 +158,7 @@ export function checkPlan(env) {
     'database-recovery',
     'availability',
   ])
-    smoke(name, ['app-up']);
+    smoke(name, ['app-up', ...(name === 'lifecycle' ? ['competitions'] : [])]);
   add(
     'installation',
     ['node', 'scripts/installation-smoke.mjs'],
@@ -168,7 +168,7 @@ export function checkPlan(env) {
   add(
     'recovery',
     ['node', 'scripts/recovery-drill.mjs'],
-    ['app-image'],
+    ['app-image', 'competitions', 'catalog-proxy', 'branding-proxy', 'review'],
     'smoke',
   );
   add('browser-results', ['node', 'scripts/check-browser-results.mjs']);

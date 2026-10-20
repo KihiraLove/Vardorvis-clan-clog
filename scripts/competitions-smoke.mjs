@@ -9,8 +9,9 @@ import { PgXpStore } from '../apps/api/dist/xp-store.js';
 import {
   PgSchedulingStore,
   lockScheduling,
-  requireScheduledItem,
 } from '../apps/api/dist/scheduling-store.js';
+import { intakeScheduling } from '../apps/api/dist/intake-scheduling.js';
+import { classifyCollection } from '@clog/domain';
 if (process.env.COMPETITION_SMOKE_DISPOSABLE !== 'true')
   throw new Error(
     'Set COMPETITION_SMOKE_DISPOSABLE=true only for an isolated disposable database.',
@@ -167,7 +168,17 @@ try {
       )
     ).rows[0];
     assert.ok(shared, 'catalog shared item fixture');
-    await requireScheduledItem(client, enabled, shared.item_id);
+    const clock = (await client.query('SELECT clock_timestamp() AS now'))
+      .rows[0].now;
+    const evidence = await intakeScheduling(client, enabled, false, clock);
+    assert.equal(
+      classifyCollection(evidence, shared.item_id, false).collectionType,
+      'event',
+    );
+    assert.equal(
+      classifyCollection(evidence, shared.item_id, true).collectionType,
+      'regular',
+    );
     await client.query('ROLLBACK');
   } finally {
     client.release();

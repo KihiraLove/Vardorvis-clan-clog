@@ -67,7 +67,8 @@ acceptance rejects skips and missing required scenarios.
 
 Reports and logs are in `.data/local-checks/<run-id>/`; record the tested commit
 and dirty/clean state. Independent checks continue after failures. Checks that
-need a failed build or unavailable test service are marked **blocked**, and the
+need a failed build, unavailable test service or missing prerequisite fixture data
+are marked **blocked**, and the
 run still exits with an error. Initial tooling/database setup must succeed before
 the test runner can start.
 
