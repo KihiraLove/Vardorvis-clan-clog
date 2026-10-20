@@ -411,30 +411,40 @@ export async function mockApi(
           id = parts[5]!,
           action = parts[6];
         result =
-          action === 'note'
-            ? await admin.saveReviewNote(
+          action === 'flags'
+            ? await admin.saveCollectionFlags(
                 id,
                 b.expectedVersion,
-                b.note,
+                b.flags,
+                b.reason,
                 csrf,
                 signal,
               )
-            : action
-              ? await admin.decide(
+            : action === 'note'
+              ? await admin.saveReviewNote(
                   id,
                   b.expectedVersion,
-                  action as 'approve' | 'reject' | 'revoke',
-                  b.reason ?? '',
+                  b.note,
                   csrf,
                   signal,
                 )
-              : method === 'PATCH'
-                ? await admin.edit(id, b.expectedVersion, b, csrf, signal)
-                : await admin.detail(
+              : action
+                ? await admin.decide(
                     id,
+                    b.expectedVersion,
+                    action as 'approve' | 'reject' | 'revoke',
+                    b.reason ?? '',
+                    csrf,
                     signal,
-                    url.searchParams.get('cursor') ?? undefined,
-                  );
+                    b.flags,
+                  )
+                : method === 'PATCH'
+                  ? await admin.edit(id, b.expectedVersion, b, csrf, signal)
+                  : await admin.detail(
+                      id,
+                      signal,
+                      url.searchParams.get('cursor') ?? undefined,
+                    );
       } else if (path === '/api/v1/xp/tracker')
         result = await xp.tracker(signal);
       else if (path === '/api/v1/admin/xp/imports')

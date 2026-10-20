@@ -17,6 +17,8 @@ import {
 } from './submission-filters.js';
 import type {
   ReviewAction,
+  ReviewCollectionFlags,
+  ReviewFlagsChange,
   ManualSubmissionInput,
   ReviewAudit,
   ReviewCorrection,
@@ -115,6 +117,25 @@ function manualType(value: unknown, hardcore: boolean): CollectionType {
   if (hardcore && value === 'event')
     throw new ApiError(422, 'Hardcore supports Regular collections only.');
   return value ?? 'regular';
+}
+function selectedFlags(row: Row, flags: ReviewCollectionFlags) {
+  if (
+    typeof flags.hardcore !== 'boolean' ||
+    (flags.useIntakeTiming !== undefined && flags.useIntakeTiming !== true) ||
+    (flags.useIntakeTiming
+      ? flags.collectionType !== undefined || row.source === 'manual'
+      : flags.collectionType === undefined)
+  )
+    throw new ApiError(422, 'Choose collection flags or saved intake timing.');
+  if (flags.collectionType !== undefined)
+    manualType(flags.collectionType, flags.hardcore);
+  const classification = flags.useIntakeTiming
+    ? classifyCollection(row.intakeScheduling, row.itemId, flags.hardcore)
+    : {
+        collectionType: flags.collectionType!,
+        collectionReason: 'staff_correction',
+      };
+  return { hardcore: flags.hardcore, ...classification };
 }
 const cursorError = () =>
   new ApiError(
@@ -503,7 +524,7 @@ export class PgReviewStore implements ReviewStore {
   async mutate(
     id: string,
     expectedVersion: number,
-    fields: ReviewCorrection | ReviewAction | ReviewNote,
+    fields: ReviewCorrection | ReviewAction | ReviewNote | ReviewFlagsChange,
     actorId: string,
     actorName: string,
   ) {
@@ -526,11 +547,18 @@ export class PgReviewStore implements ReviewStore {
         if ('action' in fields) {
           action = fields.action;
           reason = action === 'approve' ? '' : reasonOf(fields.reason, true);
+          if (action === 'revoke' && fields.flags !== undefined)
+            throw new ApiError(
+              422,
+              'Save collection flags separately before revoking.',
+            );
+          const flags =
+            fields.flags === undefined ? row : selectedFlags(row, fields.flags);
           if (action === 'approve') {
             if (
               row.status !== 'pending' ||
               row.itemId === null ||
-              row.collectionType === null ||
+              flags.collectionType === null ||
               !row.collectorName.trim() ||
               (row.source !== 'manual' &&
                 !row.proofImageId &&
@@ -559,8 +587,8 @@ export class PgReviewStore implements ReviewStore {
             await requireCreditAvailable(
               client,
               row.itemId,
-              row.hardcore,
-              row.collectionType!,
+              flags.hardcore,
+              flags.collectionType!,
             );
           } else if (
             action === 'reject'
@@ -577,9 +605,58 @@ export class PgReviewStore implements ReviewStore {
           result = (
             await client.query<Row>(
               'UPDATE submissions SET status=$2,reviewed_by=$3,reviewed_at=now(),' +
-                'review_reason=$4,version=version+1 WHERE id=$1 RETURNING ' +
+                'review_reason=$4,hardcore=$5,collection_type=$6,collection_reason=$7,version=version+1 WHERE id=$1 RETURNING ' +
                 selection,
-              [id, status, actorId, reason || null],
+              [
+                id,
+                status,
+                actorId,
+                reason || null,
+                flags.hardcore,
+                flags.collectionType,
+                flags.collectionReason,
+              ],
+            )
+          ).rows[0]!;
+        } else if ('flags' in fields) {
+          action = 'edit';
+          if (row.status !== 'approved') throw conflict();
+          reason = reasonOf(fields.reason, true);
+          const flags = selectedFlags(row, fields.flags);
+          if (
+            row.hardcore === flags.hardcore &&
+            row.collectionType === flags.collectionType &&
+            row.collectionReason === flags.collectionReason
+          )
+            throw new ApiError(
+              422,
+              'There are no collection flag changes to save.',
+            );
+          const active = await client.query(
+            'SELECT 1 FROM items WHERE id=$1 AND active FOR UPDATE',
+            [row.itemId],
+          );
+          if (active.rowCount !== 1)
+            throw new ApiError(422, 'Selected item is inactive.');
+          await requireCreditAvailable(
+            client,
+            row.itemId!,
+            flags.hardcore,
+            flags.collectionType!,
+            row.id,
+          );
+          result = (
+            await client.query<Row>(
+              'UPDATE submissions SET hardcore=$2,collection_type=$3,collection_reason=$4,reviewed_by=$5,reviewed_at=now(),review_reason=$6,version=version+1 WHERE id=$1 RETURNING ' +
+                selection,
+              [
+                id,
+                flags.hardcore,
+                flags.collectionType,
+                flags.collectionReason,
+                actorId,
+                reason,
+              ],
             )
           ).rows[0]!;
         } else if ('note' in fields) {

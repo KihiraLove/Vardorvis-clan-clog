@@ -10,6 +10,83 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('review decisions and separate flag saves send only their selected fields and validate receipts', async () => {
+  const row = (await adminFixtures()).detail.submission;
+  const flags = { hardcore: false, collectionType: 'event' as const };
+  for (const action of ['approve', 'reject', 'flags'] as const) {
+    const client = new LiveAdminClient(async (path, options) => {
+      assert.equal(path, '/api/v1/admin/submissions/' + row.id + '/' + action);
+      assert.equal(options!.method, action === 'flags' ? 'PATCH' : 'POST');
+      assert.equal(
+        (options!.headers as Record<string, string>)['X-CSRF-Token'],
+        'csrf',
+      );
+      assert.deepEqual(JSON.parse(String(options!.body)), {
+        expectedVersion: row.version,
+        flags,
+        ...(action === 'approve' ? {} : { reason: 'Verified' }),
+      });
+      return json({
+        ...row,
+        ...flags,
+        version: row.version + 1,
+        status: action === 'reject' ? 'rejected' : 'approved',
+      });
+    });
+    if (action === 'flags')
+      await client.saveCollectionFlags(
+        row.id,
+        row.version,
+        flags,
+        'Verified',
+        'csrf',
+        signal(),
+      );
+    else
+      await client.decide(
+        row.id,
+        row.version,
+        action,
+        'Verified',
+        'csrf',
+        signal(),
+        flags,
+      );
+  }
+  const badReceipt = new LiveAdminClient(async () =>
+    json({
+      ...row,
+      version: row.version + 1,
+      status: 'approved',
+      hardcore: true,
+      collectionType: 'regular',
+    }),
+  );
+  await assert.rejects(
+    badReceipt.decide(
+      row.id,
+      row.version,
+      'approve',
+      '',
+      'csrf',
+      signal(),
+      flags,
+    ),
+    /Unexpected review receipt/,
+  );
+  await assert.rejects(
+    badReceipt.saveCollectionFlags(
+      row.id,
+      row.version,
+      flags,
+      'Verified',
+      'csrf',
+      signal(),
+    ),
+    /Unexpected collection flags receipt/,
+  );
+});
+
 test('Discord settings use CSRF and revision checks; unavailable gateway status remains readable', async () => {
   const fields = {
     enabled: true,

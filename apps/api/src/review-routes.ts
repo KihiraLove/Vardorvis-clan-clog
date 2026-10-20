@@ -6,6 +6,7 @@ import type {
   ReviewAction,
   ManualSubmissionInput,
   ReviewCorrection,
+  ReviewCollectionFlags,
 } from './review-types.js';
 type Authorize = (
   request: FastifyRequest,
@@ -13,6 +14,17 @@ type Authorize = (
 ) => Promise<{ id: string; displayName: string; role?: 'admin' | 'moderator' }>;
 const version = { type: 'integer', minimum: 1, maximum: 2147483647 } as const;
 const reason = { type: 'string', maxLength: 1000 } as const;
+const flags = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['hardcore'],
+  properties: {
+    hardcore: { type: 'boolean' },
+    collectionType: { type: 'string', enum: ['regular', 'event'] },
+    useIntakeTiming: { type: 'boolean', const: true },
+  },
+  oneOf: [{ required: ['collectionType'] }, { required: ['useIntakeTiming'] }],
+} as const;
 export function reviewRoutes(
   app: FastifyInstance,
   store: ReviewRouteStore,
@@ -272,10 +284,45 @@ export function reviewRoutes(
       );
     },
   );
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      expectedVersion: number;
+      flags: ReviewCollectionFlags;
+      reason: string;
+    };
+  }>(
+    '/api/v1/admin/submissions/:id/flags',
+    {
+      onRequest: guard(true),
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['expectedVersion', 'flags', 'reason'],
+          properties: { expectedVersion: version, flags, reason },
+        },
+      },
+    },
+    async (req) => {
+      const actor = await authorize(req, true);
+      return store.mutate(
+        req.params.id,
+        req.body.expectedVersion,
+        { flags: req.body.flags, reason: req.body.reason },
+        actor.id,
+        actor.displayName,
+      );
+    },
+  );
   for (const action of ['approve', 'reject', 'revoke'] as const) {
     app.post<{
       Params: { id: string };
-      Body: { expectedVersion: number; reason?: string };
+      Body: {
+        expectedVersion: number;
+        reason?: string;
+        flags?: ReviewCollectionFlags;
+      };
     }>(
       '/api/v1/admin/submissions/:id/' + action,
       {
@@ -291,6 +338,7 @@ export function reviewRoutes(
             properties: {
               expectedVersion: version,
               ...(action === 'approve' ? {} : { reason }),
+              ...(action === 'revoke' ? {} : { flags }),
             },
           },
         },
@@ -301,6 +349,7 @@ export function reviewRoutes(
           expectedVersion: req.body.expectedVersion,
           action,
           ...(action === 'approve' ? {} : { reason: req.body.reason }),
+          ...(req.body.flags === undefined ? {} : { flags: req.body.flags }),
         };
         return store.mutate(
           req.params.id,

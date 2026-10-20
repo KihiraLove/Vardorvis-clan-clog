@@ -30,14 +30,20 @@ offers a fresh load instead of combining different snapshots.
 
 Open a card to see evidence, item identity, source, original chat message and
 audit history. Save corrections and staff notes separately. Approval requires
-a saved matching item and proof acknowledgement. Rejection, revocation and
+a saved matching item and proof acknowledgement. Pending **Collection flags** save
+with Approve/Reject; changing a flag clears acknowledgement without making claim
+corrections dirty. For approved credits, enter an audit reason and use **Save
+collection flags** separately. This preserves other correction/note drafts.
+For Discord/RuneLite claims, **Use saved intake timing** reclassifies from the
+original receipt's timing and page membership. Rejection, revocation and
 corrections to an approved credit require a reason. The revision prevents
 concurrent reviewers from overwriting each other; reload after a conflict.
 
 Manual submission accepts a collector, catalog item, collection date and optional
-PNG screenshot and note. External proof links are no longer accepted. Choose **Regular collection** or **Event collection**;
+PNG screenshot and note. External proof links are no longer accepted. Check
+**Obtained during events** for Event collection; otherwise it is Regular.
 Approve immediately is on by default. Hardcore forces Regular and has independent
-credit. Its checkbox appears when hardcore worlds are enabled.
+credit. Staff can record hardcore claims even when the public hardcore view is disabled.
 
 Normal-world items can have one approved Event collection and independent Regular
 collections. **Filter out regular duplicates** blocks another Regular credit in

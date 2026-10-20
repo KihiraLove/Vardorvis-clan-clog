@@ -18,12 +18,10 @@ import { useAdminAction } from './use-admin-action.ts';
 import type { SubmissionFilters } from '@clog/domain';
 export function AdminQueue({
   client,
-  hardcoreEnabled,
   session,
   onAccessLost,
 }: {
   client: AdminClient;
-  hardcoreEnabled: boolean;
   session: AdminSession;
   onAccessLost: () => void;
 }) {
@@ -146,7 +144,6 @@ export function AdminQueue({
     <>
       {snapshot?.catalog && (
         <ManualSubmissionForm
-          hardcoreEnabled={hardcoreEnabled}
           catalog={snapshot.catalog}
           client={client}
           session={session}

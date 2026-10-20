@@ -50,6 +50,16 @@ export interface ReviewAction {
   expectedVersion: number;
   action: 'approve' | 'reject' | 'revoke';
   reason?: string;
+  flags?: ReviewCollectionFlags;
+}
+export interface ReviewCollectionFlags {
+  hardcore: boolean;
+  collectionType?: import('@clog/domain').CollectionType;
+  useIntakeTiming?: true;
+}
+export interface ReviewFlagsChange {
+  flags: ReviewCollectionFlags;
+  reason: string;
 }
 export interface ReviewAudit {
   id: string;
@@ -101,7 +111,7 @@ export interface ReviewStore {
   mutate(
     id: string,
     expectedVersion: number,
-    fields: ReviewCorrection | ReviewAction | ReviewNote,
+    fields: ReviewCorrection | ReviewAction | ReviewNote | ReviewFlagsChange,
     actorId: string,
     actorName: string,
   ): Promise<ReviewSubmission>;

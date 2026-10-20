@@ -39,6 +39,7 @@ import {
   type AdminPage,
   type AuditEntry,
   type Correction,
+  type CollectionFlags,
   type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
@@ -1197,9 +1198,12 @@ export class MemoryAdminClient implements AdminClient {
     reason: string,
     _csrf: string,
     signal: AbortSignal,
+    flags?: CollectionFlags,
   ) {
     this.access(signal);
     const row = this.row(id, version);
+    if (action === 'revoke' && flags) throw new AdminRequestError(422);
+    const selected = flags ? this.selectedFlags(row, flags) : row;
     if (
       (action === 'revoke'
         ? row.status !== 'approved'
@@ -1216,16 +1220,60 @@ export class MemoryAdminClient implements AdminClient {
       this.ensureUnique(
         id,
         row.itemId!,
-        row.hardcore,
-        row.collectionType ?? 'regular',
+        selected.hardcore,
+        selected.collectionType ?? 'regular',
       );
     const before = structuredClone(row);
+    if (flags) Object.assign(row, selected);
     row.status = (
       { approve: 'approved', reject: 'rejected', revoke: 'revoked' } as const
     )[action];
     row.version++;
     row.reviewReason = action === 'approve' ? null : reason.trim();
     this.record(before, row, action, reason.trim());
+    return structuredClone(row);
+  }
+  private selectedFlags(row: Submission, flags: CollectionFlags) {
+    if (
+      (flags.useIntakeTiming && row.source === 'manual') ||
+      (flags.hardcore && flags.collectionType === 'event')
+    )
+      throw new AdminRequestError(422);
+    return {
+      hardcore: flags.hardcore,
+      collectionType: flags.hardcore
+        ? ('regular' as const)
+        : (flags.collectionType ?? row.collectionType ?? ('regular' as const)),
+      collectionReason: flags.useIntakeTiming
+        ? 'scheduling_disabled'
+        : 'staff_correction',
+    };
+  }
+  async saveCollectionFlags(
+    id: string,
+    version: number,
+    flags: CollectionFlags,
+    reason: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const row = this.row(id, version);
+    if (row.status !== 'approved' || !reason.trim())
+      throw new AdminRequestError(422);
+    const selected = this.selectedFlags(row, flags);
+    this.ensureUnique(
+      id,
+      row.itemId!,
+      selected.hardcore,
+      selected.collectionType,
+    );
+    const before = structuredClone(row);
+    Object.assign(row, selected, {
+      version: version + 1,
+      reviewReason: reason.trim(),
+    });
+    this.record(before, row, 'edit', reason.trim());
     return structuredClone(row);
   }
   async upload(

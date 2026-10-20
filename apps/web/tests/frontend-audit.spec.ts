@@ -764,8 +764,10 @@ for (const hardcore of [false, true]) {
       .getByLabel('Collected on hardcore worlds')
       .setChecked(!hardcore);
     await expect(check).not.toBeChecked();
-    await expect(check).toBeDisabled();
-    await editor.getByRole('button', { name: 'Discard corrections' }).click();
+    await expect(check).toBeEnabled();
+    await editor
+      .getByRole('button', { name: 'Discard collection flags' })
+      .click();
     await expect(
       editor.getByLabel('Collected on hardcore worlds'),
     ).toHaveJSProperty('checked', hardcore);
@@ -829,19 +831,20 @@ test('audit: approved credit requires an audit reason for claim corrections or r
     editor.getByText('Enter a reason before revoking a credit.'),
   ).toHaveCount(0);
   await editor.getByLabel('Collected on hardcore worlds').uncheck();
-  const save = editor.getByRole('button', { name: 'Save corrections' });
+  const save = editor.getByRole('button', { name: 'Save collection flags' });
   await expect(save).toBeDisabled();
   await expect(
-    editor.getByText(
-      'Enter an audit reason before changing an approved credit.',
-    ),
+    editor.getByText('Enter an audit reason before saving collection flags.'),
   ).toBeVisible();
   await editor
     .getByLabel('Review reason')
     .fill('Corrected world mode after proof review');
   await expect(save).toBeEnabled();
   await expect(revoke).toBeDisabled();
-  await editor.getByRole('button', { name: 'Discard corrections' }).click();
+  await editor
+    .getByRole('button', { name: 'Discard collection flags' })
+    .click();
+  await editor.getByLabel('Review reason').fill('');
   await expect(revoke).toBeDisabled();
   await expect(
     editor.getByText('Enter a reason before revoking a credit.'),

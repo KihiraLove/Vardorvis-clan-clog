@@ -61,6 +61,11 @@ export interface Correction {
   hardcore: boolean;
   reason: string;
 }
+export interface CollectionFlags {
+  hardcore: boolean;
+  collectionType?: import('@clog/domain').CollectionType;
+  useIntakeTiming?: true;
+}
 export interface AuditEntry {
   id: string;
   actorName: string;
@@ -386,6 +391,15 @@ export interface AdminClient {
     id: string,
     version: number,
     action: 'approve' | 'reject' | 'revoke',
+    reason: string,
+    csrf: string,
+    signal: AbortSignal,
+    flags?: CollectionFlags,
+  ): Promise<Submission>;
+  saveCollectionFlags(
+    id: string,
+    version: number,
+    flags: CollectionFlags,
     reason: string,
     csrf: string,
     signal: AbortSignal,

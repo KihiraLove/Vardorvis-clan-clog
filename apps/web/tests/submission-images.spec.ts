@@ -42,7 +42,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await expect(form.getByLabel('Approve immediately')).toBeChecked();
   await expect(
     form.getByLabel('Collected on hardcore worlds', { exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page
       .locator('.submission-card')

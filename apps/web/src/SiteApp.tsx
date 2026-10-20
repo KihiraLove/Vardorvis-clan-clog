@@ -393,7 +393,6 @@ export function SiteApp({
               client={adminClient}
               registerNavigation={register}
               clanName={clanName}
-              hardcoreEnabled={liveEnabled}
               onSettingsSaved={settingsSaved}
               onBrandingSaved={(value, hardcoreMode) =>
                 (hardcoreMode ? setLiveHardcoreBranding : setLiveBranding)(

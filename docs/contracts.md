@@ -24,6 +24,16 @@ Successful replay returns the saved receipt. Auth failures are 401/403; stale
 state is 409; malformed or unsupported input is 400/422. A timeout cannot prove
 rollback: preserve the retry key and reconcile the original operation.
 
+Pending `POST /admin/submissions/:id/approve` and `/reject` optionally accept
+`flags` alongside `expectedVersion` (and the rejection `reason`). Flags contain
+`hardcore` and either `collectionType` (`regular`/`event`) or `useIntakeTiming: true`.
+Omitting flags preserves the saved classification. Both flags and the decision
+save in one transaction/revision/audit. Hardcore permits Regular only; manual
+claims cannot use intake timing. Approved credits use the separate
+`PATCH /admin/submissions/:id/flags` with `expectedVersion`, `flags` and an audit
+`reason`. It changes no item, collector, date or review note. Revoke accepts no
+flags; save/discard their draft first. All credit moves enforce duplicate rules.
+
 `POST /bot/submissions` requires the bot credential and multipart fields
 `submission` (JSON) and `screenshot` (one PNG, up to 10 MiB). JSON contains
 `interactionId`, `guildId`, `actorDiscordId`, `rawItemText`, `collectorName`,

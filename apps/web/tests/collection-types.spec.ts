@@ -47,22 +47,22 @@ test('migrated Regular credits keep their type unless staff explicitly choose sa
     .click();
   const editor = page.locator('.submission-editor');
   await expect(
-    editor.getByLabel('Collection type', { exact: true }),
-  ).toHaveValue('regular');
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).not.toBeChecked();
   await editor
     .getByLabel('Collector name', { exact: true })
     .fill('Corrected collector');
   await expect(
-    editor.getByLabel('Collection type', { exact: true }),
-  ).toHaveValue('regular');
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).not.toBeChecked();
   await editor
-    .getByLabel('Collection type', { exact: true })
-    .selectOption('automatic');
+    .getByRole('button', { name: 'Use saved intake timing', exact: true })
+    .click();
   await editor
     .getByLabel(/^Review reason/)
     .fill('Restore original timed eligibility');
   await expect(
-    editor.getByRole('button', { name: 'Save corrections', exact: true }),
+    editor.getByRole('button', { name: 'Save collection flags', exact: true }),
   ).toBeEnabled();
 });
 
@@ -252,9 +252,7 @@ test('manual entry and approved corrections explicitly choose type and force har
     .getByLabel('Canonical item', { exact: true })
     .selectOption(String(item.id));
   await form.getByLabel('Collection date', { exact: true }).fill('2026-10-18');
-  await form
-    .getByLabel('Collection type', { exact: true })
-    .selectOption('event');
+  await form.getByLabel('Obtained during events', { exact: true }).check();
   await form
     .getByRole('button', { name: 'Create manual submission', exact: true })
     .click();
@@ -266,18 +264,16 @@ test('manual entry and approved corrections explicitly choose type and force har
     .click();
   const editor = page.locator('.submission-editor');
   await expect(
-    editor.getByLabel('Collection type', { exact: true }),
-  ).toHaveValue('event');
-  await editor
-    .getByLabel('Collection type', { exact: true })
-    .selectOption('regular');
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).toBeChecked();
+  await editor.getByLabel('Obtained during events', { exact: true }).uncheck();
   await editor.getByLabel(/^Review reason/).fill('Correct collection type');
   await editor
-    .getByRole('button', { name: 'Save corrections', exact: true })
+    .getByRole('button', { name: 'Save collection flags', exact: true })
     .click();
   await expect(
-    editor.getByLabel('Collection type', { exact: true }),
-  ).toHaveValue('regular');
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).not.toBeChecked();
   await expect(editor.locator('.submission-facts')).toContainText(
     'Regular collection',
   );
@@ -288,10 +284,10 @@ test('manual entry and approved corrections explicitly choose type and force har
     .getByLabel(/^Review reason/)
     .fill('Move to hardcore Regular collection');
   await expect(
-    editor.getByLabel('Collection type', { exact: true }),
-  ).toHaveCount(0);
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).toBeDisabled();
   await editor
-    .getByRole('button', { name: 'Save corrections', exact: true })
+    .getByRole('button', { name: 'Save collection flags', exact: true })
     .click();
   await expect(editor.locator('.submission-facts')).toContainText(
     'Regular collection',

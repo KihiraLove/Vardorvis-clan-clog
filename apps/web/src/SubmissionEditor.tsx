@@ -2,7 +2,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { collectionTypeLabel } from '@clog/domain';
 import { useAdminDraft } from './admin-route-data.ts';
-import { AdminRequestError } from './admin-api.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
   safeScreenshotPath,
@@ -11,6 +10,7 @@ import {
   type AdminCatalog,
   type AdminClient,
   type Correction,
+  type CollectionFlags,
   type Submission,
   type SubmissionDetail,
 } from './admin-model.ts';
@@ -38,16 +38,19 @@ const usesSavedTiming = (row: Submission) =>
   row.source !== 'manual' &&
   row.collectionReason !== 'staff_correction' &&
   !(row.collectionReason === 'legacy' && row.itemId !== null);
-const draftOf = (row: Submission): Correction => ({
+type ClaimDraft = Pick<
+  Correction,
+  'itemId' | 'collectorName' | 'collectedOn' | 'reason'
+>;
+const draftOf = (row: Submission): ClaimDraft => ({
   itemId: row.itemId ?? 0,
   collectorName: row.collectorName,
   collectedOn: row.collectedOn,
-  hardcore: row.hardcore,
-  ...(!usesSavedTiming(row)
-    ? { collectionType: row.collectionType ?? 'regular' }
-    : {}),
   reason: '',
-  useIntakeTiming: usesSavedTiming(row),
+});
+const flagsOf = (row: Submission): CollectionFlags => ({
+  hardcore: row.hardcore,
+  collectionType: row.collectionType ?? 'regular',
 });
 function ReviewWindow({
   children,
@@ -96,7 +99,8 @@ export function SubmissionEditor({
   onChanged: (status: Submission['status']) => void;
 }) {
   const [detail, setDetail] = useState<SubmissionDetail>(),
-    [draft, setDraft] = useState<Correction>();
+    [draft, setDraft] = useState<ClaimDraft>();
+  const [flags, setFlags] = useState<CollectionFlags>();
   const [query, setQuery] = useState(''),
     [checked, setChecked] = useState(false),
     [reviewNote, setReviewNote] = useState('');
@@ -108,6 +112,7 @@ export function SubmissionEditor({
   const accept = (next: SubmissionDetail) => {
     setDetail(next);
     setDraft(draftOf(next.submission));
+    setFlags(flagsOf(next.submission));
     setReviewNote(next.submission.reviewNote);
     setChecked(false);
     setReadError(undefined);
@@ -141,15 +146,20 @@ export function SubmissionEditor({
       clearTimeout(timer);
     };
   }, [client, id, refresh, onAccessLost]);
+  const flagsDirty =
+    !!detail &&
+    !!flags &&
+    (flags.hardcore !== detail.submission.hardcore ||
+      flags.collectionType !==
+        (detail.submission.collectionType ?? 'regular') ||
+      flags.useIntakeTiming === true);
   const dirty =
     !!detail &&
     !!draft &&
     (draft.itemId !== (detail.submission.itemId ?? 0) ||
       draft.collectorName.trim() !== detail.submission.collectorName ||
       draft.collectedOn !== detail.submission.collectedOn ||
-      draft.hardcore !== detail.submission.hardcore ||
-      draft.collectionType !== draftOf(detail.submission).collectionType ||
-      draft.useIntakeTiming !== draftOf(detail.submission).useIntakeTiming ||
+      flagsDirty ||
       reviewNote.trim() !== detail.submission.reviewNote ||
       !!draft.reason);
   useAdminDraft(dirty, action.busy);
@@ -158,7 +168,7 @@ export function SubmissionEditor({
     if (dirty && !window.confirm('Discard unsaved review changes?')) return;
     onClose();
   };
-  if (!detail || !draft)
+  if (!detail || !draft || !flags)
     return (
       <ReviewWindow onClose={close}>
         <section className="admin-panel">
@@ -194,23 +204,43 @@ export function SubmissionEditor({
   const claimDirty =
     draft.itemId !== (row.itemId ?? 0) ||
     draft.collectorName.trim() !== row.collectorName ||
-    draft.collectedOn !== row.collectedOn ||
-    draft.hardcore !== row.hardcore ||
-    draft.collectionType !== draftOf(row).collectionType ||
-    draft.useIntakeTiming !== draftOf(row).useIntakeTiming;
+    draft.collectedOn !== row.collectedOn;
   const noteDirty = reviewNote.trim() !== row.reviewNote;
   const locked = action.busy || disabled || Boolean(readError),
     proof =
       safeScreenshotPath(row.screenshotPath) ||
       (row.source === 'runelite' && Boolean(row.chatMessage?.trim()));
-  const change = (fields: Partial<Correction>) => {
+  const change = (fields: Partial<ClaimDraft>) => {
     setDraft({ ...draft, ...fields });
     setChecked(false);
+  };
+  const changeFlags = (next: CollectionFlags) => {
+    setFlags(next);
+    setChecked(false);
+  };
+  const refreshAudit = async (next: Submission, signal: AbortSignal) => {
+    try {
+      const latest = await client.detail(id, signal);
+      if (signal.aborted) return;
+      if (latest.submission.version !== next.version)
+        throw new Error('Submission changed again.');
+      setDetail(latest);
+    } catch (failure) {
+      if (classifyAccessFailure(failure) === 'expired') throw failure;
+      if (!signal.aborted)
+        setReadError(
+          'The change was saved, but the latest revision or audit could not be confirmed. Reload before continuing.',
+        );
+    }
   };
   // Save corrections before approval so the acknowledgment refers to persisted claim fields.
   const perform = (decision?: 'approve' | 'reject' | 'revoke') => {
     void action.execute(
       async (signal) => {
+        if (decision && claimDirty)
+          throw new Error('Save or discard claim corrections before deciding.');
+        if (decision === 'revoke' && flagsDirty)
+          throw new Error('Save or discard collection flags before revoking.');
         if (
           decision === 'approve' &&
           (claimDirty ||
@@ -233,17 +263,30 @@ export function SubmissionEditor({
               draft.reason.trim(),
               session.csrfToken,
               signal,
+              flagsDirty ? flags : undefined,
             )
           : await client.edit(
               id,
               row.version,
-              validateCorrection(draft, catalog),
+              validateCorrection(
+                {
+                  ...draft,
+                  hardcore: row.hardcore,
+                  ...(!usesSavedTiming(row)
+                    ? { collectionType: row.collectionType ?? 'regular' }
+                    : {}),
+                  useIntakeTiming: usesSavedTiming(row),
+                },
+                catalog,
+              ),
               session.csrfToken,
               signal,
             );
         if (signal.aborted) return;
         setDetail({ ...detail, submission: next });
         setDraft(draftOf(next));
+        if (decision || !flagsDirty) setFlags(flagsOf(next));
+        if (!noteDirty) setReviewNote(next.reviewNote);
         setChecked(false);
         action.setMessage(
           decision
@@ -253,22 +296,42 @@ export function SubmissionEditor({
             : 'Changes saved. Review the saved claim before approving.',
         );
         onChanged(next.status);
-        try {
-          await reload(signal);
-        } catch (failure) {
-          if (
-            failure instanceof AdminRequestError &&
-            [401, 403].includes(failure.status)
-          )
-            throw failure;
-          if (!signal.aborted)
-            setReadError(
-              'The change was saved, but audit history could not be refreshed. Reload before continuing.',
-            );
-        }
+        await refreshAudit(next, signal);
       },
       reload,
       decision ?? 'claim',
+    );
+  };
+  const saveFlags = () => {
+    void action.execute(
+      async (signal) => {
+        if (row.status !== 'approved' || !flagsDirty || !draft.reason.trim())
+          throw new Error(
+            'Enter an audit reason before saving collection flags.',
+          );
+        const next = await client.saveCollectionFlags(
+          id,
+          row.version,
+          flags,
+          draft.reason.trim(),
+          session.csrfToken,
+          signal,
+        );
+        if (signal.aborted) return;
+        setDetail({ ...detail, submission: next });
+        setFlags(flagsOf(next));
+        if (!claimDirty) setDraft({ ...draft, reason: '' });
+        setChecked(false);
+        action.setMessage('Collection flags saved.');
+        onChanged(next.status);
+        await refreshAudit(next, signal);
+      },
+      async () => {
+        setReadError(
+          'The submission changed. Your local drafts are retained; reload the submission before continuing.',
+        );
+      },
+      'flags',
     );
   };
   const saveNote = () => {
@@ -321,6 +384,8 @@ export function SubmissionEditor({
     acknowledged: checked,
     reasonProvided: Boolean(draft.reason.trim()),
   });
+  if (row.status === 'approved' && flagsDirty && !blockers.revoke)
+    blockers.revoke = 'Save or discard collection flags before revoking.';
   const shownHint = (key: ReviewActionHint) =>
     blockers[key] && !hiddenHints.has(blockers[key]);
   const describedBy = (key: ReviewActionHint) =>
@@ -578,44 +643,6 @@ export function SubmissionEditor({
                   resolving this submission.
                 </p>
               )}
-              {!draft.hardcore && (
-                <label>
-                  Collection type
-                  <select
-                    aria-label="Collection type"
-                    value={draft.collectionType ?? 'automatic'}
-                    onChange={(event) =>
-                      change({
-                        useIntakeTiming: event.target.value === 'automatic',
-                        collectionType:
-                          event.target.value === 'automatic'
-                            ? undefined
-                            : (event.target.value as 'regular' | 'event'),
-                      })
-                    }
-                  >
-                    {row.source !== 'manual' && (
-                      <option value="automatic">Use saved intake timing</option>
-                    )}
-                    <option value="regular">Regular collection</option>
-                    <option value="event">Event collection</option>
-                  </select>
-                </label>
-              )}
-              <label className="admin-checkbox">
-                <input
-                  type="checkbox"
-                  checked={draft.hardcore}
-                  onChange={(event) =>
-                    change({
-                      hardcore: event.target.checked,
-                      collectionType: 'regular',
-                      useIntakeTiming: false,
-                    })
-                  }
-                />
-                Collected on hardcore worlds
-              </label>
               <label>
                 Review note (optional)
                 <textarea
@@ -682,6 +709,102 @@ export function SubmissionEditor({
                 </button>
               </div>
               {explanations(['claim', 'discardClaim'])}
+            </fieldset>
+            <fieldset
+              disabled={locked || !editable}
+              className="admin-fieldset review-collection-flags"
+            >
+              <legend>Collection flags</legend>
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  checked={flags.hardcore}
+                  onChange={(event) =>
+                    changeFlags({
+                      hardcore: event.target.checked,
+                      collectionType: 'regular',
+                    })
+                  }
+                />
+                Collected on hardcore worlds
+              </label>
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  disabled={flags.hardcore}
+                  checked={
+                    !flags.hardcore &&
+                    (flags.collectionType ?? row.collectionType) === 'event'
+                  }
+                  onChange={(event) =>
+                    changeFlags({
+                      hardcore: flags.hardcore,
+                      collectionType: event.target.checked
+                        ? 'event'
+                        : 'regular',
+                    })
+                  }
+                />
+                Obtained during events
+              </label>
+              {row.source !== 'manual' && (
+                <button
+                  className="site-button"
+                  type="button"
+                  disabled={flags.useIntakeTiming === true}
+                  onClick={() =>
+                    changeFlags({
+                      hardcore: flags.hardcore,
+                      useIntakeTiming: true,
+                    })
+                  }
+                >
+                  Use saved intake timing
+                </button>
+              )}
+              {flags.useIntakeTiming && (
+                <p className="admin-note">
+                  Saved intake timing will determine the collection type.
+                </p>
+              )}
+              {row.status === 'pending' && flagsDirty && (
+                <p className="admin-note">
+                  Collection flags will be saved with your review decision.
+                </p>
+              )}
+              <div className="admin-actions">
+                {row.status === 'approved' && (
+                  <button
+                    className="site-button"
+                    type="button"
+                    disabled={
+                      locked ||
+                      !activeItem ||
+                      !flagsDirty ||
+                      !draft.reason.trim()
+                    }
+                    aria-busy={action.busy && action.operation === 'flags'}
+                    onClick={saveFlags}
+                  >
+                    Save collection flags
+                  </button>
+                )}
+                <button
+                  className="site-button"
+                  type="button"
+                  disabled={!flagsDirty}
+                  onClick={() => changeFlags(flagsOf(row))}
+                >
+                  Discard collection flags
+                </button>
+              </div>
+              {row.status === 'approved' &&
+                flagsDirty &&
+                !draft.reason.trim() && (
+                  <p className="admin-note">
+                    Enter an audit reason before saving collection flags.
+                  </p>
+                )}
             </fieldset>
             {claimDirty && (
               <p className="admin-note">

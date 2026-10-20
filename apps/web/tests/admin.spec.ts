@@ -351,7 +351,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   expect(pageErrors).toEqual([]);
 });
 
-test('approved corrections require a reason and move the single credit into a free normal slot', async ({
+test('approved collection flags require a reason and move the single credit into a free normal slot', async ({
   page,
 }) => {
   await mockApi(page);
@@ -366,14 +366,14 @@ test('approved corrections require a reason and move the single credit into a fr
   ).toBeDisabled();
   await expect(
     editor(page).getByText(
-      'Enter an audit reason before changing an approved credit.',
+      'Enter an audit reason before saving collection flags.',
     ),
   ).toBeVisible();
   await editor(page)
     .getByLabel('Review reason')
     .fill('Proof was from ordinary worlds');
   await editor(page)
-    .getByRole('button', { name: 'Save corrections', exact: true })
+    .getByRole('button', { name: 'Save collection flags', exact: true })
     .click();
   await expect(
     editor(page).getByLabel('Collected on hardcore worlds', { exact: true }),

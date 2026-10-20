@@ -72,7 +72,6 @@ export function AdminPage({
   path,
   onNavigate,
   clanName,
-  hardcoreEnabled,
   onSettingsSaved,
   onBrandingSaved,
   competitionClient,
@@ -83,7 +82,6 @@ export function AdminPage({
   competitionClient: CompetitionClient;
   registerNavigation: (navigator: AdminNavigator | null) => void;
   clanName: string;
-  hardcoreEnabled: boolean;
   onSettingsSaved: (settings: SiteSettings) => void;
   onBrandingSaved: (branding: Branding, hardcore?: boolean) => void;
   initial?: PreparedAdminEntry | undefined;
@@ -444,7 +442,6 @@ export function AdminPage({
           />
         ) : (
           <AdminQueue
-            hardcoreEnabled={hardcoreEnabled}
             client={client}
             session={session}
             onAccessLost={accessLost}

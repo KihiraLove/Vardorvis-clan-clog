@@ -995,6 +995,7 @@ export class LiveAdminClient implements AdminClient {
     reason: string,
     csrf: string,
     signal: AbortSignal,
+    flags?: import('./admin-model.ts').CollectionFlags,
   ) {
     const result = parseSubmission(
       await this.json(
@@ -1003,12 +1004,17 @@ export class LiveAdminClient implements AdminClient {
         this.write(csrf, {
           expectedVersion: version,
           ...(action === 'approve' ? {} : { reason }),
+          ...(flags === undefined ? {} : { flags }),
         }),
       ),
     );
     if (
       result.id !== id ||
       result.version <= version ||
+      (flags !== undefined &&
+        (result.hardcore !== flags.hardcore ||
+          (flags.collectionType !== undefined &&
+            result.collectionType !== flags.collectionType))) ||
       result.status !==
         (
           {
@@ -1019,6 +1025,32 @@ export class LiveAdminClient implements AdminClient {
         )[action]
     )
       throw new Error('Unexpected review receipt.');
+    return result;
+  }
+  async saveCollectionFlags(
+    id: string,
+    version: number,
+    flags: import('./admin-model.ts').CollectionFlags,
+    reason: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSubmission(
+      await this.json(
+        '/api/v1/admin/submissions/' + encodeURIComponent(id) + '/flags',
+        signal,
+        this.write(csrf, { expectedVersion: version, flags, reason }, 'PATCH'),
+      ),
+    );
+    if (
+      result.id !== id ||
+      result.version <= version ||
+      result.status !== 'approved' ||
+      result.hardcore !== flags.hardcore ||
+      (flags.collectionType !== undefined &&
+        result.collectionType !== flags.collectionType)
+    )
+      throw new Error('Unexpected collection flags receipt.');
     return result;
   }
   async upload(
