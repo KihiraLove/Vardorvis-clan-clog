@@ -22,6 +22,32 @@ import {
 import { ItemMenu, type OpenItem } from './ItemMenu.tsx';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
 
+/** Retry temporary asset failures; a replacement path starts with a fresh image. */
+function ItemIcon({ path }: { path: string }) {
+  const [broken, setBroken] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!broken || attempt >= 3) return;
+    const timer = window.setTimeout(() => {
+      setAttempt((value) => value + 1);
+      setBroken(false);
+    }, [1000, 3000, 10000][attempt]);
+    return () => window.clearTimeout(timer);
+  }, [broken, attempt]);
+  return broken ? (
+    <span className="icon-missing" aria-label="Icon unavailable">
+      ?
+    </span>
+  ) : (
+    <img
+      src={attempt ? `${path}?retry=${attempt}` : path}
+      alt=""
+      draggable="false"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 /** Hover/focus opens transient history; clicking or tapping pins it until dismissal. */
 function ItemSlot({
   item,
@@ -39,7 +65,6 @@ function ItemSlot({
   close: () => void;
 }) {
   const state = itemState(item.id, credits);
-  const [broken, setBroken] = useState(false);
   const active = open?.item.id === item.id;
   const reveal = (anchor: HTMLElement, pinned: boolean) =>
     state.collected &&
@@ -69,18 +94,7 @@ function ItemSlot({
         else reveal(event.currentTarget, true);
       }}
     >
-      {broken ? (
-        <span className="icon-missing" aria-label="Icon unavailable">
-          ?
-        </span>
-      ) : (
-        <img
-          src={item.iconPath}
-          alt=""
-          draggable="false"
-          onError={() => setBroken(true)}
-        />
-      )}
+      <ItemIcon key={item.iconPath} path={item.iconPath} />
       {state.obtainCount >= 2 && (
         <span
           className="item-obtain-count"

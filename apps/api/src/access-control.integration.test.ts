@@ -1,7 +1,7 @@
 /** Upgrade the released schema, retain accounts/credits/sessions, then exercise real authorization. */
 import assert from 'node:assert/strict';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -127,15 +127,13 @@ test(
           'SELECT name,checksum FROM schema_migrations ORDER BY name',
         )
       ).rows.map((row) => row.name),
-      [
-        '001_baseline.sql',
-        '002_staff_page_access.sql',
-        '003_wom_multi_metric.sql',
-        '004_permanently_open_pages.sql',
-        '005_unmatched_runelite.sql',
-        '006_collection_types.sql',
-        '007_submission_help.sql',
-      ],
+      (
+        await readdir(
+          new URL('../../../packages/database/migrations/', import.meta.url),
+        )
+      )
+        .filter((name) => name.endsWith('.sql'))
+        .sort(),
     );
     assert.equal(
       (

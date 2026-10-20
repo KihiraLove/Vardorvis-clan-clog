@@ -48,6 +48,17 @@ for (const width of [1440, 740, 580, 390, 320]) {
       await expect(skull).toHaveCount(0);
       expect(privateReads).toBe(0);
       const original = await geometry(entry);
+      const helpBounds = await geometry(
+        page.getByRole('button', { name: 'How to submit', exact: true }),
+      );
+      expect(original.x! + original.width!).toBeCloseTo(
+        helpBounds.x! + helpBounds.width!,
+        1,
+      );
+      if (width > 580) {
+        expect(original.x).toBe(helpBounds.x);
+        expect(original.width).toBe(helpBounds.width);
+      }
       const caption = await geometry(page.locator('.log-help'));
       await entry.focus();
       await expect(entry).toHaveCSS('outline-style', 'solid');

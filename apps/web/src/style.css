@@ -1812,7 +1812,7 @@ html:has(.submission-review-dialog[open]) {
 /* Shared header and public navigation across normal, hardcore and XP views. */
 .site-header {
   border: 0;
-  padding: 18px 4px 12px;
+  padding: 18px 0 12px;
   min-height: 120px;
   flex-wrap: nowrap;
 }
@@ -1857,6 +1857,7 @@ html:has(.submission-review-dialog[open]) {
 .submission-help-button {
   grid-column: 3;
   justify-self: end;
+  width: 108px;
 }
 .public-navigation a {
   display: grid;
@@ -2493,8 +2494,12 @@ main {
 }
 .scheduling-toggle {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.scheduling-toggle h3 {
+  margin-bottom: 0;
 }
 .schedule-delete-confirm {
   max-width: min(32rem, calc(100vw - 2rem));

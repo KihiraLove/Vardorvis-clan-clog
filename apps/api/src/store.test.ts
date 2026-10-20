@@ -39,7 +39,7 @@ test(
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
-        revision: 'settings-3',
+        revision: 'settings-4',
         clanName: 'Clan name',
         hardcoreEnabled: false,
         howToSubmitMarkdown: defaultSubmissionHelp,
@@ -99,9 +99,10 @@ test(
       assert.equal(revised.statusCode, 200);
       assert.equal(revised.json().credits[0].hardcore, true);
       assert.equal(revised.json().credits.length, 1);
+      const revision = (await store.settings()).revision;
       const results = await Promise.all([
-        store.saveSettings(true, 'settings-3', 'admin-one'),
-        store.saveSettings(false, 'settings-3', 'admin-two'),
+        store.saveSettings(true, revision, 'admin-one'),
+        store.saveSettings(false, revision, 'admin-two'),
       ]);
       assert.equal(results.filter(Boolean).length, 1);
       assert.equal(

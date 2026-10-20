@@ -131,10 +131,8 @@ export function ManualSubmissionForm({
 
   return (
     <section className="admin-panel">
-      <div className="admin-section-heading">
-        <div>
-          <h2>Manual submission</h2>
-        </div>
+      <h2>Manual submission</h2>
+      <div className="admin-actions">
         <button
           className="site-button"
           type="button"

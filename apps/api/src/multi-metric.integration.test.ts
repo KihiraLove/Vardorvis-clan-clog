@@ -1,7 +1,7 @@
 /** Upgrade existing imports in place, then exercise weighted/multi-metric reconciliation. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { migrate } from '@clog/database/dist/migrate.js';
@@ -119,15 +119,16 @@ test(
           (
             await pool.query('SELECT name FROM schema_migrations ORDER BY name')
           ).rows.map((r) => r.name),
-          [
-            '001_baseline.sql',
-            '002_staff_page_access.sql',
-            '003_wom_multi_metric.sql',
-            '004_permanently_open_pages.sql',
-            '005_unmatched_runelite.sql',
-            '006_collection_types.sql',
-            '007_submission_help.sql',
-          ],
+          (
+            await readdir(
+              new URL(
+                '../../../packages/database/migrations/',
+                import.meta.url,
+              ),
+            )
+          )
+            .filter((name) => name.endsWith('.sql'))
+            .sort(),
         );
         const publicRows = await imports.activities();
         assert.equal(publicRows.competitions.length, 1);

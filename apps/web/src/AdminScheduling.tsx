@@ -213,11 +213,6 @@ export function AdminScheduling({
         aria-labelledby="permanent-pages-title"
       >
         <h2 id="permanent-pages-title">Permanently open pages</h2>
-        <p>
-          These pages produce Regular collections even during an overlapping
-          timed window. Another associated event page can still qualify a shared
-          item for Event collection. Hardcore is always Regular separately.
-        </p>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -349,8 +344,7 @@ export function AdminScheduling({
           onApplied={() => setRefresh((n) => n + 1)}
         />
         <p>
-          Times use your local timezone: <strong>{timezone}</strong>. Review the
-          UTC times before saving.
+          Times use your local timezone: <strong>{timezone}</strong>.
         </p>
         <form
           aria-busy={!state && !error}

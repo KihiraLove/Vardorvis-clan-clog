@@ -1,7 +1,7 @@
 /** Upgrade populated 004 data through the checksummed production runner. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { migrate } from './migrate.js';
@@ -108,10 +108,13 @@ test(
       ).rows[0].intake_scheduling,
       null,
     );
-    assert.equal(
-      (await client.query('SELECT count(*)::int n FROM schema_migrations'))
-        .rows[0].n,
-      7,
+    assert.deepEqual(
+      (
+        await client.query('SELECT name FROM schema_migrations ORDER BY name')
+      ).rows.map((row) => row.name),
+      (await readdir(new URL('../migrations/', import.meta.url)))
+        .filter((name) => name.endsWith('.sql'))
+        .sort(),
     );
     const unknown = randomUUID();
     await client.query(

@@ -1,7 +1,7 @@
 /** Upgrade a populated 003 installation through the real checksummed runner. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
 import { migrate } from './migrate.js';
@@ -87,9 +87,13 @@ test(
       (await client.query('SELECT * FROM collection_permanent_pages')).rowCount,
       0,
     );
-    assert.equal(
-      (await client.query('SELECT * FROM schema_migrations')).rowCount,
-      7,
+    assert.deepEqual(
+      (
+        await client.query('SELECT name FROM schema_migrations ORDER BY name')
+      ).rows.map((row) => row.name),
+      (await readdir(new URL('../migrations/', import.meta.url)))
+        .filter((name) => name.endsWith('.sql'))
+        .sort(),
     );
     await assert.rejects(
       client.query(
