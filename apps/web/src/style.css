@@ -1544,6 +1544,8 @@ html:has(.submission-review-dialog[open]) {
 .catalog-item .item-slot img {
   max-width: 48px;
   max-height: 48px;
+  filter: none;
+  opacity: 1;
 }
 .catalog-item .catalog-grip {
   position: absolute;
