@@ -34,6 +34,37 @@ const request =
   (source: unknown): typeof fetch =>
   async () =>
     Response.json(source);
+
+test('The Fractured Archive imports as Activity throughout its lifecycle and maps its canonical raid page', async () => {
+  const metric = 'the_fractured_archive';
+  assert.deepEqual(mappedPages(metric), [metric]);
+  for (const [start, end, lifecycle] of [
+    [now + 1000, now + 2000, 'future'],
+    [now - 1000, now + 1000, 'running'],
+    [now - 2000, now, 'finished'],
+  ] as const) {
+    const result = await fetchCompetition(
+      'https://wiseoldman.net/competitions/123',
+      now,
+      request({
+        ...fixture(metric, start, end),
+        title: 'The Fractured Archive',
+      }),
+    );
+    assert.equal(result.competition.kind, 'ACTIVITY');
+    assert.deepEqual(result.competition.metrics, [metric]);
+    assert.equal(result.lifecycle, lifecycle);
+    assert.deepEqual(result.skills, []);
+    assert.equal(result.results?.xp, undefined);
+    if (lifecycle === 'finished') {
+      assert.equal(result.results?.participants[0]?.gained, '9007199254740993');
+      assert.deepEqual(result.results?.participants[0]?.deltas, [
+        { metric, gained: '9007199254740993' },
+      ]);
+      assert.equal(result.results?.participants.length, 1);
+    } else assert.equal(result.results, undefined);
+  }
+});
 test('lifecycle boundaries include start and exclude end', () => {
   const c = {
     startsAt: new Date(now).toISOString(),

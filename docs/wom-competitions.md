@@ -24,6 +24,12 @@ unknown metrics and mixed types are rejected. Overall expands into the 24 canoni
 skills without counting raw XP twice, including when a skill is also selected.
 Live participant data is discarded for metadata-only imports.
 
+**The Fractured Archive** uses WOM's `the_fractured_archive` metric and imports
+as ACTIVITY with kill-count results. An active catalog page with that ID is
+suggested automatically. If your catalog predates the raid, create its page/items
+in **Items catalog** and select the page explicitly in the competition preview.
+Finished results can be imported without a matching catalog page.
+
 Standalone **EHP** and **EHB** competitions use the same preview/apply flow.
 Future/running imports store metadata; finished imports retain decimal hours and
 WOM's ranked results. They create no skill-XP contribution or page window and

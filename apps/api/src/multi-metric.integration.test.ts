@@ -290,5 +290,73 @@ test(
         );
       },
     );
+    await t.test(
+      'The Fractured Archive imports final results without catalog data and schedules future/running Activity competitions',
+      async () => {
+        const metric = 'the_fractured_archive';
+        const metrics = [{ metric, weight: '1' }];
+        const xpBefore = await xp.tracker();
+        const finished = await snapshot(8110, metrics, [
+          { id: 10, name: 'Archive winner', gains: { [metric]: '25' } },
+        ]);
+        const results = await imports.preview(finished, 'staff');
+        assert.equal(results.competition.kind, 'ACTIVITY');
+        assert.equal(results.action, 'import-results');
+        assert.deepEqual(results.pageIds, []);
+        assert.deepEqual(results.changes, []);
+        assert.equal(results.standings?.[0]?.gained, '25');
+        assert.equal((await apply(results)).scheduleId, null);
+        assert.equal(
+          (await apply(await imports.preview(finished, 'staff'))).outcome,
+          'unchanged',
+        );
+        const xpAfter = await xp.tracker();
+        assert.deepEqual(xpAfter.totals, xpBefore.totals);
+        assert.deepEqual(xpAfter.events, xpBefore.events);
+        assert.deepEqual(xpAfter.podium, xpBefore.podium);
+        const activities = await imports.activities();
+        assert.deepEqual(
+          activities.competitions.find((c) => c.id === 8110)?.metrics,
+          [metric],
+        );
+
+        // Older catalogs can still select an existing active page explicitly.
+        const future = await snapshot(8111, metrics, [], true);
+        const missing = await imports.preview(future, 'staff');
+        assert.deepEqual(missing.pageIds, []);
+        assert.ok(
+          missing.warnings.some((w) =>
+            w.includes('mapped pages are unavailable'),
+          ),
+        );
+        await assert.rejects(apply(missing), { status: 422 });
+        const manual = await imports.preview(future, 'staff', ['vardorvis']);
+        assert.ok((await apply(manual)).scheduleId);
+
+        await pool.query(
+          "INSERT INTO pages(id,category,name,sort_order) VALUES('the_fractured_archive','raids','The Fractured Archive',0)",
+        );
+        for (const [id, running] of [
+          [8112, false],
+          [8113, true],
+        ] as const) {
+          const s = await snapshot(id, metrics, [], true);
+          if (running)
+            s.competition.startsAt = new Date(now - day).toISOString();
+          const p = await imports.preview(s, 'staff');
+          assert.equal(p.lifecycle, running ? 'running' : 'future');
+          assert.equal(p.action, 'create-schedule');
+          assert.deepEqual(p.pageIds, [metric]);
+          const receipt = await apply(p);
+          const saved = (await schedules.state()).schedules.find(
+            (s) => s.id === receipt.scheduleId,
+          )!;
+          assert.deepEqual(saved.pageIds, [metric]);
+          assert.equal(saved.endsAt, s.competition.endsAt);
+          if (running) assert.ok(Date.parse(saved.startsAt) >= now);
+          else assert.equal(saved.startsAt, s.competition.startsAt);
+        }
+      },
+    );
   },
 );
