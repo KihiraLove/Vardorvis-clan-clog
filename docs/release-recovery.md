@@ -64,6 +64,6 @@ Do not rotate credentials by editing initialization seeds.
 An image rollback requires the same applied schema and compatible catalog.
 Missing, changed or unknown migration history blocks startup. Otherwise restore
 a matching backup; schema downgrade is not automatic. Recovery loses changes
-after the snapshot unless reconciled separately. Development databases predating
-`001_baseline.sql` are unsupported. Later versions retain the baseline and add
+after the snapshot unless reconciled separately. Pre-release databases with a
+different baseline checksum are unsupported. Later versions retain the baseline and add
 forward-only migrations for existing installations.

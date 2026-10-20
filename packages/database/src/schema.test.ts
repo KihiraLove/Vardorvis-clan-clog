@@ -20,18 +20,7 @@ test(
       );
       assert.deepEqual(
         migrationRows.rows.map((row) => row.name),
-        [
-          '001_baseline.sql',
-          '002_staff_page_access.sql',
-          '003_wom_multi_metric.sql',
-          '004_permanently_open_pages.sql',
-          '005_unmatched_runelite.sql',
-          '006_collection_types.sql',
-          '007_submission_help.sql',
-          '008_webp_assets.sql',
-          '009_screenshot_proof.sql',
-          '010_highlight_colours.sql',
-        ],
+        ['001_baseline.sql'],
       );
       // Roll back fixtures; migrations persist in the disposable test database.
       await client.query('BEGIN');

@@ -44,7 +44,7 @@ test(
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
-        revision: 'settings-5',
+        revision: 'settings-1',
         eventHighlight: defaultEventHighlight,
         hardcoreHighlight: defaultHardcoreHighlight,
         clanName: 'Clan name',

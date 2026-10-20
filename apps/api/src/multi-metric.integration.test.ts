@@ -1,7 +1,6 @@
-/** Upgrade existing imports in place, then exercise weighted/multi-metric reconciliation. */
+/** Exercise compatible imports and weighted/multi-metric reconciliation on the release baseline. */
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import pg from 'pg';
 import { migrate } from '@clog/database/dist/migrate.js';
@@ -12,7 +11,7 @@ import { fetchCompetition } from './competition-wom.js';
 import type { CompetitionMetric } from '@clog/domain';
 
 test(
-  'multi-metric migration preserves existing imports and supports every WOM metric type',
+  'fresh baseline supports compatible imports and every WOM metric type',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
     const url = new URL(process.env.TEST_DATABASE_URL!);
@@ -26,23 +25,7 @@ test(
       await root.query('DROP SCHEMA ' + schema + ' CASCADE');
       await root.end();
     });
-    await pool.query(
-      'CREATE TABLE schema_migrations(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    for (const name of ['001_baseline.sql', '002_staff_page_access.sql']) {
-      const bytes = await readFile(
-        new URL(
-          '../../../packages/database/migrations/' + name,
-          import.meta.url,
-        ),
-        'utf8',
-      );
-      await pool.query(bytes);
-      await pool.query(
-        'INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)',
-        [name, createHash('sha256').update(bytes).digest('hex')],
-      );
-    }
+    await migrate(url.href);
     await pool.query(
       `INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at,results_imported_at,activity_results,source_hash,archived_at)
     VALUES(8000,'ACTIVITY','Archived legacy','https://wiseoldman.net/competitions/8000','["vardorvis"]','[]',now()-interval '3 days',now()-interval '2 days',now(),
@@ -103,14 +86,14 @@ test(
       );
 
     await t.test(
-      '002 to 003 upgrade leaves live and archived records unchanged and is repeatable',
+      'repeated startup preserves current and archived imports without creating import history',
       async () => {
         await migrate(url.href);
         await migrate(url.href);
         assert.deepEqual(
           (
             await pool.query(
-              "SELECT to_jsonb(c)-'metric_definitions'-'competition_results' AS row FROM wom_competitions c ORDER BY competition_id",
+              'SELECT to_jsonb(c) AS row FROM wom_competitions c ORDER BY competition_id',
             )
           ).rows,
           before,
@@ -119,16 +102,7 @@ test(
           (
             await pool.query('SELECT name FROM schema_migrations ORDER BY name')
           ).rows.map((r) => r.name),
-          (
-            await readdir(
-              new URL(
-                '../../../packages/database/migrations/',
-                import.meta.url,
-              ),
-            )
-          )
-            .filter((name) => name.endsWith('.sql'))
-            .sort(),
+          ['001_baseline.sql'],
         );
         const publicRows = await imports.activities();
         assert.equal(publicRows.competitions.length, 1);

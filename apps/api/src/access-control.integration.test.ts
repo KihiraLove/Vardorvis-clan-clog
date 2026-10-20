@@ -1,4 +1,4 @@
-/** Upgrade the released schema, retain accounts/credits/sessions, then exercise real authorization. */
+/** Repeated baseline setup retains accounts/credits/sessions; exercise real authorization. */
 import assert from 'node:assert/strict';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
@@ -29,7 +29,7 @@ import { PgProofStore } from './proof-store.js';
 import { setupAdministrator } from './setup-admin.js';
 
 test(
-  'live baseline upgrades preserve accounts, sessions and credits; moderator pages enforce reads, writes and owner boundaries',
+  'repeated baseline setup preserves accounts, sessions and credits; moderator pages enforce reads, writes and owner boundaries',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
     const url = new URL(process.env.TEST_DATABASE_URL!);
@@ -54,19 +54,12 @@ test(
       ),
       'utf8',
     );
-    await pool.query(
-      'CREATE TABLE schema_migrations(name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    await pool.query(baseline);
+    await migrate(url.href);
     const checksum = createHash('sha256').update(baseline).digest('hex');
     assert.equal(
       checksum,
-      'e8c05aeed9e62b84a8a3286b4580a61f670c40be11a7b11eba9402663df3e6ba',
-      'The released baseline is immutable.',
-    );
-    await pool.query(
-      'INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)',
-      ['001_baseline.sql', checksum],
+      'f76f8ebfc863e069a27ecc24455a07d7a7f44bd2afeef67e778c5973403194bd',
+      'The 1.0.0 release baseline is immutable.',
     );
     const password = 'live-test-password-123456';
     await setupAdministrator(pool, password);

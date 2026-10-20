@@ -31,11 +31,12 @@ and revocation grant no credit. Claims, receipts and audits remain private.
 Revisions prevent one staff edit from overwriting another. Request keys let
 clients retry uncertain writes without creating a second submission or import.
 
-Bootstrap applies pending migrations after the immutable `001_baseline.sql`, imports the catalog and provisions
+Bootstrap initializes a fresh database with `001_baseline.sql`, applies pending
+migrations, imports the catalog and provisions
 `clog_runtime`. Only bootstrap/maintenance gets owner credentials. Startup
 checks migration names and checksums; incompatible history fails before writes.
 New migrations upgrade existing installations without recreating their data.
-Development databases predating the baseline are unsupported.
+Databases with pre-release or incompatible migration checksums are unsupported.
 
 Public reads use revision-based ETags and visibility-aware polling. Staff routes
 load code and data together and clear private state on access loss. Production

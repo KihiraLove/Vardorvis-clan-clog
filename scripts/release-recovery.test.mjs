@@ -22,17 +22,7 @@ test('release bundle binds exact infrastructure and migration bytes without copy
   assert.equal(saved.evidence, 'local-acceptance');
   assert.deepEqual(
     saved.migrations.map((entry) => entry.name),
-    [
-      '001_baseline.sql',
-      '002_staff_page_access.sql',
-      '003_wom_multi_metric.sql',
-      '004_permanently_open_pages.sql',
-      '005_unmatched_runelite.sql',
-      '006_collection_types.sql',
-      '007_submission_help.sql',
-      '008_webp_assets.sql',
-      '009_screenshot_proof.sql',
-    ],
+    ['001_baseline.sql'],
   );
   assert.deepEqual(
     Object.keys(saved.files).filter((name) => !name.startsWith('packages/')),
