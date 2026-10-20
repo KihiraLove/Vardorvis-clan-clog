@@ -64,6 +64,8 @@ async function mockAccounts(
       return route.fulfill({ status: 204 });
     }
     if (path.startsWith('/api/v1/admin/')) state.privateReads++;
+    if (path === '/api/v1/admin/catalog-updates')
+      return route.fulfill({ json: fixture.catalogUpdates });
     if (path === '/api/v1/admin/accounts') {
       if (method === 'POST') {
         const fields = route.request().postDataJSON();

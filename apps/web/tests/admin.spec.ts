@@ -110,6 +110,8 @@ async function mockAdmin(page: Page) {
         },
       });
     if (path.startsWith('/api/v1/admin/')) state.privateReads++;
+    if (path === '/api/v1/admin/catalog-updates')
+      return route.fulfill({ json: f.catalogUpdates });
     if (path === '/api/v1/admin/catalog') {
       state.catalogReads++;
       return route.fulfill({ json: state.catalog });
