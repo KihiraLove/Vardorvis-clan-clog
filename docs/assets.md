@@ -32,6 +32,10 @@ or altered pinned assets. Outdated review screenshots are not shipped.
 New catalog artwork uses the [release update manifest](catalog-import.md#release-updates).
 The original asset manifest and bytes stay pinned; a new image gets a new hash.
 The installer retains selected legacy and supplied images in PostgreSQL, served
-at immutable hash URLs. Replacing a hosted item's image requires the administrator's
+at immutable hash URLs. The Fractured Archive's 17 native icons and their exact
+source/delivered-byte hashes are recorded in its
+[artwork provenance](../catalog/updates/2026-10-20-fractured-archive.provenance.json).
+Lossless WebP conversion preserves native dimensions and transparency.
+Replacing a hosted item's image requires the administrator's
 review unless it is a newly inserted item. Retaining a custom icon does not delete
 its uploaded bytes, and normal database backups include the retained bundled bytes.

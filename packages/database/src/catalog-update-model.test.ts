@@ -89,3 +89,53 @@ test('catalog manifests reject unsafe assets, duplicate IDs, malformed fields an
   assert.throws(() => parseCatalogUpdate({ ...b, unexpected: true }));
   assert.throws(() => parseCatalogUpdate({ ...b, title: 'Bad\u0000name' }));
 });
+
+test('page membership evidence defers renamed manual pages, including shared and retired candidates', () => {
+  const local: UpdateCatalog = {
+    bindings: [],
+    items: [
+      {
+        id: 7,
+        name: 'Archive relic',
+        gameItemIds: [42],
+        active: true,
+        iconPath: null,
+      },
+    ],
+    pages: [
+      {
+        id: 'our-loot',
+        name: 'Our raid loot',
+        category: 'other',
+        itemIds: [7],
+        active: true,
+      },
+    ],
+  };
+  let page = matchCatalogUpdate(batch(), local)[0]!;
+  assert.equal(page.localId, 'our-loot');
+  assert.equal(page.candidate, true);
+  assert.deepEqual(page.pageChoices![0]!.matchedItems, ['Archive relic']);
+  local.pages.push({
+    ...local.pages[0]!,
+    id: 'shared',
+    name: 'Shared rewards',
+  });
+  page = matchCatalogUpdate(batch(), local)[0]!;
+  assert.equal(page.localId, null);
+  assert.ok(page.conflict);
+  assert.equal(page.pageChoices!.length, 2);
+  local.pages.pop();
+  local.pages[0]!.active = false;
+  page = matchCatalogUpdate(batch(), local)[0]!;
+  assert.match(page.conflict!.reason, /retired/);
+  local.pages[0]!.active = true;
+  local.bindings.push({
+    kind: 'page',
+    source_key: 'archive',
+    local_id: 'our-loot',
+  });
+  page = matchCatalogUpdate(batch(), local)[0]!;
+  assert.equal(page.candidate, false);
+  assert.equal(page.pageChoices, undefined);
+});

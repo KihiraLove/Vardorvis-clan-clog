@@ -94,9 +94,16 @@ independently for names, game IDs, pages, associations and supplied images, then
 click **Apply selected changes**. Bulk buttons select only their named category.
 An image can be adopted while retaining the local name, IDs or page choices.
 Identical images are shown as already current. Removing an extra local association
-is optional: it may be an intentional shared-page placement. An ID fix replaces
-the displayed list; keep current and use the item inspector if some valid local
-variants need to be retained separately.
+is optional: it may be an intentional shared-page placement. Game IDs have separate
+add/remove choices. Select the correct ID to add and the bad ID to remove; leave
+valid local variants unchanged. Adding an ID never implies removing the others.
+
+For a manually created page with a different name/key, review the matching,
+missing and extra item evidence. Choose one existing page to adopt, or explicitly
+create a separate page. Adoption keeps its local key and references; renaming,
+moving sections and changing memberships remain separate choices. Confirm any
+required identity adoption alongside dependent corrections, then rescan to add
+content that was waiting for the mapping.
 
 **Review later**, Escape and close apply no proposed changes; additions already
 installed are retained. Prompt state and saved decisions persist across devices

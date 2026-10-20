@@ -305,13 +305,24 @@ export class ImportReconciliation {
               'SELECT id,name FROM pages WHERE active ORDER BY category,sort_order,id',
             )
           ).rows;
-      const proposed = [
-        ...new Set(
-          competitionDefinitions(snapshot.competition).flatMap(
-            (d) => d.definition?.pageIds ?? mappedPages(d.metric),
+      const pageBindings = metadataOnly
+        ? []
+        : (
+            await client.query<{ source_key: string; local_id: string }>(
+              "SELECT source_key,local_id FROM catalog_update_bindings WHERE kind='page'",
+            )
+          ).rows;
+      const mapped = competitionDefinitions(snapshot.competition).flatMap(
+        (d) =>
+          d.definition?.pageIds ??
+          mappedPages(d.metric).map(
+            (key) =>
+              pageBindings.find((b) => b.source_key === key)?.local_id ?? key,
           ),
-        ),
-      ].filter((id) => pages.some((p) => p.id === id));
+      );
+      const proposed = [...new Set(mapped)].filter((id) =>
+        pages.some((p) => p.id === id),
+      );
       const linked = schedules.schedules.find(
         (s) => s.id === prior?.scheduleId,
       );
@@ -406,11 +417,7 @@ export class ImportReconciliation {
             ? 'The previously linked staff schedule is preserved. This import will not edit or open pages; manage that schedule in Scheduling.'
             : 'The previously linked schedule was deleted. This import will not recreate it.',
         );
-      if (
-        competitionDefinitions(snapshot.competition)
-          .flatMap((d) => d.definition?.pageIds ?? mappedPages(d.metric))
-          .some((id) => !pages.some((p) => p.id === id))
-      )
+      if (mapped.some((id) => !pages.some((p) => p.id === id)))
         warnings.push(
           'Some mapped pages are unavailable. Review the active page selections before applying.',
         );

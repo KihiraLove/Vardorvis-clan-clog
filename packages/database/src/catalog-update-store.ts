@@ -88,10 +88,25 @@ function effective(rows: BatchRow[]) {
   return batch;
 }
 async function bind(client: Client, kind: string, key: string, id: string) {
-  await client.query(
-    'INSERT INTO catalog_update_bindings(kind,source_key,local_id) VALUES($1,$2,$3) ON CONFLICT(kind,source_key) DO NOTHING',
+  const existing = (
+    await client.query(
+      'SELECT source_key,local_id FROM catalog_update_bindings WHERE kind=$1 AND (source_key=$2 OR local_id=$3)',
+      [kind, key, id],
+    )
+  ).rows;
+  if (existing.some((b) => b.source_key !== key || b.local_id !== id))
+    throw new CatalogUpdateError(
+      409,
+      'This catalog identity already has a different release mapping. Reload the review.',
+    );
+  const inserted = await client.query(
+    'INSERT INTO catalog_update_bindings(kind,source_key,local_id) VALUES($1,$2,$3) ON CONFLICT(kind,source_key) DO NOTHING RETURNING source_key',
     [kind, key, id],
   );
+  if (inserted.rowCount)
+    await client.query(
+      'UPDATE catalog_state SET version=version+1 WHERE singleton',
+    );
 }
 async function audit(
   client: Client,
@@ -294,7 +309,9 @@ async function review(
   );
   const proposals: CatalogUpdateProposal[] = [],
     conflicts: CatalogUpdateReview['conflicts'] = [],
-    currentImages: CatalogUpdateReview['currentImages'] = [];
+    currentImages: CatalogUpdateReview['currentImages'] = [],
+    pageMatches: NonNullable<CatalogUpdateReview['pageMatches']> = [],
+    gameIdReviews: NonNullable<CatalogUpdateReview['gameIdReviews']> = [];
   const propose = (p: Omit<CatalogUpdateProposal, 'id'>) => {
     if (p.before === p.after) return;
     const id = updateHash({
@@ -319,6 +336,48 @@ async function review(
   for (const page of merged.pages) {
     if (!requiredPages.has(page.key)) continue;
     const m = matches.find((m) => m.kind === 'page' && m.key === page.key)!;
+    if (m.pageChoices) {
+      pageMatches.push({
+        entityKey: page.key,
+        label: page.name,
+        candidates: m.pageChoices,
+      });
+      const hasVerifiedEvidence = m.pageChoices.some(
+        (p) => p.matchedItems.length > 0,
+      );
+      if (hasVerifiedEvidence && m.pageChoices.every((p) => p.active)) {
+        for (const candidate of m.pageChoices)
+          propose({
+            kind: 'adoptPage',
+            entityKey: page.key,
+            localId: candidate.id,
+            label: page.name + ' → ' + candidate.name,
+            before: 'Unlinked local page',
+            after: candidate.id,
+          });
+        if (!catalog.pages.some((p) => p.id === page.key))
+          propose({
+            kind: 'createPage',
+            entityKey: page.key,
+            localId: page.key,
+            label: page.name,
+            before: 'Possible existing pages require review',
+            after: page.key,
+          });
+      }
+      conflicts.push(
+        m.conflict ?? {
+          kind: 'page',
+          entityKey: page.key,
+          label: page.name,
+          reason: hasVerifiedEvidence
+            ? 'Review the matching item evidence and adopt a local page, or explicitly create a separate page.'
+            : 'Resolve the item identities first, then rescan to review this possible existing page.',
+          candidates: m.pageChoices.map((p) => ({ id: p.id, name: p.name })),
+        },
+      );
+      continue;
+    }
     if (m.conflict) {
       conflicts.push(m.conflict);
       continue;
@@ -387,12 +446,39 @@ async function review(
         after: 'Use this local item for ' + item.key,
       });
     propose({ ...common, kind: 'name', before: local.name, after: item.name });
-    propose({
+    gameIdReviews.push({
       ...common,
+      localIds: local.gameItemIds,
+      suppliedIds: item.gameItemIds,
+    });
+    // Decisions made by the original whole-list reviewer retain their exact meaning.
+    const legacy = updateHash({
       kind: 'gameIds',
+      entityKey: item.key,
+      localId: m.localId,
       before: local.gameItemIds.join(', '),
       after: item.gameItemIds.join(', '),
     });
+    if (!decisions.has(legacy)) {
+      for (const id of item.gameItemIds.filter(
+        (id) => !local.gameItemIds.includes(id),
+      ))
+        propose({
+          ...common,
+          kind: 'addGameId',
+          before: '',
+          after: String(id),
+        });
+      for (const id of local.gameItemIds.filter(
+        (id) => !item.gameItemIds.includes(id),
+      ))
+        propose({
+          ...common,
+          kind: 'removeGameId',
+          before: String(id),
+          after: '',
+        });
+    }
     const path = suppliedImagePath(item.image.sha256);
     const identical =
       local.iconPath === path || local.iconHash === item.image.sha256;
@@ -409,9 +495,16 @@ async function review(
         before: local.iconPath ?? '',
         after: path,
       });
+    if (
+      item.pageKeys.some((key) => {
+        const page = matches.find((m) => m.kind === 'page' && m.key === key)!;
+        return page.candidate || page.conflict || page.localId === null;
+      })
+    )
+      continue;
     for (const pageKey of item.pageKeys) {
       const pm = matches.find((p) => p.kind === 'page' && p.key === pageKey)!;
-      if (pm.conflict || pm.localId === null) continue;
+      if (pm.conflict || pm.localId === null || pm.candidate) continue;
       const page = catalog.pages.find((p) => p.id === pm.localId)!;
       if (!page.itemIds.includes(local.id))
         propose({ ...common, kind: 'addLink', before: '', after: page.id });
@@ -465,6 +558,8 @@ async function review(
     proposals,
     conflicts,
     currentImages,
+    pageMatches,
+    gameIdReviews,
   };
 }
 export class PgCatalogUpdates {
@@ -594,26 +689,129 @@ export class PgCatalogUpdates {
         merged = effective(rows),
         catalog = await updateCatalog(c),
         matches = matchCatalogUpdate(merged, catalog);
-      for (const id of selection.apply) {
-        const p = current.proposals.find((p) => p.id === id)!;
+      const selected = selection.apply.map((id) =>
+        current.proposals.find((p) => p.id === id)!,
+      );
+      const adoptions = new Set<string>();
+      for (const p of selected.filter((p) =>
+        ['adopt', 'adoptPage', 'createPage'].includes(p.kind),
+      )) {
+        const kind =
+          p.kind !== 'adopt' || p.before === 'Unlinked local page'
+            ? 'page'
+            : 'item';
+        const identity = kind + ':' + p.entityKey;
+        if (adoptions.has(identity))
+          throw new CatalogUpdateError(
+            422,
+            'Choose one page identity or separate-page creation per supplied page.',
+          );
+        adoptions.add(identity);
+      }
+      for (const p of selected) {
+        const kind =
+          ['pageName', 'pageCategory', 'adoptPage', 'createPage'].includes(
+            p.kind,
+          ) ||
+          (p.kind === 'adopt' && p.before === 'Unlinked local page')
+            ? 'page'
+            : 'item';
+        const match = matches.find(
+          (m) => m.kind === kind && m.key === p.entityKey,
+        )!;
+        if (
+          match.candidate &&
+          !['image', 'adopt', 'adoptPage', 'createPage'].includes(p.kind) &&
+          !adoptions.has(kind + ':' + p.entityKey)
+        )
+          throw new CatalogUpdateError(
+            422,
+            'Confirm the proposed local identity before applying its dependent corrections.',
+          );
+      }
+      for (const item of merged.items) {
+        const operations = selected.filter(
+          (p) =>
+            p.entityKey === item.key &&
+            ['addGameId', 'removeGameId'].includes(p.kind),
+        );
+        if (!operations.length) continue;
+        const local = catalog.items.find(
+          (i) => String(i.id) === operations[0]!.localId,
+        )!;
+        const resulting = new Set(local.gameItemIds);
+        for (const p of operations) {
+          if (p.kind === 'addGameId') resulting.add(Number(p.after));
+          else resulting.delete(Number(p.before));
+        }
+        if (!item.gameItemIds.some((id) => resulting.has(id)))
+          throw new CatalogUpdateError(
+            422,
+            'Retain or add a supplied game ID before removing the existing mappings.',
+          );
+      }
+      const priority = (p: CatalogUpdateProposal) =>
+        ['adoptPage', 'createPage', 'adopt'].includes(p.kind)
+          ? 0
+          : p.kind === 'addGameId'
+            ? 1
+            : 2;
+      for (const p of selected.sort((a, b) => priority(a) - priority(b))) {
         const isPage =
           p.kind === 'pageName' ||
           p.kind === 'pageCategory' ||
+          p.kind === 'adoptPage' ||
+          p.kind === 'createPage' ||
           (p.kind === 'adopt' && p.before === 'Unlinked local page');
         const kind = isPage ? 'page' : 'item';
-        await bind(c, kind, p.entityKey, p.localId);
+        if (p.kind === 'createPage') {
+          const page = merged.pages.find((p2) => p2.key === p.entityKey)!;
+          if (
+            (await c.query('SELECT count(*)::int AS n FROM pages')).rows[0].n >=
+            2000
+          )
+            throw new CatalogUpdateError(
+              422,
+              'Catalog page capacity exceeded.',
+            );
+          if (
+            !(
+              await c.query(
+                'SELECT 1 FROM catalog_sections WHERE id=$1 AND active',
+                [page.category],
+              )
+            ).rowCount
+          )
+            throw new CatalogUpdateError(
+              422,
+              'The supplied page section is unavailable.',
+            );
+          await c.query(
+            'INSERT INTO pages(id,name,category,sort_order) SELECT $1,$2,$3,COALESCE(max(sort_order),-1)+1 FROM pages WHERE category=$3',
+            [page.key, page.name, page.category],
+          );
+        }
+        const match = matches.find(
+          (m) => m.kind === kind && m.key === p.entityKey,
+        )!;
+        if (!(
+          p.kind === 'image' &&
+          match.candidate &&
+          !adoptions.has('item:' + p.entityKey)
+        ))
+          await bind(c, kind, p.entityKey, p.localId);
         if (p.kind === 'name')
           await c.query(
             "UPDATE items SET name=$2,overrides=ARRAY(SELECT DISTINCT unnest(overrides||ARRAY['name'])) WHERE id=$1",
             [p.localId, p.after],
           );
-        if (p.kind === 'gameIds') {
-          const item = merged.items.find((i) => i.key === p.entityKey)!;
+        if (p.kind === 'addGameId' || p.kind === 'removeGameId') {
+          const gameId = Number(p.kind === 'addGameId' ? p.after : p.before);
           if (
             (
               await c.query(
-                'SELECT 1 FROM game_item_ids WHERE game_item_id=ANY($1::int[]) AND item_id<>$2',
-                [item.gameItemIds, p.localId],
+                'SELECT 1 FROM game_item_ids WHERE game_item_id=$1 AND item_id<>$2',
+                [gameId, p.localId],
               )
             ).rowCount
           )
@@ -621,13 +819,23 @@ export class PgCatalogUpdates {
               409,
               'A supplied game ID belongs to another local item. Resolve it first.',
             );
-          await c.query('DELETE FROM game_item_ids WHERE item_id=$1', [
-            p.localId,
-          ]);
-          await c.query(
-            'INSERT INTO game_item_ids(game_item_id,item_id) SELECT unnest($1::int[]),$2',
-            [item.gameItemIds, p.localId],
-          );
+          if (p.kind === 'addGameId')
+            await c.query(
+              'INSERT INTO game_item_ids(game_item_id,item_id) VALUES($1,$2)',
+              [gameId, p.localId],
+            );
+          else if (
+            (
+              await c.query(
+                'DELETE FROM game_item_ids WHERE game_item_id=$1 AND item_id=$2',
+                [gameId, p.localId],
+              )
+            ).rowCount !== 1
+          )
+            throw new CatalogUpdateError(
+              409,
+              'The selected game ID mapping changed. Reload the review.',
+            );
           await c.query(
             "UPDATE items SET overrides=ARRAY(SELECT DISTINCT unnest(overrides||ARRAY['game_ids'])) WHERE id=$1",
             [p.localId],

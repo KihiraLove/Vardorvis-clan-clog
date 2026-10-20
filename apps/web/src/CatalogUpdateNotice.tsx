@@ -8,17 +8,29 @@ import type {
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
+import { useAdminDraft } from './admin-route-data.ts';
 
 const labels: Record<CatalogUpdateProposal['kind'], string> = {
   name: 'Item name',
   gameIds: 'Game item IDs',
+  addGameId: 'Add game item ID',
+  removeGameId: 'Remove local game item ID',
   image: 'Supplied image',
   pageName: 'Page name',
   pageCategory: 'Page section',
   addLink: 'Add to page',
   removeLink: 'Remove local page association',
   adopt: 'Confirm local identity',
+  adoptPage: 'Adopt existing page',
+  createPage: 'Create separate supplied page',
 };
+const proposalLabel = (p: CatalogUpdateProposal) =>
+  labels[p.kind] +
+  (p.kind === 'addGameId'
+    ? ' ' + p.after
+    : p.kind === 'removeGameId'
+      ? ' ' + p.before
+      : '');
 export function CatalogUpdateNotice({
   client,
   session,
@@ -35,6 +47,7 @@ export function CatalogUpdateNotice({
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState('');
   const [choices, setChoices] = useState<Record<string, 'apply' | 'keep'>>({});
+  useAdminDraft(false, busy);
   const dialog = useRef<HTMLDialogElement>(null),
     op = useRef<AbortController | undefined>(undefined),
     button = useRef<HTMLButtonElement>(null),
@@ -278,10 +291,10 @@ export function CatalogUpdateNotice({
           </details>
           {review.conflicts.length > 0 && (
             <section aria-label="Identity conflicts">
-              <h3>Resolve these identities in Items catalog</h3>
+              <h3>Identity review</h3>
               <p>
-                Correct the conflicting entry, then rescan. Entries are never
-                merged automatically.
+                Review page candidates below. Other conflicting entries can be
+                corrected in Items catalog, then rescanned.
               </p>
               {review.conflicts.map((c) => (
                 <p key={c.kind + ':' + c.entityKey}>
@@ -293,6 +306,54 @@ export function CatalogUpdateNotice({
               ))}
             </section>
           )}
+          {review.pageMatches?.map((match) => (
+            <section
+              key={match.entityKey}
+              aria-label={'Page candidates for ' + match.label}
+            >
+              <h3>Existing pages for {match.label}</h3>
+              <p>
+                Choose one existing page to adopt, or explicitly create a
+                separate page. Adoption keeps its local key and existing
+                memberships.
+              </p>
+              {match.candidates.map((p) => (
+                <article key={p.id} className="catalog-update-proposal">
+                  <h4>
+                    {p.name} ({p.id})
+                  </h4>
+                  <p>
+                    Section: {p.category}.{' '}
+                    {p.active
+                      ? 'Active'
+                      : 'Retired — resolve in Items catalog first'}
+                  </p>
+                  <p>Matching items: {p.matchedItems.join(', ') || 'None'}</p>
+                  <p>
+                    Missing supplied items:{' '}
+                    {p.missingItems.join(', ') || 'None'}
+                  </p>
+                  <p>Extra local items: {p.extraItems.join(', ') || 'None'}</p>
+                </article>
+              ))}
+            </section>
+          ))}
+          {review.gameIdReviews
+            ?.filter((r) => r.localIds.join(',') !== r.suppliedIds.join(','))
+            .map((r) => (
+              <details key={r.entityKey}>
+                <summary>{r.label} — review game item IDs</summary>
+                <p>
+                  Current IDs, retained unless you select a removal:{' '}
+                  {r.localIds.join(', ') || 'None'}
+                </p>
+                <p>Supplied IDs: {r.suppliedIds.join(', ')}</p>
+                <p>
+                  Extra local IDs may be valid variants. Keep them unless you
+                  identify an incorrect mapping.
+                </p>
+              </details>
+            ))}
           <label className="admin-field-label">
             Search changes
             <input
@@ -308,6 +369,8 @@ export function CatalogUpdateNotice({
                 [
                   'name',
                   'gameIds',
+                  'addGameId',
+                  'removeGameId',
                   'image',
                   'pageName',
                   'pageCategory',
@@ -339,14 +402,13 @@ export function CatalogUpdateNotice({
             </div>
             <p className="admin-note">
               Extra local page associations may be intentional. Remove only the
-              associations you want to change. Game ID fixes replace the
-              displayed list; retain any valid local variants by keeping the
-              current list and editing the item separately.
+              associations you want to change. Game IDs are added and removed
+              individually; unselected local variants are retained.
             </p>
             {visible.map((p) => (
               <article className="catalog-update-proposal" key={p.id}>
                 <h3>
-                  {p.label} — {labels[p.kind]}
+                  {p.label} — {proposalLabel(p)}
                 </h3>
                 <p className="admin-note">
                   Local entry {p.localId}; supplied key {p.entityKey}
@@ -374,13 +436,24 @@ export function CatalogUpdateNotice({
                   </p>
                 )}
                 <label className="admin-field-label">
-                  Decision for {p.label}: {labels[p.kind]}
+                  Decision for {p.label}: {proposalLabel(p)}
                   <select
                     className="admin-input"
                     value={choices[p.id] ?? ''}
                     onChange={(e) =>
                       setChoices((old) => {
                         const next = { ...old };
+                        if (
+                          e.target.value === 'apply' &&
+                          ['adoptPage', 'createPage'].includes(p.kind)
+                        )
+                          for (const other of review.proposals.filter(
+                            (other) =>
+                              other.entityKey === p.entityKey &&
+                              ['adoptPage', 'createPage'].includes(other.kind),
+                          ))
+                            if (other.id !== p.id && next[other.id] === 'apply')
+                              delete next[other.id];
                         if (e.target.value)
                           next[p.id] = e.target.value as 'apply' | 'keep';
                         else delete next[p.id];

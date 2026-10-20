@@ -11,8 +11,10 @@ const require = createRequire('/app/apps/api/package.json'),
 const { databaseUrl } = await import('/app/packages/database/dist/secrets.js');
 const { installCatalogUpdate, PgCatalogUpdates } =
   await import('/app/packages/database/dist/catalog-update-store.js');
-const { suppliedImagePath } =
+const { suppliedImagePath, updateHash } =
   await import('/app/packages/database/dist/catalog-update-model.js');
+const { readCatalogUpdates } =
+  await import('/app/packages/database/dist/catalog-update-bundle.js');
 const url = new URL(databaseUrl()),
   owner = new pg.Client({ connectionString: url.href });
 await owner.connect();
@@ -26,11 +28,17 @@ try {
     0,
     'Requires a fresh disposable installation',
   );
-  assert.equal(
-    (await owner.query('SELECT count(*)::int AS n FROM catalog_update_batches'))
-      .rows[0].n,
-    0,
-    'Requires no installed content updates',
+  const bundled = await readCatalogUpdates();
+  assert.deepEqual(
+    (
+      await owner.query(
+        'SELECT id,hash,review_required FROM catalog_update_batches ORDER BY id',
+      )
+    ).rows,
+    bundled.batches
+      .map((b) => ({ id: b.id, hash: updateHash(b), review_required: false }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    'Requires exactly the fresh-install bundled updates, without reviewed/local release fixtures',
   );
   const initialPassword = JSON.parse(
     await readFile('/data/bootstrap/administrator.json', 'utf8'),
@@ -98,6 +106,10 @@ try {
     "INSERT INTO game_item_ids(game_item_id,item_id) VALUES(1900000001,9000001);INSERT INTO page_items(page_id,item_id,slot,origin) SELECT 'abyssal_sire',9000001,max(slot)+1,'manual' FROM page_items WHERE page_id='abyssal_sire';INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,status,reviewed_by,reviewed_at) VALUES('00000000-0000-4000-8000-000000000117','manual','Upgrade fixture relic',9000001,'Fixture collector','2026-10-20','admin','','approved','fixture',now())",
   );
   const supplied = images[1];
+  // The manual fixture's wrong game ID must not identify its other local page.
+  await owner.query(
+    "INSERT INTO pages(id,name,category,sort_order) SELECT 'upgrade_fixture_page','Upgrade fixture page','other',COALESCE(max(sort_order),-1)+1 FROM pages WHERE category='other'",
+  );
   await installCatalogUpdate(
     owner,
     {
@@ -137,7 +149,11 @@ try {
     revision: ready.data.revision,
     catalogRevision: ready.data.catalogRevision,
     apply: ready.data.proposals
-      .filter((p) => ['gameIds', 'image', 'adopt', 'addLink'].includes(p.kind))
+      .filter((p) =>
+        ['addGameId', 'removeGameId', 'image', 'adopt', 'addLink'].includes(
+          p.kind,
+        ),
+      )
       .map((p) => p.id),
     keep: [],
   };
@@ -262,6 +278,12 @@ try {
   assert.equal((await store.preview(actor)).autoOpen, false);
   assert.deepEqual(await store.image(images[0].sha256), images[0].bytes);
   assert.deepEqual(await store.image(images[1].sha256), images[1].bytes);
+  for (const image of bundled.images)
+    assert.deepEqual(
+      await store.image(image.sha256),
+      image.bytes,
+      'Bundled release artwork survives database restore',
+    );
   assert.deepEqual(await store.apply(actor, key, selection), applied.data);
   assert.equal(
     (
@@ -280,6 +302,7 @@ try {
       applied: applied.data.applied,
       creditsPreserved: true,
       imagesRestored: true,
+      bundledImagesRestored: bundled.images.length,
       decisionsAndReceiptsRestored: true,
     }),
   );

@@ -39,12 +39,16 @@ export function parseCatalogUpdateReview(value: unknown): CatalogUpdateReview {
       ![
         'name',
         'gameIds',
+        'addGameId',
+        'removeGameId',
         'image',
         'pageName',
         'pageCategory',
         'addLink',
         'removeLink',
         'adopt',
+        'adoptPage',
+        'createPage',
       ].includes(String(p.kind)) ||
       typeof p.before !== 'string' ||
       typeof p.after !== 'string'
@@ -102,6 +106,47 @@ export function parseCatalogUpdateReview(value: unknown): CatalogUpdateReview {
       identical: i.identical,
     };
   });
+  const gameIds = (value: unknown) =>
+    list(value).map((id) => {
+      if (
+        !Number.isSafeInteger(id) ||
+        Number(id) < 1 ||
+        Number(id) > 2147483647
+      )
+        throw new Error('Invalid game item ID.');
+      return Number(id);
+    });
+  const pageMatches = list(row.pageMatches ?? []).map((value) => {
+    const m = object(value);
+    return {
+      entityKey: text(m.entityKey),
+      label: text(m.label),
+      candidates: list(m.candidates).map((value) => {
+        const c = object(value);
+        if (typeof c.active !== 'boolean')
+          throw new Error('Invalid page candidate.');
+        return {
+          id: text(c.id),
+          name: text(c.name),
+          category: text(c.category),
+          active: c.active,
+          matchedItems: list(c.matchedItems).map(text),
+          missingItems: list(c.missingItems).map(text),
+          extraItems: list(c.extraItems).map(text),
+        };
+      }),
+    };
+  });
+  const gameIdReviews = list(row.gameIdReviews ?? []).map((value) => {
+    const r = object(value);
+    return {
+      entityKey: text(r.entityKey),
+      localId: text(r.localId),
+      label: text(r.label),
+      localIds: gameIds(r.localIds),
+      suppliedIds: gameIds(r.suppliedIds),
+    };
+  });
   if (
     releases.length > 1000 ||
     conflicts.length > 12000 ||
@@ -116,6 +161,8 @@ export function parseCatalogUpdateReview(value: unknown): CatalogUpdateReview {
     proposals,
     conflicts,
     currentImages,
+    pageMatches,
+    gameIdReviews,
   };
 }
 async function request(

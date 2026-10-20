@@ -5,6 +5,7 @@ import type {
   CatalogUpdateConflict,
   CatalogUpdateItem,
   CatalogUpdatePage,
+  CatalogUpdateReview,
 } from '@clog/domain';
 
 export const updateHash = (value: unknown) =>
@@ -128,15 +129,28 @@ export interface UpdateMatch {
   localId: string | null;
   candidate: boolean;
   conflict?: CatalogUpdateConflict;
+  pageChoices?: NonNullable<
+    CatalogUpdateReview['pageMatches']
+  >[number]['candidates'];
 }
 export function matchCatalogUpdate(
   batch: Pick<CatalogUpdateBatch, 'items' | 'pages'>,
   catalog: UpdateCatalog,
 ): UpdateMatch[] {
   const matches: UpdateMatch[] = [];
+  const trustedItem = (
+    m: UpdateMatch | undefined,
+  ): m is UpdateMatch & { localId: string } =>
+    !!m &&
+    !m.candidate &&
+    !m.conflict &&
+    m.localId !== null &&
+    matches.filter(
+      (other) => other.kind === 'item' && other.localId === m.localId,
+    ).length === 1;
   for (const [kind, entries] of [
-    ['page', batch.pages],
     ['item', batch.items],
+    ['page', batch.pages],
   ] as const) {
     for (const entry of entries) {
       const binding = catalog.bindings.find(
@@ -172,6 +186,26 @@ export function matchCatalogUpdate(
             String(candidates[0]!.id) !== entry.key &&
             (candidates[0] as UpdateLocalPage).category !==
               (entry as CatalogUpdatePage).category;
+          if (!candidates.length) {
+            const supplied = batch.items.filter((i) =>
+              i.pageKeys.includes(entry.key),
+            );
+            const trusted = supplied.flatMap((i) => {
+              const match = matches.find(
+                (m) => m.kind === 'item' && m.key === i.key,
+              );
+              return match?.localId !== null && match?.localId !== undefined
+                ? [Number(match.localId)]
+                : (match?.conflict?.candidates.map((c) => Number(c.id)) ?? []);
+            });
+            candidates = catalog.pages.filter(
+              (p) =>
+                !catalog.bindings.some(
+                  (b) => b.kind === 'page' && b.local_id === p.id,
+                ) && p.itemIds.some((id) => trusted.includes(id)),
+            );
+            candidate = candidates.length > 0;
+          }
         }
       }
       const match: UpdateMatch = {
@@ -180,6 +214,49 @@ export function matchCatalogUpdate(
         localId: candidates.length === 1 ? String(candidates[0]!.id) : null,
         candidate,
       };
+      if (
+        kind === 'page' &&
+        !binding &&
+        candidate &&
+        !catalog.pages.some(
+          (p) =>
+            p.id === entry.key ||
+            normalizeCatalogName(p.name) === normalizeCatalogName(entry.name),
+        )
+      ) {
+        const supplied = batch.items.filter((i) =>
+          i.pageKeys.includes(entry.key),
+        );
+        const resolved = supplied.map((i) => ({
+          item: i,
+          match: matches.find((m) => m.kind === 'item' && m.key === i.key)!,
+        }));
+        match.pageChoices = (candidates as UpdateLocalPage[]).map((p) => {
+          const matched = resolved.filter(
+            ({ match: m }) =>
+              trustedItem(m) && p.itemIds.includes(Number(m.localId)),
+          );
+          return {
+            id: p.id,
+            name: p.name,
+            category: p.category,
+            active: p.active,
+            matchedItems: matched.map(({ item }) => item.name),
+            missingItems: supplied
+              .filter((i) => !matched.some((m) => m.item.key === i.key))
+              .map((i) => i.name),
+            extraItems: p.itemIds
+              .filter(
+                (id) =>
+                  !matched.some(({ match: m }) => Number(m.localId) === id),
+              )
+              .map(
+                (id) =>
+                  catalog.items.find((i) => i.id === id)?.name ?? String(id),
+              ),
+          };
+        });
+      }
       const stolen =
         kind === 'item' &&
         match.localId !== null &&
@@ -228,5 +305,7 @@ export function matchCatalogUpdate(
         candidates: [],
       };
   }
-  return matches;
+  return matches.sort((a, b) =>
+    a.kind === b.kind ? 0 : a.kind === 'page' ? -1 : 1,
+  );
 }

@@ -22,11 +22,15 @@ export interface CatalogUpdateProposal {
   kind:
     | 'name'
     | 'gameIds'
+    | 'addGameId'
+    | 'removeGameId'
     | 'image'
     | 'pageName'
     | 'pageCategory'
     | 'addLink'
     | 'removeLink'
+    | 'adoptPage'
+    | 'createPage'
     | 'adopt';
   entityKey: string;
   localId: string;
@@ -53,6 +57,26 @@ export interface CatalogUpdateReview {
   }[];
   proposals: CatalogUpdateProposal[];
   conflicts: CatalogUpdateConflict[];
+  pageMatches?: {
+    entityKey: string;
+    label: string;
+    candidates: {
+      id: string;
+      name: string;
+      category: string;
+      active: boolean;
+      matchedItems: string[];
+      missingItems: string[];
+      extraItems: string[];
+    }[];
+  }[];
+  gameIdReviews?: {
+    entityKey: string;
+    localId: string;
+    label: string;
+    localIds: number[];
+    suppliedIds: number[];
+  }[];
   currentImages: {
     name: string;
     path: string;

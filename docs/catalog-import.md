@@ -1,6 +1,8 @@
 # Catalog and sources
 
-The bundled catalog contains 1,717 canonical items across 124 source pages.
+The pinned baseline contains 1,717 canonical items across 124 source pages.
+The Fractured Archive release adds 17 items and one raid page, for 1,734 items
+and 125 pages on a fresh installation. Its pet also belongs to All Pets.
 Items can occur on several pages without duplicating credit. Startup imports the
 pinned snapshot once; it does not fetch live game data or overwrite staff edits.
 
@@ -35,8 +37,10 @@ merge identities. See [staff tools](staff-guide.md) and [asset attribution](asse
 
 New content ships through `catalog/updates/index.json`, an ordered list of immutable
 batch IDs. Add `<batch-id>.json` beside the index and place each supplied still
-WebP at `catalog/updates/assets/<sha256>.webp`. The initial index is empty; adding
-the update mechanism does not invent or download new game content.
+WebP at `catalog/updates/assets/<sha256>.webp`. The first shipped batch is
+[The Fractured Archive](../catalog/updates/2026-10-20-fractured-archive.json),
+with [source and artwork provenance](../catalog/updates/2026-10-20-fractured-archive.provenance.json).
+Runtime imports use these local, verified files without fetching live content.
 
 A batch has `id`, `title`, `pages` and `items`. Each page supplies a stable `key`,
 `name` and existing section `category`. Each item supplies a stable `key`, `name`,
@@ -61,6 +65,19 @@ can suggest identity review but never merge credit. Ambiguous, contradictory or
 retired entries remain pending. Existing fields and page arrangements are reviewed
 by the administrator; unrelated custom content remains local. A changed legacy
 snapshot uses the same review workflow instead of failing the old import guard.
+
+Page discovery also compares supplied items with verified local item identities.
+A manual page with a different name/key and matching items is offered for explicit
+adoption; partial/shared/extra membership is shown as evidence. A possible match
+defers automatic page creation. Review can adopt one active candidate or explicitly
+create a separate supplied page; retired candidates require resolution first.
+Adoption preserves the local page key, membership, ordering and schedule references.
+WOM page suggestions resolve the saved source key to the adopted local key.
+
+Game-ID corrections are individual additions/removals. Extra local IDs remain
+unless explicitly removed, so valid local variants can be retained while repairing
+wrong IDs. Whole-list decisions from the initial reviewer retain their meaning
+for equivalent corrections, and old request receipts still replay unchanged.
 
 The original `catalog/assets.json` is pinned by `catalog/legacy-assets.sha256`.
 Do not change the pin or replace/remove those images: publish new artwork through

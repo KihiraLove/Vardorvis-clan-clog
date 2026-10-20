@@ -6,7 +6,14 @@ import { mockApi } from './mock-api.ts';
 async function install(page: Page, initialReadFailure = false) {
   await mockApi(page);
   const image = '/api/v1/catalog/update-images/' + 'f'.repeat(64) + '.webp';
-  const kinds = ['name', 'gameIds', 'image', 'addLink', 'removeLink'] as const;
+  const kinds = [
+    'name',
+    'addGameId',
+    'image',
+    'addLink',
+    'removeLink',
+    'removeGameId',
+  ] as const;
   const data: CatalogUpdateReview = {
     revision: 'a'.repeat(64),
     catalogRevision: 'catalog-1',
@@ -28,7 +35,7 @@ async function install(page: Page, initialReadFailure = false) {
       before:
         kind === 'image'
           ? '/catalog/items/1249.webp'
-          : kind === 'addLink'
+          : kind === 'addLink' || kind === 'addGameId'
             ? ''
             : kind === 'removeLink'
               ? 'custom-page'
@@ -38,7 +45,7 @@ async function install(page: Page, initialReadFailure = false) {
       after:
         kind === 'image'
           ? image
-          : kind === 'removeLink'
+          : kind === 'removeLink' || kind === 'removeGameId'
             ? ''
             : kind === 'addLink'
               ? 'archive'
@@ -47,6 +54,15 @@ async function install(page: Page, initialReadFailure = false) {
                 : '50001',
     })),
     conflicts: [],
+    gameIdReviews: [
+      {
+        entityKey: 'relic',
+        localId: '77',
+        label: 'Archive relic',
+        localIds: [50002, 99999],
+        suppliedIds: [50001],
+      },
+    ],
     currentImages: [
       {
         name: 'Already correct item',
@@ -153,12 +169,111 @@ test('first-login catalog modal offers independent corrections/images and applie
   expect(state.saves[0]!.body.keep).toEqual(['1'.repeat(64)]);
   await expect(
     dialog.getByRole('combobox', {
-      name: 'Decision for Archive relic: Game item IDs',
+      name: 'Decision for Archive relic: Add game item ID 50001',
       exact: true,
     }),
   ).toBeVisible();
   expect(state.applied).toBe(1);
 });
+test('individual game IDs and page candidates remain explicit and independent', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  const { data, dialog, state } = await install(page);
+  data.proposals.push({
+    id: '7'.repeat(64),
+    kind: 'removeGameId',
+    entityKey: 'relic',
+    localId: '77',
+    label: 'Archive relic',
+    before: '50002',
+    after: '',
+  });
+  data.pageMatches = [
+    {
+      entityKey: 'archive',
+      label: 'The Archive',
+      candidates: [
+        {
+          id: 'our-loot',
+          name: 'Our raid loot',
+          category: 'raids',
+          active: true,
+          matchedItems: ['Archive relic'],
+          missingItems: ['Other treasure'],
+          extraItems: ['Local ornament'],
+        },
+      ],
+    },
+  ];
+  data.proposals.push(
+    {
+      id: '8'.repeat(64),
+      kind: 'adoptPage',
+      entityKey: 'archive',
+      localId: 'our-loot',
+      label: 'The Archive → Our raid loot',
+      before: 'Unlinked local page',
+      after: 'our-loot',
+    },
+    {
+      id: '9'.repeat(64),
+      kind: 'createPage',
+      entityKey: 'archive',
+      localId: 'archive',
+      label: 'The Archive',
+      before: 'Possible existing pages require review',
+      after: 'archive',
+    },
+  );
+  await dialog
+    .getByRole('button', { name: 'Reload review', exact: true })
+    .click();
+  await expect(
+    dialog.getByRole('region', { name: 'Page candidates for The Archive' }),
+  ).toContainText('Local ornament');
+  await dialog
+    .getByText('Archive relic — review game item IDs', { exact: true })
+    .click();
+  await expect(
+    dialog.getByText(
+      'Current IDs, retained unless you select a removal: 50002, 99999',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const decision = (name: string) =>
+    dialog.getByRole('combobox', { name: 'Decision for ' + name, exact: true });
+  await decision('Archive relic: Add game item ID 50001').selectOption('apply');
+  await decision('Archive relic: Remove local game item ID 99999').selectOption(
+    'apply',
+  );
+  await decision('Archive relic: Remove local game item ID 50002').selectOption(
+    'keep',
+  );
+  await decision('The Archive: Create separate supplied page').selectOption(
+    'apply',
+  );
+  await decision(
+    'The Archive → Our raid loot: Adopt existing page',
+  ).selectOption('apply');
+  await expect(
+    decision('The Archive: Create separate supplied page'),
+  ).toHaveValue('');
+  expect(await dialog.evaluate((d) => d.scrollWidth <= d.clientWidth)).toBe(
+    true,
+  );
+  await page.screenshot({
+    path: test.info().outputPath('catalog-page-adoption-mobile.png'),
+  });
+  await dialog
+    .getByRole('button', { name: 'Apply selected changes', exact: true })
+    .click();
+  expect(state.saves[0]!.body.apply).toEqual(
+    ['2', '6', '8'].map((n) => n.repeat(64)),
+  );
+  expect(state.saves[0]!.body.keep).toEqual(['7'.repeat(64)]);
+});
+
 test('Escape defers without changes, survives reload and permits reopening the review', async ({
   page,
 }) => {

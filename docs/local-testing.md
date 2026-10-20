@@ -14,6 +14,22 @@ Vite proxies `/api` to `127.0.0.1:3000`. The frontend always uses the API;
 there is no demo fallback. Browser fixtures live under `apps/web/tests/support`
 and cannot enter production bundles. See [configuration](environment.md).
 
+After pulling a catalog update, stop the API watcher and refresh the local database
+with its owner credentials. For an owner-configured local `.env`:
+
+```bash
+node --env-file=.env packages/database/dist/migrate.js
+node --env-file=.env packages/database/dist/catalog-import.js
+npm run dev:api
+```
+
+Compile changed domain/database/API sources first. Use the owner connection for
+these two maintenance commands; the restricted runtime role cannot install release
+batches. Starting Vite or the direct API watcher alone does not run catalog import.
+Production startup performs this refresh automatically. Existing installations
+offer the first administrator an update review; fresh installs include the content
+without an upgrade prompt. Running tests does not refresh a development database.
+
 ## Focused checks
 
 Run checks for the behavior/files you changed. Examples:

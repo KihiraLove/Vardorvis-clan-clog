@@ -360,6 +360,26 @@ test(
           if (running) assert.ok(Date.parse(saved.startsAt) >= now);
           else assert.equal(saved.startsAt, s.competition.startsAt);
         }
+        await pool.query(
+          "INSERT INTO pages(id,category,name,sort_order) VALUES('manual-archive','raids','Our raid loot',1); INSERT INTO catalog_update_bindings(kind,source_key,local_id) VALUES('page','the_fractured_archive','manual-archive')",
+        );
+        const adopted = await imports.preview(
+          await snapshot(8114, metrics, [], true),
+          'staff',
+        );
+        assert.deepEqual(adopted.pageIds, ['manual-archive']);
+        assert.ok(
+          !adopted.warnings.some((w) =>
+            w.includes('mapped pages are unavailable'),
+          ),
+        );
+        const adoptedReceipt = await apply(adopted);
+        assert.deepEqual(
+          (await schedules.state()).schedules.find(
+            (s) => s.id === adoptedReceipt.scheduleId,
+          )!.pageIds,
+          ['manual-archive'],
+        );
       },
     );
   },
