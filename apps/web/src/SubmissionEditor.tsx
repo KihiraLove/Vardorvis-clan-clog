@@ -40,6 +40,7 @@ const hiddenHints = new Set([
 const usesSavedTiming = (row: Submission) =>
   row.source !== 'manual' &&
   row.collectionReason !== 'staff_correction' &&
+  row.collectionReason !== 'event_credit_already_obtained' &&
   !(row.collectionReason === 'legacy' && row.itemId !== null);
 type ClaimDraft = Pick<
   Correction,
@@ -274,7 +275,8 @@ export function SubmissionEditor({
                 {
                   ...draft,
                   hardcore: row.hardcore,
-                  ...(!usesSavedTiming(row)
+                  ...(!usesSavedTiming(row) &&
+                  row.collectionReason !== 'event_credit_already_obtained'
                     ? { collectionType: row.collectionType ?? 'regular' }
                     : {}),
                   useIntakeTiming: usesSavedTiming(row),
@@ -459,6 +461,12 @@ export function SubmissionEditor({
               <div>
                 <dt>Collection type</dt>
                 <dd>{collectionTypeLabel(row.collectionType)}</dd>
+                {row.collectionReason === 'event_credit_already_obtained' && (
+                  <dd>
+                    Recorded as Regular because this item already had an Event
+                    collection.
+                  </dd>
+                )}
               </div>
               <div>
                 <dt>

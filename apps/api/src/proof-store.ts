@@ -16,6 +16,7 @@ import { requireClanKey } from './clan-api-key.js';
 import {
   readSubmissionFilters,
   isCollectedDuplicate,
+  resolveCollectionCredit,
 } from './submission-filters.js';
 import type { IconRecord } from './icon-storage.js';
 import { ApiError } from './types.js';
@@ -265,10 +266,15 @@ export class PgProofStore implements ProofStore {
         world.hardcore,
         receivedAt,
       );
-      const classification = classifyCollection(
-        schedulingEvidence,
+      const classification = await resolveCollectionCredit(
+        client,
         item?.id ?? null,
         world.hardcore,
+        classifyCollection(
+          schedulingEvidence,
+          item?.id ?? null,
+          world.hardcore,
+        ),
       );
       const collectedDuplicate =
         item &&

@@ -212,8 +212,11 @@ nonbreaking spaces and ordinary spaces. The list supports up to 200 names, one
 per line. Neither whitelisting nor auto allow bypasses clan/key, catalog or PNG
 validation. Auto approvals grant collection credit immediately and append an
 audit attributed to **RuneLite auto review**. If an approved Event credit already
-exists for the canonical item, another Event claim remains pending
-with an audit explaining why approval was deferred. Replays retain their
+exists for the canonical item and **Filter out regular duplicates** is off,
+another Event-eligible obtain is recorded as Regular and follows the usual
+automatic review policy. Its original scheduling evidence and fallback reason
+are retained. With the filter on, another Event claim remains pending with an
+audit explaining why approval was deferred. Replays retain their
 original pending/approved/rejected receipt after policy, filter or whitelist
 changes. With **Filter out regular duplicates** enabled, a new Regular claim for
 an item with an approved Regular credit in that mode creates a rejected submission.

@@ -14,6 +14,7 @@ import { ApiError, type BackendStore } from './types.js';
 import {
   readSubmissionFilters,
   requireCreditAvailable,
+  resolveCollectionCredit,
 } from './submission-filters.js';
 import type {
   ReviewAction,
@@ -294,12 +295,18 @@ export class PgReviewStore implements ReviewStore {
             422,
             'Collection date is invalid or in the future.',
           );
+        const classification = await resolveCollectionCredit(
+          client,
+          fields.itemId,
+          fields.hardcore,
+          { collectionType, collectionReason: 'manual' },
+        );
         if (fields.approve)
           await requireCreditAvailable(
             client,
             fields.itemId,
             fields.hardcore,
-            collectionType,
+            classification.collectionType,
           );
         if (image) await insertImage(client, image);
         const id = randomUUID();
@@ -309,7 +316,7 @@ export class PgReviewStore implements ReviewStore {
               'collected_on,date_source,proof_url,hardcore,status,reviewed_at,' +
               "reviewed_by,review_reason,proof_image_id,collection_type,collection_reason) VALUES($1,'manual',$2,$3,$4,$5,'admin'," +
               "$6,$7,$8,CASE WHEN $8='approved' THEN now() ELSE NULL END," +
-              "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11,$12,'manual') RETURNING " +
+              "CASE WHEN $8='approved' THEN $9 ELSE NULL END,$10,$11,$12,$13) RETURNING " +
               selection,
             [
               id,
@@ -323,7 +330,8 @@ export class PgReviewStore implements ReviewStore {
               actorId,
               fields.reason?.trim() || null,
               image?.id ?? null,
-              collectionType,
+              classification.collectionType,
+              classification.collectionReason,
             ],
           )
         ).rows[0]!;
@@ -552,8 +560,14 @@ export class PgReviewStore implements ReviewStore {
               422,
               'Save collection flags separately before revoking.',
             );
-          const flags =
-            fields.flags === undefined ? row : selectedFlags(row, fields.flags);
+          let flags =
+            fields.flags === undefined
+              ? {
+                  hardcore: row.hardcore,
+                  collectionType: row.collectionType,
+                  collectionReason: row.collectionReason,
+                }
+              : selectedFlags(row, fields.flags);
           if (action === 'approve') {
             if (
               row.status !== 'pending' ||
@@ -584,6 +598,13 @@ export class PgReviewStore implements ReviewStore {
                 422,
                 'Collection date is invalid or in the future.',
               );
+            flags = await resolveCollectionCredit(
+              client,
+              row.itemId,
+              flags.hardcore,
+              flags,
+              row.id,
+            );
             await requireCreditAvailable(
               client,
               row.itemId,
@@ -622,7 +643,13 @@ export class PgReviewStore implements ReviewStore {
           action = 'edit';
           if (row.status !== 'approved') throw conflict();
           reason = reasonOf(fields.reason, true);
-          const flags = selectedFlags(row, fields.flags);
+          const flags = await resolveCollectionCredit(
+            client,
+            row.itemId,
+            fields.flags.hardcore,
+            selectedFlags(row, fields.flags),
+            row.id,
+          );
           if (
             row.hardcore === flags.hardcore &&
             row.collectionType === flags.collectionType &&
@@ -716,6 +743,9 @@ export class PgReviewStore implements ReviewStore {
             !fields.useIntakeTiming &&
             (row.source === 'manual' ||
               row.collectionReason === 'staff_correction' ||
+              (row.collectionReason === 'event_credit_already_obtained' &&
+                row.itemId === fields.itemId &&
+                row.hardcore === fields.hardcore) ||
               (row.collectionReason === 'legacy' && row.itemId !== null));
           const collectionType = fields.hardcore
             ? 'regular'
@@ -757,11 +787,18 @@ export class PgReviewStore implements ReviewStore {
           );
           if (active.rowCount !== 1)
             throw new ApiError(422, 'Selected catalog item is unavailable.');
+          const classification = await resolveCollectionCredit(
+            client,
+            fields.itemId,
+            fields.hardcore,
+            { collectionType, collectionReason },
+            row.id,
+          );
           if (
             row.itemId === fields.itemId &&
             row.hardcore === fields.hardcore &&
-            row.collectionType === collectionType &&
-            row.collectionReason === collectionReason &&
+            row.collectionType === classification.collectionType &&
+            row.collectionReason === classification.collectionReason &&
             row.collectorName === fields.collectorName.trim() &&
             row.collectedOn === fields.collectedOn
           )
@@ -770,13 +807,13 @@ export class PgReviewStore implements ReviewStore {
             row.status === 'approved' &&
             (row.itemId !== fields.itemId ||
               row.hardcore !== fields.hardcore ||
-              row.collectionType !== collectionType)
+              row.collectionType !== classification.collectionType)
           )
             await requireCreditAvailable(
               client,
               fields.itemId,
               fields.hardcore,
-              collectionType,
+              classification.collectionType,
               row.id,
             );
           result = (
@@ -796,8 +833,8 @@ export class PgReviewStore implements ReviewStore {
                 fields.hardcore,
                 actorId,
                 reason || null,
-                collectionType,
-                collectionReason,
+                classification.collectionType,
+                classification.collectionReason,
               ],
             )
           ).rows[0]!;

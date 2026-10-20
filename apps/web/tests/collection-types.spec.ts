@@ -1,6 +1,98 @@
 import { expect, test } from './test.ts';
 import { mockApi } from './mock-api.ts';
 
+test('Regular fallback explains the occupied Event credit and ordinary edits preserve its classification', async ({
+  page,
+}) => {
+  const { admin } = await mockApi(page);
+  const signal = new AbortController().signal;
+  const itemId = (await admin.catalog(signal)).items.find(
+    (i) => i.name === 'Virtus mask',
+  )!.id;
+  const row = await admin.addManual(
+    {
+      itemId,
+      collectorName: 'Later collector',
+      collectedOn: '2026-10-18',
+      hardcore: false,
+      approve: true,
+      collectionType: 'regular',
+    },
+    crypto.randomUUID(),
+    'test-admin',
+    signal,
+  );
+  const detail = await admin.detail(row.id, signal);
+  let fallback = {
+    ...detail.submission,
+    source: 'runelite',
+    collectionReason: 'event_credit_already_obtained',
+    chatMessage: 'Original chat proof',
+  };
+  await page.route('**/api/v1/admin/submissions/' + row.id, async (route) => {
+    if (route.request().method() === 'PATCH') {
+      fallback = {
+        ...fallback,
+        version: row.version + 1,
+        collectorName: 'Corrected collector',
+      };
+      return route.fulfill({ json: fallback });
+    }
+    return route.fulfill({ json: { ...detail, submission: fallback } });
+  });
+  await page.goto('/admin/submissions');
+  await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
+  await page
+    .getByRole('button', {
+      name: 'Review Later collector · Virtus mask',
+      exact: true,
+    })
+    .click();
+  const editor = page.locator('.submission-editor');
+  await expect(editor.locator('.submission-facts')).toContainText(
+    'Regular collection',
+  );
+  await expect(
+    editor.getByText(
+      'Recorded as Regular because this item already had an Event collection.',
+    ),
+  ).toBeVisible();
+  await expect(
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).not.toBeChecked();
+  await editor
+    .getByLabel('Collector name', { exact: true })
+    .fill('Corrected collector');
+  await editor.getByLabel(/^Review reason/).fill('Correct name');
+  const request = page.waitForRequest(
+    (req) => req.method() === 'PATCH' && req.url().endsWith('/' + row.id),
+  );
+  await editor
+    .getByRole('button', { name: 'Save corrections', exact: true })
+    .click();
+  const payload = (await request).postDataJSON();
+  expect(payload.useIntakeTiming).toBe(false);
+  expect(payload.collectionType).toBeUndefined();
+  await expect(
+    editor.getByText(
+      'Changes saved. Review the saved claim before approving.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    editor.getByText(/The change was saved, but the latest revision/),
+  ).toHaveCount(0);
+  await expect(
+    editor.getByLabel('Collector name', { exact: true }),
+  ).toHaveValue('Corrected collector');
+  await expect(
+    editor.getByLabel('Obtained during events', { exact: true }),
+  ).not.toBeChecked();
+  await page.screenshot({
+    path: test.info().outputPath('regular-event-fallback.png'),
+  });
+});
+
 test('migrated Regular credits keep their type unless staff explicitly choose saved intake timing', async ({
   page,
 }) => {

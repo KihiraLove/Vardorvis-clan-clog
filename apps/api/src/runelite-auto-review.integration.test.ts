@@ -424,6 +424,10 @@ test(
       await pool.query(
         "INSERT INTO pages(id,name,category,sort_order) VALUES('event-credit','Event credit','bosses',0); INSERT INTO page_items(page_id,item_id,slot) VALUES('event-credit',11,0); UPDATE collection_scheduling SET enabled=true; INSERT INTO collection_log_schedules(id,title,starts_at,ends_at) VALUES('00000000-0000-4000-8000-000000000001','Credit race',now()-interval '1 hour',now()+interval '1 hour'); INSERT INTO collection_log_schedule_pages(schedule_id,page_id) VALUES('00000000-0000-4000-8000-000000000001','event-credit')",
       );
+      // With the regular filter on, occupied Event credits still defer approval.
+      await pool.query(
+        'UPDATE submission_filter_settings SET filter_collected=true',
+      );
       const concurrent = await Promise.all(
         Array.from({ length: 3 }, (_, index) =>
           submit('MEMBERS', 11, 'Collector ' + index, 'Game Clan'),

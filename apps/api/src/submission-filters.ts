@@ -61,6 +61,39 @@ export async function requireUncollected(
     );
 }
 
+/** Resolve occupied Event credit under the same item/filter locks as approval. */
+export async function resolveCollectionCredit<
+  T extends {
+    collectionType: CollectionType | null;
+    collectionReason: string;
+  },
+>(
+  client: pg.PoolClient,
+  itemId: number | null,
+  hardcore: boolean,
+  classification: T,
+  excludeId?: string,
+) {
+  if (itemId === null || hardcore || classification.collectionType !== 'event')
+    return classification;
+  await client.query('SELECT id FROM items WHERE id=$1 FOR UPDATE', [itemId]);
+  const filters = await readSubmissionFilters(client, true);
+  if (filters.filterCollected) return classification;
+  const occupied = (
+    await client.query(
+      "SELECT 1 FROM submissions WHERE item_id=$1 AND NOT hardcore AND collection_type='event' AND status='approved' AND ($2::uuid IS NULL OR id<>$2) LIMIT 1",
+      [itemId, excludeId ?? null],
+    )
+  ).rowCount;
+  return occupied
+    ? {
+        ...classification,
+        collectionType: 'regular' as const,
+        collectionReason: 'event_credit_already_obtained',
+      }
+    : classification;
+}
+
 /** Call before granting or moving a credit. The canonical lock serializes every writer. */
 export async function requireCreditAvailable(
   client: pg.PoolClient,

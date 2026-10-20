@@ -57,6 +57,15 @@ the same world mode when on. When off, Regular collections can repeat, including
 the same collector. Re-enabling it preserves existing history. Staff approval and
 corrections enforce the same rules. Revoke a credit to remove that entry only.
 
+With the regular duplicate filter off, a later Event-eligible obtain becomes
+Regular when that item already has an approved Event collection, even while the
+schedule is still open. It follows the usual review/automatic approval policy.
+The original Event credit stays intact; the later obtain appears in Regular
+history and adds to the obtain total. Review details explain this fallback.
+Approval checks again if another claim acquired the Event credit after intake.
+Ordinary edits and later Event revocation do not promote a saved fallback to Event;
+staff can explicitly request saved intake timing or change collection flags.
+
 ## Catalog
 
 Sections contain pages, and pages can share canonical items. Moving or removing
