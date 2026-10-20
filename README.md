@@ -46,7 +46,7 @@ temporary password. Visit `/admin`, sign in and choose a new password.
 Configure your clan, submission rules and optional Discord bot in Administration.
 No separate password-generation command or `.env` file is required for this setup.
 
-One container runs the website, private PostgreSQL 17 and optional bot. One
+One container runs the website, private PostgreSQL 17 and optional bot. One 
 `/data` volume keeps the database, uploads and generated credentials across
 updates. Keep the volume and [back it up](docs/release-recovery.md) before changing
 images. See [hosting and updates](docs/deployment.md) for the full setup options.

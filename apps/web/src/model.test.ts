@@ -253,7 +253,7 @@ test('normal and hardcore credits are independent; one collector is displayed in
   );
   assert.equal(
     creditLine(hc.collectors[0]!),
-    'Collected by KihiraVD on 05/10/26 on hardcore worlds',
+    'Collected by KihiraVD on 05/10/26',
   );
   assert.equal(itemState(1, modeCredits([credits[1]!], true)).collected, false);
   assert.equal(
