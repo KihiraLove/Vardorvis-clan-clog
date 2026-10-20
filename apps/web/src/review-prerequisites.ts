@@ -1,4 +1,7 @@
 /** Pure explanations for every review action; UI and tests share one policy. */
+export const unsavedClaimHint =
+  'Save or discard corrections before deciding on this claim.';
+
 export interface ReviewRequirements {
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
   requestBusy: boolean;
@@ -48,11 +51,7 @@ export function reviewBlockers(
       : null);
   const note =
     write ?? (!x.noteDirty ? 'No review note changes to save.' : null);
-  const decision =
-    common ??
-    (x.claimDirty
-      ? 'Save or discard claim corrections before deciding.'
-      : null);
+  const decision = common ?? (x.claimDirty ? unsavedClaimHint : null);
   const proof =
     decision ??
     (x.status !== 'pending' ? 'Only pending claims may be approved.' : null) ??

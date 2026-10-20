@@ -21,10 +21,13 @@ import { ProofLink } from './AdminProofLink.tsx';
 import { useAdminAction } from './use-admin-action.ts';
 import {
   reviewBlockers,
+  unsavedClaimHint,
   type ReviewActionHint,
 } from './review-prerequisites.ts';
 
 const hiddenHints = new Set([
+  'Only pending or approved claims can be edited.',
+  unsavedClaimHint,
   'No review note changes to save.',
   'There are no review note changes to discard.',
   'No claim corrections to save.',
@@ -237,8 +240,7 @@ export function SubmissionEditor({
   const perform = (decision?: 'approve' | 'reject' | 'revoke') => {
     void action.execute(
       async (signal) => {
-        if (decision && claimDirty)
-          throw new Error('Save or discard claim corrections before deciding.');
+        if (decision && claimDirty) throw new Error(unsavedClaimHint);
         if (decision === 'revoke' && flagsDirty)
           throw new Error('Save or discard collection flags before revoking.');
         if (
@@ -386,10 +388,16 @@ export function SubmissionEditor({
   });
   if (row.status === 'approved' && flagsDirty && !blockers.revoke)
     blockers.revoke = 'Save or discard collection flags before revoking.';
+  const showClaimHint = editable && claimDirty;
+  const claimHintId = `review-${hintId}-claim-draft`;
   const shownHint = (key: ReviewActionHint) =>
     blockers[key] && !hiddenHints.has(blockers[key]);
   const describedBy = (key: ReviewActionHint) =>
-    shownHint(key) ? `review-${hintId}-${key}` : undefined;
+    showClaimHint && blockers[key] === unsavedClaimHint
+      ? claimHintId
+      : shownHint(key)
+        ? `review-${hintId}-${key}`
+        : undefined;
   const explanations = (keys: ReviewActionHint[]) =>
     keys.filter(shownHint).map((key) => (
       <p
@@ -806,9 +814,9 @@ export function SubmissionEditor({
                   </p>
                 )}
             </fieldset>
-            {claimDirty && (
-              <p className="admin-note">
-                Save or discard corrections before deciding on this claim.
+            {showClaimHint && (
+              <p className="admin-note" id={claimHintId}>
+                {unsavedClaimHint}
               </p>
             )}
             {row.status === 'pending' && (

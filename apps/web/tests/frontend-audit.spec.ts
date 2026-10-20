@@ -747,7 +747,7 @@ for (const hardcore of [false, true]) {
     await expect(approve).toBeDisabled();
     await expect(
       editor
-        .getByText('Save or discard claim corrections before deciding.')
+        .getByText('Save or discard corrections before deciding on this claim.')
         .first(),
     ).toBeVisible();
     await editor.getByRole('button', { name: 'Save corrections' }).click();
