@@ -173,3 +173,11 @@ export {
   safeCorrelation,
   type ErrorCategory,
 } from './operations.js';
+export {
+  defaultEventHighlight,
+  defaultHardcoreHighlight,
+  parseHighlightColour,
+  highlightCss,
+  type HighlightColour,
+  type HighlightUpdate,
+} from './highlight-colour.js';

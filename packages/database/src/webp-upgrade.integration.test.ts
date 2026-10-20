@@ -95,7 +95,9 @@ test(
         result.push(
           (
             await client.query(
-              'SELECT to_jsonb(t) row FROM ' +
+              "SELECT to_jsonb(t)-'event_highlight'-'hardcore_highlight'-'old_event_highlight'-'new_event_highlight'-'old_hardcore_highlight'-'new_hardcore_highlight'" +
+                (table === 'site_settings' ? "-'version'" : '') +
+                ' row FROM ' +
                 table +
                 ' t ORDER BY to_jsonb(t)::text',
             )

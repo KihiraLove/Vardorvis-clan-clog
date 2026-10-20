@@ -1,5 +1,7 @@
 /** Versioned release visibility; missing public settings must fail closed. */
 export interface SiteSettings {
+  eventHighlight?: HighlightColour;
+  hardcoreHighlight?: HighlightColour;
   howToSubmitMarkdown?: string;
   copy?: SiteCopy;
   hardcore?: HardcoreAppearance;
@@ -21,6 +23,12 @@ export function parseSettings(value: unknown): SiteSettings {
   )
     throw new Error('Invalid site settings.');
   return {
+    ...(data.eventHighlight === undefined
+      ? {}
+      : { eventHighlight: parseHighlightColour(data.eventHighlight) }),
+    ...(data.hardcoreHighlight === undefined
+      ? {}
+      : { hardcoreHighlight: parseHighlightColour(data.hardcoreHighlight) }),
     revision: data.revision,
     hardcoreEnabled: data.hardcoreEnabled,
     clanName: data.clanName,
@@ -34,6 +42,8 @@ export function parseSettings(value: unknown): SiteSettings {
   };
 }
 import {
+  parseHighlightColour,
+  type HighlightColour,
   parseSubmissionHelp,
   parseSiteCopy,
   parseHardcoreAppearance,

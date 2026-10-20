@@ -10,6 +10,65 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('highlight settings send revision and CSRF, accept reordered channels and reject malformed or mismatched receipts', async () => {
+  const eventHighlight = { alpha: 0.375, blue: 128, green: 255, red: 0 };
+  let receipt: unknown = {
+    revision: 'settings-6',
+    clanName: 'Clan name',
+    hardcoreEnabled: false,
+    eventHighlight,
+  };
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(path, '/api/v1/admin/settings');
+    assert.equal(options?.method, 'PUT');
+    assert.equal(new Headers(options?.headers).get('X-CSRF-Token'), 'csrf');
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      hardcoreEnabled: false,
+      expectedRevision: 'settings-5',
+      eventHighlight,
+    });
+    return json(receipt);
+  });
+  const save = () =>
+    client.saveSettings(
+      false,
+      'settings-5',
+      'csrf',
+      signal(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { eventHighlight },
+    );
+  assert.deepEqual((await save()).eventHighlight, {
+    red: 0,
+    green: 255,
+    blue: 128,
+    alpha: 0.375,
+  });
+  for (const invalid of [
+    { ...eventHighlight, alpha: 1.1 },
+    { ...eventHighlight, red: '0' },
+    null,
+  ]) {
+    receipt = {
+      revision: 'settings-6',
+      clanName: 'Clan name',
+      hardcoreEnabled: false,
+      eventHighlight: invalid,
+    };
+    await assert.rejects(save(), /highlight/i);
+  }
+  receipt = {
+    revision: 'settings-6',
+    clanName: 'Clan name',
+    hardcoreEnabled: false,
+    eventHighlight: { ...eventHighlight, alpha: 1 },
+  };
+  await assert.rejects(save(), /Unexpected settings receipt/);
+});
+
 test('Discord status accepts explicit phases and legacy replies while rejecting contradictions and malformed states', async () => {
   for (const state of [
     'disabled',

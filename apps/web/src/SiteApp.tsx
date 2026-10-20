@@ -14,6 +14,10 @@ import type { SiteNavigation } from './use-route-navigation.ts';
 import type { RouteResources } from './app-runtime.ts';
 import {
   defaultSiteCopy,
+  defaultEventHighlight,
+  defaultHardcoreHighlight,
+  highlightCss,
+  type HighlightColour,
   defaultSubmissionHelp,
   type SiteCopy,
   type HardcoreAppearance,
@@ -27,6 +31,7 @@ function LiveLog({
   onViewChange,
   requestedPage,
   captions,
+  highlights,
 }: {
   hardcore: boolean;
   copy: SiteCopy;
@@ -35,6 +40,7 @@ function LiveLog({
   onViewChange: (view: CollectionLogView, pageId?: string) => void;
   requestedPage?: string | null;
   captions: { normal: string; hardcore: string };
+  highlights: { event: HighlightColour; hardcore: HighlightColour };
 }) {
   const state = usePublicLog();
   return (
@@ -47,6 +53,7 @@ function LiveLog({
       onViewChange={onViewChange}
       requestedPage={requestedPage}
       captions={captions}
+      highlights={highlights}
     />
   );
 }
@@ -112,6 +119,10 @@ export function SiteApp({
   const [liveClanName, setLiveClanName] = useState('');
   const [liveCopy, setLiveCopy] = useState<SiteCopy>(defaultSiteCopy);
   const [liveHelp, setLiveHelp] = useState(defaultSubmissionHelp);
+  const [highlights, setHighlights] = useState({
+    event: defaultEventHighlight,
+    hardcore: defaultHardcoreHighlight,
+  });
   const [helpOpen, setHelpOpen] = useState(false);
   const [liveBranding, setLiveBranding] = useState(defaultBranding);
   const [liveHardcoreBranding, setLiveHardcoreBranding] =
@@ -168,6 +179,10 @@ export function SiteApp({
     setLiveClanName(value.clanName);
     setLiveCopy(value.copy ?? defaultSiteCopy);
     setLiveHelp(value.howToSubmitMarkdown ?? defaultSubmissionHelp);
+    setHighlights({
+      event: value.eventHighlight ?? defaultEventHighlight,
+      hardcore: value.hardcoreHighlight ?? defaultHardcoreHighlight,
+    });
     setLiveHardcoreAppearance(
       value.hardcore ?? {
         clanName: value.clanName,
@@ -203,6 +218,10 @@ export function SiteApp({
   }, [branding.faviconPath]);
   const copy = appearance?.copy ?? defaultSiteCopy;
   const settingsSaved = (value: SiteSettings) => {
+    setHighlights({
+      event: value.eventHighlight ?? defaultEventHighlight,
+      hardcore: value.hardcoreHighlight ?? defaultHardcoreHighlight,
+    });
     setLiveCopy(value.copy ?? defaultSiteCopy);
     setLiveHelp(value.howToSubmitMarkdown ?? defaultSubmissionHelp);
     setLiveHardcoreAppearance(
@@ -234,8 +253,8 @@ export function SiteApp({
         <defs>
           {(
             [
-              ['hardcore-outline', '#ff2929'],
-              ['event-outline', '#e7bd52'],
+              ['hardcore-outline', highlights.hardcore],
+              ['event-outline', highlights.event],
             ] as const
           ).map(([id, color]) => (
             <filter
@@ -259,7 +278,10 @@ export function SiteApp({
                 operator="out"
                 result="edge"
               />
-              <feFlood floodColor={color} />
+              <feFlood
+                floodColor={highlightCss({ ...color, alpha: 1 })}
+                floodOpacity={color.alpha}
+              />
               <feComposite in2="edge" operator="in" result="colored-edge" />
               <feMerge>
                 <feMergeNode in="colored-edge" />
@@ -415,6 +437,7 @@ export function SiteApp({
             <XpPage client={xpClient} copy={copy} />
           ) : (
             <LiveLog
+              highlights={highlights}
               hardcore={hardcore}
               copy={copy}
               competitionClient={competitionClient}

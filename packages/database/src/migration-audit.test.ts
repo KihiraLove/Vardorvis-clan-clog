@@ -209,7 +209,7 @@ test(
       assert.equal(settings.clan_name, 'Clan name');
       assert.equal(settings.hardcore_name, 'Clan name');
       assert.equal(settings.hardcore_enabled, false);
-      assert.equal(settings.version, 4);
+      assert.equal(settings.version, 5);
       assert.deepEqual(settings.public_copy, settings.hardcore_copy);
       assert.equal(settings.public_copy.xpTotalCaption, undefined);
       assert.equal(

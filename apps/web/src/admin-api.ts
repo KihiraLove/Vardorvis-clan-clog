@@ -2,6 +2,7 @@
 import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
 import {
   parseAccessControl,
+  parseHighlightColour,
   parseStaffPages,
   type StaffPage,
   parseDiscordSettings,
@@ -767,6 +768,7 @@ export class LiveAdminClient implements AdminClient {
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
     howToSubmitMarkdown?: string,
+    highlights?: import('@clog/domain').HighlightUpdate,
   ) {
     const result = parseSettings(
       await this.json(
@@ -780,6 +782,7 @@ export class LiveAdminClient implements AdminClient {
             ...(clanName === undefined ? {} : { clanName }),
             ...(copy === undefined ? {} : { copy }),
             ...(hardcore === undefined ? {} : { hardcore }),
+            ...highlights,
             ...(howToSubmitMarkdown === undefined
               ? {}
               : { howToSubmitMarkdown }),
@@ -790,6 +793,12 @@ export class LiveAdminClient implements AdminClient {
     );
     if (
       result.hardcoreEnabled !== hardcoreEnabled ||
+      (highlights?.eventHighlight !== undefined &&
+        JSON.stringify(result.eventHighlight) !==
+          JSON.stringify(parseHighlightColour(highlights.eventHighlight))) ||
+      (highlights?.hardcoreHighlight !== undefined &&
+        JSON.stringify(result.hardcoreHighlight) !==
+          JSON.stringify(parseHighlightColour(highlights.hardcoreHighlight))) ||
       (howToSubmitMarkdown !== undefined &&
         result.howToSubmitMarkdown !== howToSubmitMarkdown) ||
       (clanName !== undefined && result.clanName !== clanName.trim()) ||

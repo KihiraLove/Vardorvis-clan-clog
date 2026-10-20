@@ -15,6 +15,12 @@ import {
   submissionHelpMaxBytes,
 } from '@clog/domain';
 import { SubmissionHelpContent } from './SubmissionHelp.tsx';
+import { defaultEventHighlight, defaultHardcoreHighlight } from '@clog/domain';
+import {
+  HighlightPicker,
+  highlightDraft,
+  draftHighlight,
+} from './HighlightPicker.tsx';
 export function AdminSettings({
   client,
   session,
@@ -32,6 +38,16 @@ export function AdminSettings({
 }) {
   const initial = usePreparedAdminData()?.settings;
   const initialAppearance = hardcore ? initial?.hardcore : initial;
+  const defaultHighlight = hardcore
+    ? defaultHardcoreHighlight
+    : defaultEventHighlight;
+  const savedHighlight = (value: SiteSettings | undefined) =>
+    (hardcore ? value?.hardcoreHighlight : value?.eventHighlight) ??
+    defaultHighlight;
+  const [highlight, setHighlight] = useState(() =>
+    highlightDraft(savedHighlight(initial)),
+  );
+  const colour = draftHighlight(highlight);
   const [saved, setSaved] = useState<SiteSettings | undefined>(initial);
   const [enabled, setEnabled] = useState(initial?.hardcoreEnabled ?? false);
   const [clanName, setClanName] = useState(
@@ -57,6 +73,8 @@ export function AdminSettings({
   const dirty =
     !!saved &&
     (enabled !== saved.hardcoreEnabled ||
+      JSON.stringify(highlight) !==
+        JSON.stringify(highlightDraft(savedHighlight(saved))) ||
       clanName !== (savedAppearance?.clanName ?? saved.clanName) ||
       JSON.stringify(copy) !==
         JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy) ||
@@ -66,6 +84,7 @@ export function AdminSettings({
   const apply = (value: SiteSettings) => {
     const appearance = hardcore ? value.hardcore : value;
     setSaved(value);
+    setHighlight(highlightDraft(savedHighlight(value)));
     setEnabled(value.hardcoreEnabled);
     setClanName(appearance?.clanName ?? value.clanName);
     setCopy(appearance?.copy ?? { ...defaultSiteCopy });
@@ -174,7 +193,7 @@ export function AdminSettings({
           aria-busy={!saved && !readError}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!saved || !editable || helpInvalid) return;
+            if (!saved || !editable || helpInvalid || !colour) return;
             void action.execute(
               async (signal) => {
                 const value = await client.saveSettings(
@@ -188,6 +207,9 @@ export function AdminSettings({
                     ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
                     : undefined,
                   hardcore ? undefined : parseSubmissionHelp(help),
+                  hardcore
+                    ? { hardcoreHighlight: colour }
+                    : { eventHighlight: colour },
                 );
                 if (!signal.aborted) {
                   apply(value);
@@ -245,6 +267,16 @@ export function AdminSettings({
               </label>
             ))}
           </fieldset>
+          <HighlightPicker
+            title={
+              hardcore
+                ? 'Hardcore collection highlight'
+                : 'Event collection highlight'
+            }
+            value={highlight}
+            onChange={setHighlight}
+            disabled={busy || !saved || !editable}
+          />
           {!hardcore && (
             <fieldset className="site-copy-fields submission-help-settings">
               <legend>Submission help</legend>
@@ -291,6 +323,7 @@ export function AdminSettings({
               !editable ||
               !dirty ||
               helpInvalid ||
+              !colour ||
               busy ||
               !saved ||
               !clanName.trim() ||

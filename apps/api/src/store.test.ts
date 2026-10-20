@@ -4,7 +4,12 @@ import { randomUUID, createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
-import { defaultSiteCopy, defaultSubmissionHelp } from '@clog/domain';
+import {
+  defaultSiteCopy,
+  defaultSubmissionHelp,
+  defaultEventHighlight,
+  defaultHardcoreHighlight,
+} from '@clog/domain';
 import { PgStore } from './store.js';
 import { createApp } from './app.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -39,7 +44,9 @@ test(
       await store.ready();
       assert.equal((await app.inject('/api/v1/catalog')).statusCode, 503);
       assert.deepEqual(await store.settings(), {
-        revision: 'settings-4',
+        revision: 'settings-5',
+        eventHighlight: defaultEventHighlight,
+        hardcoreHighlight: defaultHardcoreHighlight,
         clanName: 'Clan name',
         hardcoreEnabled: false,
         howToSubmitMarkdown: defaultSubmissionHelp,

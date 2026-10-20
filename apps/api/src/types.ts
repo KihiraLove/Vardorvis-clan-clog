@@ -1,5 +1,7 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
+  eventHighlight?: import('@clog/domain').HighlightColour;
+  hardcoreHighlight?: import('@clog/domain').HighlightColour;
   howToSubmitMarkdown?: string;
   copy?: import('@clog/domain').SiteCopy;
   hardcore?: import('@clog/domain').HardcoreAppearance;
@@ -120,6 +122,7 @@ export interface BackendStore {
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
     howToSubmitMarkdown?: string,
+    highlights?: import('@clog/domain').HighlightUpdate,
   ): Promise<Settings | null>;
   createSession(
     hash: string,

@@ -454,8 +454,21 @@ export function authRoutes(
       ]),
     ),
   };
+  const highlightSchema = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['red', 'green', 'blue', 'alpha'],
+    properties: {
+      red: { type: 'integer', minimum: 0, maximum: 255 },
+      green: { type: 'integer', minimum: 0, maximum: 255 },
+      blue: { type: 'integer', minimum: 0, maximum: 255 },
+      alpha: { type: 'number', minimum: 0, maximum: 1 },
+    },
+  };
   app.put<{
     Body: {
+      eventHighlight?: import('@clog/domain').HighlightColour;
+      hardcoreHighlight?: import('@clog/domain').HighlightColour;
       hardcoreEnabled: boolean;
       expectedRevision: string;
       clanName?: string;
@@ -477,6 +490,8 @@ export function authRoutes(
             hardcoreEnabled: { type: 'boolean' },
             copy: copySchema,
             howToSubmitMarkdown: { type: 'string', maxLength: 32768 },
+            eventHighlight: highlightSchema,
+            hardcoreHighlight: highlightSchema,
             hardcore: {
               type: 'object',
               additionalProperties: false,
@@ -521,6 +536,14 @@ export function authRoutes(
         request.body.copy,
         request.body.hardcore,
         request.body.howToSubmitMarkdown,
+        {
+          ...(request.body.eventHighlight === undefined
+            ? {}
+            : { eventHighlight: request.body.eventHighlight }),
+          ...(request.body.hardcoreHighlight === undefined
+            ? {}
+            : { hardcoreHighlight: request.body.hardcoreHighlight }),
+        },
       );
       if (!saved)
         throw new ApiError(

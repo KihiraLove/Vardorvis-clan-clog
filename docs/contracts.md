@@ -59,6 +59,13 @@ bytes with no NUL characters. Saves advance the settings ETag and audit the old
 and new text. Markdown is rendered without raw HTML or embedded images, with
 safe links opening separately. This content is public; do not include secrets.
 
+Settings also publish `eventHighlight` and `hardcoreHighlight`. Each is an RGBA
+object: integer `red`, `green`, `blue` channels from 0–255 and numeric `alpha`
+from 0–1. The same administrator endpoint accepts either optional colour;
+omission preserves it. Writes validate channels, check the shared revision,
+audit both old/new colours and refresh the public ETag. Defaults are opaque
+gold (231,189,82) and red (255,41,41).
+
 Review queries return at most 20 rows plus an opaque next cursor. Cursors bind
 filters/revision and cannot combine different snapshots. Audit and import history
 are similarly bounded. Approval requires saved proof acknowledgement and a matched

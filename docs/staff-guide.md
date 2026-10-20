@@ -22,6 +22,12 @@ Hardcore mode has its own collection log and hides the public page buttons;
 switching to hardcore from XP opens that log. Page links use `?page=<page-id>`;
 `hardcore=1` selects hardcore only when the feature is enabled in settings.
 
+In **Site settings**, **Event collection highlight** changes the Event item outline
+and hover-menu highlight. **Hardcore worlds** has its own **Hardcore collection
+highlight**. Choose a colour from the box or enter Red/Green/Blue values (0–255)
+and Alpha (0–100% opacity), then save the settings. Alpha affects the highlight
+only; 0% hides it without hiding the item or collection history.
+
 ## Submissions
 
 The Pending and Reviewed queues show 20 submissions per page. Next appears when

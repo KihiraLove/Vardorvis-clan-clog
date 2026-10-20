@@ -57,7 +57,7 @@ test(
         result.push(
           (
             await client.query(
-              "SELECT to_jsonb(t)-'how_to_submit_markdown'-'old_how_to_submit_markdown'-'new_how_to_submit_markdown'" +
+              "SELECT to_jsonb(t)-'event_highlight'-'hardcore_highlight'-'old_event_highlight'-'new_event_highlight'-'old_hardcore_highlight'-'new_hardcore_highlight'-'how_to_submit_markdown'-'old_how_to_submit_markdown'-'new_how_to_submit_markdown'" +
                 (table === 'site_settings' ? "-'version'" : '') +
                 ' row FROM ' +
                 table +
@@ -73,7 +73,7 @@ test(
     assert.deepEqual(await snapshot(), before);
     const settings = (await client.query('SELECT * FROM site_settings'))
       .rows[0];
-    assert.equal(settings.version, 14);
+    assert.equal(settings.version, 15);
     assert.equal(settings.how_to_submit_markdown, defaultSubmissionHelp);
     const audit = (await client.query('SELECT * FROM site_settings_audit'))
       .rows[0];

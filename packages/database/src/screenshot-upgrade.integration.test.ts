@@ -87,7 +87,7 @@ for (const custom of [false, true])
         after.how_to_submit_markdown,
         custom ? 'Custom clan instructions' : defaultSubmissionHelp,
       );
-      assert.equal(after.version, settings.version + (custom ? 0 : 1));
+      assert.equal(after.version, settings.version + (custom ? 1 : 2));
       const image = randomUUID();
       await client.query(
         'INSERT INTO submission_images(id,sha256,byte_size,width,height) VALUES($1,$2,1,1,1)',

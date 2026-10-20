@@ -162,6 +162,14 @@ export async function mockApi(
                 b.copy,
                 b.hardcore,
                 b.howToSubmitMarkdown,
+                {
+                  ...(b.eventHighlight === undefined
+                    ? {}
+                    : { eventHighlight: b.eventHighlight }),
+                  ...(b.hardcoreHighlight === undefined
+                    ? {}
+                    : { hardcoreHighlight: b.hardcoreHighlight }),
+                },
               );
       else if (path === '/api/v1/admin/clan-api-key')
         result =

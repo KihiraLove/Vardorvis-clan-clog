@@ -21,6 +21,11 @@ import {
 } from './model.ts';
 import { ItemMenu, type OpenItem } from './ItemMenu.tsx';
 import { defaultSiteCopy, type SiteCopy } from '@clog/domain';
+import {
+  defaultEventHighlight,
+  defaultHardcoreHighlight,
+  type HighlightColour,
+} from '@clog/domain';
 
 /** Retry temporary asset failures; a replacement path starts with a fresh image. */
 function ItemIcon({ path }: { path: string }) {
@@ -128,6 +133,10 @@ export function CollectionLog({
   onViewChange,
   requestedPage,
   captions,
+  highlights = {
+    event: defaultEventHighlight,
+    hardcore: defaultHardcoreHighlight,
+  },
 }: {
   data?: LogData | undefined;
   loading?: boolean;
@@ -140,6 +149,7 @@ export function CollectionLog({
   onViewChange: (view: CollectionLogView, pageId?: string) => void;
   requestedPage?: string | null | undefined;
   captions: { normal: string; hardcore: string };
+  highlights?: { event: HighlightColour; hardcore: HighlightColour };
 }) {
   const firstPage =
     data?.catalog.pages.find((page) => page.id === requestedPage) ??
@@ -471,6 +481,7 @@ export function CollectionLog({
           const current = itemState(open.item.id, credits);
           return (
             <ItemMenu
+              highlights={highlights}
               open={{
                 ...open,
                 collectors: current.collectors,

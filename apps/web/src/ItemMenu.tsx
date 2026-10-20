@@ -1,5 +1,6 @@
 /** Portal tooltip escapes the scaled/clipped log window and stays inside the viewport. */
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { highlightCss, type HighlightColour } from '@clog/domain';
 import { createPortal } from 'react-dom';
 import { creditLine, type Credit, type Item } from './model.ts';
 
@@ -15,11 +16,13 @@ export function ItemMenu({
   close,
   stay,
   leave,
+  highlights,
 }: {
   open: OpenItem;
   close: () => void;
   stay: () => void;
   leave: () => void;
+  highlights: { event: HighlightColour; hardcore: HighlightColour };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const eventCredits = open.collectors.filter(
@@ -85,11 +88,15 @@ export function ItemMenu({
       role="tooltip"
       tabIndex={0}
       className={`item-menu${open.hardcore ? ' item-menu--hardcore' : ''}`}
-      style={{
-        left: position.left,
-        top: position.top,
-        visibility: position.ready ? 'visible' : 'hidden',
-      }}
+      style={
+        {
+          '--event-highlight': highlightCss(highlights.event),
+          '--hardcore-highlight': highlightCss(highlights.hardcore),
+          left: position.left,
+          top: position.top,
+          visibility: position.ready ? 'visible' : 'hidden',
+        } as CSSProperties
+      }
       onPointerEnter={stay}
       onPointerLeave={leave}
       onFocus={stay}
