@@ -893,6 +893,7 @@ test('logout clears reviews and also denies the XP import form in the same SPA s
 test('staff can add a manual credit without a Discord claim', async ({
   page,
 }) => {
+  await page.clock.install({ time: new Date('2026-10-20T12:00:00Z') });
   await mockApi(page);
   await page.goto('/admin');
   await page.getByRole('button', { name: 'Add manual submission' }).click();
@@ -932,7 +933,7 @@ test('staff can add a manual credit without a Discord claim', async ({
     '',
   );
   await expect(form.getByLabel('Collection date', { exact: true })).toHaveValue(
-    '',
+    '2026-10-20',
   );
 });
 
