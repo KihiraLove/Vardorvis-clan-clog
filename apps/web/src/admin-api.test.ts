@@ -10,6 +10,197 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('highlight settings send revision and CSRF, accept reordered channels and reject malformed or mismatched receipts', async () => {
+  const eventHighlight = { alpha: 0.375, blue: 128, green: 255, red: 0 };
+  let receipt: unknown = {
+    revision: 'settings-6',
+    clanName: 'Clan name',
+    hardcoreEnabled: false,
+    eventHighlight,
+  };
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(path, '/api/v1/admin/settings');
+    assert.equal(options?.method, 'PUT');
+    assert.equal(new Headers(options?.headers).get('X-CSRF-Token'), 'csrf');
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      hardcoreEnabled: false,
+      expectedRevision: 'settings-5',
+      eventHighlight,
+    });
+    return json(receipt);
+  });
+  const save = () =>
+    client.saveSettings(
+      false,
+      'settings-5',
+      'csrf',
+      signal(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { eventHighlight },
+    );
+  assert.deepEqual((await save()).eventHighlight, {
+    red: 0,
+    green: 255,
+    blue: 128,
+    alpha: 0.375,
+  });
+  for (const invalid of [
+    { ...eventHighlight, alpha: 1.1 },
+    { ...eventHighlight, red: '0' },
+    null,
+  ]) {
+    receipt = {
+      revision: 'settings-6',
+      clanName: 'Clan name',
+      hardcoreEnabled: false,
+      eventHighlight: invalid,
+    };
+    await assert.rejects(save(), /highlight/i);
+  }
+  receipt = {
+    revision: 'settings-6',
+    clanName: 'Clan name',
+    hardcoreEnabled: false,
+    eventHighlight: { ...eventHighlight, alpha: 1 },
+  };
+  await assert.rejects(save(), /Unexpected settings receipt/);
+});
+
+test('Discord status accepts explicit phases and legacy replies while rejecting contradictions and malformed states', async () => {
+  for (const state of [
+    'disabled',
+    'connecting',
+    'connected',
+    'disconnected',
+    'unavailable',
+  ] as const) {
+    const value = {
+      enabled: state !== 'disabled',
+      ready: state === 'connected',
+      state,
+    };
+    const client = new LiveAdminClient(
+      async () =>
+        new Response(
+          JSON.stringify({ ...value, token: 'private ignored field' }),
+          { status: value.ready || !value.enabled ? 200 : 503 },
+        ),
+    );
+    assert.deepEqual(await client.discordStatus(signal()), value);
+  }
+  for (const value of [
+    { enabled: false, ready: true, state: 'disabled' },
+    { enabled: true, ready: false, state: 'connected' },
+    { enabled: true, ready: true, state: 'connecting' },
+    { enabled: false, ready: false, state: 'disconnected' },
+    { enabled: true, ready: false, state: 'disabled' },
+    { enabled: true, ready: false, state: 'bad' },
+    { enabled: true, ready: false, state: null },
+    {},
+  ]) {
+    const client = new LiveAdminClient(async () => json(value));
+    await assert.rejects(client.discordStatus(signal()), /Discord status/);
+  }
+  for (const value of [
+    { enabled: false, ready: false },
+    { enabled: true, ready: true },
+  ]) {
+    const client = new LiveAdminClient(async () => json(value));
+    assert.deepEqual(await client.discordStatus(signal()), {
+      ...value,
+      state: value.ready ? 'connected' : 'disabled',
+    });
+  }
+  const unhealthy = new LiveAdminClient(
+    async () =>
+      new Response(
+        JSON.stringify({ enabled: true, ready: true, state: 'connected' }),
+        { status: 503 },
+      ),
+  );
+  await assert.rejects(unhealthy.discordStatus(signal()), /Discord status/);
+});
+
+test('review decisions and separate flag saves send only their selected fields and validate receipts', async () => {
+  const row = (await adminFixtures()).detail.submission;
+  const flags = { hardcore: false, collectionType: 'event' as const };
+  for (const action of ['approve', 'reject', 'flags'] as const) {
+    const client = new LiveAdminClient(async (path, options) => {
+      assert.equal(path, '/api/v1/admin/submissions/' + row.id + '/' + action);
+      assert.equal(options!.method, action === 'flags' ? 'PATCH' : 'POST');
+      assert.equal(
+        (options!.headers as Record<string, string>)['X-CSRF-Token'],
+        'csrf',
+      );
+      assert.deepEqual(JSON.parse(String(options!.body)), {
+        expectedVersion: row.version,
+        flags,
+        ...(action === 'approve' ? {} : { reason: 'Verified' }),
+      });
+      return json({
+        ...row,
+        ...flags,
+        version: row.version + 1,
+        status: action === 'reject' ? 'rejected' : 'approved',
+      });
+    });
+    if (action === 'flags')
+      await client.saveCollectionFlags(
+        row.id,
+        row.version,
+        flags,
+        'Verified',
+        'csrf',
+        signal(),
+      );
+    else
+      await client.decide(
+        row.id,
+        row.version,
+        action,
+        'Verified',
+        'csrf',
+        signal(),
+        flags,
+      );
+  }
+  const badReceipt = new LiveAdminClient(async () =>
+    json({
+      ...row,
+      version: row.version + 1,
+      status: 'approved',
+      hardcore: true,
+      collectionType: 'regular',
+    }),
+  );
+  await assert.rejects(
+    badReceipt.decide(
+      row.id,
+      row.version,
+      'approve',
+      '',
+      'csrf',
+      signal(),
+      flags,
+    ),
+    /Unexpected review receipt/,
+  );
+  await assert.rejects(
+    badReceipt.saveCollectionFlags(
+      row.id,
+      row.version,
+      flags,
+      'Verified',
+      'csrf',
+      signal(),
+    ),
+    /Unexpected collection flags receipt/,
+  );
+});
+
 test('Discord settings use CSRF and revision checks; unavailable gateway status remains readable', async () => {
   const fields = {
     enabled: true,
@@ -53,6 +244,7 @@ test('Discord settings use CSRF and revision checks; unavailable gateway status 
   assert.deepEqual(await client.discordStatus(signal()), {
     enabled: true,
     ready: false,
+    state: 'unavailable',
   });
   await assert.rejects(
     new LiveAdminClient(async () =>
@@ -496,7 +688,7 @@ test('manual PNG uploads use multipart with CSRF and a stable retry key', async 
     { type: 'image/png' },
   );
   const path =
-    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
   const client = new LiveAdminClient(async (url, options) => {
     assert.equal(url, '/api/v1/admin/submissions/upload');
     assert.equal(

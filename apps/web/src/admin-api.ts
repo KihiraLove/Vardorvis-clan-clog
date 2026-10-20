@@ -1,12 +1,17 @@
 /** Same-origin private HTTP adapter for future admin routes; validates mutation receipts. */
 import { parseClanKey, type ClanKeyUpdate } from './clan-api-key.ts';
 import {
+  parseAccessControl,
+  parseHighlightColour,
+  parseStaffPages,
+  type StaffPage,
   parseDiscordSettings,
   parseDiscordFields,
   type DiscordSettingsUpdate,
 } from '@clog/domain';
 import {
   parseSchedulingState,
+  parsePermanentPageIds,
   parseCollectionScheduleInput,
   closedCollectionPageMessage,
   type CollectionScheduleInput,
@@ -57,6 +62,8 @@ export class AdminRequestError extends Error {
       [400, 409].includes(status) &&
         serverConflict &&
         [
+          'An approved Event collection already exists for this item. Revoke it before approving another Event collection.',
+          'Filter out regular duplicates is on and this item already has a Regular collection in this world mode.',
           'That username is already in use.',
           'The current password is incorrect.',
           'Choose a new password to finish account setup.',
@@ -93,6 +100,32 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async accessControl(signal: AbortSignal) {
+    return parseAccessControl(
+      await this.json('/api/v1/admin/access-control', signal),
+    );
+  }
+  async saveAccessControl(
+    pages: StaffPage[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const moderatorPages = parseStaffPages(pages);
+    const result = parseAccessControl(
+      await this.json(
+        '/api/v1/admin/access-control',
+        signal,
+        this.write(csrf, { moderatorPages, expectedRevision: revision }, 'PUT'),
+      ),
+    );
+    if (
+      result.revision === revision ||
+      JSON.stringify(result.moderatorPages) !== JSON.stringify(moderatorPages)
+    )
+      throw new Error('Unexpected access control receipt.');
+    return result;
+  }
   async discordStatus(signal: AbortSignal) {
     const response = await this.request('/api/v1/discord/status', {
       signal,
@@ -107,7 +140,33 @@ export class LiveAdminClient implements AdminClient {
       typeof result.ready !== 'boolean'
     )
       throw new Error('Invalid Discord status.');
-    return { enabled: result.enabled, ready: result.ready };
+    const state =
+      result.state === undefined
+        ? !result.enabled
+          ? 'disabled'
+          : result.ready
+            ? 'connected'
+            : 'unavailable'
+        : result.state;
+    if (
+      ![
+        'disabled',
+        'connecting',
+        'connected',
+        'disconnected',
+        'unavailable',
+      ].includes(String(state)) ||
+      (!result.enabled && (result.ready || state !== 'disabled')) ||
+      (result.enabled && state === 'disabled') ||
+      result.ready !== (state === 'connected') ||
+      (!response.ok && result.ready)
+    )
+      throw new Error('Invalid Discord status.');
+    return {
+      enabled: result.enabled,
+      ready: result.ready,
+      state: state as import('@clog/domain').DiscordConnectionState,
+    };
   }
   async discordSettings(signal: AbortSignal) {
     return parseDiscordSettings(
@@ -199,6 +258,27 @@ export class LiveAdminClient implements AdminClient {
     );
     if (result.revision === expectedRevision || result.enabled !== enabled)
       throw new Error('Unexpected scheduling receipt.');
+    return result;
+  }
+  async setPermanentPages(
+    pageIds: string[],
+    expectedRevision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const ids = parsePermanentPageIds(pageIds);
+    const result = parseSchedulingState(
+      await this.json(
+        '/api/v1/admin/schedules/permanent-pages',
+        signal,
+        this.write(csrf, { pageIds: ids, expectedRevision }, 'PUT'),
+      ),
+    );
+    if (
+      result.revision === expectedRevision ||
+      JSON.stringify(result.permanentlyOpenPageIds) !== JSON.stringify(ids)
+    )
+      throw new Error('Unexpected permanent pages receipt.');
     return result;
   }
   async saveSchedule(
@@ -596,6 +676,8 @@ export class LiveAdminClient implements AdminClient {
       (screenshot && !safeScreenshotPath(result.screenshotPath)) ||
       result.itemId !== fields.itemId ||
       result.hardcore !== fields.hardcore ||
+      (fields.collectionType !== undefined &&
+        result.collectionType !== fields.collectionType) ||
       result.status !== (fields.approve ? 'approved' : 'pending')
     )
       throw new Error('Unexpected manual submission receipt.');
@@ -685,6 +767,8 @@ export class LiveAdminClient implements AdminClient {
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
+    howToSubmitMarkdown?: string,
+    highlights?: import('@clog/domain').HighlightUpdate,
   ) {
     const result = parseSettings(
       await this.json(
@@ -698,6 +782,10 @@ export class LiveAdminClient implements AdminClient {
             ...(clanName === undefined ? {} : { clanName }),
             ...(copy === undefined ? {} : { copy }),
             ...(hardcore === undefined ? {} : { hardcore }),
+            ...highlights,
+            ...(howToSubmitMarkdown === undefined
+              ? {}
+              : { howToSubmitMarkdown }),
           },
           'PUT',
         ),
@@ -705,6 +793,14 @@ export class LiveAdminClient implements AdminClient {
     );
     if (
       result.hardcoreEnabled !== hardcoreEnabled ||
+      (highlights?.eventHighlight !== undefined &&
+        JSON.stringify(result.eventHighlight) !==
+          JSON.stringify(parseHighlightColour(highlights.eventHighlight))) ||
+      (highlights?.hardcoreHighlight !== undefined &&
+        JSON.stringify(result.hardcoreHighlight) !==
+          JSON.stringify(parseHighlightColour(highlights.hardcoreHighlight))) ||
+      (howToSubmitMarkdown !== undefined &&
+        result.howToSubmitMarkdown !== howToSubmitMarkdown) ||
       (clanName !== undefined && result.clanName !== clanName.trim()) ||
       (copy !== undefined &&
         JSON.stringify(result.copy) !== JSON.stringify(copy)) ||
@@ -896,7 +992,12 @@ export class LiveAdminClient implements AdminClient {
         this.write(csrf, { ...fields, expectedVersion: version }, 'PATCH'),
       ),
     );
-    if (result.id !== id || result.version <= version)
+    if (
+      result.id !== id ||
+      result.version <= version ||
+      (fields.collectionType !== undefined &&
+        result.collectionType !== fields.collectionType)
+    )
       throw new Error('Unexpected correction receipt.');
     return result;
   }
@@ -929,6 +1030,7 @@ export class LiveAdminClient implements AdminClient {
     reason: string,
     csrf: string,
     signal: AbortSignal,
+    flags?: import('./admin-model.ts').CollectionFlags,
   ) {
     const result = parseSubmission(
       await this.json(
@@ -937,12 +1039,17 @@ export class LiveAdminClient implements AdminClient {
         this.write(csrf, {
           expectedVersion: version,
           ...(action === 'approve' ? {} : { reason }),
+          ...(flags === undefined ? {} : { flags }),
         }),
       ),
     );
     if (
       result.id !== id ||
       result.version <= version ||
+      (flags !== undefined &&
+        (result.hardcore !== flags.hardcore ||
+          (flags.collectionType !== undefined &&
+            result.collectionType !== flags.collectionType))) ||
       result.status !==
         (
           {
@@ -953,6 +1060,32 @@ export class LiveAdminClient implements AdminClient {
         )[action]
     )
       throw new Error('Unexpected review receipt.');
+    return result;
+  }
+  async saveCollectionFlags(
+    id: string,
+    version: number,
+    flags: import('./admin-model.ts').CollectionFlags,
+    reason: string,
+    csrf: string,
+    signal: AbortSignal,
+  ) {
+    const result = parseSubmission(
+      await this.json(
+        '/api/v1/admin/submissions/' + encodeURIComponent(id) + '/flags',
+        signal,
+        this.write(csrf, { expectedVersion: version, flags, reason }, 'PATCH'),
+      ),
+    );
+    if (
+      result.id !== id ||
+      result.version <= version ||
+      result.status !== 'approved' ||
+      result.hardcore !== flags.hardcore ||
+      (flags.collectionType !== undefined &&
+        result.collectionType !== flags.collectionType)
+    )
+      throw new Error('Unexpected collection flags receipt.');
     return result;
   }
   async upload(

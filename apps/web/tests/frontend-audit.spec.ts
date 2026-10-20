@@ -2,6 +2,7 @@
 import { expect, test, type Page } from './test.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 import { defaultBranding } from '../src/branding.ts';
+import { resolve } from 'node:path';
 import { zeroTotals } from '../src/xp-model.ts';
 
 async function liveAdmin(page: Page, authenticated = true) {
@@ -16,6 +17,11 @@ async function liveAdmin(page: Page, authenticated = true) {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+    if (path === state.detail.submission.screenshotPath)
+      return route.fulfill({
+        path: resolve('public/skills/sailing.webp'),
+        contentType: 'image/webp',
+      });
     if (path === '/api/v1/auth/session')
       return route.fulfill({
         json: authenticated ? f.session : { authenticated: false },
@@ -320,7 +326,7 @@ for (const hardcore of [false, true]) {
     const state = await liveAdmin(page);
     state.detail.submission.hardcore = hardcore;
     const editor = await openReview(page);
-    await editor.getByLabel(/^I checked the linked proof/).check();
+    await editor.getByLabel(/^I checked the screenshot/).check();
     await editor
       .getByRole('button', { name: 'Approve submission', exact: true })
       .click();
@@ -340,9 +346,9 @@ test('audit: rejection needs a reason but does not need proof acknowledgement', 
     name: 'Reject submission',
     exact: true,
   });
-  await editor.getByLabel(/^I checked the linked proof/).check();
+  await editor.getByLabel(/^I checked the screenshot/).check();
   await expect(reject).toBeDisabled();
-  await editor.getByLabel(/^I checked the linked proof/).uncheck();
+  await editor.getByLabel(/^I checked the screenshot/).uncheck();
   await editor
     .getByLabel('Review reason')
     .fill('The evidence does not establish this claim.');
@@ -727,7 +733,7 @@ for (const hardcore of [false, true]) {
     state.detail.submission.itemId = null;
     const editor = await openReview(page);
     const approve = editor.getByRole('button', { name: 'Approve submission' });
-    const check = editor.getByLabel(/^I checked the linked proof/);
+    const check = editor.getByLabel(/^I checked the screenshot/);
     await expect(approve).toBeDisabled();
     await expect(
       editor
@@ -741,7 +747,7 @@ for (const hardcore of [false, true]) {
     await expect(approve).toBeDisabled();
     await expect(
       editor
-        .getByText('Save or discard claim corrections before deciding.')
+        .getByText('Save or discard corrections before deciding on this claim.')
         .first(),
     ).toBeVisible();
     await editor.getByRole('button', { name: 'Save corrections' }).click();
@@ -758,8 +764,10 @@ for (const hardcore of [false, true]) {
       .getByLabel('Collected on hardcore worlds')
       .setChecked(!hardcore);
     await expect(check).not.toBeChecked();
-    await expect(check).toBeDisabled();
-    await editor.getByRole('button', { name: 'Discard corrections' }).click();
+    await expect(check).toBeEnabled();
+    await editor
+      .getByRole('button', { name: 'Discard collection flags' })
+      .click();
     await expect(
       editor.getByLabel('Collected on hardcore worlds'),
     ).toHaveJSProperty('checked', hardcore);
@@ -779,6 +787,7 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
 }) => {
   const state = await liveAdmin(page);
   state.detail.submission.proofUrl = 'https://example.com/not-valid';
+  state.detail.submission.screenshotPath = null;
   const editor = await openReview(page);
   await expect(
     editor.getByRole('button', { name: 'Approve submission' }),
@@ -786,11 +795,11 @@ test('audit: missing proof blocks approval but not reasoned rejection', async ({
   await expect(
     editor
       .getByText(
-        'A valid proof link, chat message or saved screenshot is required for approval.',
+        'A saved screenshot or RuneLite chat message is required for approval.',
       )
       .first(),
   ).toBeVisible();
-  await expect(editor.getByLabel(/^I checked the linked proof/)).toBeDisabled();
+  await expect(editor.getByLabel(/^I checked the screenshot/)).toBeDisabled();
   const reject = editor.getByRole('button', { name: 'Reject submission' });
   await expect(reject).toBeDisabled();
   await expect(
@@ -822,19 +831,20 @@ test('audit: approved credit requires an audit reason for claim corrections or r
     editor.getByText('Enter a reason before revoking a credit.'),
   ).toHaveCount(0);
   await editor.getByLabel('Collected on hardcore worlds').uncheck();
-  const save = editor.getByRole('button', { name: 'Save corrections' });
+  const save = editor.getByRole('button', { name: 'Save collection flags' });
   await expect(save).toBeDisabled();
   await expect(
-    editor.getByText(
-      'Enter an audit reason before changing an approved credit.',
-    ),
+    editor.getByText('Enter an audit reason before saving collection flags.'),
   ).toBeVisible();
   await editor
     .getByLabel('Review reason')
     .fill('Corrected world mode after proof review');
   await expect(save).toBeEnabled();
   await expect(revoke).toBeDisabled();
-  await editor.getByRole('button', { name: 'Discard corrections' }).click();
+  await editor
+    .getByRole('button', { name: 'Discard collection flags' })
+    .click();
+  await editor.getByLabel('Review reason').fill('');
   await expect(revoke).toBeDisabled();
   await expect(
     editor.getByText('Enter a reason before revoking a credit.'),
@@ -862,7 +872,7 @@ test('audit: a pending approve request shows progress, serializes clicks and nev
     await route.fulfill({ status: 409, json: { error: 'stale request' } });
   });
   const editor = await openReview(page);
-  await editor.getByLabel(/^I checked the linked proof/).check();
+  await editor.getByLabel(/^I checked the screenshot/).check();
   const approve = editor.getByRole('button', { name: 'Approve submission' });
   try {
     await approve.click();
@@ -877,7 +887,7 @@ test('audit: a pending approve request shows progress, serializes clicks and nev
   await expect(approve).not.toHaveAttribute('aria-busy', 'true');
   await expect(approve).toBeDisabled();
   await expect(
-    editor.getByLabel(/^I checked the linked proof/),
+    editor.getByLabel(/^I checked the screenshot/),
   ).not.toBeChecked();
   await expect(editor.getByRole('alert')).toContainText(
     'Another change was saved.',

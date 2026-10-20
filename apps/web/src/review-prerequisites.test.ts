@@ -32,7 +32,7 @@ test('saved ordinary/hardcore claims can be approved with proof acknowledgement'
     );
     assert.equal(
       reviewBlockers({ ...ready, validProof: false }).approve?.includes(
-        'proof',
+        'screenshot',
       ),
       true,
     );
@@ -123,8 +123,19 @@ test('pending requests, stale reads and lost queue access block all mutations wi
     ] as const)
       assert.match(b[action]!, new RegExp(phrase, 'u'), action);
   }
-  assert.match(
-    reviewBlockers({ ...ready, status: 'revoked', noteDirty: true }).note!,
-    /Only pending or approved/u,
-  );
+  for (const status of ['rejected', 'revoked'] as const) {
+    const blockers = reviewBlockers({
+      ...ready,
+      status,
+      noteDirty: true,
+      claimDirty: true,
+    });
+    for (const action of [
+      'claim',
+      'discardClaim',
+      'note',
+      'discardNote',
+    ] as const)
+      assert.match(blockers[action]!, /Only pending or approved/u);
+  }
 });

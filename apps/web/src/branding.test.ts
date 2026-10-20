@@ -6,7 +6,7 @@ const id = '00000000-0000-4000-8000-000000000001';
 const branding = {
   revision: 'branding-2',
   logoPath: `/api/v1/branding/${id}.webp`,
-  faviconPath: `/api/v1/branding/${id}/favicon.png`,
+  faviconPath: `/api/v1/branding/${id}/favicon.webp`,
 };
 test('live branding allows only a matched same-origin logo/favicon pair', () => {
   assert.deepEqual(parseBranding(defaultBranding), defaultBranding);
@@ -14,7 +14,7 @@ test('live branding allows only a matched same-origin logo/favicon pair', () => 
   for (const invalid of [
     { ...branding, logoPath: 'https://example.com/logo.svg' },
     { ...branding, logoPath: 'javascript:alert(1)' },
-    { ...branding, faviconPath: '/favicon.ico' },
+    { ...branding, faviconPath: '/favicon.webp' },
     { ...branding, revision: 'branding-0' },
     { ...branding, logoPath: '/api/v1/branding/../file.webp' },
   ])

@@ -1,21 +1,24 @@
 # Clan Collection Log
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-72A5F2?logo=kofi&logoColor=white)](https://ko-fi.com/kihiralove)
+[![Downloads](https://img.shields.io/github/downloads/KihiraLove/clan-clog/total)](https://github.com/KihiraLove/clan-clog/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/KihiraLove/clan-clog/ci.yml?label=CI)](https://github.com/KihiraLove/clan-clog/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/KihiraLove/clan-clog?include_prereleases&sort=date&label=version)](https://github.com/KihiraLove/clan-clog/releases)
+
 A self-hosted Old School RuneScape collection log for any clan. Track ordinary
 and hardcore collections, review evidence, manage your catalog, accept Discord
 and RuneLite submissions, and import Wise Old Man competitions.
 
-Version: **1.0.0-SNAPSHOT**. Development databases from earlier snapshots must
-be recreated; there is no pre-release upgrade path.
-
 ## Get started
 
-Install Docker with Compose v2. Add this service and volume to your existing
-Compose file, replacing `v1.0.0` with an available published release:
+Install Docker with Compose v2. Choose an image tag from the
+[published releases](https://github.com/KihiraLove/clan-clog/releases), then add
+this service and volume to your Compose file, replacing `YOUR_RELEASE_TAG`:
 
 ```yaml
 services:
   clan-clog:
-    image: ghcr.io/kihiralove/clan-clog:v1.0.0
+    image: ghcr.io/kihiralove/clan-clog:YOUR_RELEASE_TAG
     restart: unless-stopped
     stop_grace_period: 90s
     environment:
@@ -40,20 +43,21 @@ docker compose logs clan-clog
 
 Near the beginning of the log, find **FIRST LOGIN**, username `admin` and its
 temporary password. Visit `/admin`, sign in and choose a new password.
-Interrupted setup keeps the same temporary password; once changed, startup
-neither prints nor replaces it. No password-generation command or secret-filled
-`.env` is required. Configure your clan, submission rules and optional Discord
-bot in Administration.
+Configure your clan, submission rules and optional Discord bot in Administration.
+No separate password-generation command or `.env` file is required for this setup.
 
 One container runs the website, private PostgreSQL 17 and optional bot. One
 `/data` volume keeps the database, uploads and generated credentials across
-updates. Keep the volume and back it up before changing images.
+updates. Keep the volume and [back it up](docs/release-recovery.md) before changing
+images. See [hosting and updates](docs/deployment.md) for the full setup options.
 
-## Build the current snapshot locally
+## Install from source
 
-Clone this repository and run from its directory:
+To build locally instead of using a published image:
 
 ```bash
+git clone https://github.com/KihiraLove/clan-clog.git
+cd clan-clog
 cp .env.example .env
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait clan-clog
 docker compose -f compose.yaml -f compose.dev.yaml logs clan-clog
@@ -61,6 +65,20 @@ docker compose -f compose.yaml -f compose.dev.yaml logs clan-clog
 
 The example origin is http://127.0.0.1:8088 for local use. The build is named
 `clan-clog:dev`; the same first-login flow applies.
+
+## Repository map
+
+| Path                                    | Contents                                      |
+| --------------------------------------- | --------------------------------------------- |
+| [apps/web](apps/web/)                   | Website and administration panel              |
+| [apps/api](apps/api/)                   | API, authentication and submission processing |
+| [apps/bot](apps/bot/)                   | Optional Discord integration                  |
+| [packages/domain](packages/domain/)     | Shared validation and collection rules        |
+| [packages/database](packages/database/) | Database migrations, catalog and maintenance  |
+| [catalog](catalog/)                     | Catalog sources and asset provenance          |
+| [infra](infra/)                         | Container, hosting and recovery helpers       |
+| [scripts](scripts/)                     | Development and validation tools              |
+| [docs](docs/)                           | Configuration, usage and technical guides     |
 
 ## Guides
 
@@ -71,18 +89,6 @@ The example origin is http://127.0.0.1:8088 for local use. The build is named
 - [Backups and recovery](docs/release-recovery.md) and [maintenance](docs/maintenance.md)
 - [Architecture](docs/architecture.md), [API contracts](docs/contracts.md) and [security](docs/security.md)
 - [Development and tests](docs/local-testing.md), [contributing](CONTRIBUTING.md) and [asset attribution](docs/assets.md)
-
-## Run the complete checks
-
-With Node 24 and Linux Docker running:
-
-```bash
-node scripts/check-local.mjs
-```
-
-The runner uses disposable data without reading your runtime `.env`. Reports
-are saved in `.data/local-checks/<run-id>/`. Published GitHub Releases run
-acceptance before publishing the image; ordinary PR pushes do not run hosted CI.
 
 Project code is [MIT licensed](LICENSE). Game and third-party assets retain
 their own ownership and licenses; see the asset attribution guide.

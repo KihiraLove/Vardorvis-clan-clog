@@ -15,10 +15,9 @@ ghcr.io/<repository-owner>/clan-clog:release-<full-commit-sha>
 ghcr.io/<repository-owner>/clan-clog:sha-<full-commit-sha>
 ```
 
-Ordinary pushes, tags and drafts do not publish. Select an available release;
-`1.0.0-SNAPSHOT` is not a published stable release. The repository Compose file
-uses `IMAGE_NAME` and `IMAGE_TAG` from `.env`; an inline service can use a literal
-image reference and needs no `.env`.
+Ordinary pushes, tags and drafts do not publish. Select an available published
+release. The repository Compose file uses `IMAGE_NAME` and `IMAGE_TAG` from `.env`;
+an inline service can use a literal image reference and needs no `.env`.
 
 Persist `/data` in one named volume. It contains PostgreSQL 17, uploads and
 credentials. Do not change container UID, mount PostgreSQL separately, or use
@@ -48,6 +47,10 @@ docker compose up -d --no-deps --wait clan-clog
 
 Use your selected service name in place of `clan-clog`. Accounts and credentials
 remain in the volume; updates never reset the administrator.
+Startup applies pending, checksummed migrations automatically. Released migrations
+are immutable; new versions add forward-only migrations and preserve existing data.
+After a schema upgrade, an older image may be incompatible. Restore the coordinated
+backup to roll back both the database and image; do not delete migration history.
 
 For an optional pinned updater, keep `infra/` from a reviewed release and run
 from your Compose directory:

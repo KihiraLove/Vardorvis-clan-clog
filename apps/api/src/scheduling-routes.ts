@@ -78,6 +78,39 @@ export function schedulingRoutes(
       );
     },
   );
+  app.put<{ Body: { pageIds: string[]; expectedRevision: string } }>(
+    '/api/v1/admin/schedules/permanent-pages',
+    {
+      onRequest: async (request) => {
+        await staff(request, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['pageIds', 'expectedRevision'],
+          properties: {
+            expectedRevision: revision,
+            pageIds: {
+              type: 'array',
+              maxItems: 2000,
+              uniqueItems: true,
+              items: { type: 'string', minLength: 1, maxLength: 100 },
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const actor = await staff(request, true);
+      return available().setPermanentPages(
+        request.body.pageIds,
+        request.body.expectedRevision,
+        actor.id,
+        actor.displayName,
+      );
+    },
+  );
   app.post<{ Body: CollectionScheduleInput & { expectedRevision: string } }>(
     '/api/v1/admin/schedules',
     {

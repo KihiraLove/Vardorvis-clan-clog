@@ -3,11 +3,22 @@ import {
   parseDiscordFields,
   type DiscordSettings,
   type DiscordSettingsUpdate,
+  type DiscordConnectionState,
 } from '@clog/domain';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { useAdminDraft, usePreparedAdminData } from './admin-route-data.ts';
+import { withAbort } from './with-abort.ts';
+
+const connectionLabels = {
+  checking: 'Checking…',
+  disabled: 'Disabled',
+  connecting: 'Connecting',
+  connected: 'Connected',
+  disconnected: 'Disconnected',
+  unavailable: 'Unavailable',
+};
 
 export function DiscordBotSettings({
   client,
@@ -24,32 +35,39 @@ export function DiscordBotSettings({
   const [token, setToken] = useState(''),
     [clearToken, setClearToken] = useState(false);
   const action = useAdminAction(onAccessLost);
-  const [connection, setConnection] = useState('Checking…');
+  const editable = session.role === 'admin';
+  const [connection, setConnection] = useState<
+    DiscordConnectionState | 'checking'
+  >('checking');
   useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let request: AbortController | undefined;
+    setConnection('checking');
     const poll = async () => {
+      const controller = new AbortController();
+      request = controller;
+      const deadline = setTimeout(() => controller.abort(), 4000);
       try {
-        const status = await client.discordStatus(controller.signal);
-        if (!controller.signal.aborted)
-          setConnection(
-            !status.enabled
-              ? 'Disabled'
-              : status.ready
-                ? 'Connected'
-                : 'Connecting or unavailable',
-          );
+        const status = await withAbort(
+          client.discordStatus(controller.signal),
+          controller.signal,
+        );
+        if (active) setConnection(status.state);
       } catch {
-        if (!controller.signal.aborted) setConnection('Unavailable');
+        if (active) setConnection('unavailable');
+      } finally {
+        clearTimeout(deadline);
       }
-      if (!controller.signal.aborted)
+      if (active)
         timer = setTimeout(() => {
           void poll();
         }, 5000);
     };
     void poll();
     return () => {
-      controller.abort();
+      active = false;
+      request?.abort();
       clearTimeout(timer);
     };
   }, [client, saved?.revision]);
@@ -68,7 +86,7 @@ export function DiscordBotSettings({
     if (!signal.aborted) accept(value);
   };
   const register = (target: 'guild' | 'test') => {
-    if (!saved) return;
+    if (!editable || !saved) return;
     void action.execute(
       async (signal) => {
         await client.registerDiscordCommands(
@@ -93,14 +111,37 @@ export function DiscordBotSettings({
   return (
     <section className="admin-panel discord-settings">
       <h2>Discord bot</h2>
-      <p role="status">Status: {connection}</p>
-      <p>
-        Connect your own Discord application. Changes take effect automatically
-        within a few seconds.
+      {!editable && (
+        <p>
+          Only the administrator can change Discord settings or register
+          commands.
+        </p>
+      )}
+      <p
+        role="status"
+        className="discord-connection-status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        Status:{' '}
+        <span
+          className={
+            connection === 'connected'
+              ? 'admin-success'
+              : connection === 'connecting'
+                ? 'admin-warning'
+                : ['disconnected', 'unavailable'].includes(connection)
+                  ? 'admin-error'
+                  : undefined
+          }
+        >
+          {connectionLabels[connection]}
+        </span>
       </p>
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          if (!editable) return;
           void action.execute(async (signal) => {
             const input: DiscordSettingsUpdate = {
               ...parseDiscordFields(fields),
@@ -127,7 +168,7 @@ export function DiscordBotSettings({
           }, reload);
         }}
       >
-        <fieldset disabled={action.busy}>
+        <fieldset disabled={action.busy || !editable}>
           <legend>Connection</legend>
           <div>
             <span id="discord-enable-label">Enable Discord bot</span>{' '}
@@ -199,11 +240,7 @@ export function DiscordBotSettings({
               />
             </label>
           </div>
-          <p>
-            {saved.tokenConfigured
-              ? 'A bot token is stored. Its value is never displayed.'
-              : 'No bot token is stored.'}
-          </p>
+          {!saved.tokenConfigured && <p>No bot token is stored.</p>}
           {saved.tokenConfigured && (
             <label>
               <input
@@ -220,7 +257,7 @@ export function DiscordBotSettings({
             </label>
           )}
         </fieldset>
-        <fieldset disabled={action.busy}>
+        <fieldset disabled={action.busy || !editable}>
           <legend>Rate limits per minute</legend>
           <div className="discord-settings-grid">
             {(
@@ -254,13 +291,16 @@ export function DiscordBotSettings({
           </div>
         </fieldset>
         <div className="admin-actions">
-          <button className="site-button" disabled={action.busy || !dirty}>
+          <button
+            className="site-button"
+            disabled={!editable || action.busy || !dirty}
+          >
             Save Discord settings
           </button>
           <button
             type="button"
             className="site-button"
-            disabled={action.busy || !dirty}
+            disabled={!editable || action.busy || !dirty}
             onClick={() => accept(saved)}
           >
             Discard changes
@@ -268,14 +308,11 @@ export function DiscordBotSettings({
         </div>
       </form>
       <h3>Register slash commands</h3>
-      <p>
-        Invite the bot to your server with the bot and applications.commands
-        permissions, then register /cc-clog. Save changes before registering.
-      </p>
       <div className="admin-actions">
         <button
           className="site-button"
           disabled={
+            !editable ||
             action.busy ||
             dirty ||
             !saved.tokenConfigured ||
@@ -289,6 +326,7 @@ export function DiscordBotSettings({
         <button
           className="site-button"
           disabled={
+            !editable ||
             action.busy ||
             dirty ||
             !saved.tokenConfigured ||

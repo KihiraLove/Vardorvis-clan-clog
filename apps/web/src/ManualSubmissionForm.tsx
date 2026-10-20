@@ -3,7 +3,6 @@ import { AdminRequestError } from './admin-api.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { useState } from 'react';
 import {
-  safeProof,
   type AdminCatalog,
   type AdminClient,
   type ManualSubmissionInput,
@@ -14,14 +13,12 @@ import { useAdminDraft } from './admin-route-data.ts';
 
 export function ManualSubmissionForm({
   catalog,
-  hardcoreEnabled,
   client,
   session,
   onAccessLost,
   onCreated,
 }: {
   catalog: AdminCatalog;
-  hardcoreEnabled: boolean;
   client: AdminClient;
   session: AdminSession;
   onAccessLost: () => void;
@@ -35,7 +32,9 @@ export function ManualSubmissionForm({
     new Date().toISOString().slice(0, 10),
   );
   const [hardcore, setHardcore] = useState(false);
-  const [proofUrl, setProofUrl] = useState('');
+  const [collectionType, setCollectionType] = useState<'regular' | 'event'>(
+    'regular',
+  );
   const [screenshot, setScreenshot] = useState<File>();
   const [formVersion, setFormVersion] = useState(0);
   const [approve, setApprove] = useState(true);
@@ -48,14 +47,7 @@ export function ManualSubmissionForm({
     screenshot?: File | undefined;
   }>();
   useAdminDraft(
-    !!(
-      (open && itemId) ||
-      collectorName ||
-      proofUrl ||
-      screenshot ||
-      reason ||
-      pending
-    ),
+    !!((open && itemId) || collectorName || screenshot || reason || pending),
     busy,
   );
   const options = catalog.items.filter(
@@ -76,10 +68,6 @@ export function ManualSubmissionForm({
       setError('Select a specific item, collector and collection date.');
       return;
     }
-    if (proofUrl.trim() && !safeProof(proofUrl.trim())) {
-      setError('Proof must be a supported HTTPS Imgur or Gyazo link.');
-      return;
-    }
     if (
       screenshot &&
       (screenshot.type !== 'image/png' || screenshot.size > 10 * 1024 * 1024)
@@ -93,8 +81,8 @@ export function ManualSubmissionForm({
           itemId: chosen.id,
           collectorName: collectorName.trim(),
           collectedOn,
-          hardcore: hardcoreEnabled && hardcore,
-          proofUrl: proofUrl.trim(),
+          hardcore,
+          collectionType: hardcore ? 'regular' : collectionType,
           approve,
           reason: reason.trim(),
         },
@@ -121,14 +109,6 @@ export function ManualSubmissionForm({
           ![408, 429].includes(failure.status)
         ) {
           setPending(undefined);
-          if (failure.status === 409 && request.fields.approve)
-            throw new Error(
-              chosen.name +
-                ' is already collected in ' +
-                (hardcore ? 'hardcore' : 'ordinary') +
-                ' worlds. Revoke or edit the existing approved entry instead.',
-              { cause: failure },
-            );
         }
         throw failure;
       }
@@ -137,9 +117,9 @@ export function ManualSubmissionForm({
       setSearch('');
       setItemId('');
       setCollectorName('');
-      setCollectedOn('');
+      setCollectedOn(new Date().toISOString().slice(0, 10));
       setHardcore(false);
-      setProofUrl('');
+      setCollectionType('regular');
       setScreenshot(undefined);
       setFormVersion((value) => value + 1);
       setApprove(true);
@@ -151,10 +131,8 @@ export function ManualSubmissionForm({
 
   return (
     <section className="admin-panel">
-      <div className="admin-section-heading">
-        <div>
-          <h2>Manual submission</h2>
-        </div>
+      <h2>Manual submission</h2>
+      <div className="admin-actions">
         <button
           className="site-button"
           type="button"
@@ -194,15 +172,6 @@ export function ManualSubmissionForm({
                     onChange={(event) => setScreenshot(event.target.files?.[0])}
                   />
                   <span className="admin-note">Up to 10 MiB.</span>
-                </label>
-                <label>
-                  Proof URL (optional)
-                  <input
-                    type="url"
-                    value={proofUrl}
-                    placeholder="https://imgur.com/…"
-                    onChange={(event) => setProofUrl(event.target.value)}
-                  />
                 </label>
                 <label>
                   Reason or note (optional)
@@ -254,16 +223,30 @@ export function ManualSubmissionForm({
               </div>
             </div>
             <div className="manual-submission-options">
-              {hardcoreEnabled && (
-                <label className="admin-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={hardcore}
-                    onChange={(event) => setHardcore(event.target.checked)}
-                  />
-                  Collected on hardcore worlds
-                </label>
-              )}
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  checked={collectionType === 'event'}
+                  disabled={hardcore}
+                  onChange={(event) =>
+                    setCollectionType(
+                      event.target.checked ? 'event' : 'regular',
+                    )
+                  }
+                />
+                Obtained during events
+              </label>
+              <label className="admin-checkbox">
+                <input
+                  type="checkbox"
+                  checked={hardcore}
+                  onChange={(event) => {
+                    setHardcore(event.target.checked);
+                    setCollectionType('regular');
+                  }}
+                />
+                Collected on hardcore worlds
+              </label>
               <label className="admin-checkbox">
                 <input
                   type="checkbox"

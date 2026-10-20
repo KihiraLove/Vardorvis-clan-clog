@@ -1,5 +1,10 @@
 import {
   competitionScope,
+  parseCompetitionDefinitions,
+  parseCompetitionStandings,
+  competitionAmount,
+  competitionUsesPages,
+  type CompetitionStanding,
   type CompetitionImportAction,
   type CompetitionKind,
   type CompetitionLifecycle,
@@ -31,6 +36,7 @@ export interface CompetitionImportPreview {
   participants: { playerId: number; displayName: string; gained: string }[];
   changes: ImportChange[];
   warnings: string[];
+  standings?: CompetitionStanding[];
 }
 export interface CompetitionClient {
   activities(
@@ -70,6 +76,17 @@ export function parseWomCompetition(value: unknown): WomCompetition {
     title: text(c.title),
     sourceUrl: source.url,
     metrics,
+    ...(c.metricDefinitions == null
+      ? {}
+      : {
+          metricDefinitions: parseCompetitionDefinitions(
+            c.metricDefinitions,
+            metrics,
+          ),
+        }),
+    ...(c.standings == null
+      ? {}
+      : { standings: parseCompetitionStandings(c.standings, metrics) }),
     startsAt,
     endsAt,
   };
@@ -204,14 +221,21 @@ export class LiveCompetitionClient implements CompetitionClient {
         displayName: text(r.displayName),
         gained: gains
           ? gains.reduce((sum, n) => sum + BigInt(n), 0n).toString()
-          : amount(r.gained),
+          : competitionAmount(r.gained),
       };
     });
     unique(participants.map((r) => r.playerId));
-    if (p.lifecycle !== 'finished' && participants.length)
+    const standings =
+      p.standings === undefined
+        ? undefined
+        : parseCompetitionStandings(p.standings, competition.metrics);
+    if (
+      p.lifecycle !== 'finished' &&
+      (participants.length || standings?.length)
+    )
       throw new Error('Live imports must contain metadata only.');
     const metadataOnly =
-      competition.kind === 'SKILL' && p.lifecycle !== 'finished';
+      !competitionUsesPages(competition.metrics) && p.lifecycle !== 'finished';
     if (
       metadataOnly !== (p.action === 'import-metadata') ||
       (metadataOnly &&
@@ -220,7 +244,7 @@ export class LiveCompetitionClient implements CompetitionClient {
           list(p.changes).length ||
           p.scheduleStartsAt !== null))
     )
-      throw new Error('Invalid metadata-only SKILL preview.');
+      throw new Error('Invalid metadata-only competition preview.');
     return {
       previewToken: text(p.previewToken),
       expectedRevision: text(p.expectedRevision),
@@ -239,6 +263,7 @@ export class LiveCompetitionClient implements CompetitionClient {
       participants,
       changes: parseChanges(p.changes),
       warnings: list(p.warnings).map(text),
+      ...(standings === undefined ? {} : { standings }),
     };
   }
   async apply(

@@ -1,7 +1,7 @@
 /** Administrator-editable public labels with one shared validation contract. */
 export const defaultSiteCopy = {
   collectionTitle: 'Clan Collection Log',
-  collectionCaption: 'Collected during BOTW events',
+  collectionCaption: 'Collected by clan members',
   xpTitle: 'XP gained during SOTW events',
 };
 export type SiteCopy = typeof defaultSiteCopy;

@@ -17,7 +17,7 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
   });
   await expect(enabled).toBeEnabled();
   await expect(enabled).toHaveAccessibleDescription(
-    'Enable scheduled opening windows for log pages (submissions to closed pages are automatically rejected)',
+    'Track Event collections during scheduled windows',
   );
   const management = page.locator('section.admin-panel').filter({
     has: page.getByRole('heading', {
@@ -142,6 +142,7 @@ test('moderators can create windows but cannot see or write the administrator en
     revision: 'schedules-1',
     enabled: true,
     schedules: [],
+    permanentlyOpenPageIds: [],
   };
   let created = false;
   await page.route('**/api/v1/**', async (route) => {

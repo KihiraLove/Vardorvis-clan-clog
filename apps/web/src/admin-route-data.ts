@@ -10,11 +10,18 @@ import type { AdminSession } from './xp-model.ts';
 import type { Branding } from './branding.ts';
 import type { SiteSettings } from './site-settings.ts';
 import type { ClanKeySettings } from './clan-api-key.ts';
-import type { RuneLiteSettings, SchedulingState } from '@clog/domain';
+import {
+  canAccessStaffPage,
+  staffPageForPath,
+  type AccessControlSettings,
+  type RuneLiteSettings,
+  type SchedulingState,
+} from '@clog/domain';
 import { withAbort } from './with-abort.ts';
 
 export interface PreparedAdminData {
   kind:
+    | 'access-control'
     | 'discord'
     | 'queue'
     | 'catalog'
@@ -33,6 +40,7 @@ export interface PreparedAdminData {
   clanKey?: ClanKeySettings;
   runeLite?: RuneLiteSettings;
   accounts?: StaffAccount[];
+  accessControl?: AccessControlSettings;
   denial?: string;
 }
 export const adminRouteLabels: Record<string, string> = {
@@ -45,6 +53,7 @@ export const adminRouteLabels: Record<string, string> = {
   '/admin/runelite': 'RuneLite submissions',
   '/admin/discord': 'Discord bot',
   '/admin/accounts': 'Moderator accounts',
+  '/admin/access-control': 'Access control',
   '/admin/account': 'Your account',
 };
 export function isAdminPath(path: string) {
@@ -69,23 +78,27 @@ async function readAdminRoute(
     return { kind: 'account' };
   if (
     session.role !== 'admin' &&
-    [
-      '/admin/settings',
-      '/admin/settings/hardcore',
-      '/admin/accounts',
-      '/admin/discord',
-    ].includes(path)
+    ['/admin/accounts', '/admin/access-control'].includes(path)
   )
     return {
       kind: 'denied',
       denial:
         path === '/admin/accounts'
           ? 'Only the administrator can create moderator accounts.'
-          : path === '/admin/discord'
-            ? 'Only the administrator can manage Discord settings.'
-            : 'Only the administrator can change site settings.',
+          : 'Only the administrator can manage access control.',
+    };
+  const page = staffPageForPath(path) ?? 'submissions';
+  if (!canAccessStaffPage(session, page))
+    return {
+      kind: 'denied',
+      denial: 'Your account is not allowed to view this page.',
     };
   switch (path) {
+    case '/admin/access-control':
+      return {
+        kind: 'access-control',
+        accessControl: await client.accessControl(signal),
+      };
     case '/admin/discord':
       return { kind: 'discord', discord: await client.discordSettings(signal) };
     case '/admin/catalog':

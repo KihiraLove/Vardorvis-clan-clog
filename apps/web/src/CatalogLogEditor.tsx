@@ -6,7 +6,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { catalogSections, progressClass } from './model.ts';
+import { catalogSections } from './model.ts';
 import type { AdminCatalog, AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { useAdminAction } from './use-admin-action.ts';
@@ -95,13 +95,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
   const section = sections.find((s) => s.id === sectionId) ?? sections[0];
   const pages = displayPages.filter((p) => p.category === section?.id);
   const page = pages.find((p) => p.id === pageId) ?? pages[0];
-  const collected = new Set(catalog.collectedItemIds ?? []);
-  const count = (ids: number[]) => ({
-    collected: ids.filter((id) => collected.has(id)).length,
-    total: ids.length,
-  });
-  const pageCount = count(page?.itemIds ?? []),
-    items = new Map(catalog.items.map((item) => [item.id, item]));
+  const items = new Map(catalog.items.map((item) => [item.id, item]));
   useEffect(() => {
     if (editor)
       panelRef.current?.querySelector<HTMLElement>('input,button')?.focus();
@@ -373,7 +367,6 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
             >
               <div className="page-list game-scroll catalog-page-list">
                 {pages.map((entry) => {
-                  const c = count(entry.itemIds);
                   return (
                     <div
                       className="catalog-page-row"
@@ -384,7 +377,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
                       {grip('page', entry.id, entry.name)}
                       <button
                         type="button"
-                        className={`catalog-page-name ${c.total > 0 && c.collected === c.total ? 'complete' : ''}`}
+                        className="catalog-page-name"
                         aria-current={
                           page?.id === entry.id ? 'page' : undefined
                         }
@@ -419,17 +412,6 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
                 <>
                   <div className="page-heading">
                     <h3>{page.name}</h3>
-                    <p>
-                      Obtained:{' '}
-                      <span
-                        className={progressClass(
-                          pageCount.collected,
-                          pageCount.total,
-                        )}
-                      >
-                        {pageCount.collected}/{pageCount.total}
-                      </span>
-                    </p>
                   </div>
                   <div className="item-area game-scroll">
                     <div
@@ -448,7 +430,7 @@ export function CatalogLogEditor(props: CatalogEditorProps) {
                             {grip('item', String(id), item.name)}
                             <button
                               type="button"
-                              className={`item-slot${collected.has(id) ? ' item-slot--collected' : ''}`}
+                              className="item-slot"
                               aria-label={`Edit item ${item.name}`}
                               disabled={locked}
                               onClick={() => open({ kind: 'item-edit', id })}

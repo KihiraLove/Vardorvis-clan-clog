@@ -51,7 +51,7 @@ test('proxy sends the enforced policy on HTML, assets, API, conditional and erro
     '/healthz',
     '/readyz',
     '/fonts/runescape.ttf',
-    '/brand/clan-logo.png',
+    '/brand/clan-logo.webp',
     '/api/v1/catalog',
   ]) {
     const response = await request.get(path);
@@ -249,14 +249,15 @@ test('staff chunks, local icon previews and same-origin private image rendering 
     .toBe(true);
   const detail = (await adminFixtures()).detail;
   detail.submission.screenshotPath =
-    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
   f.responses['/api/v1/admin/submissions/sample-hardcore'] = detail;
   f.responses['/api/v1/admin/submissions'] = {
     ...(f.responses['/api/v1/admin/submissions'] as object),
     submissions: [detail.submission],
   };
-  await page.route('**/api/v1/admin/submission-images/*.png', (route) =>
-    route.fulfill({ contentType: 'image/png', body: png }),
+  const webp = await sharp(png).webp({ lossless: true }).toBuffer();
+  await page.route('**/api/v1/admin/submission-images/*.webp', (route) =>
+    route.fulfill({ contentType: 'image/webp', body: webp }),
   );
   await page
     .getByLabel('Item icon (required)', { exact: true })

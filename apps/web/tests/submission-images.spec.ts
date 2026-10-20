@@ -14,18 +14,19 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await page.getByRole('button', { name: 'Save site settings' }).click();
   await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await expect(page.locator('.clan-name')).toHaveText('New Clan');
-  await expect(page).toHaveTitle('New Clan · Clan Collection Log');
+  await expect(page).toHaveTitle('New Clan · Clan administration');
   await page.getByRole('button', { name: 'Add manual submission' }).click();
   const form = page
     .locator('form')
     .filter({ has: page.getByLabel('Collector name', { exact: true }) });
+  await expect(form.getByLabel('Proof URL (optional)')).toHaveCount(0);
   await form.getByLabel('Canonical item').selectOption({ index: 1 });
   await form
     .getByLabel('Collector name', { exact: true })
     .fill('PNG Collector');
   await form
     .getByLabel('PNG screenshot (optional)')
-    .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
+    .setInputFiles(await pngFile(resolve('public/skills/sailing.webp')));
   await form.getByLabel('Approve immediately').uncheck();
   await form.getByRole('button', { name: 'Create manual submission' }).click();
   await expect(
@@ -41,7 +42,7 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await expect(form.getByLabel('Approve immediately')).toBeChecked();
   await expect(
     form.getByLabel('Collected on hardcore worlds', { exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page
       .locator('.submission-card')
@@ -65,10 +66,18 @@ test('saving the clan name updates branding and a manual PNG can be reviewed', a
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),
   ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('screenshot-proof-review.png'),
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 320, height: 800 });
   await expect(
     page.locator('.submission-editor').getByAltText('Submission screenshot'),
   ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('screenshot-proof-mobile.png'),
+    fullPage: true,
+  });
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
 });
@@ -78,7 +87,7 @@ test('moderators can review stored RuneLite screenshots without access to clan s
 }) => {
   const f = await adminFixtures();
   const path =
-    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
   const row = {
     ...f.detail.submission,
     id: '00000000-0000-4000-8000-000000000002',
@@ -92,8 +101,8 @@ test('moderators can review stored RuneLite screenshots without access to clan s
     const url = new URL(route.request().url());
     if (url.pathname === path)
       return route.fulfill({
-        path: resolve('public/skills/sailing.png'),
-        contentType: 'image/png',
+        path: resolve('public/skills/sailing.webp'),
+        contentType: 'image/webp',
       });
     if (url.pathname === '/api/v1/settings')
       return route.fulfill({
@@ -133,9 +142,9 @@ test('moderators can review stored RuneLite screenshots without access to clan s
   await page.getByRole('button', { name: /^Review / }).click();
   const editor = page.locator('.submission-editor');
   await expect(
-    editor.getByRole('link', { name: 'View PNG screenshot' }),
+    editor.getByRole('link', { name: 'View screenshot' }),
   ).toHaveAttribute('href', path);
-  await editor.getByLabel(/^I checked the linked proof/).check();
+  await editor.getByLabel(/^I checked the screenshot/).check();
   await expect(
     editor.getByRole('button', { name: 'Approve submission', exact: true }),
   ).toBeEnabled();
@@ -149,7 +158,7 @@ for (const screenshot of [false, true]) {
     const chatMessage =
       '  Collector received <img src="https://example.org/tracker">: Rare item & 100 coins.\nFull original message 😀  ';
     const path =
-      '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+      '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
     const row = {
       ...f.detail.submission,
       source: 'runelite',
@@ -173,8 +182,8 @@ for (const screenshot of [false, true]) {
       }
       if (url === path)
         return route.fulfill({
-          path: resolve('public/skills/sailing.png'),
-          contentType: 'image/png',
+          path: resolve('public/skills/sailing.webp'),
+          contentType: 'image/webp',
         });
       const responses: Record<string, unknown> = {
         '/api/v1/auth/session': { ...f.session, role: 'moderator' },

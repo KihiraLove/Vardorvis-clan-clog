@@ -70,7 +70,7 @@ try {
     .sort())
     await pool.query(await readFile(new URL(file, directory), 'utf8'));
   await pool.query(
-    "INSERT INTO items(id,name,icon_path) SELECT n,'Item '||n,'/catalog/items/'||n||'.png' FROM generate_series(1,1717) n",
+    "INSERT INTO items(id,name,icon_path) SELECT n,'Item '||n,'/catalog/items/'||n||'.webp' FROM generate_series(1,1717) n",
   );
   await pool.query(
     "INSERT INTO item_aliases(item_id,alias) SELECT n,'Alias '||n FROM generate_series(1,1717) n",

@@ -40,6 +40,7 @@ import { matchesEtag } from './projection-cache.js';
 import type { XpStore } from './xp-types.js';
 import { ApiError, type Settings } from './types.js';
 interface Options {
+  accessControl?: import('./access-control.js').AccessControlStore | undefined;
   discordSettings?:
     | import('@clog/database/dist/discord-settings.js').DiscordSettingsStore
     | undefined;
@@ -61,7 +62,11 @@ interface Options {
   clanKeys?: import('./clan-api-key.js').ClanKeyStore | undefined;
   proofs?: ProofFiles | undefined;
   proofStore?: ProofStore | undefined;
-  checkBotReady?: (() => Promise<void>) | undefined;
+  readBotConnectionState?:
+    | (() => Promise<
+        Exclude<import('@clog/domain').DiscordConnectionState, 'disabled'>
+      >)
+    | undefined;
   catalog?: CatalogService | undefined;
   icons?: IconFiles | undefined;
   store?: ApplicationStore | undefined;
@@ -219,15 +224,28 @@ export function createApp(
   app.get('/api/v1/discord/status', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (
-      !options.checkBotReady ||
+      !options.readBotConnectionState ||
       (options.botConfiguration && !(await options.botConfiguration()))
     )
-      return { enabled: false, ready: false };
+      return { enabled: false, ready: false, state: 'disabled' };
     try {
-      await checkReadiness(options.checkBotReady);
-      return { enabled: true, ready: true };
+      const observed: {
+        state: Exclude<
+          import('@clog/domain').DiscordConnectionState,
+          'disabled'
+        >;
+      } = { state: 'unavailable' };
+      await checkReadiness(async () => {
+        observed.state = await options.readBotConnectionState!();
+      });
+      const { state } = observed;
+      return reply
+        .code(state === 'connected' ? 200 : 503)
+        .send({ enabled: true, ready: state === 'connected', state });
     } catch {
-      return reply.code(503).send({ enabled: true, ready: false });
+      return reply
+        .code(503)
+        .send({ enabled: true, ready: false, state: 'unavailable' });
     }
   });
   app.get('/api/v1/settings', async (request, reply) => {
@@ -299,7 +317,12 @@ export function createApp(
     };
   });
   if (store && (options.botConfiguration || options.bot))
-    botRoutes(app, store, options.botConfiguration ?? options.bot!);
+    botRoutes(
+      app,
+      store,
+      options.botConfiguration ?? options.bot!,
+      options.proofs,
+    );
   const requireAdmin =
     store && options.auth
       ? authRoutes(
@@ -312,6 +335,7 @@ export function createApp(
           options.clanKeys,
           previews,
           passwords,
+          options.accessControl,
         )
       : undefined;
   if (!requireAdmin) {

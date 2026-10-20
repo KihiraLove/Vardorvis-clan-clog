@@ -2,8 +2,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { collectionLogCommand } from './command.js';
+import { ApplicationCommandOptionType } from 'discord.js';
 
-test('submission command keeps required item/proof before optional name and uses autocomplete', () => {
+test('submission command keeps required item/screenshot before optional name and uses autocomplete', () => {
   const command = collectionLogCommand.toJSON();
   assert.equal(command.name, 'cc-clog');
   assert.equal(
@@ -16,11 +17,15 @@ test('submission command keeps required item/proof before optional name and uses
   assert.ok(submit && 'options' in submit);
   assert.deepEqual(
     submit.options?.map((option) => option.name),
-    ['item', 'proof', 'submitter-name', 'hardcore'],
+    ['item', 'screenshot', 'submitter-name', 'hardcore'],
   );
   const item = submit.options?.[0];
   assert.ok(item && 'autocomplete' in item && item.autocomplete);
   assert.equal(submit.options?.[1]?.required, true);
+  assert.equal(
+    submit.options?.[1]?.type,
+    ApplicationCommandOptionType.Attachment,
+  );
   assert.equal(submit.options?.[2]?.required, false);
   assert.equal(submit.options?.[3]?.required, false);
 });

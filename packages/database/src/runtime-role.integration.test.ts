@@ -17,11 +17,11 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT',
-    'audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history discord_settings_audit manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit submission_images xp_import_history',
+    'audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history discord_settings_audit manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit staff_page_access_audit submission_images xp_import_history',
   ],
   [
     'SELECT UPDATE',
-    'catalog_state clan_branding collection_scheduling lifecycle_state projection_state review_state runelite_settings submission_filter_settings site_settings xp_state',
+    'catalog_state clan_branding collection_scheduling lifecycle_state projection_state review_state runelite_settings submission_filter_settings site_settings staff_page_access xp_state',
   ],
   [
     'SELECT INSERT UPDATE',
@@ -29,7 +29,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT DELETE',
-    'admin_sessions collection_log_schedule_pages game_item_ids page_items',
+    'admin_sessions collection_log_schedule_pages collection_permanent_pages game_item_ids page_items',
   ],
   ['SELECT INSERT UPDATE DELETE', 'auth_rate_limits collection_log_schedules'],
 ])
@@ -45,6 +45,7 @@ const sequences = [
   'runelite_settings_audit_id_seq',
   'site_settings_audit_id_seq',
   'staff_account_audit_id_seq',
+  'staff_page_access_audit_id_seq',
 ];
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
 
@@ -331,6 +332,20 @@ test(
           );
           await runtime.query(
             "INSERT INTO pages(id,category,name,sort_order) VALUES('runtime-page','runtime-section','Runtime page',0)",
+          );
+          await runtime.query(
+            "INSERT INTO collection_permanent_pages(page_id) VALUES('runtime-page')",
+          );
+          assert.deepEqual(
+            (
+              await runtime.query(
+                'SELECT page_id FROM collection_permanent_pages',
+              )
+            ).rows,
+            [{ page_id: 'runtime-page' }],
+          );
+          await runtime.query(
+            "DELETE FROM collection_permanent_pages WHERE page_id='runtime-page'",
           );
           await runtime.query(
             "INSERT INTO page_items(page_id,item_id,slot) VALUES('runtime-page',1000001,0)",

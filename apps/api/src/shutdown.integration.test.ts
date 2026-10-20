@@ -1,8 +1,11 @@
+import { botRequest, screenshotRecord } from './tests/screenshot.js';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 /** Real signals during locked query and deferred COMMIT against the production entry point. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
@@ -37,6 +40,7 @@ for (const phase of ['query', 'commit'] as const)
       const url = new URL(process.env.TEST_DATABASE_URL!);
       url.searchParams.set('options', '-c search_path=' + schema);
       url.searchParams.set('application_name', appName);
+      const directory = await mkdtemp(join(tmpdir(), 'clog-shutdown-proof-'));
       const pool = new pg.Pool({ connectionString: url.toString() });
       const listen = await port(),
         base = 'http://127.0.0.1:' + listen,
@@ -50,7 +54,6 @@ for (const phase of ['query', 'commit'] as const)
         rawItemText: 'Item',
         itemId: 42,
         collectorName: 'Fixture',
-        proofUrl: 'https://imgur.com/a/fixture',
         hardcore: false,
       };
       let child: ReturnType<typeof spawn> | undefined,
@@ -89,7 +92,7 @@ for (const phase of ['query', 'commit'] as const)
               BOT_API_TOKEN: token,
               DISCORD_GUILD_ID: guild,
               ICON_STORAGE_PATH: '',
-              PROOF_STORAGE_PATH: '',
+              PROOF_STORAGE_PATH: directory,
             },
             stdio: ['ignore', 'pipe', 'pipe'],
           },
@@ -125,13 +128,13 @@ for (const phase of ['query', 'commit'] as const)
           );
           await blocker.query('SELECT pg_advisory_lock(891234)');
         }
+        const upload = await botRequest(input, {
+          authorization: 'Bearer ' + token,
+        });
         const response = fetch(base + '/api/v1/bot/submissions', {
           method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(input),
+          headers: upload.headers,
+          body: new Uint8Array(upload.payload),
         });
         await until(
           async () =>
@@ -159,8 +162,8 @@ for (const phase of ['query', 'commit'] as const)
           1,
         );
         const replay = await new PgStore(pool).submitClaim(
-          input,
-          claimHash(input),
+          { ...input, image: screenshotRecord() },
+          claimHash({ ...input, image: screenshotRecord() }),
         );
         assert.equal(replay.receipt.submissionId, receipt.submissionId);
         assert.match(logs, /DRAIN_COMPLETE/u);
@@ -185,6 +188,7 @@ for (const phase of ['query', 'commit'] as const)
         await pool.end();
         await root.query('DROP SCHEMA ' + schema + ' CASCADE');
         await root.end();
+        await rm(directory, { recursive: true, force: true });
       }
     },
   );

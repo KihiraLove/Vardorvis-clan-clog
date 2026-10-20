@@ -1,6 +1,6 @@
 {
   "name": "@clog/web",
-  "version": "1.0.0-SNAPSHOT",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,9 +14,10 @@
     "test:stack": "playwright test --config playwright.stack.config.ts"
   },
   "dependencies": {
-    "@clog/domain": "1.0.0-SNAPSHOT",
+    "@clog/domain": "1.0.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-markdown": "10.1.0"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

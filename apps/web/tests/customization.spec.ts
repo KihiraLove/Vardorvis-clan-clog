@@ -26,6 +26,7 @@ test('site settings lives on its own page and edited labels appear across the pu
     'Site settings',
     'Hardcore worlds',
     'Discord bot',
+    'Access control',
     'Moderator accounts',
     'Your account',
   ]);
@@ -79,28 +80,35 @@ test('site settings lives on its own page and edited labels appear across the pu
     const caption = await page.locator('.log-help').boundingBox();
     const log = await page.locator('.game-window').boundingBox();
     expect(caption!.y + caption!.height).toBeLessThan(log!.y);
-    const sizes = await page.evaluate(() =>
-      [
-        document.querySelector('.log-help'),
-        document.querySelector('.event-tracker > h1'),
-      ].map((node) => getComputedStyle(node!).fontSize),
+    const captionSize = await page
+      .locator('.log-help')
+      .evaluate((node) => getComputedStyle(node).fontSize);
+    await page.getByRole('link', { name: 'Xp tracker', exact: true }).click();
+    await expect(page.locator('.event-tracker > h1')).toHaveCSS(
+      'font-size',
+      captionSize,
     );
-    expect(sizes[0]).toBe(sizes[1]);
+    await expect(page).toHaveTitle('Clan name · Clan training');
+    await page
+      .getByRole('link', { name: 'Collection log', exact: true })
+      .click();
   }
   await page.setViewportSize({ width: 1100, height: 850 });
+  await expect(page).toHaveTitle('Clan name · Our clan collection');
+  await page.getByRole('link', { name: 'Xp tracker', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Clan training', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText('Across all recorded SOTW events', { exact: true }),
   ).toHaveCount(0);
-  await expect(page).toHaveTitle('Clan name · Our clan collection');
+  await expect(page).toHaveTitle('Clan name · Clan training');
   await expect(page.locator('.site-footer')).not.toContainText(
     'One clan. Every collection.',
   );
   await expect(
     page.getByRole('link', { name: 'GitHub', exact: true }),
-  ).toHaveAttribute('href', 'https://github.com/KihiraLove');
+  ).toHaveAttribute('href', 'https://github.com/KihiraLove/clan-clog');
   expect(
     await page
       .locator('.github-support')
@@ -109,6 +117,7 @@ test('site settings lives on its own page and edited labels appear across the pu
   await expect(
     page.getByRole('link', { name: 'Support this project' }),
   ).toHaveAttribute('href', 'https://ko-fi.com/kihiralove');
+  await page.getByRole('link', { name: 'Collection log', exact: true }).click();
   const search = await page.locator('.game-search').boundingBox(),
     window = await page.locator('.game-window').boundingBox();
   expect(search!.x - window!.x).toBeLessThan(20);
@@ -172,7 +181,7 @@ test('hardcore appearance can be configured while disabled and switches independ
     .fill('Hardcore training');
   await page
     .getByLabel('Logo image')
-    .setInputFiles(await pngFile(resolve('public/skills/sailing.png')));
+    .setInputFiles(await pngFile(resolve('public/skills/sailing.webp')));
   await page
     .getByRole('button', { name: 'Save clan logo', exact: true })
     .click();
@@ -232,6 +241,10 @@ test('hardcore appearance can be configured while disabled and switches independ
     defaultBranding.logoPath,
   );
   await page.goBack();
+  await page.getByRole('link', { name: 'Admin panel', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Hardcore worlds', exact: true })
+    .click();
   await page.getByLabel('Enable hardcore worlds').click();
   await expect(
     page.getByRole('switch', { name: 'Enable hardcore worlds', exact: true }),

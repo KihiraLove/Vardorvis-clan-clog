@@ -3,14 +3,20 @@ import type pg from 'pg';
 import { transaction } from './transaction.js';
 import {
   parseCollectionScheduleInput,
+  parsePermanentPageIds,
   scheduleIdPattern,
-  closedCollectionPageMessage,
   type CollectionScheduleInput,
   type SchedulingState,
 } from '@clog/domain';
 import { ApiError } from './types.js';
 export interface SchedulingStore {
   state(): Promise<SchedulingState>;
+  setPermanentPages(
+    pageIds: string[],
+    revision: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<SchedulingState>;
   setEnabled(
     enabled: boolean,
     revision: string,
@@ -45,32 +51,6 @@ export async function lockScheduling(
   if (!row) throw new ApiError(503, 'Scheduling settings unavailable.');
   return row.enabled;
 }
-export async function isScheduledItem(
-  client: pg.PoolClient,
-  enabled: boolean,
-  itemId: number | null,
-) {
-  if (!enabled) return true;
-  return (
-    itemId !== null &&
-    (
-      await client.query(
-        'SELECT 1 FROM page_items pi JOIN pages p ON p.id=pi.page_id AND p.active ' +
-          'JOIN collection_log_schedule_pages sp ON sp.page_id=p.id JOIN collection_log_schedules s ON s.id=sp.schedule_id ' +
-          'WHERE pi.item_id=$1 AND s.archived_at IS NULL AND s.starts_at<=statement_timestamp() AND statement_timestamp()<s.ends_at LIMIT 1',
-        [itemId],
-      )
-    ).rowCount === 1
-  );
-}
-export async function requireScheduledItem(
-  client: pg.PoolClient,
-  enabled: boolean,
-  itemId: number | null,
-) {
-  if (!(await isScheduledItem(client, enabled, itemId)))
-    throw new ApiError(403, closedCollectionPageMessage);
-}
 export async function readState(
   client: pg.PoolClient,
 ): Promise<SchedulingState> {
@@ -94,15 +74,81 @@ export async function readState(
   ).rows;
   if (schedules.length > 500)
     throw new ApiError(503, 'Scheduling exceeds supported limits.');
+  const permanentPages = (
+    await client.query<{ page_id: string }>(
+      'SELECT pp.page_id FROM collection_permanent_pages pp JOIN pages p ON p.id=pp.page_id AND p.active ORDER BY pp.page_id LIMIT 2001',
+    )
+  ).rows;
+  if (permanentPages.length > 2000)
+    throw new ApiError(503, 'Permanently open pages exceed supported limits.');
   return {
     enabled: row.enabled,
     revision: 'schedules-' + row.version,
+    permanentlyOpenPageIds: permanentPages.map((p) => p.page_id),
     schedules: schedules.map((s) => ({
       ...s,
       startsAt: s.startsAt.toISOString(),
       endsAt: s.endsAt.toISOString(),
     })),
   };
+}
+async function recordChange(
+  client: pg.PoolClient,
+  before: SchedulingState,
+  actorId: string,
+  actorName: string,
+  action: string,
+) {
+  const version = (
+    await client.query<{ version: number }>(
+      'UPDATE collection_scheduling SET version=version+1 WHERE singleton=true RETURNING version',
+    )
+  ).rows[0]!.version;
+  const after = await readState(client);
+  await client.query(
+    'INSERT INTO collection_schedule_audit(actor_id,actor_name,action,version,old_values,new_values) VALUES($1,$2,$3,$4,$5,$6)',
+    [
+      actorId,
+      actorName,
+      action,
+      version,
+      JSON.stringify(before),
+      JSON.stringify(after),
+    ],
+  );
+  return after;
+}
+/** Catalog retirement takes this gate before item/page locks, matching intake and saves. */
+export async function removePermanentPage(
+  client: pg.PoolClient,
+  pageId: string,
+  actorId: string,
+) {
+  await client.query(
+    'SELECT singleton FROM collection_scheduling WHERE singleton=true FOR UPDATE',
+  );
+  if (
+    !(
+      await client.query(
+        'SELECT 1 FROM collection_permanent_pages WHERE page_id=$1',
+        [pageId],
+      )
+    ).rowCount
+  )
+    return;
+  const before = await readState(client);
+  const removed = await client.query(
+    'DELETE FROM collection_permanent_pages WHERE page_id=$1',
+    [pageId],
+  );
+  if (removed.rowCount)
+    await recordChange(
+      client,
+      before,
+      actorId,
+      actorId,
+      'remove_permanent_page',
+    );
 }
 export class PgSchedulingStore implements SchedulingStore {
   constructor(private readonly pool: pg.Pool) {}
@@ -131,26 +177,43 @@ export class PgSchedulingStore implements SchedulingStore {
           'Schedules changed. Reload before saving again.',
         );
       await change(client, before);
-      const version = (
-        await client.query<{ version: number }>(
-          'UPDATE collection_scheduling SET version=version+1 WHERE singleton=true RETURNING version',
-        )
-      ).rows[0]!.version;
-      const after = await readState(client);
-      await client.query(
-        'INSERT INTO collection_schedule_audit(actor_id,actor_name,action,version,old_values,new_values) VALUES($1,$2,$3,$4,$5,$6)',
-        [
-          actorId,
-          actorName,
-          action,
-          version,
-          JSON.stringify(before),
-          JSON.stringify(after),
-        ],
-      );
-
-      return after;
+      return recordChange(client, before, actorId, actorName, action);
     });
+  }
+  setPermanentPages(
+    pageIds: string[],
+    revision: string,
+    actorId: string,
+    actorName: string,
+  ) {
+    let ids: string[];
+    try {
+      ids = parsePermanentPageIds(pageIds);
+    } catch (error) {
+      throw new ApiError(
+        422,
+        error instanceof Error ? error.message : 'Invalid pages.',
+      );
+    }
+    return this.mutate(
+      revision,
+      actorId,
+      actorName,
+      'set_permanent_pages',
+      async (client) => {
+        const pages = await client.query(
+          'SELECT id FROM pages WHERE id=ANY($1::text[]) AND active ORDER BY id FOR SHARE',
+          [ids],
+        );
+        if (pages.rowCount !== ids.length)
+          throw new ApiError(422, 'Choose active collection log pages.');
+        await client.query('DELETE FROM collection_permanent_pages');
+        await client.query(
+          'INSERT INTO collection_permanent_pages(page_id) SELECT unnest($1::text[])',
+          [ids],
+        );
+      },
+    );
   }
   setEnabled(
     enabled: boolean,

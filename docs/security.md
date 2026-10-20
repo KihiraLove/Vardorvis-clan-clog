@@ -4,13 +4,19 @@ Staff use individual password accounts with salted scrypt hashes, first-login
 password changes, server sessions and role checks. HTTPS cookies, exact Origin
 and CSRF validation protect writes. Browser bundles never receive backend secrets.
 Only the administrator changes site settings, shared keys and staff accounts.
-Discord settings also require the administrator and CSRF validation. The Discord
+Discord changes and command registration also require the administrator and CSRF validation. The Discord
 token and automatically generated internal API token are encrypted with AES-GCM
 using the private volume's encryption root and a separate purpose identifier.
-Admin responses expose only whether a token exists; audit rows contain settings
+Settings responses expose only whether a token exists; audit rows contain settings
 and a token-change flag, never credentials. Configuration reads fail closed if
 the encryption root is missing or incorrect. Changing the Discord token also
 rotates the internal token. Saved settings are read again before intake requests.
+
+The administrator chooses page access for all moderators. The API checks the
+current policy on private requests, including existing sessions and direct URLs.
+Page grants never delegate administrator-only actions; granted site, hardcore
+and Discord settings remain read-only. Access control and staff account
+management always remain administrator-only.
 
 The API's `clog_runtime` role has explicit table/sequence permissions, no DDL or
 ownership, and no ability to rewrite receipts or audit history. Bootstrap removes

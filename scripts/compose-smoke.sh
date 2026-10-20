@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Extracted from the complete CI smoke gate; shared by local and release checks.
+# Independent smoke scenarios; check-gates runs every scenario and records failures.
 set -euo pipefail
 [[ "${COMPOSE_PROJECT_NAME:-}" =~ ^clog-checks-[a-z0-9-]+$ ]] || { echo "Use npm run test:all" >&2; exit 1; }
 export COMPOSE_FILE=compose.yaml:compose.checks.yaml
 export COMPOSE_ENV_FILES=/dev/null COMPOSE_DISABLE_ENV_FILE=true
 export CLOG_HOST=clog.example.com
 
+case "${1:-}" in
+compose-config)
 printf "\nValidate Compose\n"
 docker compose config --quiet
 
+;;
+traefik)
 printf "\nValidate opt-in Traefik labels and private network topology\n"
 docker compose -f compose.yaml -f compose.traefik.yaml config --quiet
 docker compose -f compose.yaml -f compose.traefik.yaml config --format json > /tmp/clog-traefik.json
@@ -24,9 +28,13 @@ jq -e '
   ([.services | to_entries[] | select(.key != "clan-clog") | (.value.networks // {} | keys[])] | index("web") == null)
 ' /tmp/clog-traefik.json
 
-printf "\nStart and smoke test\n"
+;;
+runtime-image)
+printf "\nInspect production runtime\n"
 docker run --rm -i --read-only --network none --label "clog.local-checks=$COMPOSE_PROJECT_NAME" --entrypoint node "$CHECK_APP_IMAGE" --input-type=module < scripts/inspect-runtime.mjs | tee .data/local-checks/runtime-image.json
-docker compose up -d --wait --wait-timeout 180 clan-clog
+;;
+startup)
+printf "\nVerify installation startup and public endpoints\n"
 app_secret_check="$(docker compose ps -q clan-clog)"
 docker inspect "$app_secret_check" | jq -e '
   (.[0].Config.Env | any(test("^(DATABASE_URL|POSTGRES_PASSWORD|APP_DB_PASSWORD|SESSION_SECRET)=.+")) | not) and
@@ -38,7 +46,8 @@ docker compose up -d --no-deps --force-recreate --wait clan-clog
 docker compose exec -T --user 0 clan-clog clog identity > /tmp/secret-identity-after.json
 cmp /tmp/secret-identity-before.json /tmp/secret-identity-after.json
 # Fresh install applies the immutable baseline and forward-only upgrades.
-test "$(docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "001_baseline.sql"
+expected_migrations="$(node --input-type=module -e "import {readdirSync} from 'node:fs'; console.log(readdirSync('packages/database/migrations').filter(name=>name.endsWith('.sql')).sort().join(','))")"
+test "$(docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -U clog -d clog -Atc "SELECT string_agg(name, ',' ORDER BY name) FROM schema_migrations")" = "$expected_migrations"
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
 curl --fail http://app:8080/api/v1/status
 curl --fail --output /tmp/catalog.json http://app:8080/api/v1/catalog
@@ -52,7 +61,7 @@ jq -e '
    ([ $catalog.pages[] | select(.id=="elite_treasure_trails" or .id=="master_treasure_trails") |
       select(.itemIds | index($ring)) ] | length) == 2)
 ' /tmp/catalog.json
-curl --fail --output /dev/null http://app:8080/catalog/items/1249.png
+curl --fail --output /dev/null http://app:8080/catalog/items/1249.webp
 curl --fail --output /tmp/collections.json http://app:8080/api/v1/collections
 jq -e '.credits == []' /tmp/collections.json
 curl --fail http://app:8080/api/v1/settings
@@ -67,6 +76,8 @@ test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://clog
   http://app:8080/api/v1/auth/login)" = "401"
 docker compose exec -T clan-clog clog runtime node -e "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+;;
+permissions)
 printf "\nVerify restricted database runtime and append-only receipt/audit privileges\n"
 docker compose exec -T clan-clog clog runtime node --input-type=module -e "
   import pg from 'pg';
@@ -85,26 +96,30 @@ docker compose exec -T clan-clog clog runtime node --input-type=module -e "
   } finally { await client.end(); }
 "
 
+;;
+competitions)
 printf "\nUnified WOM competitions and scheduled page imports\n"
 docker compose exec -T --user root clan-clog mkdir -p /app/scripts
 docker compose cp scripts/competitions-smoke.mjs clan-clog:/app/scripts/competitions-smoke.mjs
 docker compose exec -T -e COMPETITION_SMOKE_DISPOSABLE=true clan-clog clog runtime node /app/scripts/competitions-smoke.mjs
 
+;;
+review)
 printf "\nProxy isolation and durable manual submission retries\n"
 docker compose exec -T -e REVIEW_SMOKE_TEST=1 clan-clog clog runtime node --input-type=module < scripts/review-smoke.mjs
 
+;;
+projections-proxy)
 printf "\nPublic conditional projections and cross-instance invalidation\n"
 docker compose exec -T -e PROJECTION_SMOKE_DISPOSABLE=true clan-clog clog runtime node --input-type=module < scripts/projection-smoke.mjs
 
+;;
+branding-proxy)
 printf "\nProxy branding logos accept valid large images and enforce both upload limits\n"
 docker compose exec -T -e BRANDING_PROXY_SMOKE_TEST=1 clan-clog clog runtime node --input-type=module < scripts/branding-proxy-smoke.mjs
 
-printf "\nEnforced production proxy CSP and framing browser acceptance\n"
-SECURITY_PROXY_TEST=1 npm run test:security -w @clog/web
-
-printf "\nReal HTTPS browser/proxy/API/PostgreSQL acceptance across browser engines\n"
-STACK_BROWSER_TEST=1 npm run test:stack -w @clog/web
-
+;;
+preview-maintenance)
 printf "\nBounded import preview maintenance respects runtime role and receipts\n"
 docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -v ON_ERROR_STOP=1 -U clog -d clog -c "
   INSERT INTO xp_previews(token_hash,actor_discord_id,expected_revision,snapshot,expires_at)
@@ -129,13 +144,15 @@ docker compose exec -T clan-clog clog runtime node --input-type=module -e "
   } finally { await c.end(); }
 "
 
+;;
+catalog-proxy)
 printf "\nAdmin catalog, durable icons and coordinated backup\n"
 docker compose exec -T -e CATALOG_SMOKE_TEST=1 clan-clog clog runtime node --input-type=module < scripts/catalog-smoke.mjs > /tmp/catalog-created.json
 icon_path="$(jq -r '.iconPath' /tmp/catalog-created.json)"
-curl --fail "http://app:8080$icon_path" --output /tmp/icon-before.png
+curl --fail "http://app:8080$icon_path" --output /tmp/icon-before.webp
 docker compose up -d --no-deps --force-recreate --wait clan-clog
-curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://app:8080$icon_path" --output /tmp/icon-after.png
-cmp /tmp/icon-before.png /tmp/icon-after.png
+curl --fail --retry 5 --retry-delay 1 --retry-connrefused "http://app:8080$icon_path" --output /tmp/icon-after.webp
+cmp /tmp/icon-before.webp /tmp/icon-after.webp
 curl --fail --output /tmp/catalog-after.json http://app:8080/api/v1/catalog
 jq -e --slurpfile receipt /tmp/catalog-created.json '
   ([.pages[] | select(.category=="bosses")][0].id == $receipt[0].pageId) and
@@ -148,6 +165,8 @@ test -f /tmp/catalog-backup/COMPLETE
 tar -tzf /tmp/catalog-backup/icons.tar.gz | grep "$(basename "$icon_path")"
 tar -tzf /tmp/catalog-backup/screenshots.tar.gz | grep -Fx './.clan-api-key.secret'
 
+;;
+asset-maintenance)
 printf "\nBounded asset maintenance preserves evidence and resumes safely\n"
 docker compose exec -T -e ASSET_SMOKE_DISPOSABLE=true clan-clog clog runtime node --input-type=module - seed < scripts/asset-maintenance-smoke.mjs
 docker compose exec -T --user 0 clan-clog clog owner node packages/database/dist/asset-maintenance.js --dry-run > /tmp/asset-inspect.json
@@ -156,6 +175,8 @@ docker compose exec -T --user 0 clan-clog clog owner node packages/database/dist
 jq -e '.mode=="apply" and .removed>=2 and .referenced>=1 and .errors==0' /tmp/asset-applied.json
 docker compose exec -T -e ASSET_SMOKE_DISPOSABLE=true clan-clog clog runtime node --input-type=module - verify < scripts/asset-maintenance-smoke.mjs
 
+;;
+lifecycle)
 printf "\nExplicit ended-record archival retains results and staff schedules\n"
 docker compose exec -T -e LIFECYCLE_SMOKE_DISPOSABLE=true clan-clog clog runtime node --input-type=module - seed < scripts/lifecycle-smoke.mjs > /tmp/lifecycle-seed.json
 schedule_id="$(jq -r '.scheduleId' /tmp/lifecycle-seed.json)"
@@ -176,6 +197,8 @@ docker compose exec -T --user 0 clan-clog clog owner node packages/database/dist
 jq -e '.outcome=="applied"' /tmp/lifecycle-restore.json
 docker compose exec -T -e LIFECYCLE_SMOKE_DISPOSABLE=true clan-clog clog runtime node --input-type=module - restored < scripts/lifecycle-smoke.mjs
 
+;;
+database-recovery)
 printf "\nRestart PostgreSQL and verify API recovers without a process restart\n"
 app_id="$(docker compose ps -q clan-clog)"
 app_started="$(docker inspect --format '{{.State.StartedAt}}' "$app_id")"
@@ -191,6 +214,8 @@ done
 curl --fail http://app:8080/readyz
 test "$app_started" = "$(docker inspect --format '{{.State.StartedAt}}' "$app_id")"
 
+;;
+availability)
 printf "\nIndependent Discord availability, ordered shutdown and durable response uncertainty\n"
 docker compose exec -T --user 0 clan-clog clog pause
 docker compose exec -T --user 0 -e AVAILABILITY_SMOKE_DISPOSABLE=true -e BOT_ENABLED=true \
@@ -199,6 +224,6 @@ docker compose exec -T --user 0 -e AVAILABILITY_SMOKE_DISPOSABLE=true -e BOT_ENA
   clan-clog clog runtime node --input-type=module < scripts/availability-smoke.mjs
 docker compose exec -T --user 0 clan-clog clog resume
 
-printf "\nComplete isolated restore and versioned deployment recovery\n"
-node scripts/installation-smoke.mjs
-node scripts/recovery-drill.mjs
+;;
+*) echo 'Select a smoke scenario through scripts/check-gates.mjs' >&2; exit 1 ;;
+esac

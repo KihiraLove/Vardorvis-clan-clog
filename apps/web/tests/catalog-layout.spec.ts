@@ -11,7 +11,7 @@ function catalogFixture(pages: number, items: number): AdminCatalog {
   const entries = Array.from({ length: items }, (_, i) => ({
     id: i + 1,
     name: `Item ${String(i + 1).padStart(3, '0')} ${'LongCatalogItemName'.repeat(3)}`,
-    iconPath: '/skills/sailing.png',
+    iconPath: '/skills/sailing.webp',
     origin: 'manual' as const,
     overrides: [],
   }));
@@ -146,6 +146,52 @@ test('new-item editor uses its selected page and requires an in-game ID', async 
   );
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles('public/skills/sailing.png');
+    .setInputFiles('public/skills/sailing.webp');
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
 });
+
+for (const width of [1440, 320]) {
+  test(`catalog icons and page names ignore collection state at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const state = await liveCatalog(page, 3, 3);
+    for (const collected of [[1], [1, 2, 3]]) {
+      state.catalog.collectedItemIds = collected;
+      await page.reload();
+      const log = page.locator('.catalog-log');
+      await expect(log.locator('.catalog-item')).toHaveCount(3);
+      await expect(log.locator('.page-heading p')).toHaveCount(0);
+      await expect(log.getByText(/Obtained:/)).toHaveCount(0);
+      await expect(log.locator('.catalog-page-name.complete')).toHaveCount(0);
+      await expect(
+        log.locator(
+          '.item-slot--collected, .item-slot--hardcore, .item-slot--event, .item-obtain-count',
+        ),
+      ).toHaveCount(0);
+      for (const icon of await log.locator('.catalog-item img').all()) {
+        await expect(icon).toHaveCSS('filter', 'none');
+        await expect(icon).toHaveCSS('opacity', '1');
+      }
+    }
+    await page.screenshot({
+      path: test.info().outputPath('catalog-regular-icons-' + width + '.png'),
+      fullPage: true,
+    });
+    await page
+      .getByRole('button', {
+        name: 'Edit item ' + state.catalog.items[0]!.name,
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole('complementary', { name: 'Catalog editor', exact: true }),
+    ).toBeVisible();
+    expect(state.writes()).toBe(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  });
+}

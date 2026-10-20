@@ -84,6 +84,7 @@ async function main() {
           status: stopping ? 'stopping' : config ? 'running' : 'disabled',
           discordConfigured: !!config,
           discordConnected,
+          connectionState: runtime?.connectionState() ?? 'disabled',
         }),
       );
       return;
@@ -106,6 +107,7 @@ async function main() {
           discordConfigured: !!config,
           discordConnected: runtime?.ready() ?? false,
           apiConnected,
+          connectionState: runtime?.connectionState() ?? 'disabled',
         }),
       );
     })().catch(() => {

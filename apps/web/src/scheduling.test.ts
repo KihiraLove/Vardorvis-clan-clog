@@ -47,6 +47,7 @@ test('schedule adapters send UTC, revisions and CSRF; closed submissions do not 
     revision: 'schedules-2',
     enabled: false,
     schedules: [{ id, ...input }],
+    permanentlyOpenPageIds: [],
   };
   const client = new LiveAdminClient(async (path, options) => {
     assert.equal(path, '/api/v1/admin/schedules');
@@ -156,5 +157,71 @@ test('fixture client preserves schedules and stale-write checks while manual sta
   assert.equal(
     (await client.scheduling(signal())).schedules[0]!.pageIds.length,
     1,
+  );
+});
+
+test('permanent-page adapter sends validated selection with CSRF/revision and checks the saved receipt', async () => {
+  const saved = {
+    revision: 'schedules-2',
+    enabled: true,
+    schedules: [],
+    permanentlyOpenPageIds: ['page-a', 'page-b'],
+  };
+  const client = new LiveAdminClient(async (path, options) => {
+    assert.equal(path, '/api/v1/admin/schedules/permanent-pages');
+    assert.equal(options?.method, 'PUT');
+    assert.equal(
+      (options?.headers as Record<string, string>)['X-CSRF-Token'],
+      'csrf',
+    );
+    assert.deepEqual(JSON.parse(String(options?.body)), {
+      expectedRevision: 'schedules-1',
+      pageIds: ['page-a', 'page-b'],
+    });
+    return Response.json(saved);
+  });
+  assert.deepEqual(
+    await client.setPermanentPages(
+      ['page-b', 'page-a'],
+      'schedules-1',
+      'csrf',
+      signal(),
+    ),
+    saved,
+  );
+  for (const bad of [
+    { ...saved, revision: 'schedules-1' },
+    { ...saved, permanentlyOpenPageIds: ['page-a'] },
+  ])
+    await assert.rejects(
+      new LiveAdminClient(async () => Response.json(bad)).setPermanentPages(
+        ['page-a', 'page-b'],
+        'schedules-1',
+        'csrf',
+        signal(),
+      ),
+      /Unexpected permanent pages receipt/u,
+    );
+  const fixture = new MemoryAdminClient();
+  const catalog = await fixture.catalog(signal());
+  const initial = await fixture.scheduling(signal());
+  const value = await fixture.setPermanentPages(
+    [catalog.pages[0]!.id],
+    initial.revision,
+    'csrf',
+    signal(),
+  );
+  await assert.rejects(
+    fixture.setPermanentPages([], initial.revision, 'csrf', signal()),
+    { status: 409 },
+  );
+  value.permanentlyOpenPageIds.push('injected');
+  assert.equal(
+    (await fixture.scheduling(signal())).permanentlyOpenPageIds.length,
+    1,
+  );
+  await assert.rejects(
+    fixture.setPermanentPages(['missing'], value.revision, 'csrf', signal()),
+    { status: 422 },
   );
 });

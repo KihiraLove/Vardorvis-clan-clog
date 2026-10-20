@@ -14,7 +14,7 @@ export interface IconRecord {
   width: number;
   height: number;
 }
-export const iconPath = (id: string) => `/api/v1/catalog/icons/${id}.png`;
+export const iconPath = (id: string) => `/api/v1/catalog/icons/${id}.webp`;
 export async function decodeIcon(input: Buffer, mime: string) {
   if (!input.length || input.length > MAX_ICON_BYTES)
     throw new ApiError(413, 'Choose an icon up to 2 MiB.');
@@ -38,7 +38,7 @@ export async function decodeIcon(input: Buffer, mime: string) {
       throw new Error('Unsupported dimensions or animation');
     // Native pixels and alpha are retained; scripts, metadata and trailing input are discarded.
     const { data, info } = await decoder
-      .png()
+      .webp({ lossless: true, effort: 2 })
       .toBuffer({ resolveWithObject: true });
     if (data.length > MAX_ICON_BYTES) throw new Error('Decoded icon too large');
     return { bytes: data, width: info.width, height: info.height };
@@ -54,7 +54,7 @@ export class IconStorage {
     if (!isAbsolute(directory))
       throw new Error('ICON_STORAGE_PATH must be an absolute path');
   }
-  protected extension = 'png';
+  protected extension = 'webp';
   private path(id: string) {
     if (!assetIdPattern.test(id)) throw new ApiError(404, 'Icon not found.');
     return join(this.directory, id + '.' + this.extension);

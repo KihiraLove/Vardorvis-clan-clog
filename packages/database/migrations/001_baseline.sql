@@ -1,4 +1,4 @@
--- Clan Collection Log 1.0: complete fresh-install database setup.
+-- Clan Collection Log 1.0.0: complete fresh-install database setup.
 -- Pre-release databases must be recreated; no development upgrade path is supported.
 -- After release, append new checksummed migrations instead of editing this file.
 
@@ -146,14 +146,14 @@ BEGIN
   PERFORM pg_advisory_xact_lock_shared(74261080,hashtext(current_schema()));
   IF TG_TABLE_NAME = 'clan_logo_assets' THEN
     kind := 'branding';
-    names := ARRAY[NEW.id::text || '.webp', NEW.favicon_id::text || '.png'];
+    names := ARRAY[NEW.id::text || '.webp', NEW.favicon_id::text || '.webp'];
   ELSIF TG_TABLE_NAME = 'submission_images' THEN
     kind := 'proofs';
-    names := ARRAY[NEW.id::text || '.png'];
+    names := ARRAY[NEW.id::text || '.webp'];
   ELSIF TG_TABLE_NAME = 'items' THEN
-    names := ARRAY[NEW.icon_asset_id::text || '.png', substring(NEW.icon_path from '([a-f0-9-]{36}\.png)$')];
+    names := ARRAY[NEW.icon_asset_id::text || '.webp', substring(NEW.icon_path from '([a-f0-9-]{36}\.webp)$')];
   ELSE
-    names := ARRAY[NEW.id::text || '.png'];
+    names := ARRAY[NEW.id::text || '.webp'];
   END IF;
   IF EXISTS (
     SELECT 1 FROM asset_retirements
@@ -329,23 +329,6 @@ CREATE TABLE catalog_versions (
     imported_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE discord_settings (
-    singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
-    version integer NOT NULL DEFAULT 1 CHECK(version > 0),
-    settings jsonb NOT NULL CHECK(jsonb_typeof(settings)='object'),
-    credentials text NOT NULL
-);
-
-CREATE TABLE discord_settings_audit (
-    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    actor_id uuid NOT NULL,
-    version integer NOT NULL UNIQUE CHECK(version > 1),
-    old_settings jsonb NOT NULL,
-    new_settings jsonb NOT NULL,
-    token_changed boolean NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
-);
-
 CREATE TABLE clan_api_key_audit (
     id bigint NOT NULL,
     actor_id text NOT NULL,
@@ -456,17 +439,24 @@ CREATE TABLE submissions (
     submitted_world_types text[],
     review_note text DEFAULT ''::text NOT NULL,
     chat_message text,
+    intake_scheduling jsonb,
+    collection_type text DEFAULT 'regular'::text,
+    collection_reason text DEFAULT 'legacy'::text NOT NULL,
     CONSTRAINT intake_receipt_pair CHECK ((((intake_payload_hash IS NULL) AND (intake_receipt IS NULL)) OR ((intake_payload_hash IS NOT NULL) AND (intake_receipt IS NOT NULL)))),
     CONSTRAINT submissions_chat_message CHECK (((chat_message IS NULL) OR ((source = 'runelite'::text) AND ((octet_length(chat_message) >= 1) AND (octet_length(chat_message) <= 8192)) AND (length(TRIM(BOTH FROM chat_message)) > 0)))),
     CONSTRAINT submissions_check CHECK (((status <> 'approved'::text) OR (item_id IS NOT NULL))),
     CONSTRAINT submissions_check1 CHECK (((status = 'pending'::text) OR ((reviewed_at IS NOT NULL) AND (reviewed_by IS NOT NULL)))),
     CONSTRAINT submissions_check2 CHECK (((status <> ALL (ARRAY['rejected'::text, 'revoked'::text])) OR ((review_reason IS NOT NULL) AND (length(TRIM(BOTH FROM review_reason)) > 0)))),
     CONSTRAINT submissions_check3 CHECK (((submitted_world_types IS NULL) OR ((source = 'runelite'::text) AND (cardinality(submitted_world_types) <= 32) AND (array_position(submitted_world_types, NULL::text) IS NULL)))),
+    CONSTRAINT submissions_collection_type_check CHECK ((collection_type = ANY (ARRAY['regular'::text, 'event'::text]))),
+    CONSTRAINT submissions_collection_type_resolved CHECK ((((item_id IS NULL) AND (status <> 'approved'::text)) OR (collection_type IS NOT NULL))),
     CONSTRAINT submissions_collector_name_check CHECK (((length(TRIM(BOTH FROM collector_name)) >= 1) AND (length(TRIM(BOTH FROM collector_name)) <= 80))),
     CONSTRAINT submissions_date_source_check CHECK ((date_source = ANY (ARRAY['submission_default'::text, 'collector'::text, 'admin'::text]))),
     CONSTRAINT submissions_game_item_id_check CHECK ((game_item_id > 0)),
+    CONSTRAINT submissions_hardcore_regular CHECK (((NOT hardcore) OR (NOT (collection_type IS DISTINCT FROM 'regular'::text)))),
     CONSTRAINT submissions_intake_payload_hash_check CHECK ((intake_payload_hash ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT submissions_proof_by_source CHECK (((length(proof_url) <= 2048) AND ((source = 'manual'::text) OR ((source = 'discord'::text) AND (length(proof_url) > 0)) OR ((source = 'runelite'::text) AND ((proof_image_id IS NOT NULL) OR (chat_message IS NOT NULL)))))),
+    CONSTRAINT submissions_intake_scheduling_check CHECK (((intake_scheduling IS NULL) OR (jsonb_typeof(intake_scheduling) = 'object'::text))),
+    CONSTRAINT submissions_proof_by_source CHECK (((length(proof_url) <= 2048) AND ((source = 'manual'::text) OR ((source = 'discord'::text) AND ((proof_image_id IS NOT NULL) OR (length(proof_url) > 0))) OR ((source = 'runelite'::text) AND ((proof_image_id IS NOT NULL) OR (chat_message IS NOT NULL)))))),
     CONSTRAINT submissions_raw_item_text_check CHECK (((length(TRIM(BOTH FROM raw_item_text)) >= 1) AND (length(TRIM(BOTH FROM raw_item_text)) <= 200))),
     CONSTRAINT submissions_review_note_check CHECK ((length(review_note) <= 1000)),
     CONSTRAINT submissions_runelite_provenance CHECK (((source <> 'runelite'::text) OR ((game_item_id IS NOT NULL) AND (submitted_clan_name IS NOT NULL) AND ((length(TRIM(BOTH FROM submitted_clan_name)) >= 1) AND (length(TRIM(BOTH FROM submitted_clan_name)) <= 80))))),
@@ -481,7 +471,8 @@ CREATE VIEW collection_credits AS
     item_id,
     collector_name,
     collected_on,
-    hardcore
+    hardcore,
+    collection_type
    FROM submissions
   WHERE (status = 'approved'::text);
 
@@ -501,6 +492,10 @@ CREATE TABLE collection_log_schedules (
     CONSTRAINT schedule_archive_ended CHECK (((archived_at IS NULL) OR (archived_at >= ends_at)))
 );
 
+CREATE TABLE collection_permanent_pages (
+    page_id text NOT NULL
+);
+
 CREATE TABLE collection_schedule_audit (
     id bigint NOT NULL,
     actor_id text NOT NULL,
@@ -510,7 +505,7 @@ CREATE TABLE collection_schedule_audit (
     old_values jsonb NOT NULL,
     new_values jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT collection_schedule_audit_action_check CHECK ((action = ANY (ARRAY['enable'::text, 'disable'::text, 'create'::text, 'edit'::text, 'delete'::text])))
+    CONSTRAINT collection_schedule_audit_action_check CHECK ((action = ANY (ARRAY['enable'::text, 'disable'::text, 'create'::text, 'edit'::text, 'delete'::text, 'set_permanent_pages'::text, 'remove_permanent_page'::text])))
 );
 
 ALTER TABLE collection_schedule_audit ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
@@ -555,6 +550,36 @@ CREATE TABLE competition_previews (
     page_ids text[] NOT NULL,
     expires_at timestamp with time zone NOT NULL,
     CONSTRAINT competition_previews_token_hash_check CHECK ((token_hash ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE discord_settings (
+    singleton boolean DEFAULT true NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    settings jsonb NOT NULL,
+    credentials text NOT NULL,
+    CONSTRAINT discord_settings_settings_check CHECK ((jsonb_typeof(settings) = 'object'::text)),
+    CONSTRAINT discord_settings_singleton_check CHECK (singleton),
+    CONSTRAINT discord_settings_version_check CHECK ((version > 0))
+);
+
+CREATE TABLE discord_settings_audit (
+    id bigint NOT NULL,
+    actor_id uuid NOT NULL,
+    version integer NOT NULL,
+    old_settings jsonb NOT NULL,
+    new_settings jsonb NOT NULL,
+    token_changed boolean NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT discord_settings_audit_version_check CHECK ((version > 1))
+);
+
+ALTER TABLE discord_settings_audit ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME discord_settings_audit_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 CREATE TABLE game_item_ids (
@@ -653,10 +678,13 @@ CREATE TABLE review_state (
 CREATE TABLE runelite_drop_events (
     submission_id uuid NOT NULL,
     player_key text NOT NULL,
-    item_id integer NOT NULL,
+    item_id integer,
     hardcore boolean NOT NULL,
     first_received_at timestamp with time zone NOT NULL,
-    receipt jsonb NOT NULL
+    receipt jsonb NOT NULL,
+    game_item_id integer,
+    CONSTRAINT runelite_drop_events_game_item_id_check CHECK ((game_item_id > 0)),
+    CONSTRAINT runelite_drop_events_identity_check CHECK (((item_id IS NOT NULL) OR (game_item_id IS NOT NULL)))
 );
 
 CREATE TABLE runelite_settings (
@@ -700,12 +728,52 @@ CREATE TABLE site_settings (
     hardcore_enabled boolean DEFAULT false NOT NULL,
     version integer DEFAULT 1 NOT NULL,
     clan_name text DEFAULT 'Clan name'::text NOT NULL,
-    public_copy jsonb DEFAULT '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected during BOTW events"}'::jsonb NOT NULL,
+    public_copy jsonb DEFAULT '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected by clan members"}'::jsonb NOT NULL,
     hardcore_name text DEFAULT 'Clan name'::text NOT NULL,
-    hardcore_copy jsonb DEFAULT '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected during BOTW events"}'::jsonb NOT NULL,
+    hardcore_copy jsonb DEFAULT '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected by clan members"}'::jsonb NOT NULL,
+    how_to_submit_markdown text DEFAULT '## Submit a collection
+
+1. Follow your clan''s RuneLite submission setup, or send your proof to a moderator.
+2. Include the item, collector name, collection date and a PNG screenshot. RuneLite submissions can use their chat proof.
+3. Your collection appears in the log once the submission is approved.
+
+Ask your clan staff for setup instructions and submission rules.'::text NOT NULL,
+    event_highlight jsonb DEFAULT '{"red": 231, "blue": 82, "alpha": 1, "green": 189}'::jsonb NOT NULL,
+    hardcore_highlight jsonb DEFAULT '{"red": 255, "blue": 41, "alpha": 1, "green": 41}'::jsonb NOT NULL,
+    CONSTRAINT event_highlight_valid CHECK(CASE WHEN
+    jsonb_typeof(event_highlight) = 'object'
+    AND event_highlight - ARRAY['red','green','blue','alpha'] = '{}'::jsonb
+    AND jsonb_typeof(event_highlight->'red') = 'number'
+    AND jsonb_typeof(event_highlight->'green') = 'number'
+    AND jsonb_typeof(event_highlight->'blue') = 'number'
+    AND jsonb_typeof(event_highlight->'alpha') = 'number'
+    THEN (event_highlight->>'red')::numeric BETWEEN 0 AND 255
+      AND (event_highlight->>'green')::numeric BETWEEN 0 AND 255
+      AND (event_highlight->>'blue')::numeric BETWEEN 0 AND 255
+      AND (event_highlight->>'alpha')::numeric BETWEEN 0 AND 1
+      AND (event_highlight->>'red')::numeric = trunc((event_highlight->>'red')::numeric)
+      AND (event_highlight->>'green')::numeric = trunc((event_highlight->>'green')::numeric)
+      AND (event_highlight->>'blue')::numeric = trunc((event_highlight->>'blue')::numeric)
+    ELSE false END),
     CONSTRAINT hardcore_copy_valid CHECK (((jsonb_typeof(hardcore_copy) = 'object'::text) AND (hardcore_copy ?& ARRAY['collectionTitle'::text, 'collectionCaption'::text, 'xpTitle'::text]) AND ((hardcore_copy - ARRAY['collectionTitle'::text, 'collectionCaption'::text, 'xpTitle'::text]) = '{}'::jsonb) AND (jsonb_typeof((hardcore_copy -> 'collectionTitle'::text)) = 'string'::text) AND ((length(TRIM(BOTH FROM (hardcore_copy ->> 'collectionTitle'::text))) >= 1) AND (length(TRIM(BOTH FROM (hardcore_copy ->> 'collectionTitle'::text))) <= 160)) AND (jsonb_typeof((hardcore_copy -> 'collectionCaption'::text)) = 'string'::text) AND ((length(TRIM(BOTH FROM (hardcore_copy ->> 'collectionCaption'::text))) >= 1) AND (length(TRIM(BOTH FROM (hardcore_copy ->> 'collectionCaption'::text))) <= 160)) AND (jsonb_typeof((hardcore_copy -> 'xpTitle'::text)) = 'string'::text) AND ((length(TRIM(BOTH FROM (hardcore_copy ->> 'xpTitle'::text))) >= 1) AND (length(TRIM(BOTH FROM (hardcore_copy ->> 'xpTitle'::text))) <= 160)))),
+    CONSTRAINT hardcore_highlight_valid CHECK(CASE WHEN
+    jsonb_typeof(hardcore_highlight) = 'object'
+    AND hardcore_highlight - ARRAY['red','green','blue','alpha'] = '{}'::jsonb
+    AND jsonb_typeof(hardcore_highlight->'red') = 'number'
+    AND jsonb_typeof(hardcore_highlight->'green') = 'number'
+    AND jsonb_typeof(hardcore_highlight->'blue') = 'number'
+    AND jsonb_typeof(hardcore_highlight->'alpha') = 'number'
+    THEN (hardcore_highlight->>'red')::numeric BETWEEN 0 AND 255
+      AND (hardcore_highlight->>'green')::numeric BETWEEN 0 AND 255
+      AND (hardcore_highlight->>'blue')::numeric BETWEEN 0 AND 255
+      AND (hardcore_highlight->>'alpha')::numeric BETWEEN 0 AND 1
+      AND (hardcore_highlight->>'red')::numeric = trunc((hardcore_highlight->>'red')::numeric)
+      AND (hardcore_highlight->>'green')::numeric = trunc((hardcore_highlight->>'green')::numeric)
+      AND (hardcore_highlight->>'blue')::numeric = trunc((hardcore_highlight->>'blue')::numeric)
+    ELSE false END),
     CONSTRAINT hardcore_name_valid CHECK (((length(TRIM(BOTH FROM hardcore_name)) >= 1) AND (length(TRIM(BOTH FROM hardcore_name)) <= 80))),
     CONSTRAINT site_settings_clan_name_check CHECK (((clan_name = TRIM(BOTH FROM clan_name)) AND ((length(clan_name) >= 1) AND (length(clan_name) <= 80)))),
+    CONSTRAINT site_settings_help_size CHECK ((octet_length(how_to_submit_markdown) <= 32768)),
     CONSTRAINT site_settings_public_copy_check CHECK (((jsonb_typeof(public_copy) = 'object'::text) AND (public_copy ?& ARRAY['collectionTitle'::text, 'collectionCaption'::text, 'xpTitle'::text]) AND ((public_copy - ARRAY['collectionTitle'::text, 'collectionCaption'::text, 'xpTitle'::text]) = '{}'::jsonb) AND (jsonb_typeof((public_copy -> 'collectionTitle'::text)) = 'string'::text) AND ((length(TRIM(BOTH FROM (public_copy ->> 'collectionTitle'::text))) >= 1) AND (length(TRIM(BOTH FROM (public_copy ->> 'collectionTitle'::text))) <= 160)) AND (jsonb_typeof((public_copy -> 'collectionCaption'::text)) = 'string'::text) AND ((length(TRIM(BOTH FROM (public_copy ->> 'collectionCaption'::text))) >= 1) AND (length(TRIM(BOTH FROM (public_copy ->> 'collectionCaption'::text))) <= 160)) AND (jsonb_typeof((public_copy -> 'xpTitle'::text)) = 'string'::text) AND ((length(TRIM(BOTH FROM (public_copy ->> 'xpTitle'::text))) >= 1) AND (length(TRIM(BOTH FROM (public_copy ->> 'xpTitle'::text))) <= 160)))),
     CONSTRAINT site_settings_singleton_check CHECK (singleton),
     CONSTRAINT site_settings_version_check CHECK ((version > 0))
@@ -725,7 +793,13 @@ CREATE TABLE site_settings_audit (
     old_hardcore_name text,
     new_hardcore_name text,
     old_hardcore_copy jsonb,
-    new_hardcore_copy jsonb
+    new_hardcore_copy jsonb,
+    old_how_to_submit_markdown text,
+    new_how_to_submit_markdown text,
+    old_event_highlight jsonb,
+    new_event_highlight jsonb,
+    old_hardcore_highlight jsonb,
+    new_hardcore_highlight jsonb
 );
 
 ALTER TABLE site_settings_audit ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
@@ -774,6 +848,36 @@ CREATE TABLE staff_accounts (
     CONSTRAINT staff_accounts_username_check CHECK ((username ~ '^[A-Za-z0-9_.-]{3,32}$'::text))
 );
 
+CREATE TABLE staff_page_access (
+    singleton boolean DEFAULT true NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    moderator_pages text[] NOT NULL,
+    CONSTRAINT staff_page_access_moderator_pages_check CHECK ((moderator_pages <@ ARRAY['submissions'::text, 'catalog'::text, 'schedules'::text, 'runelite'::text, 'settings'::text, 'hardcore'::text, 'discord'::text])),
+    CONSTRAINT staff_page_access_moderator_pages_check1 CHECK ((array_position(moderator_pages, NULL::text) IS NULL)),
+    CONSTRAINT staff_page_access_moderator_pages_check2 CHECK ((cardinality(moderator_pages) <= 7)),
+    CONSTRAINT staff_page_access_singleton_check CHECK (singleton),
+    CONSTRAINT staff_page_access_version_check CHECK ((version > 0))
+);
+
+CREATE TABLE staff_page_access_audit (
+    id bigint NOT NULL,
+    actor_id text NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    version integer NOT NULL,
+    old_pages text[] NOT NULL,
+    new_pages text[] NOT NULL,
+    CONSTRAINT staff_page_access_audit_version_check CHECK ((version > 1))
+);
+
+ALTER TABLE staff_page_access_audit ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME staff_page_access_audit_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 CREATE TABLE submission_filter_audit (
     id uuid NOT NULL,
     actor_id text NOT NULL,
@@ -819,12 +923,16 @@ CREATE TABLE wom_competitions (
     activity_results jsonb,
     source_hash text,
     archived_at timestamp with time zone,
+    metric_definitions jsonb,
+    competition_results jsonb,
     CONSTRAINT competition_archive_ended CHECK (((archived_at IS NULL) OR (archived_at >= ends_at))),
     CONSTRAINT wom_competitions_check CHECK ((ends_at > starts_at)),
     CONSTRAINT wom_competitions_check1 CHECK (((activity_results IS NULL) OR ((kind = 'ACTIVITY'::text) AND (results_imported_at IS NOT NULL)))),
     CONSTRAINT wom_competitions_competition_id_check CHECK ((competition_id > 0)),
     CONSTRAINT wom_competitions_kind_check CHECK ((kind = ANY (ARRAY['SKILL'::text, 'ACTIVITY'::text]))),
+    CONSTRAINT wom_competitions_metric_definitions_check CHECK (((metric_definitions IS NULL) OR ((jsonb_typeof(metric_definitions) = 'array'::text) AND (jsonb_array_length(metric_definitions) = jsonb_array_length(metrics))))),
     CONSTRAINT wom_competitions_metrics_check CHECK (((jsonb_typeof(metrics) = 'array'::text) AND (jsonb_array_length(metrics) > 0))),
+    CONSTRAINT wom_competitions_results_check CHECK (((competition_results IS NULL) OR ((jsonb_typeof(competition_results) = 'array'::text) AND ((jsonb_array_length(competition_results) = 0) OR (results_imported_at IS NOT NULL))))),
     CONSTRAINT wom_competitions_title_check CHECK (((length(TRIM(BOTH FROM title)) >= 1) AND (length(TRIM(BOTH FROM title)) <= 200)))
 );
 
@@ -952,6 +1060,9 @@ ALTER TABLE ONLY collection_log_schedule_pages
 ALTER TABLE ONLY collection_log_schedules
     ADD CONSTRAINT collection_log_schedules_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY collection_permanent_pages
+    ADD CONSTRAINT collection_permanent_pages_pkey PRIMARY KEY (page_id);
+
 ALTER TABLE ONLY collection_schedule_audit
     ADD CONSTRAINT collection_schedule_audit_pkey PRIMARY KEY (id);
 
@@ -969,6 +1080,15 @@ ALTER TABLE ONLY competition_import_history
 
 ALTER TABLE ONLY competition_previews
     ADD CONSTRAINT competition_previews_pkey PRIMARY KEY (token_hash);
+
+ALTER TABLE ONLY discord_settings_audit
+    ADD CONSTRAINT discord_settings_audit_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY discord_settings_audit
+    ADD CONSTRAINT discord_settings_audit_version_key UNIQUE (version);
+
+ALTER TABLE ONLY discord_settings
+    ADD CONSTRAINT discord_settings_pkey PRIMARY KEY (singleton);
 
 ALTER TABLE ONLY game_item_ids
     ADD CONSTRAINT game_item_ids_pkey PRIMARY KEY (game_item_id);
@@ -1036,6 +1156,15 @@ ALTER TABLE ONLY staff_account_audit
 ALTER TABLE ONLY staff_accounts
     ADD CONSTRAINT staff_accounts_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY staff_page_access_audit
+    ADD CONSTRAINT staff_page_access_audit_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY staff_page_access_audit
+    ADD CONSTRAINT staff_page_access_audit_version_key UNIQUE (version);
+
+ALTER TABLE ONLY staff_page_access
+    ADD CONSTRAINT staff_page_access_pkey PRIMARY KEY (singleton);
+
 ALTER TABLE ONLY submission_filter_audit
     ADD CONSTRAINT submission_filter_audit_pkey PRIMARY KEY (id);
 
@@ -1101,6 +1230,8 @@ CREATE INDEX item_aliases_item ON item_aliases USING btree (item_id);
 
 CREATE INDEX lifecycle_audit_resource ON lifecycle_archive_audit USING btree (resource, resource_id, created_at DESC, id DESC);
 
+CREATE INDEX runelite_drop_events_player_recent ON runelite_drop_events USING btree (player_key, hardcore, first_received_at DESC);
+
 CREATE INDEX runelite_drop_events_recent ON runelite_drop_events USING btree (player_key, item_id, hardcore, first_received_at DESC);
 
 CREATE INDEX schedules_archived_page ON collection_log_schedules USING btree (id) WHERE (archived_at IS NOT NULL);
@@ -1113,11 +1244,13 @@ CREATE UNIQUE INDEX staff_accounts_username ON staff_accounts USING btree (lower
 
 CREATE INDEX submissions_item_approved ON submissions USING btree (item_id, collected_on) WHERE (status = 'approved'::text);
 
-CREATE UNIQUE INDEX submissions_one_credit_per_world ON submissions USING btree (item_id, hardcore) WHERE (status = 'approved'::text);
+CREATE UNIQUE INDEX submissions_one_event_credit ON submissions USING btree (item_id) WHERE ((status = 'approved'::text) AND (collection_type = 'event'::text) AND (NOT hardcore));
 
 CREATE INDEX submissions_pending_page ON submissions USING btree (submitted_at DESC, id DESC) WHERE (status = 'pending'::text);
 
 CREATE INDEX submissions_proof_reference ON submissions USING btree (proof_image_id) WHERE (proof_image_id IS NOT NULL);
+
+CREATE INDEX submissions_regular_credits ON submissions USING btree (item_id, hardcore) WHERE ((status = 'approved'::text) AND (collection_type = 'regular'::text));
 
 CREATE INDEX submissions_review_cursor ON submissions USING btree (submitted_at DESC, id DESC);
 
@@ -1139,19 +1272,37 @@ INSERT INTO catalog_sections (id, name, sort_order, active) VALUES ('raids', 'Ra
 INSERT INTO catalog_sections (id, name, sort_order, active) VALUES ('clues', 'Clues', 2, true);
 INSERT INTO catalog_sections (id, name, sort_order, active) VALUES ('minigames', 'Minigames', 3, true);
 INSERT INTO catalog_sections (id, name, sort_order, active) VALUES ('other', 'Other', 4, true);
+
 INSERT INTO catalog_state (singleton, version) VALUES (true, 1);
+
 INSERT INTO clan_branding (singleton, version, logo_asset_id, hardcore_version, hardcore_logo_asset_id) VALUES (true, 1, NULL, 1, NULL);
+
 INSERT INTO collection_scheduling (singleton, enabled, version) VALUES (true, false, 1);
+
 INSERT INTO lifecycle_state (singleton, version) VALUES (true, 1);
+
 INSERT INTO projection_state (resource, version) VALUES ('collections', 1);
 INSERT INTO projection_state (resource, version) VALUES ('matches', 1);
 INSERT INTO projection_state (resource, version) VALUES ('xp', 1);
 INSERT INTO projection_state (resource, version) VALUES ('activities', 1);
 INSERT INTO projection_state (resource, version) VALUES ('catalog', 1);
+
 INSERT INTO review_state (singleton, version) VALUES (true, 1);
+
 INSERT INTO runelite_settings (singleton, version, rules) VALUES (true, 1, '{"clanName": "Clan name", "matchClanName": true, "worldPolicies": {"f2p": "review", "pvp": "review", "members": "review", "hardcore": "review"}, "playerWhitelist": []}');
-INSERT INTO site_settings (singleton, hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy) VALUES (true, false, 1, 'Clan name', '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected during BOTW events"}', 'Clan name', '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected during BOTW events"}');
+
+INSERT INTO site_settings (singleton, hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy, how_to_submit_markdown, event_highlight, hardcore_highlight) VALUES (true, false, 1, 'Clan name', '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected by clan members"}', 'Clan name', '{"xpTitle": "XP gained during SOTW events", "collectionTitle": "Clan Collection Log", "collectionCaption": "Collected by clan members"}', '## Submit a collection
+
+1. Follow your clan''s RuneLite submission setup, or send your proof to a moderator.
+2. Include the item, collector name, collection date and a PNG screenshot. RuneLite submissions can use their chat proof.
+3. Your collection appears in the log once the submission is approved.
+
+Ask your clan staff for setup instructions and submission rules.', '{"red": 231, "blue": 82, "alpha": 1, "green": 189}', '{"red": 255, "blue": 41, "alpha": 1, "green": 41}');
+
+INSERT INTO staff_page_access (singleton, version, moderator_pages) VALUES (true, 1, '{submissions,catalog,schedules,runelite}');
+
 INSERT INTO submission_filter_settings (singleton, version, filter_collected) VALUES (true, 1, false);
+
 INSERT INTO xp_state (singleton, version, updated_at, history_version) VALUES (true, 1, NULL, 1);
 
 CREATE TRIGGER aliases_revision AFTER INSERT OR DELETE OR UPDATE ON game_item_ids FOR EACH STATEMENT EXECUTE FUNCTION bump_catalog_revision();
@@ -1254,6 +1405,9 @@ ALTER TABLE ONLY collection_log_schedule_pages
 
 ALTER TABLE ONLY collection_log_schedule_pages
     ADD CONSTRAINT collection_log_schedule_pages_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES collection_log_schedules(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY collection_permanent_pages
+    ADD CONSTRAINT collection_permanent_pages_page_id_fkey FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY competition_import_history
     ADD CONSTRAINT competition_import_history_competition_id_fkey FOREIGN KEY (competition_id) REFERENCES wom_competitions(competition_id);

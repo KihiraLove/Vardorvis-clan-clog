@@ -18,12 +18,10 @@ import { useAdminAction } from './use-admin-action.ts';
 import type { SubmissionFilters } from '@clog/domain';
 export function AdminQueue({
   client,
-  hardcoreEnabled,
   session,
   onAccessLost,
 }: {
   client: AdminClient;
-  hardcoreEnabled: boolean;
   session: AdminSession;
   onAccessLost: () => void;
 }) {
@@ -146,7 +144,6 @@ export function AdminQueue({
     <>
       {snapshot?.catalog && (
         <ManualSubmissionForm
-          hardcoreEnabled={hardcoreEnabled}
           catalog={snapshot.catalog}
           client={client}
           session={session}
@@ -161,7 +158,7 @@ export function AdminQueue({
         />
       )}
       <section className="admin-panel submission-filter-panel">
-        <h2 id="submission-filter-title">Filter out duplicates</h2>
+        <h2 id="submission-filter-title">Filter out regular duplicates</h2>
         {session.role === 'admin' ? (
           <button
             type="button"
@@ -195,7 +192,7 @@ export function AdminQueue({
           </button>
         ) : (
           <p>
-            Duplicate filtering is{' '}
+            Regular duplicate filtering is{' '}
             <strong>
               {filters
                 ? filters.filterCollected
@@ -291,7 +288,16 @@ export function AdminQueue({
                     >
                       <span className="submission-card__summary">
                         <span className="submission-card__item">
-                          {item && <img src={item.iconPath} alt="" />}
+                          {item ? (
+                            <img src={item.iconPath} alt="" />
+                          ) : (
+                            <span
+                              className="submission-card__icon-fallback"
+                              aria-hidden="true"
+                            >
+                              ?
+                            </span>
+                          )}
                           <strong>
                             {item?.name ??
                               (row.rawItemText || 'Needs item match')}
@@ -300,9 +306,24 @@ export function AdminQueue({
                         <span className="submission-card__collector">
                           {row.collectorName}
                         </span>
+                        {row.itemId === null && (
+                          <span>
+                            Unmatched
+                            {row.gameItemId === undefined
+                              ? ''
+                              : ` · Game item ID ${row.gameItemId}`}
+                          </span>
+                        )}
                         <time dateTime={row.submittedAt}>
                           {formatUtcTime(row.submittedAt)}
                         </time>
+                        <span>
+                          {row.collectionType === null
+                            ? 'Awaiting item match'
+                            : row.collectionType === 'event'
+                              ? 'Event collection'
+                              : 'Regular collection'}
+                        </span>
                       </span>
                       {safeScreenshotPath(row.screenshotPath) && (
                         <img

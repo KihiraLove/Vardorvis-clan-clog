@@ -4,6 +4,7 @@ import {
   parseCollectionScheduleInput,
   parseSchedulingState,
   scheduledItemOpen,
+  parsePermanentPageIds,
 } from './scheduling.js';
 const schedule = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -99,10 +100,53 @@ test('schedule validation rejects normalized invalid dates, reversed windows and
     revision: 'schedules-1',
     enabled: false,
     schedules: [{ id, ...input }],
+    permanentlyOpenPageIds: [],
   };
   assert.deepEqual(parseSchedulingState(state), state);
   assert.throws(() =>
     parseSchedulingState({ ...state, schedules: [schedule, schedule] }),
   );
   assert.throws(() => parseSchedulingState({ ...state, enabled: 'false' }));
+});
+
+test('permanent pages are independent from timed windows and validate bounded distinct page IDs', () => {
+  const state = {
+    enabled: true,
+    schedules: [schedule],
+    permanentlyOpenPageIds: ['page-b'],
+  };
+  for (const now of [
+    '2026-10-12T09:00:00.000Z',
+    '2026-10-12T11:00:00.000Z',
+    '2026-10-12T13:00:00.000Z',
+  ]) {
+    assert.equal(scheduledItemOpen(state, ['page-b'], now), true);
+    assert.equal(scheduledItemOpen(state, ['other', 'page-b'], now), true);
+    assert.equal(scheduledItemOpen(state, ['unrelated'], now), false);
+  }
+  assert.deepEqual(parsePermanentPageIds(['page-b', 'page-a']), [
+    'page-a',
+    'page-b',
+  ]);
+  assert.deepEqual(parsePermanentPageIds([]), []);
+  for (const bad of [
+    null,
+    'page-a',
+    [1],
+    [''],
+    [' page-a'],
+    ['page-a', 'page-a'],
+    ['a'.repeat(101)],
+    Array.from({ length: 2001 }, (_, i) => 'page-' + i),
+  ])
+    assert.throws(() => parsePermanentPageIds(bad));
+  const parsed = parseSchedulingState({
+    revision: 'schedules-1',
+    enabled: false,
+    schedules: [],
+  });
+  assert.deepEqual(parsed.permanentlyOpenPageIds, []);
+  assert.throws(() =>
+    parseSchedulingState({ ...parsed, permanentlyOpenPageIds: null }),
+  );
 });

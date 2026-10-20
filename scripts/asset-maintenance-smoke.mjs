@@ -27,11 +27,11 @@ try {
       [
         'SELECT id FROM catalog_assets WHERE item_id IS NOT NULL',
         'icons',
-        '.png',
+        '.webp',
       ],
       ['SELECT id FROM clan_logo_assets', 'branding', '.webp'],
-      ['SELECT favicon_id AS id FROM clan_logo_assets', 'branding', '.png'],
-      ['SELECT id FROM submission_images', 'proofs', '.png'],
+      ['SELECT favicon_id AS id FROM clan_logo_assets', 'branding', '.webp'],
+      ['SELECT id FROM submission_images', 'proofs', '.webp'],
     ]) {
       const rows = (await pool.query(query)).rows;
       assert.ok(
@@ -45,15 +45,15 @@ try {
       }
     }
     const orphans = [
-      join(dirs.icons, randomUUID() + '.png'),
+      join(dirs.icons, randomUUID() + '.webp'),
       join(dirs.branding, randomUUID() + '.webp'),
-      join(dirs.proofs, randomUUID() + '.png'),
+      join(dirs.proofs, randomUUID() + '.webp'),
     ];
     for (const file of orphans) {
       await writeFile(file, 'abandoned-upload');
       await utimes(file, old, old);
     }
-    const fresh = join(dirs.proofs, randomUUID() + '.png');
+    const fresh = join(dirs.proofs, randomUUID() + '.webp');
     await writeFile(fresh, 'active-upload');
     const rootPath = join(dirs.proofs, '.clan-api-key.secret');
     const rootHash = createHash('sha256')

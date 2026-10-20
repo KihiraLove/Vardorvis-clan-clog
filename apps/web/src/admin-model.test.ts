@@ -9,7 +9,6 @@ import {
   parseDetail,
   parseQueue,
   parseSubmission,
-  safeProof,
   safeScreenshotPath,
   validateCorrection,
   validateIconFile,
@@ -21,6 +20,43 @@ import {
 import { MemoryAdminClient } from '../tests/support/admin.ts';
 
 const signal = () => new AbortController().signal;
+
+test('unmatched RuneLite provenance remains available after canonical resolution', async () => {
+  const seed = (
+    await new MemoryAdminClient().queue('pending', undefined, signal())
+  ).submissions[0]!;
+  const original = {
+    ...seed,
+    source: 'runelite',
+    itemId: null,
+    hardcore: false,
+    rawItemText: 'Unlisted variant',
+    gameItemId: 987654,
+    chatMessage: 'Valuable drop: Unlisted variant',
+  };
+  const unmatched = parseSubmission(original);
+  assert.equal(unmatched.itemId, null);
+  assert.equal(unmatched.gameItemId, 987654);
+  assert.equal(
+    parseSubmission({ ...original, collectionType: null }).collectionType,
+    null,
+  );
+  assert.throws(() =>
+    parseSubmission({ ...original, itemId: 42, collectionType: null }),
+  );
+  assert.throws(() =>
+    parseSubmission({ ...original, hardcore: true, collectionType: 'event' }),
+  );
+  assert.equal(
+    parseSubmission({ ...original, itemId: 42 }).rawItemText,
+    'Unlisted variant',
+  );
+  for (const gameItemId of [null, 0, -1, '987654', 1.5, 2147483648])
+    assert.throws(() => parseSubmission({ ...original, gameItemId }));
+  const { gameItemId: _oldClient, ...legacy } = original;
+  assert.equal(_oldClient, 987654);
+  assert.equal(parseSubmission(legacy).gameItemId, undefined);
+});
 
 test('RuneLite chat proof preserves full text and rejects malformed private evidence', async () => {
   const seed = (
@@ -106,17 +142,18 @@ test('fixture audit pagination retains every event, binds scope/revision and val
   );
 });
 
-test('stored evidence accepts only generated private PNG paths and survives RuneLite parsing', async () => {
+test('stored evidence accepts only generated private WebP paths and survives RuneLite parsing', async () => {
   const client = new MemoryAdminClient();
   const fixture = (await client.queue('pending', undefined, signal()))
     .submissions[0]!;
   const path =
-    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.png';
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp';
   assert.equal(safeScreenshotPath(path), true);
   for (const value of [
+    path.replace('.webp', '.png'),
     'https://evil.test/proof.png',
     '//evil.test/proof.png',
-    '/api/v1/admin/submission-images/../../proof.png',
+    '/api/v1/admin/submission-images/../../proof.webp',
     path + '?token=secret',
     'data:image/png;base64,AAAA',
   ]) {
@@ -190,25 +227,6 @@ test('admin payloads validate identities, view boundaries, dates and source meta
       }),
     /calendar/,
   );
-});
-
-test('proof links block spoofed/unsafe origins without requiring an external fetch', () => {
-  assert.equal(
-    safeProof('https://imgur.com/a/proof'),
-    'https://imgur.com/a/proof',
-  );
-  assert.equal(
-    safeProof('https://i.gyazo.com/proof.png'),
-    'https://i.gyazo.com/proof.png',
-  );
-  for (const input of [
-    'javascript:alert(1)',
-    'https://imgur.com.evil.test/proof',
-    'http://imgur.com/proof',
-    '***imgur.com/proof',
-    'https://imgur.com:444/proof',
-  ])
-    assert.equal(safeProof(input), undefined);
 });
 
 test('corrections require a canonical item and valid collector/calendar date', async () => {

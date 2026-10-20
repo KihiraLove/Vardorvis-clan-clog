@@ -13,7 +13,7 @@ test('the shared registry preserves all 24 canonical skills, display order and i
   for (const [id, name, icon] of skills) {
     assert.equal(skillName(id), name);
     assert.equal(skillIcon(id), '/skills/' + icon);
-    assert.equal(icon, (id === 'runecrafting' ? 'runecraft' : id) + '.png');
+    assert.equal(icon, (id === 'runecrafting' ? 'runecraft' : id) + '.webp');
     assert.deepEqual(competitionScope([id]), { kind: 'SKILL', skills: [id] });
   }
   assert.equal(skillName('runecrafting'), 'Runecraft');
@@ -29,13 +29,8 @@ test('aggregate and multiple skill scopes use canonical order without counting a
     skills: ['attack', 'fishing', 'sailing'],
   });
 });
-test('non-skill classification is separate from validating supported result data', () => {
-  for (const metric of [
-    'vardorvis',
-    'clue_scrolls_all',
-    'ehp',
-    'unknown_metric',
-  ])
+test('WOM same-type multi-metric groups classify independently from raw XP', () => {
+  for (const metric of ['vardorvis', 'clue_scrolls_all', 'ehp'])
     assert.deepEqual(competitionScope([metric]), {
       kind: 'ACTIVITY',
       skills: [],
@@ -43,11 +38,27 @@ test('non-skill classification is separate from validating supported result data
   for (const scope of [
     [],
     ['attack', 'attack'],
-    ['overall', 'attack'],
     ['total', 'overall'],
     ['attack', 'vardorvis'],
     ['attack', 'ehp'],
-    ['vardorvis', 'zulrah'],
+    ['unknown_metric'],
+    ['vardorvis', 'clue_scrolls_all'],
+    ['ehb', 'vardorvis'],
   ])
     assert.throws(() => competitionScope(scope), /Invalid|unsupported/);
+});
+test('all valid metric groups permit multiple metrics and aggregate skills expand only once', () => {
+  for (const metrics of [
+    ['vardorvis', 'zulrah'],
+    ['clue_scrolls_hard', 'clue_scrolls_elite'],
+    ['ehp', 'ehb'],
+  ])
+    assert.deepEqual(competitionScope(metrics), {
+      kind: 'ACTIVITY',
+      skills: [],
+    });
+  assert.deepEqual(competitionScope(['overall', 'attack']), {
+    kind: 'SKILL',
+    skills: [...skillIds],
+  });
 });

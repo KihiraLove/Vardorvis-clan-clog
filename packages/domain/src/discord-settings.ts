@@ -1,4 +1,12 @@
 /** Public Discord settings never contain either service credential. */
+export type DiscordConnectionState =
+  'disabled' | 'connecting' | 'connected' | 'disconnected' | 'unavailable';
+export interface DiscordStatus {
+  enabled: boolean;
+  ready: boolean;
+  state: DiscordConnectionState;
+}
+
 export const defaultDiscordLimits = {
   intakeUser: 5,
   intakeGuild: 60,

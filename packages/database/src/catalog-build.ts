@@ -29,6 +29,7 @@ interface Assets {
     gameItemId: number;
     path: string;
     url: string;
+    sourceSha256: string;
     sha256: string;
     width: number;
     height: number;
@@ -93,7 +94,7 @@ export function buildSnapshot(
       id: identities[gameId]!,
       name: names[gameId]!,
       gameItemIds: [gameId],
-      iconPath: `/catalog/items/${gameId}.png`,
+      iconPath: `/catalog/items/${gameId}.webp`,
     })),
     pages,
   };
@@ -178,7 +179,7 @@ export async function buildVerifiedSnapshot(): Promise<CatalogSnapshot> {
   for (const asset of assets.items) {
     assert.equal(
       asset.path,
-      `apps/web/public/catalog/items/${asset.gameItemId}.png`,
+      `apps/web/public/catalog/items/${asset.gameItemId}.webp`,
     );
     assert.equal(
       asset.url,
@@ -190,25 +191,30 @@ export async function buildVerifiedSnapshot(): Promise<CatalogSnapshot> {
       asset.sha256,
       `Changed icon ${asset.gameItemId}`,
     );
-    assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-    assert.equal(bytes.readUInt32BE(16), 36);
-    assert.equal(bytes.readUInt32BE(20), 32);
+    assert.match(asset.sourceSha256, /^[a-f0-9]{64}$/u);
+    assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
+    assert.equal(bytes.readUInt32LE(4) + 8, bytes.length);
+    assert.equal(bytes.toString('ascii', 8, 16), 'WEBPVP8L');
+    assert.equal(bytes[20], 0x2f);
+    const dimensions = bytes.readUInt32LE(21);
+    assert.equal((dimensions & 0x3fff) + 1, 36);
+    assert.equal(((dimensions >>> 14) & 0x3fff) + 1, 32);
     assert.equal(asset.width, 36);
     assert.equal(asset.height, 32);
-    assert.equal(bytes[25], 6, 'Icons must retain their alpha channel');
+    assert.ok(dimensions & (1 << 28), 'Icons must retain transparency');
   }
   assert.deepEqual(
     assets.supporting.map((asset) => asset.path),
     [
       'apps/web/public/fonts/runescape.ttf',
       'apps/web/public/fonts/LICENSE.txt',
-      'apps/web/public/ui/panel.svg',
+      'apps/web/public/ui/panel.webp',
     ],
   );
   for (const asset of assets.supporting)
     assert.equal(
       sha256(
-        asset.path.endsWith('.ttf')
+        !asset.path.endsWith('.txt')
           ? await readFile(new URL(asset.path, root))
           : (await readFile(new URL(asset.path, root), 'utf8')).replaceAll(
               '\r\n',

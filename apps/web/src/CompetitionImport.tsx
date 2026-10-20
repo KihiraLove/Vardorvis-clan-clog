@@ -8,6 +8,11 @@ import {
 import { exactXp, signedXp, skillName, type AdminSession } from './xp-model.ts';
 import { localScheduleLabel, utcScheduleLabel } from './schedule-time.ts';
 import { useAdminDraft } from './admin-route-data.ts';
+import { competitionUnit, formatCompetitionAmount } from '@clog/domain';
+import {
+  CompetitionMetrics,
+  CompetitionBreakdown,
+} from './CompetitionMetrics.tsx';
 export function CompetitionImport({
   client,
   session,
@@ -195,6 +200,7 @@ export function CompetitionImport({
                       ? 'Create an opening window starting immediately when Apply commits, ending at the WOM end time.'
                       : 'Create an opening window for the WOM start and end times.'}
           </p>
+          <CompetitionMetrics competition={preview.competition} />
           {preview.scheduleStartsAt && (
             <p>
               Opening start: {localScheduleLabel(preview.scheduleStartsAt)}
@@ -278,13 +284,16 @@ export function CompetitionImport({
                 Eligible participants ({preview.participants.length})
               </summary>
               <ol>
-                {preview.participants.map((p) => (
+                {(preview.standings ?? preview.participants).map((p) => (
                   <li key={p.playerId}>
-                    {p.displayName}: {exactXp(p.gained)}{' '}
-                    {preview.competition.kind === 'SKILL' ? 'XP' : 'gained'}
+                    {p.displayName}: {formatCompetitionAmount(p.gained)}{' '}
+                    {competitionUnit(preview.competition)}
                   </li>
                 ))}
               </ol>
+              {preview.standings && (
+                <CompetitionBreakdown players={preview.standings} />
+              )}
             </details>
           )}
           {!!preview.changes.length && (

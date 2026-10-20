@@ -1,6 +1,8 @@
 /** Pure collection-log rules shared by the browser and future service handlers. */
 export * from './competitions.js';
 export * from './skills.js';
+export * from './collection-types.js';
+export * from './submission-help.js';
 export interface CatalogItem {
   id: number;
   name: string;
@@ -19,6 +21,7 @@ export interface CollectionCredit {
   collectedOn: string;
   status: 'pending' | 'approved' | 'rejected' | 'revoked';
   hardcore?: boolean;
+  collectionType?: import('./collection-types.js').CollectionType;
 }
 
 /** Collection state belongs to the canonical item, never to a page occurrence. */
@@ -36,11 +39,11 @@ export function collectionState(
     )
     .sort(
       (a, b) =>
+        Number(b.collectionType === 'event') -
+          Number(a.collectionType === 'event') ||
         a.collectedOn.localeCompare(b.collectedOn) ||
         a.submissionId.localeCompare(b.submissionId),
-    )
-    // Legacy duplicate inputs display only the earliest credit; writes must enforce uniqueness.
-    .slice(0, 1);
+    );
   return { collected: collectors.length > 0, collectors };
 }
 
@@ -83,41 +86,6 @@ export function validateCatalog(
   }
 }
 
-const proofHosts = new Set([
-  'imgur.com',
-  'www.imgur.com',
-  'm.imgur.com',
-  'i.imgur.com',
-  'gyazo.com',
-  'www.gyazo.com',
-  'i.gyazo.com',
-]);
-
-/** Validate links only. Do not fetch arbitrary user-supplied URLs on the server. */
-export function validateProofUrl(input: string): string {
-  if (
-    input.length > 2048 ||
-    /\s/u.test(input) ||
-    [...input].some(
-      (character) =>
-        character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
-    )
-  )
-    throw new Error('Invalid proof URL');
-  const url = new URL(input);
-  if (
-    url.protocol !== 'https:' ||
-    !proofHosts.has(url.hostname) ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.pathname === '/'
-  ) {
-    throw new Error('Proof must be an HTTPS Imgur or Gyazo link');
-  }
-  return url.toString();
-}
-
 /** Round-trip through UTC to reject normalized invalid dates such as February 30. */
 export function validateCollectionDate(input: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(input)) throw new Error('Use YYYY-MM-DD');
@@ -152,6 +120,8 @@ export {
   type DiscordLimits,
   type DiscordSettings,
   type DiscordSettingsUpdate,
+  type DiscordStatus,
+  type DiscordConnectionState,
 } from './discord-settings.js';
 export {
   blockedRuneLiteWorldTypes,
@@ -172,6 +142,7 @@ export {
 export {
   parseCollectionScheduleInput,
   parseSchedulingState,
+  parsePermanentPageIds,
   scheduleIdPattern,
   scheduledItemOpen,
   closedCollectionPageMessage,
@@ -180,6 +151,16 @@ export {
   type SchedulingState,
 } from './scheduling.js';
 export { WorkBudget, WorkloadError, type WorkLimit } from './work-budget.js';
+export {
+  staffPages,
+  defaultModeratorPages,
+  parseStaffPages,
+  parseAccessControl,
+  staffPageForPath,
+  canAccessStaffPage,
+  type StaffPage,
+  type AccessControlSettings,
+} from './staff-pages.js';
 export {
   parseSubmissionFilters,
   type SubmissionFilters,
@@ -192,3 +173,11 @@ export {
   safeCorrelation,
   type ErrorCategory,
 } from './operations.js';
+export {
+  defaultEventHighlight,
+  defaultHardcoreHighlight,
+  parseHighlightColour,
+  highlightCss,
+  type HighlightColour,
+  type HighlightUpdate,
+} from './highlight-colour.js';

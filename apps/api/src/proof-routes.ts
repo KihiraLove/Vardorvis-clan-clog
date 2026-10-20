@@ -4,50 +4,22 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { RequireAdmin } from './catalog-routes.js';
 import { assetIdPattern } from './icon-storage.js';
-import { runeLiteWorld, uuidPattern, type ProofStore } from './proof-store.js';
-import { MAX_SCREENSHOT_BYTES } from './proof-storage.js';
+import {
+  runeLiteWorld,
+  uuidPattern,
+  screenshotPath,
+  type ProofStore,
+} from './proof-store.js';
+import {
+  screenshotParts as parts,
+  screenshotLimits,
+} from './screenshot-multipart.js';
 import type { ManualSubmissionInput } from './review-types.js';
 import type { ManualReviewStore, ProofFiles } from './route-services.js';
 import { ApiError } from './types.js';
 import { suppliedClanKey } from './clan-api-key.js';
 import { runeLiteCors } from './runelite-cors.js';
 
-async function parts(
-  request: FastifyRequest,
-  required: string[],
-  optional: string[] = [],
-  requireFile = true,
-) {
-  if (!request.isMultipart())
-    throw new ApiError(400, 'Use multipart/form-data.');
-  const fields: Record<string, string> = {};
-  let file: { bytes: Buffer; mime: string } | undefined;
-  for await (const part of request.parts()) {
-    if (part.type === 'file') {
-      if (file || part.fieldname !== 'screenshot')
-        throw new ApiError(400, 'Supply one screenshot file.');
-      const bytes = await part.toBuffer();
-      if (part.file.truncated)
-        throw new ApiError(413, 'Choose a PNG screenshot up to 10 MiB.');
-      file = { bytes, mime: part.mimetype };
-    } else {
-      if (
-        ![...required, ...optional].includes(part.fieldname) ||
-        Object.hasOwn(fields, part.fieldname) ||
-        typeof part.value !== 'string' ||
-        part.valueTruncated
-      )
-        throw new ApiError(400, 'Invalid or duplicate multipart fields.');
-      fields[part.fieldname] = part.value;
-    }
-  }
-  if (
-    (requireFile && !file) ||
-    required.some((key) => !Object.hasOwn(fields, key))
-  )
-    throw new ApiError(400, 'Missing submission fields or screenshot.');
-  return { fields, file };
-}
 function requestKey(request: FastifyRequest, required: boolean) {
   const value = request.headers['idempotency-key'];
   if (value === undefined && !required) return randomUUID();
@@ -70,6 +42,7 @@ function manualFields(json: string): ManualSubmissionInput {
       (k) =>
         ![
           'itemId',
+          'collectionType',
           'collectorName',
           'collectedOn',
           'hardcore',
@@ -88,8 +61,10 @@ function manualFields(json: string): ManualSubmissionInput {
     !/^\d{4}-\d{2}-\d{2}$/u.test(row.collectedOn) ||
     typeof row.hardcore !== 'boolean' ||
     typeof row.approve !== 'boolean' ||
-    (row.proofUrl !== undefined &&
-      (typeof row.proofUrl !== 'string' || row.proofUrl.length > 2048)) ||
+    (row.collectionType !== undefined &&
+      row.collectionType !== 'regular' &&
+      row.collectionType !== 'event') ||
+    (row.proofUrl !== undefined && row.proofUrl !== '') ||
     (row.reason !== undefined &&
       (typeof row.reason !== 'string' || row.reason.length > 1000))
   )
@@ -111,7 +86,7 @@ export function proofRoutes(
   // Never unlink a saved file based on an uncertain database receipt.
   // Offline, reference-checked maintenance reclaims orphaned uploads.
   app.get<{ Params: { id: string } }>(
-    '/api/v1/admin/submission-images/:id.png',
+    '/api/v1/admin/submission-images/:id.webp',
     {
       onRequest: async (req) => {
         await staff(req);
@@ -124,21 +99,15 @@ export function proofRoutes(
       if (!image) throw new ApiError(404, 'Screenshot not found.');
       return reply
         .header('Cache-Control', 'private, no-store')
-        .header('Content-Disposition', 'inline; filename="screenshot.png"')
-        .type('image/png')
+        .header('Content-Disposition', 'inline; filename="screenshot.webp"')
+        .type('image/webp')
         .send(await storage.read(image));
     },
   );
   void app.register(async (scope) => {
     runeLiteCors(scope);
     await scope.register(multipart, {
-      limits: {
-        fileSize: MAX_SCREENSHOT_BYTES,
-        files: 1,
-        fields: 5,
-        parts: 6,
-        fieldSize: 8193,
-      },
+      limits: screenshotLimits,
     });
     scope.post(
       '/api/v1/runelite/submissions',
@@ -157,7 +126,7 @@ export function proofRoutes(
         const { fields, file } = await parts(
           req,
           ['username', 'clanName', 'itemId', 'worldType'],
-          ['chatMessage'],
+          ['chatMessage', 'itemName'],
           false,
         );
         if (
@@ -177,6 +146,9 @@ export function proofRoutes(
           username: fields.username!,
           clanName: fields.clanName!,
           itemId: Number(fields.itemId),
+          ...(fields.itemName === undefined
+            ? {}
+            : { itemName: fields.itemName }),
           worldTypes: world.worldTypes,
           ...(fields.chatMessage === undefined
             ? {}
@@ -215,16 +187,23 @@ export function proofRoutes(
           const input = manualFields(fields.submission!);
           if (!file) throw new ApiError(400, 'Supply one screenshot file.');
           const image = await storage.save(file.bytes, file.mime);
-          // Commit outcome may be uncertain: preserve the file for maintenance.
-          const result = await review.createManual(
-            input,
-            actor.id,
-            actor.displayName,
-            key,
-            image,
-          );
-          // A replay may leave an orphan; maintenance reclaims it later.
-          return reply.code(201).send(result);
+          try {
+            const result = await review.createManual(
+              input,
+              actor.id,
+              actor.displayName,
+              key,
+              image,
+            );
+            if (result.screenshotPath !== screenshotPath(image.id))
+              await storage.remove?.(image.id).catch(() => {});
+            return reply.code(201).send(result);
+          } catch (error) {
+            if (error instanceof ApiError && error.status < 500)
+              await storage.remove?.(image.id).catch(() => {});
+            // Preserve evidence when a commit outcome cannot be confirmed.
+            throw error;
+          }
         },
       );
   });

@@ -11,6 +11,17 @@ import {
 const guild = '234567890123456789',
   user = '123456789012345678',
   interactionId = '345678901234567890';
+const png = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==',
+  'base64',
+);
+const screenshot = {
+  id: '456789012345678901',
+  name: 'proof.png',
+  size: png.length,
+  contentType: 'image/png',
+  url: 'https://cdn.discordapp.com/attachments/234567890123456789/456789012345678901/proof.png',
+};
 function command(item = 'item:42') {
   const messages: string[] = [];
   return {
@@ -21,12 +32,8 @@ function command(item = 'item:42') {
       user: { id: user, username: 'Fixture' },
       member: null,
       options: {
-        getString: (key: string) =>
-          key === 'item'
-            ? item
-            : key === 'proof'
-              ? 'https://imgur.com/a/fixture'
-              : null,
+        getString: (key: string) => (key === 'item' ? item : null),
+        getAttachment: () => screenshot,
         getBoolean: () => false,
       },
       deferReply: async () => undefined,
@@ -88,18 +95,33 @@ test('Discord user/guild quotas are independent, bounded and configurable with e
 test('Discord admission never splits identical HTTP retries or turns an uncertain committed receipt into a rejection', async () => {
   let now = 0,
     calls = 0;
-  const bodies: string[] = [];
-  const api = new HttpBotApi('http://api:3000', 'a'.repeat(64), (async (
-    _url,
-    init,
-  ) => {
-    calls++;
-    bodies.push(String(init?.body));
-    if (calls === 1)
-      throw new Error('Receipt acknowledgement lost after commit');
-    if (calls === 2) return new Response(null, { status: 429 });
-    return Response.json(receipt);
-  }) as typeof fetch);
+  const bodies: Buffer[] = [],
+    claims: string[] = [];
+  const api = new HttpBotApi(
+    'http://api:3000',
+    'a'.repeat(64),
+    (async (_url, init) => {
+      calls++;
+      bodies.push(Buffer.from(init!.body as ArrayBuffer));
+      const form = await new Request('http://api:3000/api/v1/bot/submissions', {
+        method: 'POST',
+        headers: init!.headers!,
+        body: init!.body!,
+      }).formData();
+      claims.push(String(form.get('submission')));
+      assert.deepEqual(
+        Buffer.from(await (form.get('screenshot') as File).arrayBuffer()),
+        png,
+      );
+      if (calls === 1)
+        throw new Error('Receipt acknowledgement lost after commit');
+      if (calls === 2) return new Response(null, { status: 429 });
+      return Response.json(receipt);
+    }) as typeof fetch,
+    undefined,
+    undefined,
+    async () => png,
+  );
   const workloads = new BotWorkloads(
     { intakeUser: 1, intakeGuild: 5, searchUser: 5, searchGuild: 10 },
     () => now,
@@ -107,11 +129,11 @@ test('Discord admission never splits identical HTTP retries or turns an uncertai
   const first = command();
   await handleSubmission(first.interaction, api, guild, workloads);
   assert.equal(calls, 2);
-  assert.equal(bodies[0], bodies[1]);
+  assert.deepEqual(bodies[0], bodies[1]);
   assert.match(first.messages[0]!, /could not be confirmed/u);
   assert.doesNotMatch(
     first.messages[0]!,
-    /Nothing was saved|Saved for admin review/u,
+    /Nothing was saved|Item submitted to review/u,
   );
   const denied = command();
   await handleSubmission(denied.interaction, api, guild, workloads);
@@ -124,9 +146,8 @@ test('Discord admission never splits identical HTTP retries or turns an uncertai
   const replay = command();
   await handleSubmission(replay.interaction, api, guild, workloads);
   assert.equal(calls, 3);
-  assert.equal(bodies[2], bodies[0]);
-  assert.match(replay.messages[0]!, /Saved for admin review/u);
-  assert.match(replay.messages[0]!, new RegExp(receipt.submissionId, 'u'));
+  assert.deepEqual(claims, [claims[0], claims[0], claims[0]]);
+  assert.deepEqual(replay.messages, ['Item submitted to review']);
 });
 test('autocomplete bursts shed queries, show a safe retry hint, recover and cannot submit that hint', async () => {
   let now = 0,

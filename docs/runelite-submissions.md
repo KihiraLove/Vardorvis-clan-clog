@@ -3,21 +3,22 @@
 `POST /api/v1/runelite/submissions` accepts `multipart/form-data` with exactly
 these fields (their order does not matter):
 
-| Field         | Value                                                        |
-| ------------- | ------------------------------------------------------------ |
-| `username`    | Collector name, 1–80 characters                              |
-| `clanName`    | In-game clan name, 1–80 characters                           |
-| `itemId`      | Positive OSRS game item ID, as decimal text                  |
-| `worldType`   | World type identifier or JSON array of identifiers           |
-| `chatMessage` | Required full chat message, nonempty, up to 8192 UTF-8 bytes |
-| `screenshot`  | Optional PNG file, MIME `image/png`, up to 10 MiB            |
+| Field         | Value                                                           |
+| ------------- | --------------------------------------------------------------- |
+| `username`    | Collector name, 1–80 characters                                 |
+| `clanName`    | In-game clan name, 1–80 characters                              |
+| `itemId`      | Positive OSRS game item ID, as decimal text                     |
+| `itemName`    | Optional submitted name, nonempty, up to 200 characters, no NUL |
+| `worldType`   | World type identifier or JSON array of identifiers              |
+| `chatMessage` | Required full chat message, nonempty, up to 8192 UTF-8 bytes    |
+| `screenshot`  | Optional PNG file, MIME `image/png`, up to 10 MiB               |
 
 ```bash
 curl --fail-with-body https://your-clan.example/api/v1/runelite/submissions \
   -H 'X-Clan-API-Key: YOUR_CLAN_SHARED_KEY' \
   -H 'Idempotency-Key: 00000000-0000-4000-8000-000000000001' \
   -F 'username=Collector' -F 'clanName=Clan name' -F 'itemId=4151' \
-  -F 'worldType=["MEMBERS"]' \
+  -F 'itemName=Abyssal whip' -F 'worldType=["MEMBERS"]' \
   -F 'chatMessage=Collector received a drop: Abyssal whip'
 ```
 
@@ -46,16 +47,31 @@ comparison uses the separate **In-game clan name for matching** setting; it does
 not authenticate clan membership. All world policies default to staff review.
 Configured auto allow policies and the player whitelist can grant automatic
 approval. Valid claims always receive **201** and a durable submission receipt
-with `status: "pending"`, `"approved"` or `"rejected"`. Configured world-policy,
-closed-schedule and collected-item duplicate rejections are saved with their
+with `status: "pending"`, `"approved"` or `"rejected"`. Configured world-policy
+and regular-duplicate rejections are saved with their
 proof, rejection reason and a **RuneLite auto review** audit entry. They appear
 in the staff **Reviewed** queue and grant no collection credit.
 
 The game ID resolves through `game_item_ids` to an active canonical catalog
-item. Variant IDs can resolve to the same item; unknown/inactive IDs return
-**422**. A canonical item without a game-ID mapping cannot be submitted by
-RuneLite. Receipt `itemId` is the **canonical** ID. The server records receipt
-time and UTC collection date. `worldType` is required. Use a single enum name
+item. Variant IDs can resolve to the same item. Unknown, unmapped and inactive
+items are accepted as **unmatched** submissions with a nullable canonical ID,
+not added to the catalog automatically. They stay pending for staff even under
+auto-allow policies; unrelated world-policy rejections still apply. Unmatched
+claims are not rejected for closed pages or filtered as collected items. Original
+receipt time and schedule/page membership determine their type when staff save a match.
+
+`itemName` is preserved as evidence, never used for automatic name matching.
+Older clients can omit it: known items use the catalog name; unknown items use
+a name recovered only from recognized drop/collection messages, or the explicit
+**Name not supplied — game item #123** fallback. Staff can save notes or reject
+an unmatched claim, but must select and save an active canonical item before
+approving. Matching does not approve, create a catalog item or add a game-ID alias.
+The submitted name and original **Game item ID** remain in Submission details
+and review audits after corrections.
+
+Receipt `itemId` is the **canonical** ID, or `null` when unmatched. `gameItemId`
+is the original submitted OSRS ID. Older saved receipts remain unchanged.
+The server records receipt time and UTC collection date. `worldType` is required. Use a single enum name
 such as `MEMBERS`, or a JSON array containing all world flags reported by
 [RuneLite](https://static.runelite.net/runelite-api/apidocs/net/runelite/api/WorldType.html).
 Use `[]` for a world without flags. Names are uppercase identifiers; up to 32
@@ -78,6 +94,8 @@ Success returns **201**, for example:
   "submissionId": "00000000-0000-4000-8000-000000000002",
   "status": "pending",
   "itemId": 42,
+  "gameItemId": 4151,
+  "collectionType": "regular",
   "submittedAt": "2026-10-11T12:00:00.000Z",
   "collectedOn": "2026-10-11",
   "hardcore": false
@@ -97,7 +115,8 @@ retry using a newly rotated key can recover its original receipt. A future plugi
 key, payload and optional PNG until it receives the receipt. Changing the chat
 message or adding/removing a screenshot under the same key returns **409**.
 
-Independent clients observing the same player and canonical item in the same
+Independent clients observing the same player and canonical item (or the same
+original game ID when unmatched) in the same
 world mode within five seconds share the first submission. This applies even when
 their request keys, game-item variants, chat messages or screenshots differ. Player matching
 normalizes case, underscores, nonbreaking spaces and repeated whitespace.
@@ -110,15 +129,20 @@ It creates no extra claim, credit or review entry. Regular and hardcore events
 are separate. A new key after five seconds can create a new claim; retrying an
 existing key always retains its original receipt. Staff corrections do not
 change the recorded event identity.
+Adding a mapping between deliveries also reuses the original receipt and proof;
+it does not silently match the saved submission. A supplied `itemName` participates
+in request-key conflict checks. Legacy requests without it retain their original hashes.
 
-The **Filter out duplicates** toggle on **Submissions**, between manual
-submission and the queue, checks items already credited in that world mode.
+The **Filter out regular duplicates** toggle on **Submissions**, between manual
+submission and the queue, checks approved **Regular** credits in that world mode.
 New RuneLite claims return **201** with `status: "rejected"` and are stored with
 a reason explaining that the duplicate filter is on. Discord intake continues
 to reject these claims with **403**. The filter defaults to off and
 can be changed only by the administrator; moderators can view its current state.
-Manual staff entry remains available
-for backfilling achievements. Replays and recognized five-second duplicates
+Staff approvals, approved manual entry and credit-moving corrections enforce
+the same policy. When off, repeated Regular credits are allowed, even for the
+same collector. Re-enabling preserves history. Event credits are independent:
+one approved Event credit per normal-world canonical item overall. Replays and recognized five-second duplicates
 retain their successful receipt. CSRF-protected
 `PUT /api/v1/admin/submission-filters` accepts `{ filterCollected,
 expectedRevision }` using the `submission-filters-N` revision supplied by the
@@ -187,12 +211,12 @@ case, surrounding/repeated spaces and the difference between underscores,
 nonbreaking spaces and ordinary spaces. The list supports up to 200 names, one
 per line. Neither whitelisting nor auto allow bypasses clan/key, catalog or PNG
 validation. Auto approvals grant collection credit immediately and append an
-audit attributed to **RuneLite auto review**. If an approved credit already
-exists for the canonical item and world mode, the new claim remains pending
+audit attributed to **RuneLite auto review**. If an approved Event credit already
+exists for the canonical item, another Event claim remains pending
 with an audit explaining why approval was deferred. Replays retain their
 original pending/approved/rejected receipt after policy, filter or whitelist
-changes. With **Filter out duplicates** enabled, already-credited items create
-a rejected submission instead of another pending claim.
+changes. With **Filter out regular duplicates** enabled, a new Regular claim for
+an item with an approved Regular credit in that mode creates a rejected submission.
 
 Staff-only `GET /api/v1/admin/runelite-settings` returns private rules with a
 `runelite-N` revision. CSRF-protected `PUT` replaces the complete rules and
@@ -220,11 +244,16 @@ rules PUT. Its key revision is `clan-key-N`; a stale key revision rolls back the
 entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
 Older clients can omit this field to preserve the existing key requirement.
 
-When [collection log scheduling](staff-guide.md) is enabled, a new
-regular-world RuneLite claim must also belong to at least one currently open active page.
-Whitelist and world auto allow settings cannot bypass closed pages. Previously
-saved retries still return their original receipt after a page closes.
-Hardcore claims bypass scheduling; all active hardcore pages remain open.
+Scheduling classifies collection type and never closes intake. An active timed
+normal-world page qualifies a drop as `collectionType: "event"`, excluding pages
+selected permanently open. Closed/unscheduled pages, disabled scheduling,
+permanent pages and all hardcore claims use `"regular"`. A shared item qualifies
+if another associated nonpermanent page has an active timed window. Start is
+inclusive and end exclusive, using one server receipt time in UTC. Unmatched
+normal claims can have `collectionType: null` while waiting for a canonical match.
+Frozen evidence determines their type on resolution; staff can make an audited
+explicit correction. Receipts never change on retry, including legacy receipts
+that omit `collectionType`.
 
 Staff-only `GET /api/v1/admin/clan-api-key` returns `{ revision, enabled, key }`.
 Administrator-only, CSRF-protected `PUT` requires `expectedRevision` (`clan-key-N`) and accepts
@@ -259,7 +288,9 @@ PNG digest in the manual receipt and retain the original uploaded image.
 
 Screenshots appear in the private queue/review editor and are served only to
 authenticated staff who completed first-login password setup, at
-`/api/v1/admin/submission-images/<generated-uuid>.png` with no-store caching.
+`/api/v1/admin/submission-images/<generated-uuid>.webp` with no-store caching.
+PNG uploads are converted to lossless WebP before storage; only WebP is saved
+and served (`image/webp`). The original PNG is discarded after conversion.
 Public catalog, credits and XP responses contain no proof URLs, image paths or
 uploaded image data. Files remain available after approval/rejection/revocation
 for later review; uploads never grant approval privileges.

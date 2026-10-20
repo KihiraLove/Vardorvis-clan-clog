@@ -589,7 +589,7 @@ test('real moderator setup, role denial and server-side access revocation clear 
     await staff.getByRole('link', { name: 'Submissions', exact: true }).click();
     await expect(
       staff.getByRole('switch', {
-        name: 'Filter out duplicates',
+        name: 'Filter out regular duplicates',
         exact: true,
       }),
     ).toHaveCount(0);
@@ -789,7 +789,7 @@ test('slow real reads preserve keyboard navigation; catalog geometry and both pr
       .toBe(true);
     expect(
       (await page.request.get(branding.faviconPath)).headers()['content-type'],
-    ).toBe('image/png');
+    ).toBe('image/webp');
     await page
       .getByRole('button', { name: 'Restore default logo', exact: true })
       .click();

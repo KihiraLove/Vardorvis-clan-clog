@@ -16,12 +16,11 @@ export const collectionLogCommand = new SlashCommandBuilder()
           .setAutocomplete(true)
           .setMaxLength(200),
       )
-      .addStringOption((option) =>
+      .addAttachmentOption((option) =>
         option
-          .setName('proof')
-          .setDescription('HTTPS Imgur or Gyazo proof link')
-          .setRequired(true)
-          .setMaxLength(2048),
+          .setName('screenshot')
+          .setDescription('PNG screenshot proof (up to 10 MiB)')
+          .setRequired(true),
       )
       .addStringOption((option) =>
         option

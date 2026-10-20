@@ -150,6 +150,77 @@ test('client rejects a kind inconsistent with authoritative metric scope and uns
     'SKILL',
   );
 });
+
+test('client retains multi-metric weights and decimal standings, without confusing them with raw XP', async (t) => {
+  const c = {
+    ...competition,
+    kind: 'ACTIVITY',
+    metrics: ['ehp', 'ehb'],
+    metricDefinitions: [
+      { metric: 'ehp', weight: '1' },
+      { metric: 'ehb', weight: '1' },
+    ],
+  };
+  const standings = [
+    {
+      playerId: 1,
+      displayName: 'Efficient',
+      gained: '3.75',
+      rank: 1,
+      deltas: [
+        { metric: 'ehp', gained: '1.25' },
+        { metric: 'ehb', gained: '2.5' },
+        { metric: 'total', gained: '3.75' },
+      ],
+    },
+  ];
+  let value: Record<string, unknown> = {
+    previewToken: 'token',
+    expectedRevision: 'xp-1',
+    scheduleRevision: 'schedules-1',
+    expiresAt: '2099-01-01T00:00:00Z',
+    competition: c,
+    lifecycle: 'finished',
+    action: 'import-results',
+    scheduleStartsAt: null,
+    pageIds: [],
+    pages: [],
+    participants: standings,
+    standings,
+    changes: [],
+    warnings: [],
+  };
+  t.mock.method(globalThis, 'fetch', async () => Response.json(value));
+  const client = new LiveCompetitionClient();
+  const p = await client.preview(url(123), 'csrf', signal());
+  assert.equal(p.participants[0]?.gained, '3.75');
+  assert.deepEqual(p.standings, standings);
+  assert.deepEqual(p.competition.metricDefinitions, c.metricDefinitions);
+  value = {
+    ...value,
+    lifecycle: 'running',
+    action: 'import-metadata',
+    participants: [],
+  };
+  await assert.rejects(
+    client.preview(url(123), 'csrf', signal()),
+    /metadata only/,
+  );
+  value = { ...value, standings: [] };
+  assert.equal(
+    (await client.preview(url(123), 'csrf', signal())).action,
+    'import-metadata',
+  );
+  assert.throws(() =>
+    parseWomCompetition({
+      ...c,
+      metricDefinitions: [
+        { metric: 'ehb', weight: '1' },
+        { metric: 'ehp', weight: '1' },
+      ],
+    }),
+  );
+});
 test('fixture client detects stable skill and activity fixture metadata without a caller kind', async () => {
   const client = new MemoryCompetitionClient(undefined, new MemoryXpClient());
   const attack = await client.preview(url(1001), 'csrf', signal());

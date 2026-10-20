@@ -1,9 +1,5 @@
 /** Private API contracts and form validation; server authorization remains mandatory. */
-import {
-  validateCollectionDate,
-  validateProofUrl,
-  parseSubmissionFilters,
-} from '@clog/domain';
+import { validateCollectionDate, parseSubmissionFilters } from '@clog/domain';
 import { parseCatalog, type Catalog, type Item, type Page } from './model.ts';
 import {
   identity,
@@ -25,11 +21,14 @@ export function dateSourceLabel(source: Submission['dateSource']): string {
       : 'Admin correction';
 }
 export interface Submission {
+  collectionType?: import('@clog/domain').CollectionType | null;
+  collectionReason?: string;
   id: string;
   version: number;
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
   rawItemText: string;
+  gameItemId?: number;
   collectorName: string;
   collectedOn: string;
   dateSource: 'submission' | 'claim' | 'admin';
@@ -43,20 +42,29 @@ export interface Submission {
   reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
+  collectionType?: import('@clog/domain').CollectionType;
   itemId: number;
   collectorName: string;
   collectedOn: string;
   hardcore: boolean;
+  /** Compatibility with old clients: empty only; proof is uploaded separately. */
   proofUrl?: string;
   approve: boolean;
   reason?: string;
 }
 export interface Correction {
+  useIntakeTiming?: boolean;
+  collectionType?: import('@clog/domain').CollectionType | undefined;
   itemId: number;
   collectorName: string;
   collectedOn: string;
   hardcore: boolean;
   reason: string;
+}
+export interface CollectionFlags {
+  hardcore: boolean;
+  collectionType?: import('@clog/domain').CollectionType;
+  useIntakeTiming?: true;
 }
 export interface AuditEntry {
   id: string;
@@ -149,6 +157,15 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  accessControl(
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').AccessControlSettings>;
+  saveAccessControl(
+    pages: import('@clog/domain').StaffPage[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
+  ): Promise<import('@clog/domain').AccessControlSettings>;
   createSection(
     name: string,
     key: string,
@@ -217,6 +234,12 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
     id?: string,
+  ): Promise<import('@clog/domain').SchedulingState>;
+  setPermanentPages(
+    pageIds: string[],
+    revision: string,
+    csrf: string,
+    signal: AbortSignal,
   ): Promise<import('@clog/domain').SchedulingState>;
   deleteSchedule(
     id: string,
@@ -291,7 +314,7 @@ export interface AdminClient {
   ): Promise<import('@clog/domain').DiscordSettings>;
   discordStatus(
     signal: AbortSignal,
-  ): Promise<{ enabled: boolean; ready: boolean }>;
+  ): Promise<import('@clog/domain').DiscordStatus>;
   saveDiscordSettings(
     fields: import('@clog/domain').DiscordSettingsUpdate,
     csrf: string,
@@ -327,6 +350,8 @@ export interface AdminClient {
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
+    howToSubmitMarkdown?: string,
+    highlights?: import('@clog/domain').HighlightUpdate,
   ): Promise<import('./site-settings.ts').SiteSettings>;
   session(signal: AbortSignal): Promise<AdminSession | null>;
   login(username: string, password: string, signal: AbortSignal): Promise<void>;
@@ -370,6 +395,15 @@ export interface AdminClient {
     reason: string,
     csrf: string,
     signal: AbortSignal,
+    flags?: CollectionFlags,
+  ): Promise<Submission>;
+  saveCollectionFlags(
+    id: string,
+    version: number,
+    flags: CollectionFlags,
+    reason: string,
+    csrf: string,
+    signal: AbortSignal,
   ): Promise<Submission>;
   upload(file: File, csrf: string, signal: AbortSignal): Promise<StagedIcon>;
   create(
@@ -388,13 +422,6 @@ export interface AdminClient {
 }
 
 /** Keep malformed claims reviewable/rejectable while withholding an unsafe proof link. */
-export function safeProof(input: string): string | undefined {
-  try {
-    return validateProofUrl(input);
-  } catch {
-    return undefined;
-  }
-}
 function choice<T extends string>(value: unknown, allowed: readonly T[]): T {
   if (!allowed.includes(value as T)) throw new Error('Invalid admin response.');
   return value as T;
@@ -402,7 +429,7 @@ function choice<T extends string>(value: unknown, allowed: readonly T[]): T {
 export function safeScreenshotPath(value: unknown): value is string {
   return (
     typeof value === 'string' &&
-    /^\/api\/v1\/admin\/submission-images\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.png$/u.test(
+    /^\/api\/v1\/admin\/submission-images\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.webp$/u.test(
       value,
     )
   );
@@ -417,6 +444,14 @@ export function parseSubmission(value: unknown): Submission {
     typeof row.hardcore !== 'boolean' ||
     typeof row.rawItemText !== 'string' ||
     typeof row.proofUrl !== 'string' ||
+    (row.collectionType === 'event' && row.hardcore === true) ||
+    (row.collectionType === null &&
+      (row.itemId !== null || row.hardcore === true)) ||
+    (row.gameItemId !== undefined &&
+      (row.source !== 'runelite' ||
+        !Number.isInteger(row.gameItemId) ||
+        Number(row.gameItemId) < 1 ||
+        Number(row.gameItemId) > 2147483647)) ||
     (row.chatMessage !== undefined &&
       (row.source !== 'runelite' ||
         typeof row.chatMessage !== 'string' ||
@@ -433,6 +468,21 @@ export function parseSubmission(value: unknown): Submission {
         : choice(row.source, ['discord', 'manual', 'runelite']),
     itemId: row.itemId === null ? null : identity(row.itemId),
     rawItemText: row.rawItemText,
+    ...(row.collectionType === undefined
+      ? {}
+      : {
+          collectionType:
+            row.collectionType === null
+              ? null
+              : (choice(row.collectionType, ['regular', 'event']) as
+                  'regular' | 'event'),
+        }),
+    ...(row.collectionReason === undefined
+      ? {}
+      : { collectionReason: text(row.collectionReason) }),
+    ...(row.gameItemId === undefined
+      ? {}
+      : { gameItemId: identity(row.gameItemId) }),
     collectorName: text(row.collectorName),
     collectedOn: validateCollectionDate(text(row.collectedOn)),
     dateSource: choice(row.dateSource, ['submission', 'claim', 'admin']),
@@ -601,6 +651,14 @@ export function validateCorrection(
     throw new Error('Keep the review reason to 1,000 characters.');
   if (typeof fields.hardcore !== 'boolean')
     throw new Error('Invalid hardcore claim.');
+  if (
+    fields.collectionType !== undefined &&
+    fields.collectionType !== 'regular' &&
+    fields.collectionType !== 'event'
+  )
+    throw new Error('Select a valid collection type.');
+  if (fields.hardcore && fields.collectionType === 'event')
+    throw new Error('Hardcore supports Regular collections only.');
   return {
     ...fields,
     collectorName,

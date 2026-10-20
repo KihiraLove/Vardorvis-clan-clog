@@ -162,31 +162,33 @@ test('page names distinguish zero, partial and complete collections in the curre
   );
 });
 
-test('homepage uses the supplied default branding, 2x log and inline XP without public admin navigation', async ({
+test('homepage uses the supplied default branding, 2x log, separate XP navigation and an admin entry link', async ({
   page,
 }) => {
   await mockApi(page);
   await page.goto('/');
   await expect(page.locator('.clan-logo')).toHaveAttribute(
     'src',
-    '/brand/clan-logo.png',
+    '/brand/clan-logo.webp',
   );
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
     'href',
-    '/favicon.png',
+    '/favicon.webp',
   );
   await expect(
     page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('link', { name: 'Admin', exact: true }),
-  ).toHaveCount(0);
+    page.getByRole('link', { name: 'Admin panel', exact: true }),
+  ).toHaveAttribute('href', '/admin');
   await expect(page.getByRole('tab')).toHaveCount(5);
   const log = await page.locator('.game-window').boundingBox();
   expect(log!.width).toBe(1000);
   expect(log!.height).toBe(628);
-  const xp = await page.locator('.event-tracker').boundingBox();
-  expect(xp!.y).toBeGreaterThan(log!.y + log!.height);
+  await expect(page.locator('.event-tracker')).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: 'Xp tracker', exact: true }),
+  ).toHaveAttribute('href', '/xp');
   await page.getByRole('tab', { name: 'Bosses', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(
@@ -280,9 +282,10 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
     exact: true,
   });
   await item.hover();
-  await expect(page.getByRole('tooltip')).toContainText(
-    '05/10/26 on hardcore worlds',
-  );
+  await expect(page.getByRole('tooltip')).toHaveClass(/item-menu--hardcore/);
+  await expect(
+    page.getByRole('tooltip').locator('.item-menu__regular p'),
+  ).toHaveText('Collected by KihiraVD on 05/10/26');
   await expect(page.getByRole('tooltip')).not.toContainText('03/10/26');
   expect(
     await item
@@ -301,6 +304,7 @@ test('admin release switch reveals skull; normal and hardcore menus and contours
     fullPage: true,
   });
   await page.goBack();
+  await page.getByRole('link', { name: 'Admin panel', exact: true }).click();
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
     .click();

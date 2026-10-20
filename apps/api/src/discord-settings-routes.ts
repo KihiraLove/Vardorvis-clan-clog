@@ -19,7 +19,7 @@ export function discordSettingsRoutes(
   const owner = async (request: FastifyRequest, write = false) => {
     if (!authorize) throw new ApiError(503, 'Staff sign-in is not configured.');
     const actor = await authorize(request, write);
-    if (actor.role !== 'admin')
+    if (write && actor.role !== 'admin')
       throw new ApiError(
         403,
         'Only the administrator can manage Discord settings.',

@@ -66,7 +66,7 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
     .fill('900007');
   await page
     .getByLabel('Item icon (required)', { exact: true })
-    .setInputFiles(await pngFile('public/skills/sailing.png'));
+    .setInputFiles(await pngFile('public/skills/sailing.webp'));
   await expect(page.getByAltText('New item icon preview')).toBeVisible();
   await page.getByRole('button', { name: 'Create item', exact: true }).click();
   await expect(
@@ -121,6 +121,11 @@ test('sections and pages are managed in the log; deleted pages leave reusable pa
   await expect(page.locator('.page-heading h3')).toHaveText('Recovered drops');
   await expect(page.locator('.item-slot')).toHaveCount(1);
   await page.goBack();
+  await expect(
+    page.getByRole('button', { name: 'Hardcore worlds', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('link', { name: 'Admin panel', exact: true }).click();
+  await page.getByRole('link', { name: 'Items catalog', exact: true }).click();
   await page.getByRole('tab', { name: 'Clan trophies', exact: true }).click();
   await page
     .getByRole('button', { name: 'Edit page Recovered drops', exact: true })

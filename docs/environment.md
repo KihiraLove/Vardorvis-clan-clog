@@ -6,6 +6,10 @@ Database passwords and the session key are generated automatically in protected
 subdirectories of that volume. No separate secret or admin setup step is needed.
 Discord is configured in **Administration → Discord bot**.
 
+If initial setup is interrupted, startup reuses the same temporary administrator
+password. Once you change it, startup neither prints nor replaces it. Existing
+accounts are never reset during an update.
+
 ## All supported settings
 
 The table includes ordinary settings, advanced host-process inputs and internal
@@ -92,7 +96,7 @@ use the generated `clog_runtime` credential. Do not pass owner URLs to workers.
 
 External DB availability, encryption, backups and lifecycle are your responsibility.
 The backup helper supports a logical external dump; automated restore targets a
-fresh bundled installation. This mode does not import older pre-release schemas.
+fresh bundled installation. This mode does not import schemas predating `001_baseline.sql`.
 
 Keep generated storage across updates. For rotation, use the explicit
 [maintenance procedure](release-recovery.md), never replace initialization seeds.

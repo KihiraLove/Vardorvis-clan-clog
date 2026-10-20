@@ -99,7 +99,19 @@ await readFile('/usr/share/postgresql/17/postgresql.conf.sample');
 const migrations = (await readdir('packages/database/migrations'))
   .filter((name) => name.endsWith('.sql'))
   .sort();
-assert.deepEqual(migrations, ['001_baseline.sql']);
+assert.deepEqual(
+  migrations,
+  Object.keys(release.files)
+    .filter((file) =>
+      /^packages\/database\/migrations\/\d{3}_[a-z0-9_]+\.sql$/u.test(file),
+    )
+    .map((file) => path.basename(file))
+    .sort(),
+);
+assert.ok(
+  migrations.length > 0,
+  'The release must include its migration manifest',
+);
 const cleanup = JSON.parse(
   await readFile('runtime-dependency-cleanup.json', 'utf8'),
 );

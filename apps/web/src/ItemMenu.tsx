@@ -1,5 +1,6 @@
 /** Portal tooltip escapes the scaled/clipped log window and stays inside the viewport. */
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { highlightCss, type HighlightColour } from '@clog/domain';
 import { createPortal } from 'react-dom';
 import { creditLine, type Credit, type Item } from './model.ts';
 
@@ -15,13 +16,21 @@ export function ItemMenu({
   close,
   stay,
   leave,
+  highlights,
 }: {
   open: OpenItem;
   close: () => void;
   stay: () => void;
   leave: () => void;
+  highlights: { event: HighlightColour; hardcore: HighlightColour };
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const eventCredits = open.collectors.filter(
+    (c) => !open.hardcore && c.collectionType === 'event',
+  );
+  const regularCredits = open.collectors.filter(
+    (c) => c.collectionType !== 'event',
+  );
   const [position, setPosition] = useState({ left: 0, top: 0, ready: false });
   useLayoutEffect(() => {
     const place = () => {
@@ -77,14 +86,23 @@ export function ItemMenu({
       ref={ref}
       id={`item-menu-${open.item.id}`}
       role="tooltip"
+      tabIndex={0}
       className={`item-menu${open.hardcore ? ' item-menu--hardcore' : ''}`}
-      style={{
-        left: position.left,
-        top: position.top,
-        visibility: position.ready ? 'visible' : 'hidden',
-      }}
+      style={
+        {
+          '--event-highlight': highlightCss(highlights.event),
+          '--hardcore-highlight': highlightCss(highlights.hardcore),
+          left: position.left,
+          top: position.top,
+          visibility: position.ready ? 'visible' : 'hidden',
+        } as CSSProperties
+      }
       onPointerEnter={stay}
       onPointerLeave={leave}
+      onFocus={stay}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) leave();
+      }}
     >
       <div className="item-menu__heading">
         {open.hardcore && (
@@ -104,9 +122,24 @@ export function ItemMenu({
         {open.item.name}
       </div>
       {open.collectors.length ? (
-        open.collectors.map((credit) => (
-          <p key={credit.submissionId}>{creditLine(credit)}</p>
-        ))
+        <>
+          {!!eventCredits.length && (
+            <div className="item-menu__event">
+              <strong>Event collection</strong>
+              {eventCredits.map((credit) => (
+                <p key={credit.submissionId}>{creditLine(credit)}</p>
+              ))}
+            </div>
+          )}
+          {!!regularCredits.length && (
+            <div className="item-menu__regular">
+              <strong>Regular collection</strong>
+              {regularCredits.map((credit) => (
+                <p key={credit.submissionId}>{creditLine(credit)}</p>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <p className="item-menu__empty">Not collected</p>
       )}

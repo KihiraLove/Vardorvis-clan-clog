@@ -4,7 +4,11 @@ export interface ReviewSubmission {
   version: number;
   source: 'discord' | 'manual' | 'runelite';
   itemId: number | null;
+  collectionType?: import('@clog/domain').CollectionType | null;
+  collectionReason?: string;
   rawItemText: string;
+  /** Original RuneLite provenance, retained through canonical corrections. */
+  gameItemId?: number;
   collectorName: string;
   collectedOn: string;
   dateSource: 'submission' | 'claim' | 'admin';
@@ -20,15 +24,19 @@ export interface ReviewSubmission {
   reviewReason: string | null;
 }
 export interface ManualSubmissionInput {
+  collectionType?: import('@clog/domain').CollectionType;
   itemId: number;
   collectorName: string;
   collectedOn: string;
   hardcore: boolean;
+  /** Compatibility with old clients: empty only; proof is uploaded separately. */
   proofUrl?: string;
   approve: boolean;
   reason?: string;
 }
 export interface ReviewCorrection {
+  useIntakeTiming?: boolean;
+  collectionType?: import('@clog/domain').CollectionType;
   itemId: number;
   collectorName: string;
   collectedOn: string;
@@ -42,6 +50,16 @@ export interface ReviewAction {
   expectedVersion: number;
   action: 'approve' | 'reject' | 'revoke';
   reason?: string;
+  flags?: ReviewCollectionFlags;
+}
+export interface ReviewCollectionFlags {
+  hardcore: boolean;
+  collectionType?: import('@clog/domain').CollectionType;
+  useIntakeTiming?: true;
+}
+export interface ReviewFlagsChange {
+  flags: ReviewCollectionFlags;
+  reason: string;
 }
 export interface ReviewAudit {
   id: string;
@@ -93,7 +111,7 @@ export interface ReviewStore {
   mutate(
     id: string,
     expectedVersion: number,
-    fields: ReviewCorrection | ReviewAction | ReviewNote,
+    fields: ReviewCorrection | ReviewAction | ReviewNote | ReviewFlagsChange,
     actorId: string,
     actorName: string,
   ): Promise<ReviewSubmission>;

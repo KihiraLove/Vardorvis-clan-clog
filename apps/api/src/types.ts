@@ -1,5 +1,8 @@
 /** Backend contracts isolate PostgreSQL and Discord from route tests. */
 export interface Settings {
+  eventHighlight?: import('@clog/domain').HighlightColour;
+  hardcoreHighlight?: import('@clog/domain').HighlightColour;
+  howToSubmitMarkdown?: string;
   copy?: import('@clog/domain').SiteCopy;
   hardcore?: import('@clog/domain').HardcoreAppearance;
   clanName: string;
@@ -13,6 +16,7 @@ export interface CatalogData {
   pages: { id: string; name: string; category: string; itemIds: number[] }[];
 }
 export interface PublicCredit {
+  collectionType?: import('@clog/domain').CollectionType;
   submissionId: string;
   itemId: number;
   collectorName: string;
@@ -49,10 +53,13 @@ export interface BotSubmissionInput {
   rawItemText: string;
   itemId?: number;
   collectorName: string;
-  proofUrl: string;
+  /** Only read for immutable pre-screenshot request hashes; never accepted by new intake. */
+  proofUrl?: string;
+  image?: import('./icon-storage.js').IconRecord;
   hardcore: boolean;
 }
 export interface BotReceipt {
+  collectionType?: import('@clog/domain').CollectionType | null;
   submissionId: string;
   interactionId: string;
   status: 'pending';
@@ -98,7 +105,11 @@ export interface BackendStore {
   submitClaim(
     input: BotSubmissionInput,
     payloadHash: string,
-  ): Promise<{ created: boolean; receipt: BotReceipt }>;
+  ): Promise<{
+    created: boolean;
+    receipt: BotReceipt;
+    imageId?: string | null;
+  }>;
   ready(): Promise<void>;
   catalog(): Promise<CatalogData>;
   collections(): Promise<PublicCredit[]>;
@@ -110,6 +121,8 @@ export interface BackendStore {
     clanName?: string,
     copy?: import('@clog/domain').SiteCopy,
     hardcore?: import('@clog/domain').HardcoreAppearance,
+    howToSubmitMarkdown?: string,
+    highlights?: import('@clog/domain').HighlightUpdate,
   ): Promise<Settings | null>;
   createSession(
     hash: string,

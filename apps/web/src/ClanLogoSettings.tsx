@@ -29,6 +29,7 @@ export function ClanLogoSettings({
   const [refresh, setRefresh] = useState(0);
   const [inputVersion, setInputVersion] = useState(0);
   const action = useAdminAction(onAccessLost);
+  const editable = session.role === 'admin';
   useAdminDraft(!!file, action.busy);
   useEffect(() => {
     if (initial && refresh === 0) return;
@@ -62,7 +63,7 @@ export function ClanLogoSettings({
     }
   };
   const save = (reset: boolean) => {
-    if (!saved || (!reset && !file)) return;
+    if (!editable || !saved || (!reset && !file)) return;
     void action.execute(async (signal) => {
       if (file && !reset) validateLogoFile(file);
       const value = await client.saveLogo(
@@ -124,7 +125,7 @@ export function ClanLogoSettings({
             key={inputVersion}
             type="file"
             accept="image/*,.avif,.tif,.tiff"
-            disabled={action.busy || !saved}
+            disabled={!editable || action.busy || !saved}
             onChange={(event) => {
               setFile(event.target.files?.[0]);
               action.setError(undefined);
@@ -134,7 +135,7 @@ export function ClanLogoSettings({
         </label>
         <button
           className="site-button"
-          disabled={action.busy || !saved || !file}
+          disabled={!editable || action.busy || !saved || !file}
         >
           Save clan logo
         </button>
@@ -142,7 +143,10 @@ export function ClanLogoSettings({
           type="button"
           className="site-button"
           disabled={
-            action.busy || !saved || saved.logoPath === defaultBranding.logoPath
+            !editable ||
+            action.busy ||
+            !saved ||
+            saved.logoPath === defaultBranding.logoPath
           }
           onClick={() => save(true)}
         >

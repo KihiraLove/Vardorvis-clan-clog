@@ -55,9 +55,15 @@ function command(
       getString: (key: string) =>
         ({
           item: 'Item',
-          proof: 'https://imgur.com/a/private',
           'submitter-name': null,
         })[key as 'item'],
+      getAttachment: () => ({
+        id: '456789012345678901',
+        name: 'proof.png',
+        size: 64,
+        contentType: 'image/png',
+        url: 'https://cdn.discordapp.com/attachments/234567890123456789/456789012345678901/proof.png',
+      }),
       getBoolean: () => false,
     },
   } as unknown as Interaction;
@@ -141,6 +147,60 @@ test('bot diagnostics distinguish local overload, upstream authentication and un
     'uncertain',
   );
 });
+
+test('gateway status distinguishes bounded connection attempts, unrecoverable disconnects, resumes and shutdown', async () => {
+  class StatusGateway extends Gateway {
+    online = false;
+    override isReady() {
+      return this.online;
+    }
+  }
+  const client = new StatusGateway();
+  let time = 0;
+  const runtime = wireGateway(
+    client as unknown as Client,
+    {
+      search: async () => [],
+      submit: async () => receipt,
+    },
+    guild,
+    undefined,
+    { now: () => time },
+  );
+  assert.equal(runtime.connectionState(), 'connecting');
+  time = 60000;
+  assert.equal(runtime.connectionState(), 'disconnected');
+  client.online = true;
+  client.emit(Events.ClientReady);
+  assert.equal(runtime.connectionState(), 'connected');
+  assert.equal(runtime.ready(), true);
+  client.emit(Events.ShardReconnecting);
+  assert.equal(runtime.connectionState(), 'connecting');
+  assert.equal(
+    runtime.ready(),
+    false,
+    'stale discord.js readiness cannot hide a reconnect',
+  );
+  time += 60000;
+  assert.equal(runtime.connectionState(), 'disconnected');
+  client.emit(Events.ShardResume);
+  assert.equal(runtime.ready(), true);
+  client.emit(Events.ShardDisconnect);
+  assert.equal(runtime.connectionState(), 'disconnected');
+  assert.equal(runtime.ready(), false);
+  client.emit(Events.ShardReconnecting);
+  assert.equal(runtime.connectionState(), 'connecting');
+  client.emit(Events.ShardReady);
+  assert.equal(runtime.ready(), true);
+  client.emit(Events.ShardError, Error('private gateway error'));
+  assert.equal(runtime.connectionState(), 'disconnected');
+  client.emit(Events.ClientReady);
+  client.emit(Events.Invalidated);
+  assert.equal(runtime.ready(), false);
+  client.emit(Events.ClientReady);
+  await runtime.stop();
+  assert.equal(runtime.connectionState(), 'disconnected');
+});
 test('gateway stop drains a committed receipt and delayed Discord acknowledgement, rejecting new work until destroy', async () => {
   const client = new Gateway(),
     messages: string[] = [],
@@ -188,13 +248,16 @@ test('gateway stop drains a committed receipt and delayed Discord acknowledgemen
   finish();
   assert.equal(await stop, true);
   assert.equal(client.destroyed, 1);
-  assert.match(messages[0]!, new RegExp(receipt.submissionId, 'u'));
+  assert.deepEqual(messages, ['Item submitted to review']);
   assert.ok(
     records.some(
       (r) => r.code === 'RECEIPT_KNOWN' && r.receipt === receipt.submissionId,
     ),
   );
-  assert.doesNotMatch(JSON.stringify(records), /imgur|private/iu);
+  assert.doesNotMatch(
+    JSON.stringify(records),
+    /cdn\.discordapp\.com|private/iu,
+  );
 });
 test('forced interaction deadline records pending identity without claiming rollback or sending a false receipt', async () => {
   const client = new Gateway(),
@@ -245,7 +308,7 @@ test('known receipt acknowledgement failures retain the receipt, and unexpected 
   await flush();
   assert.equal(messages.length, 2);
   assert.equal(messages[0], messages[1]);
-  assert.match(messages[1]!, /Saved for admin review/u);
+  assert.equal(messages[1], 'Item submitted to review');
   client.emit(
     Events.InteractionCreate,
     command(

@@ -6,7 +6,6 @@ import {
   formatCollectionDate,
   validateCatalog,
   validateCollectionDate,
-  validateProofUrl,
   type CollectionCredit,
 } from './index.js';
 
@@ -48,7 +47,7 @@ test('pending, rejected and revoked submissions never grant collection credit', 
   }
 });
 
-test('legacy duplicate approvals display only the earliest collection', () => {
+test('all regular approvals remain visible, ordered oldest first', () => {
   const credits: CollectionCredit[] = ['2026-10-16', '2026-10-01'].map(
     (collectedOn, index) => ({
       submissionId: String(index),
@@ -62,7 +61,7 @@ test('legacy duplicate approvals display only the earliest collection', () => {
     collectionState(1, credits).collectors[0]?.collectedOn,
     '2026-10-01',
   );
-  assert.equal(collectionState(1, credits).collectors.length, 1);
+  assert.equal(collectionState(1, credits).collectors.length, 2);
 });
 
 test('catalog rejects ambiguous mappings and dangling page references', () => {
@@ -70,28 +69,6 @@ test('catalog rejects ambiguous mappings and dangling page references', () => {
   assert.throws(() => validateCatalog([item, { ...item, id: 2 }], []));
   assert.throws(() => validateCatalog([item], [{ id: 'a', itemIds: [99] }]));
   assert.throws(() => validateCatalog([item], [{ id: 'a', itemIds: [1, 1] }]));
-});
-
-test('proof links reject spoofed domains, credentials, scripts and unsupported ports', () => {
-  for (const value of [
-    'http://imgur.com/a',
-    'https://imgur.com.evil.test/a',
-    'https://evil.test/imgur.com/a',
-    'https://user@imgur.com/a',
-    'https://gyazo.com:444/a',
-    'javascript:alert(1)',
-    'https://imgur.com/',
-    'https://imgur.com/a b',
-  ])
-    assert.throws(() => validateProofUrl(value));
-  assert.equal(
-    validateProofUrl('https://i.imgur.com/test.png'),
-    'https://i.imgur.com/test.png',
-  );
-  assert.equal(
-    validateProofUrl('https://gyazo.com/abc123'),
-    'https://gyazo.com/abc123',
-  );
 });
 
 test('dates are calendar dates, independent of server timezone', () => {
@@ -106,19 +83,4 @@ test('manual canonical items may have no external game aliases', () => {
     [{ id: 1, name: 'Clan trophy', gameItemIds: [] }],
     [{ id: 'clan', itemIds: [1] }],
   );
-});
-
-test('mobile Imgur uses the shared proof policy', () => {
-  assert.equal(
-    validateProofUrl('https://m.imgur.com/a/proof'),
-    'https://m.imgur.com/a/proof',
-  );
-  for (const value of [
-    'https://m.imgur.com.evil.test/proof',
-    'https://m.imgur.com@evil.test/proof',
-    'http://m.imgur.com/proof',
-    'https://m.imgur.com/',
-    'https://m.imgur.com:8443/proof',
-  ])
-    assert.throws(() => validateProofUrl(value));
 });

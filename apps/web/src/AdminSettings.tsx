@@ -9,6 +9,18 @@ import type { SiteSettings } from './site-settings.ts';
 import { useAdminAction } from './use-admin-action.ts';
 import { defaultSiteCopy, parseSiteCopy, type SiteCopy } from '@clog/domain';
 import { usePreparedAdminData, useAdminDraft } from './admin-route-data.ts';
+import {
+  defaultSubmissionHelp,
+  parseSubmissionHelp,
+  submissionHelpMaxBytes,
+} from '@clog/domain';
+import { SubmissionHelpContent } from './SubmissionHelp.tsx';
+import { defaultEventHighlight, defaultHardcoreHighlight } from '@clog/domain';
+import {
+  HighlightPicker,
+  highlightDraft,
+  draftHighlight,
+} from './HighlightPicker.tsx';
 export function AdminSettings({
   client,
   session,
@@ -26,6 +38,16 @@ export function AdminSettings({
 }) {
   const initial = usePreparedAdminData()?.settings;
   const initialAppearance = hardcore ? initial?.hardcore : initial;
+  const defaultHighlight = hardcore
+    ? defaultHardcoreHighlight
+    : defaultEventHighlight;
+  const savedHighlight = (value: SiteSettings | undefined) =>
+    (hardcore ? value?.hardcoreHighlight : value?.eventHighlight) ??
+    defaultHighlight;
+  const [highlight, setHighlight] = useState(() =>
+    highlightDraft(savedHighlight(initial)),
+  );
+  const colour = draftHighlight(highlight);
   const [saved, setSaved] = useState<SiteSettings | undefined>(initial);
   const [enabled, setEnabled] = useState(initial?.hardcoreEnabled ?? false);
   const [clanName, setClanName] = useState(
@@ -35,25 +57,38 @@ export function AdminSettings({
     initialAppearance?.copy ?? { ...defaultSiteCopy },
   );
   const [readError, setReadError] = useState<string>();
+  const [help, setHelp] = useState(
+    initial?.howToSubmitMarkdown ?? defaultSubmissionHelp,
+  );
+  const [preview, setPreview] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const action = useAdminAction(onAccessLost);
   const releaseAction = useAdminAction(onAccessLost);
   const busy = action.busy || releaseAction.busy;
+  const editable = session.role === 'admin';
   const savedAppearance = hardcore ? saved?.hardcore : saved;
-  useAdminDraft(
+  const helpBytes = new TextEncoder().encode(help).length;
+  const helpInvalid =
+    !hardcore && (helpBytes > submissionHelpMaxBytes || help.includes('\0'));
+  const dirty =
     !!saved &&
-      (enabled !== saved.hardcoreEnabled ||
-        clanName !== (savedAppearance?.clanName ?? saved.clanName) ||
-        JSON.stringify(copy) !==
-          JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy)),
-    busy,
-  );
+    (enabled !== saved.hardcoreEnabled ||
+      JSON.stringify(highlight) !==
+        JSON.stringify(highlightDraft(savedHighlight(saved))) ||
+      clanName !== (savedAppearance?.clanName ?? saved.clanName) ||
+      JSON.stringify(copy) !==
+        JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy) ||
+      (!hardcore &&
+        help !== (saved.howToSubmitMarkdown ?? defaultSubmissionHelp)));
+  useAdminDraft(dirty, busy);
   const apply = (value: SiteSettings) => {
     const appearance = hardcore ? value.hardcore : value;
     setSaved(value);
+    setHighlight(highlightDraft(savedHighlight(value)));
     setEnabled(value.hardcoreEnabled);
     setClanName(appearance?.clanName ?? value.clanName);
     setCopy(appearance?.copy ?? { ...defaultSiteCopy });
+    setHelp(value.howToSubmitMarkdown ?? defaultSubmissionHelp);
   };
   useEffect(() => {
     if (initial && refresh === 0) return;
@@ -93,9 +128,9 @@ export function AdminSettings({
             className="site-button admin-toggle"
             aria-labelledby="hardcore-release-title"
             aria-checked={enabled}
-            disabled={busy || !saved}
+            disabled={busy || !saved || !editable}
             onClick={() => {
-              if (!saved) return;
+              if (!saved || !editable) return;
               const next = !enabled;
               void releaseAction.execute(
                 async (signal) => {
@@ -137,6 +172,7 @@ export function AdminSettings({
       )}
       <section className="admin-panel">
         <h2>{hardcore ? 'Hardcore worlds settings' : 'Site settings'}</h2>
+        {!editable && <p>Only the administrator can change these settings.</p>}
         <ClanLogoSettings
           client={client}
           session={session}
@@ -157,7 +193,7 @@ export function AdminSettings({
           aria-busy={!saved && !readError}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!saved) return;
+            if (!saved || !editable || helpInvalid || !colour) return;
             void action.execute(
               async (signal) => {
                 const value = await client.saveSettings(
@@ -170,6 +206,10 @@ export function AdminSettings({
                   hardcore
                     ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
                     : undefined,
+                  hardcore ? undefined : parseSubmissionHelp(help),
+                  hardcore
+                    ? { hardcoreHighlight: colour }
+                    : { eventHighlight: colour },
                 );
                 if (!signal.aborted) {
                   apply(value);
@@ -197,7 +237,7 @@ export function AdminSettings({
               required
               maxLength={80}
               value={clanName}
-              disabled={busy || !saved}
+              disabled={busy || !saved || !editable}
               onChange={(event) => setClanName(event.target.value)}
             />
           </label>
@@ -215,7 +255,7 @@ export function AdminSettings({
                 <input
                   required
                   maxLength={160}
-                  disabled={busy || !saved}
+                  disabled={busy || !saved || !editable}
                   value={copy[key]}
                   onChange={(event) =>
                     setCopy((current) => ({
@@ -227,26 +267,82 @@ export function AdminSettings({
               </label>
             ))}
           </fieldset>
+          <HighlightPicker
+            title={
+              hardcore
+                ? 'Hardcore collection highlight'
+                : 'Event collection highlight'
+            }
+            value={highlight}
+            onChange={setHighlight}
+            disabled={busy || !saved || !editable}
+          />
+          {!hardcore && (
+            <fieldset className="site-copy-fields submission-help-settings">
+              <legend>Submission help</legend>
+              <label htmlFor="submission-help-markdown">
+                How to submit (Markdown)
+              </label>
+              <textarea
+                id="submission-help-markdown"
+                rows={14}
+                value={help}
+                disabled={busy || !saved || !editable}
+                aria-describedby="submission-help-limit"
+                aria-invalid={helpInvalid || undefined}
+                onChange={(event) => setHelp(event.target.value)}
+              />
+              <p id="submission-help-limit">
+                {helpBytes.toLocaleString()} / 32,768 bytes. Supports Markdown
+                headings, lists, links, emphasis and code blocks. Empty text
+                uses the default instructions.
+              </p>
+              {helpInvalid && (
+                <p role="alert">
+                  Use at most 32 KiB of UTF-8 text with no NUL characters.
+                </p>
+              )}
+              <button
+                type="button"
+                className="site-button"
+                aria-expanded={preview}
+                onClick={() => setPreview(!preview)}
+              >
+                {preview ? 'Hide preview' : 'Preview instructions'}
+              </button>
+              {preview && (
+                <section aria-label="Submission help preview">
+                  <SubmissionHelpContent text={help} />
+                </section>
+              )}
+            </fieldset>
+          )}
           <button
             className="site-button"
             disabled={
+              !editable ||
+              !dirty ||
+              helpInvalid ||
+              !colour ||
               busy ||
               !saved ||
               !clanName.trim() ||
-              Object.values(copy).some((text) => !text.trim()) ||
-              (enabled === saved.hardcoreEnabled &&
-                clanName.trim() ===
-                  (hardcore
-                    ? (saved.hardcore?.clanName ?? saved.clanName)
-                    : saved.clanName) &&
-                JSON.stringify(copy) ===
-                  JSON.stringify(
-                    (hardcore ? saved.hardcore?.copy : saved.copy) ??
-                      defaultSiteCopy,
-                  ))
+              Object.values(copy).some((text) => !text.trim())
             }
           >
             {hardcore ? 'Save hardcore settings' : 'Save site settings'}
+          </button>
+          <button
+            type="button"
+            className="site-button"
+            disabled={!dirty || busy || !saved || !editable}
+            onClick={() => {
+              if (saved) apply(saved);
+              action.setError(undefined);
+              action.setMessage(undefined);
+            }}
+          >
+            Discard changes
           </button>
         </form>
         {action.error && <p role="alert">{action.error}</p>}

@@ -22,6 +22,17 @@ export async function mockApi(
   if (options.xpSamples) await xp.samples();
   const signal = new AbortController().signal;
   const assets = new Map<string, { body: Buffer; contentType: string }>();
+  assets.set(
+    '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp',
+    {
+      body: await sharp({
+        create: { width: 320, height: 180, channels: 4, background: '#443322' },
+      })
+        .webp({ lossless: true })
+        .toBuffer(),
+      contentType: 'image/webp',
+    },
+  );
   const logos: Branding[] = [{ ...defaultBranding }, { ...defaultBranding }];
   const previews = new Map<
     string,
@@ -62,6 +73,16 @@ export async function mockApi(
       if (asset) return await route.fulfill(asset);
       let result: unknown;
       if (path === '/api/v1/auth/session') result = await session();
+      else if (path === '/api/v1/admin/access-control')
+        result =
+          method === 'GET'
+            ? await admin.accessControl(signal)
+            : await admin.saveAccessControl(
+                b.moderatorPages,
+                b.expectedRevision,
+                csrf,
+                signal,
+              );
       else if (path === '/api/v1/auth/logout') {
         await admin.logout(csrf, signal);
         result = {};
@@ -88,7 +109,7 @@ export async function mockApi(
               bytes = Buffer.from(await file.arrayBuffer()),
               id = crypto.randomUUID();
             const logoPath = `/api/v1/branding/${id}.webp`,
-              faviconPath = `/api/v1/branding/${id}/favicon.png`;
+              faviconPath = `/api/v1/branding/${id}/favicon.webp`;
             assets.set(logoPath, {
               body: await sharp(bytes, { animated: true }).webp().toBuffer(),
               contentType: 'image/webp',
@@ -96,9 +117,9 @@ export async function mockApi(
             assets.set(faviconPath, {
               body: await sharp(bytes)
                 .resize(64, 64, { fit: 'contain' })
-                .png()
+                .webp({ lossless: true })
                 .toBuffer(),
-              contentType: 'image/png',
+              contentType: 'image/webp',
             });
             logos[mode] = {
               revision: 'branding-' + next,
@@ -140,6 +161,15 @@ export async function mockApi(
                 b.clanName,
                 b.copy,
                 b.hardcore,
+                b.howToSubmitMarkdown,
+                {
+                  ...(b.eventHighlight === undefined
+                    ? {}
+                    : { eventHighlight: b.eventHighlight }),
+                  ...(b.hardcoreHighlight === undefined
+                    ? {}
+                    : { hardcoreHighlight: b.hardcoreHighlight }),
+                },
               );
       else if (path === '/api/v1/admin/clan-api-key')
         result =
@@ -171,6 +201,13 @@ export async function mockApi(
       else if (path === '/api/v1/admin/schedules/settings')
         result = await admin.setSchedulingEnabled(
           b.enabled,
+          b.expectedRevision,
+          csrf,
+          signal,
+        );
+      else if (path === '/api/v1/admin/schedules/permanent-pages')
+        result = await admin.setPermanentPages(
+          b.pageIds,
           b.expectedRevision,
           csrf,
           signal,
@@ -212,10 +249,12 @@ export async function mockApi(
         result = await admin.catalog(signal);
       else if (path === '/api/v1/admin/catalog/icons') {
         const file = form!.get('icon') as File,
-          iconPath = `/api/v1/catalog/icons/${crypto.randomUUID()}.png`;
+          iconPath = `/api/v1/catalog/icons/${crypto.randomUUID()}.webp`;
         assets.set(iconPath, {
-          body: Buffer.from(await file.arrayBuffer()),
-          contentType: file.type,
+          body: await sharp(Buffer.from(await file.arrayBuffer()))
+            .webp({ lossless: true })
+            .toBuffer(),
+          contentType: 'image/webp',
         });
         result = await admin.upload(file, csrf, signal, iconPath);
       } else if (path === '/api/v1/admin/catalog/sections') {
@@ -366,8 +405,10 @@ export async function mockApi(
           );
           if (screenshot) {
             assets.set(row.screenshotPath!, {
-              body: Buffer.from(await screenshot.arrayBuffer()),
-              contentType: 'image/png',
+              body: await sharp(Buffer.from(await screenshot.arrayBuffer()))
+                .webp({ lossless: true })
+                .toBuffer(),
+              contentType: 'image/webp',
             });
           }
           result = row;
@@ -378,30 +419,40 @@ export async function mockApi(
           id = parts[5]!,
           action = parts[6];
         result =
-          action === 'note'
-            ? await admin.saveReviewNote(
+          action === 'flags'
+            ? await admin.saveCollectionFlags(
                 id,
                 b.expectedVersion,
-                b.note,
+                b.flags,
+                b.reason,
                 csrf,
                 signal,
               )
-            : action
-              ? await admin.decide(
+            : action === 'note'
+              ? await admin.saveReviewNote(
                   id,
                   b.expectedVersion,
-                  action as 'approve' | 'reject' | 'revoke',
-                  b.reason ?? '',
+                  b.note,
                   csrf,
                   signal,
                 )
-              : method === 'PATCH'
-                ? await admin.edit(id, b.expectedVersion, b, csrf, signal)
-                : await admin.detail(
+              : action
+                ? await admin.decide(
                     id,
+                    b.expectedVersion,
+                    action as 'approve' | 'reject' | 'revoke',
+                    b.reason ?? '',
+                    csrf,
                     signal,
-                    url.searchParams.get('cursor') ?? undefined,
-                  );
+                    b.flags,
+                  )
+                : method === 'PATCH'
+                  ? await admin.edit(id, b.expectedVersion, b, csrf, signal)
+                  : await admin.detail(
+                      id,
+                      signal,
+                      url.searchParams.get('cursor') ?? undefined,
+                    );
       } else if (path === '/api/v1/xp/tracker')
         result = await xp.tracker(signal);
       else if (path === '/api/v1/admin/xp/imports')

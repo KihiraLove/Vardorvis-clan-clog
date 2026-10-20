@@ -11,6 +11,12 @@ const generateFixtureKey = () =>
 import { AdminRequestError } from '../../src/admin-api.ts';
 import {
   defaultSiteCopy,
+  defaultEventHighlight,
+  defaultHardcoreHighlight,
+  parseHighlightColour,
+  type HighlightUpdate,
+  defaultSubmissionHelp,
+  parseSubmissionHelp,
   parseSiteCopy,
   parseHardcoreAppearance,
   type SiteCopy,
@@ -21,12 +27,13 @@ import {
   type RuneLiteSettings,
   type RuneLiteSettingsUpdate,
   parseCollectionScheduleInput,
+  parsePermanentPageIds,
   type SchedulingState,
   type CollectionScheduleInput,
 } from '@clog/domain';
 import { defaultBranding, type Branding } from '../../src/branding.ts';
 import {
-  safeProof,
+  safeScreenshotPath,
   validateCorrection,
   validateIconFile,
   validateItem,
@@ -36,6 +43,7 @@ import {
   type AdminPage,
   type AuditEntry,
   type Correction,
+  type CollectionFlags,
   type ManualSubmissionInput,
   type CreatedItem,
   type CreateItem,
@@ -53,6 +61,29 @@ import {
 } from './scenarios.ts';
 
 export class MemoryAdminClient implements AdminClient {
+  private accessState: import('@clog/domain').AccessControlSettings = {
+    revision: 'access-control-1',
+    moderatorPages: ['submissions', 'catalog', 'schedules', 'runelite'],
+  };
+  async accessControl(signal: AbortSignal) {
+    this.access(signal);
+    return structuredClone(this.accessState);
+  }
+  async saveAccessControl(
+    pages: import('@clog/domain').StaffPage[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    if (revision !== this.accessState.revision)
+      throw new AdminRequestError(409);
+    this.accessState = {
+      revision: 'access-control-' + (Number(revision.slice(15)) + 1),
+      moderatorPages: [...pages],
+    };
+    return this.accessControl(signal);
+  }
   private discordState: import('@clog/domain').DiscordSettings = {
     revision: 'discord-1',
     enabled: false,
@@ -78,7 +109,13 @@ export class MemoryAdminClient implements AdminClient {
   }
   async discordStatus(signal: AbortSignal) {
     this.access(signal);
-    return { enabled: this.discordState.enabled, ready: false };
+    return {
+      enabled: this.discordState.enabled,
+      ready: false,
+      state: this.discordState.enabled
+        ? ('disconnected' as const)
+        : ('disabled' as const),
+    };
   }
   async saveDiscordSettings(
     input: import('@clog/domain').DiscordSettingsUpdate,
@@ -128,6 +165,7 @@ export class MemoryAdminClient implements AdminClient {
     revision: 'schedules-1',
     enabled: false,
     schedules: [],
+    permanentlyOpenPageIds: [],
   };
   async scheduling(signal: AbortSignal) {
     this.access(signal);
@@ -151,6 +189,20 @@ export class MemoryAdminClient implements AdminClient {
   ) {
     this.checkScheduleRevision(revision, signal);
     this.schedulingState.enabled = enabled;
+    this.nextScheduleRevision();
+    return this.scheduling(signal);
+  }
+  async setPermanentPages(
+    pageIds: string[],
+    revision: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.checkScheduleRevision(revision, signal);
+    const ids = parsePermanentPageIds(pageIds);
+    if (ids.some((id) => !this.data.pages.some((p) => p.id === id)))
+      throw new AdminRequestError(422);
+    this.schedulingState.permanentlyOpenPageIds = ids;
     this.nextScheduleRevision();
     return this.scheduling(signal);
   }
@@ -283,6 +335,9 @@ export class MemoryAdminClient implements AdminClient {
   private revision = 0;
   private queueRevision = 0;
   private setting = {
+    eventHighlight: { ...defaultEventHighlight },
+    hardcoreHighlight: { ...defaultHardcoreHighlight },
+    howToSubmitMarkdown: defaultSubmissionHelp,
     copy: { ...defaultSiteCopy },
     hardcore: { clanName: 'Clan name', copy: { ...defaultSiteCopy } },
     revision: 'settings-0',
@@ -387,7 +442,9 @@ export class MemoryAdminClient implements AdminClient {
       collectedOn: '2026-10-05',
       dateSource: 'submission',
       submittedAt: '2026-10-05T12:00:00Z',
-      proofUrl: 'https://imgur.com/a/test-proof',
+      proofUrl: '',
+      screenshotPath:
+        '/api/v1/admin/submission-images/00000000-0000-4000-8000-000000000001.webp',
       reviewNote: '',
       reviewReason: null,
     }));
@@ -442,17 +499,23 @@ export class MemoryAdminClient implements AdminClient {
     }
     const item = this.data.items.find((row) => row.id === fields.itemId);
     if (!item) throw new AdminRequestError(422);
-    if (fields.approve) this.ensureUnique('', item.id, fields.hardcore);
-    if (fields.proofUrl && !safeProof(fields.proofUrl))
+    const collectionType = fields.collectionType ?? 'regular';
+    if (fields.hardcore && collectionType === 'event')
+      throw new AdminRequestError(422);
+    if (fields.approve)
+      this.ensureUnique('', item.id, fields.hardcore, collectionType);
+    if (fields.proofUrl !== undefined && fields.proofUrl !== '')
       throw new AdminRequestError(422);
     const id = crypto.randomUUID();
     const row: Submission = {
       id,
       ...(screenshot
-        ? { screenshotPath: `/api/v1/admin/submission-images/${id}.png` }
+        ? { screenshotPath: `/api/v1/admin/submission-images/${id}.webp` }
         : {}),
       version: 1,
       source: 'manual',
+      collectionType,
+      collectionReason: 'manual',
       itemId: item.id,
       rawItemText: item.name,
       collectorName: fields.collectorName.trim(),
@@ -571,6 +634,13 @@ export class MemoryAdminClient implements AdminClient {
     if (revision !== this.data.revision) throw new AdminRequestError(409);
     const page = this.data.pages.find((p) => p.id === id);
     if (!page || page.version !== version) throw new AdminRequestError(409);
+    if (this.schedulingState.permanentlyOpenPageIds.includes(id)) {
+      this.schedulingState.permanentlyOpenPageIds =
+        this.schedulingState.permanentlyOpenPageIds.filter(
+          (value) => value !== id,
+        );
+      this.nextScheduleRevision();
+    }
     this.data.pages = this.data.pages.filter((p) => p.id !== id);
     const retiredItemIds: number[] = [];
     this.pageVersions.delete(id);
@@ -714,11 +784,23 @@ export class MemoryAdminClient implements AdminClient {
     clanName?: string,
     copy?: SiteCopy,
     hardcore?: HardcoreAppearance,
+    howToSubmitMarkdown?: string,
+    highlights?: HighlightUpdate,
   ) {
     this.access(signal);
     if (expectedRevision !== this.setting.revision)
       throw new AdminRequestError(409);
     this.setting = {
+      eventHighlight: parseHighlightColour(
+        highlights?.eventHighlight ?? this.setting.eventHighlight,
+      ),
+      hardcoreHighlight: parseHighlightColour(
+        highlights?.hardcoreHighlight ?? this.setting.hardcoreHighlight,
+      ),
+      howToSubmitMarkdown:
+        howToSubmitMarkdown === undefined
+          ? this.setting.howToSubmitMarkdown
+          : parseSubmissionHelp(howToSubmitMarkdown),
       copy: copy ? parseSiteCopy(copy) : this.setting.copy,
       hardcore: hardcore
         ? parseHardcoreAppearance(hardcore)
@@ -730,17 +812,30 @@ export class MemoryAdminClient implements AdminClient {
     this.changed(false);
     return this.publicSettings();
   }
-  private ensureUnique(id: string, itemId: number, hardcore: boolean) {
+  private ensureUnique(
+    id: string,
+    itemId: number,
+    hardcore: boolean,
+    type: 'regular' | 'event' = 'regular',
+  ) {
+    if (type === 'regular' && !this.submissionFilterState.filterCollected)
+      return;
     if (
       this.rows.some(
         (row) =>
           row.id !== id &&
           row.status === 'approved' &&
           row.itemId === itemId &&
-          row.hardcore === hardcore,
+          row.hardcore === hardcore &&
+          (row.collectionType ?? 'regular') === type,
       )
     )
-      throw new AdminRequestError(409);
+      throw new AdminRequestError(
+        409,
+        type === 'event'
+          ? 'An approved Event collection already exists for this item. Revoke it before approving another Event collection.'
+          : 'Filter out regular duplicates is on and this item already has a Regular collection in this world mode.',
+      );
   }
   async logout(_csrf: string, signal: AbortSignal) {
     this.access(signal);
@@ -957,6 +1052,7 @@ export class MemoryAdminClient implements AdminClient {
                   collectorName: row.collectorName,
                   collectedOn: row.collectedOn,
                   hardcore: row.hardcore,
+                  collectionType: row.collectionType ?? 'regular',
                   status: 'approved',
                 })),
             }
@@ -1085,14 +1181,27 @@ export class MemoryAdminClient implements AdminClient {
       (row.status === 'approved' && !clean.reason)
     )
       throw new AdminRequestError(422);
-    if (row.status === 'approved')
-      this.ensureUnique(id, clean.itemId, clean.hardcore);
+    const collectionType = clean.hardcore
+      ? 'regular'
+      : (clean.collectionType ?? row.collectionType ?? 'regular');
+    if (
+      row.status === 'approved' &&
+      (row.itemId !== clean.itemId ||
+        row.hardcore !== clean.hardcore ||
+        (row.collectionType ?? 'regular') !== collectionType)
+    )
+      this.ensureUnique(id, clean.itemId, clean.hardcore, collectionType);
     const before = structuredClone(row);
     Object.assign(row, {
       itemId: clean.itemId,
       collectorName: clean.collectorName,
       collectedOn: clean.collectedOn,
       hardcore: clean.hardcore,
+      collectionType,
+      collectionReason:
+        clean.collectionType === undefined
+          ? (row.collectionReason ?? 'legacy')
+          : 'staff_correction',
       dateSource:
         clean.collectedOn === before.collectedOn ? before.dateSource : 'admin',
       version: version + 1,
@@ -1108,9 +1217,12 @@ export class MemoryAdminClient implements AdminClient {
     reason: string,
     _csrf: string,
     signal: AbortSignal,
+    flags?: CollectionFlags,
   ) {
     this.access(signal);
     const row = this.row(id, version);
+    if (action === 'revoke' && flags) throw new AdminRequestError(422);
+    const selected = flags ? this.selectedFlags(row, flags) : row;
     if (
       (action === 'revoke'
         ? row.status !== 'approved'
@@ -1118,19 +1230,69 @@ export class MemoryAdminClient implements AdminClient {
       (action === 'approve'
         ? !this.data.items.some((item) => item.id === row.itemId) ||
           (row.source !== 'manual' &&
-            !safeProof(row.proofUrl) &&
+            !safeScreenshotPath(row.screenshotPath) &&
             !(row.source === 'runelite' && row.chatMessage?.trim()))
         : !reason.trim())
     )
       throw new AdminRequestError(422);
-    if (action === 'approve') this.ensureUnique(id, row.itemId!, row.hardcore);
+    if (action === 'approve')
+      this.ensureUnique(
+        id,
+        row.itemId!,
+        selected.hardcore,
+        selected.collectionType ?? 'regular',
+      );
     const before = structuredClone(row);
+    if (flags) Object.assign(row, selected);
     row.status = (
       { approve: 'approved', reject: 'rejected', revoke: 'revoked' } as const
     )[action];
     row.version++;
     row.reviewReason = action === 'approve' ? null : reason.trim();
     this.record(before, row, action, reason.trim());
+    return structuredClone(row);
+  }
+  private selectedFlags(row: Submission, flags: CollectionFlags) {
+    if (
+      (flags.useIntakeTiming && row.source === 'manual') ||
+      (flags.hardcore && flags.collectionType === 'event')
+    )
+      throw new AdminRequestError(422);
+    return {
+      hardcore: flags.hardcore,
+      collectionType: flags.hardcore
+        ? ('regular' as const)
+        : (flags.collectionType ?? row.collectionType ?? ('regular' as const)),
+      collectionReason: flags.useIntakeTiming
+        ? 'scheduling_disabled'
+        : 'staff_correction',
+    };
+  }
+  async saveCollectionFlags(
+    id: string,
+    version: number,
+    flags: CollectionFlags,
+    reason: string,
+    _csrf: string,
+    signal: AbortSignal,
+  ) {
+    this.access(signal);
+    const row = this.row(id, version);
+    if (row.status !== 'approved' || !reason.trim())
+      throw new AdminRequestError(422);
+    const selected = this.selectedFlags(row, flags);
+    this.ensureUnique(
+      id,
+      row.itemId!,
+      selected.hardcore,
+      selected.collectionType,
+    );
+    const before = structuredClone(row);
+    Object.assign(row, selected, {
+      version: version + 1,
+      reviewReason: reason.trim(),
+    });
+    this.record(before, row, 'edit', reason.trim());
     return structuredClone(row);
   }
   async upload(

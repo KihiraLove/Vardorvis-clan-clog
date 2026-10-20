@@ -1,13 +1,15 @@
 import type { PodiumPlayer } from './xp-tracker.ts';
-import { exactXp } from './xp-model.ts';
+import { formatCompetitionAmount } from '@clog/domain';
 export function XpPodium({
   players,
   title,
   sourceUrl,
+  unit = 'XP',
 }: {
   players: PodiumPlayer[];
   title: string;
   sourceUrl?: string | undefined;
+  unit?: string;
 }) {
   return (
     <aside className="xp-podium" aria-label={'XP podium for ' + title}>
@@ -23,7 +25,7 @@ export function XpPodium({
             >
               <span
                 className="xp-podium__name"
-                title={exactXp(p.gained) + ' XP'}
+                title={formatCompetitionAmount(p.gained) + ' ' + unit}
               >
                 {p.displayName}
               </span>

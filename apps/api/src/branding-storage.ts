@@ -57,7 +57,6 @@ export async function decodeLogo(input: Buffer) {
   }
 }
 export class BrandingStorage extends IconStorage {
-  protected override extension = 'webp';
   protected override decode(input: Buffer) {
     return decodeLogo(input);
   }
@@ -72,11 +71,11 @@ export class BrandingStorage extends IconStorage {
       // Derive the favicon from the stored logo, so orientation, colour and frame agree.
       const firstFrame = await sharp(await this.read(logo), { pages: 1 })
         .resize(64, 64, { fit: 'contain', background: '#00000000' })
-        .png()
+        .webp({ lossless: true, effort: 2 })
         .toBuffer();
       return {
         logo,
-        favicon: await this.favicons.save(firstFrame, 'image/png'),
+        favicon: await this.favicons.save(firstFrame, 'image/webp'),
       };
     } catch (error) {
       await this.remove(logo.id);

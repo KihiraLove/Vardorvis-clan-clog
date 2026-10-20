@@ -1,16 +1,23 @@
+import { insertImage } from './proof-store.js';
 /** Parameterized PostgreSQL persistence; public projections explicitly select safe fields. */
 import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
 import {
+  parseHighlightColour,
+  type HighlightColour,
+  type HighlightUpdate,
   parseSiteCopy,
   parseHardcoreAppearance,
+  parseSubmissionHelp,
+  classifyCollection,
   type SiteCopy,
   type HardcoreAppearance,
 } from '@clog/domain';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import type pg from 'pg';
 import { ProjectionCache, projection } from './projection-cache.js';
-import { lockScheduling, requireScheduledItem } from './scheduling-store.js';
+import { lockScheduling } from './scheduling-store.js';
+import { intakeScheduling } from './intake-scheduling.js';
 import {
   readSubmissionFilters,
   requireUncollected,
@@ -281,17 +288,24 @@ export class PgStore implements BackendStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock_shared(74261005)');
       const schedulingEnabled = await lockScheduling(client, input.hardcore);
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+        ['discord:' + input.interactionId],
+      );
       const readReceipt = async (): Promise<{
         hash: string | null;
         receipt: BotReceipt | null;
+        imageId: string | null;
       } | null> => {
         const row = (
           await client.query<{
             hash: string | null;
             receipt: BotReceipt | null;
+            imageId: string | null;
           }>(
-            'SELECT intake_payload_hash AS hash, intake_receipt AS receipt FROM submissions WHERE discord_interaction_id=$1',
+            'SELECT intake_payload_hash AS hash, intake_receipt AS receipt,proof_image_id::text AS "imageId" FROM submissions WHERE discord_interaction_id=$1',
             [input.interactionId],
           )
         ).rows[0];
@@ -300,13 +314,18 @@ export class PgStore implements BackendStore {
       const replay = (prior: {
         hash: string | null;
         receipt: BotReceipt | null;
+        imageId: string | null;
       }) => {
         if (prior.hash !== payloadHash || !prior.receipt)
           throw new ApiError(
             409,
             'Discord interaction ID was used for a different claim.',
           );
-        return { created: false, receipt: prior.receipt };
+        return {
+          created: false,
+          receipt: prior.receipt,
+          imageId: prior.imageId,
+        };
       };
       const prior = await readReceipt();
       if (prior) {
@@ -314,8 +333,12 @@ export class PgStore implements BackendStore {
         await client.query('COMMIT');
         return result;
       }
+      if (!input.image || input.proofUrl)
+        throw new ApiError(422, 'Supply a PNG screenshot as proof.');
       const submittedAt = (
-        await client.query<{ timestamp: Date }>('SELECT now() AS timestamp')
+        await client.query<{ timestamp: Date }>(
+          'SELECT clock_timestamp() AS timestamp',
+        )
       ).rows[0]!.timestamp;
       const today = submittedAt.toISOString().slice(0, 10);
       const matches = await this.matchItems(client);
@@ -344,20 +367,33 @@ export class PgStore implements BackendStore {
         await client.query('COMMIT');
         return result;
       }
-      await requireScheduledItem(client, schedulingEnabled, itemId);
+      const evidence = await intakeScheduling(
+        client,
+        schedulingEnabled,
+        input.hardcore,
+        submittedAt,
+      );
+      const classification = classifyCollection(
+        evidence,
+        itemId,
+        input.hardcore,
+      );
       const filters = await readSubmissionFilters(client, true);
       await requireUncollected(
         client,
         filters.filterCollected,
         itemId,
         input.hardcore,
+        classification.collectionType,
       );
       const creditOccupied =
+        (classification.collectionType === 'event' ||
+          filters.filterCollected) &&
         itemId !== null &&
         (
           await client.query(
-            "SELECT 1 FROM submissions WHERE item_id=$1 AND hardcore=$2 AND status='approved' LIMIT 1",
-            [itemId, input.hardcore],
+            "SELECT 1 FROM submissions WHERE item_id=$1 AND hardcore=$2 AND collection_type=$3 AND status='approved' LIMIT 1",
+            [itemId, input.hardcore, classification.collectionType],
           )
         ).rowCount === 1;
       const receipt: BotReceipt = {
@@ -372,15 +408,18 @@ export class PgStore implements BackendStore {
         itemId,
         candidates: matched.candidates,
         creditOccupied,
+        collectionType: classification.collectionType,
       };
       // Unique interaction IDs serialize concurrent retries in PostgreSQL. ON CONFLICT
       // waits for the winner, after which readReceipt observes the committed receipt.
+      await client.query('SAVEPOINT discord_image');
+      await insertImage(client, input.image);
       const inserted = await client.query(
         `INSERT INTO submissions (
           id, discord_interaction_id, discord_user_id, discord_guild_id,
           raw_item_text, item_id, collector_name, collected_on, date_source,
-          proof_url, hardcore, intake_payload_hash, intake_receipt
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          proof_url, hardcore, intake_payload_hash, intake_receipt, submitted_at, intake_scheduling, collection_type, collection_reason, proof_image_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         ON CONFLICT (discord_interaction_id) DO NOTHING RETURNING id`,
         [
           receipt.submissionId,
@@ -392,13 +431,19 @@ export class PgStore implements BackendStore {
           input.collectorName,
           receipt.collectedOn,
           receipt.dateSource,
-          input.proofUrl,
+          '',
           input.hardcore,
           payloadHash,
           JSON.stringify(receipt),
+          submittedAt,
+          JSON.stringify(evidence),
+          classification.collectionType,
+          classification.collectionReason,
+          input.image.id,
         ],
       );
       if (inserted.rowCount !== 1) {
+        await client.query('ROLLBACK TO SAVEPOINT discord_image');
         const winner = await readReceipt();
         if (!winner)
           throw new ApiError(503, 'Claim receipt is temporarily unavailable.');
@@ -407,7 +452,7 @@ export class PgStore implements BackendStore {
         return result;
       }
       await client.query('COMMIT');
-      return { created: true, receipt };
+      return { created: true, receipt, imageId: input.image.id };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -521,14 +566,9 @@ export class PgStore implements BackendStore {
   ): Promise<PublicCredit[]> {
     const rows = (
       await client.query<PublicCredit>(
-        `SELECT c.submission_id AS "submissionId", c.item_id AS "itemId", c.collector_name AS "collectorName", to_char(c.collected_on, 'YYYY-MM-DD') AS "collectedOn", c.hardcore FROM collection_credits c JOIN items i ON i.id=c.item_id WHERE i.active ORDER BY c.item_id, c.hardcore LIMIT 20001`,
+        `SELECT c.submission_id AS "submissionId", c.item_id AS "itemId", c.collector_name AS "collectorName", to_char(c.collected_on, 'YYYY-MM-DD') AS "collectedOn", c.hardcore,c.collection_type AS "collectionType" FROM collection_credits c JOIN items i ON i.id=c.item_id WHERE i.active ORDER BY c.item_id,c.hardcore,c.collected_on,c.submission_id`,
       )
     ).rows;
-    if (rows.length > 20000)
-      throw new ApiError(
-        503,
-        'Collection snapshot exceeds the supported size.',
-      );
     return rows;
   }
   async collections(): Promise<PublicCredit[]> {
@@ -550,8 +590,11 @@ export class PgStore implements BackendStore {
         public_copy: SiteCopy;
         hardcore_name: string;
         hardcore_copy: SiteCopy;
+        how_to_submit_markdown: string;
+        event_highlight: HighlightColour;
+        hardcore_highlight: HighlightColour;
       }>(
-        'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true',
+        'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy, how_to_submit_markdown, event_highlight, hardcore_highlight FROM site_settings WHERE singleton=true',
       )
     ).rows[0];
     if (!row) throw new ApiError(503, 'Settings unavailable.');
@@ -559,6 +602,9 @@ export class PgStore implements BackendStore {
       revision: 'settings-' + row.version,
       hardcoreEnabled: row.hardcore_enabled,
       clanName: row.clan_name,
+      howToSubmitMarkdown: parseSubmissionHelp(row.how_to_submit_markdown),
+      eventHighlight: parseHighlightColour(row.event_highlight),
+      hardcoreHighlight: parseHighlightColour(row.hardcore_highlight),
       copy: parseSiteCopy(row.public_copy),
       hardcore: parseHardcoreAppearance({
         clanName: row.hardcore_name,
@@ -573,7 +619,16 @@ export class PgStore implements BackendStore {
     clanName?: string,
     copy?: SiteCopy,
     hardcore?: HardcoreAppearance,
+    howToSubmitMarkdown?: string,
+    highlights?: HighlightUpdate,
   ): Promise<Settings | null> {
+    if (howToSubmitMarkdown !== undefined) {
+      try {
+        parseSubmissionHelp(howToSubmitMarkdown);
+      } catch (error) {
+        throw new ApiError(422, (error as Error).message);
+      }
+    }
     if (
       clanName !== undefined &&
       (!clanName.trim() || clanName.trim().length > 80)
@@ -590,8 +645,11 @@ export class PgStore implements BackendStore {
           public_copy: SiteCopy;
           hardcore_name: string;
           hardcore_copy: SiteCopy;
+          how_to_submit_markdown: string;
+          event_highlight: HighlightColour;
+          hardcore_highlight: HighlightColour;
         }>(
-          'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy FROM site_settings WHERE singleton=true FOR UPDATE',
+          'SELECT hardcore_enabled, version, clan_name, public_copy, hardcore_name, hardcore_copy, how_to_submit_markdown, event_highlight, hardcore_highlight FROM site_settings WHERE singleton=true FOR UPDATE',
         )
       ).rows[0];
       if (!old || 'settings-' + old.version !== revision) {
@@ -599,13 +657,25 @@ export class PgStore implements BackendStore {
         return null;
       }
       const version = old.version + 1;
+      let eventHighlight: HighlightColour, hardcoreHighlight: HighlightColour;
+      try {
+        eventHighlight = parseHighlightColour(
+          highlights?.eventHighlight ?? old.event_highlight,
+        );
+        hardcoreHighlight = parseHighlightColour(
+          highlights?.hardcoreHighlight ?? old.hardcore_highlight,
+        );
+      } catch (error) {
+        throw new ApiError(422, (error as Error).message);
+      }
+      const help = howToSubmitMarkdown ?? old.how_to_submit_markdown;
       const name = clanName?.trim() ?? old.clan_name;
       const text = parseSiteCopy(copy ?? old.public_copy);
       const hc = parseHardcoreAppearance(
         hardcore ?? { clanName: old.hardcore_name, copy: old.hardcore_copy },
       );
       await client.query(
-        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4, hardcore_name=$5, hardcore_copy=$6 WHERE singleton=true',
+        'UPDATE site_settings SET hardcore_enabled=$1, version=$2, clan_name=$3, public_copy=$4, hardcore_name=$5, hardcore_copy=$6, how_to_submit_markdown=$7, event_highlight=$8, hardcore_highlight=$9 WHERE singleton=true',
         [
           enabled,
           version,
@@ -613,10 +683,13 @@ export class PgStore implements BackendStore {
           JSON.stringify(text),
           hc.clanName,
           JSON.stringify(hc.copy),
+          help,
+          JSON.stringify(eventHighlight),
+          JSON.stringify(hardcoreHighlight),
         ],
       );
       await client.query(
-        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy,old_hardcore_name,new_hardcore_name,old_hardcore_copy,new_hardcore_copy) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        'INSERT INTO site_settings_audit(actor_discord_id,old_enabled,new_enabled,version,old_clan_name,new_clan_name,old_public_copy,new_public_copy,old_hardcore_name,new_hardcore_name,old_hardcore_copy,new_hardcore_copy,old_how_to_submit_markdown,new_how_to_submit_markdown,old_event_highlight,new_event_highlight,old_hardcore_highlight,new_hardcore_highlight) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)',
         [
           actor,
           old.hardcore_enabled,
@@ -630,6 +703,12 @@ export class PgStore implements BackendStore {
           hc.clanName,
           JSON.stringify(old.hardcore_copy),
           JSON.stringify(hc.copy),
+          old.how_to_submit_markdown,
+          help,
+          JSON.stringify(old.event_highlight),
+          JSON.stringify(eventHighlight),
+          JSON.stringify(old.hardcore_highlight),
+          JSON.stringify(hardcoreHighlight),
         ],
       );
       await client.query('COMMIT');
@@ -639,6 +718,9 @@ export class PgStore implements BackendStore {
         clanName: name,
         copy: text,
         hardcore: hc,
+        howToSubmitMarkdown: help,
+        eventHighlight,
+        hardcoreHighlight,
       };
     } catch (error) {
       await client.query('ROLLBACK');

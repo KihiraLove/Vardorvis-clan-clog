@@ -32,7 +32,7 @@ export function brandingRoutes(
   for (const favicon of [false, true])
     app.get<{ Params: { id: string } }>(
       favicon
-        ? '/api/v1/branding/:id/favicon.png'
+        ? '/api/v1/branding/:id/favicon.webp'
         : '/api/v1/branding/:id.webp',
       async (request, reply) => {
         if (!assetIdPattern.test(request.params.id))
@@ -54,14 +54,14 @@ export function brandingRoutes(
             .some((s) => s === etag || s === '*')
         )
           return reply.code(304).send();
-        return reply.type(favicon ? 'image/png' : 'image/webp').send(bytes);
+        return reply.type('image/webp').send(bytes);
       },
     );
   async function owner(request: FastifyRequest, write = false) {
     if (!authorize || !store || !storage)
       throw new ApiError(503, 'Clan branding unavailable.');
     const actor = await authorize(request, write);
-    if (actor.role !== 'admin')
+    if (write && actor.role !== 'admin')
       throw new ApiError(
         403,
         'Only the administrator can change the clan logo.',

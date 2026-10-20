@@ -1,13 +1,13 @@
 /** Raster safety and on-disk restart/integrity checks need no external services. */
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import sharp from 'sharp';
 import { decodeIcon, IconStorage, MAX_ICON_BYTES } from './icon-storage.js';
 
-test('PNG and WebP decode to lossless PNG retaining native dimensions and transparency', async () => {
+test('PNG and WebP decode to lossless WebP retaining native dimensions and transparency', async () => {
   const pixels = Buffer.from([
     255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 0, 255, 255, 255, 255,
   ]);
@@ -17,6 +17,7 @@ test('PNG and WebP decode to lossless PNG retaining native dimensions and transp
       format === 'png' ? source.png() : source.webp({ lossless: true })
     ).toBuffer();
     const result = await decodeIcon(input, 'image/' + format);
+    assert.equal((await sharp(result.bytes).metadata()).format, 'webp');
     assert.equal(result.width, 2);
     assert.equal(result.height, 2);
     const decoded = await sharp(result.bytes).ensureAlpha().raw().toBuffer();
@@ -58,13 +59,18 @@ test('generated durable icons survive new storage instances and fail closed on c
     const storage = new IconStorage(directory);
     await storage.initialize();
     const record = await storage.save(bytes, 'image/png');
+    assert.deepEqual(await readdir(directory), [record.id + '.webp']);
+    assert.equal(
+      (await sharp(await storage.read(record)).metadata()).format,
+      'webp',
+    );
     const again = new IconStorage(directory);
     assert.deepEqual(await again.read(record), await storage.read(record));
     assert.deepEqual(
-      await readFile(join(directory, record.id + '.png')),
+      await readFile(join(directory, record.id + '.webp')),
       await storage.read(record),
     );
-    await writeFile(join(directory, record.id + '.png'), 'corrupt');
+    await writeFile(join(directory, record.id + '.webp'), 'corrupt');
     await assert.rejects(again.read(record), { status: 503 });
     await assert.rejects(
       new IconStorage(join(directory, 'missing')).save(bytes, 'image/png'),

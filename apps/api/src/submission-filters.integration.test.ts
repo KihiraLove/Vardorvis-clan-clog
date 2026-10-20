@@ -1,3 +1,4 @@
+import { screenshotRecord } from './tests/screenshot.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -263,7 +264,7 @@ test(
       for (const row of rejected.rows) {
         assert.equal(row.version, 2);
         assert.equal(row.action, 'reject');
-        assert.match(row.review_reason, /Filter out duplicates is on/u);
+        assert.match(row.review_reason, /Filter out regular duplicates is on/u);
         assert.equal(row.reason, row.review_reason);
       }
       await assert.rejects(
@@ -275,7 +276,7 @@ test(
             rawItemText: 'Two',
             itemId: 2,
             collectorName: 'Discord Player',
-            proofUrl: 'https://imgur.com/proof',
+            image: screenshotRecord(),
             hardcore: false,
           },
           'hash',
@@ -291,7 +292,7 @@ test(
         rawItemText: 'Three',
         itemId: 3,
         collectorName: 'Discord winner',
-        proofUrl: 'https://imgur.com/proof',
+        image: screenshotRecord(),
         hardcore: false,
       };
       const winnerHash = 'c'.repeat(64);
@@ -381,7 +382,7 @@ test(
             apiKey,
           )
         ).receipt.status,
-        'pending',
+        'approved',
       );
       await pool.query(
         "CREATE FUNCTION fail_filter_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit failed'; END $$; CREATE TRIGGER fail_filter_audit BEFORE INSERT ON submission_filter_audit FOR EACH ROW EXECUTE FUNCTION fail_filter_audit()",

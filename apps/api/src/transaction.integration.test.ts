@@ -112,8 +112,10 @@ test(
       );
 
       await t.test(
-        'manual receipt replay and competing approved credits remain atomic',
+        'manual receipt replay and competing filtered Regular credits remain atomic',
         async () => {
+          const filters = await reviews.submissionFilters();
+          await reviews.saveSubmissionFilters(true, filters.revision, 'actor');
           const key = randomUUID();
           const replays = await Promise.all([
             reviews.createManual(fields(900002), 'actor', 'Staff', key),
@@ -165,6 +167,12 @@ test(
               )
             ).rows[0].n,
             1,
+          );
+          const enabledFilters = await reviews.submissionFilters();
+          await reviews.saveSubmissionFilters(
+            false,
+            enabledFilters.revision,
+            'actor',
           );
         },
       );

@@ -24,15 +24,19 @@ flowchart LR
 | `catalog`           | Pinned catalog inputs, identity mapping and asset provenance      |
 
 PostgreSQL is authoritative. An item has one canonical ID across every page.
-Approval grants one active credit per item per world mode; rejection and
-revocation grant none. Claims, receipts and audit records remain private.
+Approval grants Regular or Event credit. Normal-world items can have one Event
+credit and independent Regular credits; the regular duplicate filter controls
+Regular repeats in each world mode. Hardcore supports Regular only. Rejection
+and revocation grant no credit. Claims, receipts and audits remain private.
 Revisions prevent one staff edit from overwriting another. Request keys let
 clients retry uncertain writes without creating a second submission or import.
 
-Bootstrap applies `001_baseline.sql`, imports the catalog and provisions
+Bootstrap initializes a fresh database with `001_baseline.sql`, applies pending
+migrations, imports the catalog and provisions
 `clog_runtime`. Only bootstrap/maintenance gets owner credentials. Startup
 checks migration names and checksums; incompatible history fails before writes.
-Development databases from before this snapshot are unsupported.
+New migrations upgrade existing installations without recreating their data.
+Databases with pre-release or incompatible migration checksums are unsupported.
 
 Public reads use revision-based ETags and visibility-aware polling. Staff routes
 load code and data together and clear private state on access loss. Production

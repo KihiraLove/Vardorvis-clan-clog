@@ -1,3 +1,4 @@
+import { botRequest } from './tests/screenshot.js';
 /** Public intake obeys schedules; authorized staff can record manual claims afterward. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -17,11 +18,12 @@ import { PgClanKeyStore, loadClanKeyRoot } from './clan-api-key.js';
 import { PgSchedulingStore, lockScheduling } from './scheduling-store.js';
 import { PgRuneLiteSettingsStore } from './runelite-settings.js';
 import { hashPassword } from './passwords.js';
+import { PgCatalogStore } from './catalog-store.js';
 
 test(
-  'scheduling gates public intake atomically while staff manual claims can record closed-page achievements',
+  'scheduling classifies public intake atomically while staff can record historical achievements',
   { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
+  async (t) => {
     const connectionString = process.env.TEST_DATABASE_URL!;
     const root = new pg.Pool({ connectionString });
     const schema = 'schedule_test_' + randomUUID().replaceAll('-', '');
@@ -116,6 +118,7 @@ test(
         revision: 'schedules-1',
         enabled: false,
         schedules: [],
+        permanentlyOpenPageIds: [],
       });
       const path = '/api/v1/admin/schedules';
       assert.equal((await app.inject(path)).statusCode, 401);
@@ -286,26 +289,25 @@ test(
             approve,
           },
         });
-      const discord = (
+      const discord = async (
         itemId: number | undefined = 1,
         id = String(interaction++),
         hardcore = false,
       ) =>
-        app.inject({
-          method: 'POST',
-          url: '/api/v1/bot/submissions',
-          headers: { authorization: 'Bearer ' + bot.token },
-          payload: {
-            interactionId: id,
-            guildId: bot.guildId,
-            actorDiscordId: '100000000000000002',
-            rawItemText: itemId ? 'Fixture ' + itemId : 'unmatched thing',
-            ...(itemId ? { itemId } : {}),
-            collectorName: 'Bot Player',
-            proofUrl: 'https://imgur.com/proof',
-            hardcore,
-          },
-        });
+        app.inject(
+          await botRequest(
+            {
+              interactionId: id,
+              guildId: bot.guildId,
+              actorDiscordId: '100000000000000002',
+              rawItemText: itemId ? 'Fixture ' + itemId : 'unmatched thing',
+              ...(itemId ? { itemId } : {}),
+              collectorName: 'Bot Player',
+              hardcore,
+            },
+            { authorization: 'Bearer ' + bot.token },
+          ),
+        );
       const runeKey = randomUUID(),
         manualKey = randomUUID(),
         botId = String(interaction++);
@@ -323,25 +325,26 @@ test(
         )
       ).rows[0];
       const filesBefore = (await readdir(directory)).filter((name) =>
-        name.endsWith('.png'),
+        name.endsWith('.webp'),
       ).length;
       for (const response of [
         await runelite(1, randomUUID(), 'Closed Collector'),
         await runelite(4, randomUUID(), 'Closed Unpaged Collector'),
       ]) {
         assert.equal(response.statusCode, 201, response.body);
-        assert.equal(response.json().status, 'rejected');
+        assert.equal(response.json().status, 'pending');
+        assert.equal(response.json().collectionType, 'regular');
         const detail = (
           await app.inject({
             url: '/api/v1/admin/submissions/' + response.json().submissionId,
             headers: moderator,
           })
         ).json();
-        assert.match(detail.submission.reviewReason, /closed/u);
-        assert.equal(detail.audit[0].action, 'reject');
+        assert.equal(detail.submission.reviewReason, null);
+        assert.equal(detail.audit.length, 0);
       }
       for (const response of [await discord(), await discord(0)])
-        assert.equal(response.statusCode, 403, response.body);
+        assert.equal(response.statusCode, 201, response.body);
       assert.deepEqual(
         (
           await pool.query(
@@ -349,14 +352,14 @@ test(
           )
         ).rows[0],
         {
-          submissions: beforeCounts.submissions + 2,
-          images: beforeCounts.images + 2,
+          submissions: beforeCounts.submissions + 4,
+          images: beforeCounts.images + 4,
         },
       );
       assert.equal(
-        (await readdir(directory)).filter((name) => name.endsWith('.png'))
+        (await readdir(directory)).filter((name) => name.endsWith('.webp'))
           .length,
-        filesBefore + 2, // Rejected RuneLite submissions retain their proof.
+        filesBefore + 4, // Both automatic sources retain screenshot proof.
       );
       // Closed regular pages and unpaged items stay open for hardcore intake.
       for (const id of [1, 4]) {
@@ -372,10 +375,15 @@ test(
         assert.equal(hcDiscord.statusCode, 201, hcDiscord.body);
         assert.equal(hcDiscord.json().hardcore, true);
       }
-      assert.equal(
-        (await runelite(999, randomUUID(), 'HC Unknown', true)).statusCode,
-        422,
+      const unmatchedRuneHC = await runelite(
+        999,
+        randomUUID(),
+        'HC Unknown',
+        true,
       );
+      assert.equal(unmatchedRuneHC.statusCode, 201, unmatchedRuneHC.body);
+      assert.equal(unmatchedRuneHC.json().itemId, null);
+      assert.equal(unmatchedRuneHC.json().status, 'pending');
       const unmatchedHC = await discord(0, String(interaction++), true);
       assert.equal(unmatchedHC.statusCode, 201, unmatchedHC.body);
       assert.equal(unmatchedHC.json().resolution, 'needs_match');
@@ -393,7 +401,7 @@ test(
       );
       assert.equal(
         (await manual(2, randomUUID(), '2000-01-01', true)).statusCode,
-        409,
+        201,
       );
       assert.deepEqual((await runelite(1, runeKey)).json(), initialRune.json());
       assert.deepEqual(
@@ -421,7 +429,8 @@ test(
       );
       const closedTrusted = await runelite(2, randomUUID(), 'Trusted Player');
       assert.equal(closedTrusted.statusCode, 201, closedTrusted.body);
-      assert.equal(closedTrusted.json().status, 'rejected');
+      assert.equal(closedTrusted.json().status, 'approved');
+      assert.equal(closedTrusted.json().collectionType, 'regular');
       assert.equal(
         (await runelite(1, randomUUID(), 'Trusted Player')).json().status,
         'approved',
@@ -450,7 +459,7 @@ test(
       });
       assert.equal(edited.statusCode, 200, edited.body);
       state = edited.json();
-      assert.equal((await discord(1)).statusCode, 403); // Past window is closed without a background task.
+      assert.equal((await discord(1)).json().collectionType, 'regular');
       const restore = await write('PUT', path + '/' + both.id, {
         expectedRevision: state.revision,
         title: both.title,
@@ -475,7 +484,8 @@ test(
       await pool.query("UPDATE pages SET active=true WHERE id='page-b'");
       const closedUnpaged = await runelite(4, randomUUID(), 'Still Closed');
       assert.equal(closedUnpaged.statusCode, 201, closedUnpaged.body);
-      assert.equal(closedUnpaged.json().status, 'rejected');
+      assert.equal(closedUnpaged.json().status, 'approved');
+      assert.equal(closedUnpaged.json().collectionType, 'regular');
       const stale = state.revision;
       const races = await Promise.all([
         write('POST', path, {
@@ -561,6 +571,192 @@ test(
         await blocker.query('ROLLBACK');
         blocker.release();
       }
+      await t.test(
+        'permanent selections authorize staff writes, retain windows and open both intake paths independently',
+        async () => {
+          const permanentPath = path + '/permanent-pages';
+          assert.equal(
+            (
+              await app.inject({
+                method: 'PUT',
+                url: permanentPath,
+                payload: { expectedRevision: state.revision, pageIds: [] },
+              })
+            ).statusCode,
+            401,
+          );
+          assert.equal(
+            (
+              await write(
+                'PUT',
+                permanentPath,
+                { expectedRevision: state.revision, pageIds: ['page-a'] },
+                { ...moderator, 'x-csrf-token': 'bad' },
+              )
+            ).statusCode,
+            403,
+          );
+          for (const pageIds of [
+            ['missing'],
+            ['page-a', 'page-a'],
+            [1],
+            [' page-a'],
+          ])
+            assert.ok(
+              [400, 422].includes(
+                (
+                  await write('PUT', permanentPath, {
+                    expectedRevision: state.revision,
+                    pageIds,
+                  })
+                ).statusCode,
+              ),
+            );
+          assert.equal(
+            (
+              await write('PUT', permanentPath, {
+                expectedRevision: state.revision,
+                pageIds: [],
+                enabled: true,
+              })
+            ).statusCode,
+            400,
+          );
+          const windows = structuredClone(state.schedules);
+          const response = await write('PUT', permanentPath, {
+            expectedRevision: state.revision,
+            pageIds: ['page-a'],
+          });
+          assert.equal(response.statusCode, 200, response.body);
+          state = response.json();
+          assert.deepEqual(state.permanentlyOpenPageIds, ['page-a']);
+          assert.deepEqual(state.schedules, windows);
+          assert.equal(state.enabled, true);
+          assert.equal(
+            (
+              await write('PUT', permanentPath, {
+                expectedRevision: 'schedules-1',
+                pageIds: [],
+              })
+            ).statusCode,
+            409,
+          );
+          for (const window of windows) {
+            const response = await write('DELETE', path + '/' + window.id, {
+              expectedRevision: state.revision,
+            });
+            assert.equal(response.statusCode, 200, response.body);
+            state = response.json();
+          }
+          assert.deepEqual(state.schedules, []);
+          assert.deepEqual(state.permanentlyOpenPageIds, ['page-a']);
+          const permanentRune = await runelite(
+            3,
+            randomUUID(),
+            'Permanent Player',
+          );
+          assert.equal(permanentRune.statusCode, 201, permanentRune.body);
+          assert.notEqual(permanentRune.json().status, 'rejected');
+          assert.equal((await discord(3)).statusCode, 201); // Shared canonical item needs only permanent page A.
+          await toggle(false);
+          assert.deepEqual(state.permanentlyOpenPageIds, ['page-a']);
+          await toggle(true);
+          assert.deepEqual(
+            (await new PgSchedulingStore(pool).state()).permanentlyOpenPageIds,
+            ['page-a'],
+          );
+          const last = (
+            await pool.query(
+              "SELECT actor_id,old_values,new_values FROM collection_schedule_audit WHERE action='set_permanent_pages' ORDER BY id DESC LIMIT 1",
+            )
+          ).rows[0];
+          assert.equal(last.actor_id, mod.id);
+          assert.deepEqual(last.old_values.permanentlyOpenPageIds, []);
+          assert.deepEqual(last.new_values.permanentlyOpenPageIds, ['page-a']);
+          await pool.query(
+            'CREATE TRIGGER fail_schedule_audit BEFORE INSERT ON collection_schedule_audit FOR EACH ROW EXECUTE FUNCTION fail_schedule_audit()',
+          );
+          assert.equal(
+            (
+              await write('PUT', permanentPath, {
+                expectedRevision: state.revision,
+                pageIds: [],
+              })
+            ).statusCode,
+            503,
+          );
+          assert.deepEqual(await scheduling.state(), state);
+          await pool.query(
+            'DROP TRIGGER fail_schedule_audit ON collection_schedule_audit',
+          );
+          const races = await Promise.all([
+            write('PUT', permanentPath, {
+              expectedRevision: state.revision,
+              pageIds: ['page-b'],
+            }),
+            write('POST', path, { expectedRevision: state.revision, ...input }),
+          ]);
+          assert.equal(races.filter((r) => r.statusCode === 409).length, 1);
+          assert.equal(
+            races.filter((r) => r.statusCode === 200 || r.statusCode === 201)
+              .length,
+            1,
+          );
+          state = await scheduling.state();
+          const saved = await write(
+            'PUT',
+            permanentPath,
+            { expectedRevision: state.revision, pageIds: ['page-a'] },
+            owner,
+          );
+          assert.equal(saved.statusCode, 200, saved.body);
+          state = saved.json();
+        },
+      );
+      await t.test(
+        'retiring a permanent page removes its opening atomically and prevents stale reopening',
+        async () => {
+          const catalogStore = new PgCatalogStore(pool);
+          const catalog = await catalogStore.catalog();
+          const page = catalog.pages.find((p) => p.id === 'page-a')!;
+          const oldRevision = state.revision;
+          await catalogStore.removePage(
+            page.id,
+            catalog.revision,
+            page.version,
+            admin.id,
+          );
+          state = await scheduling.state();
+          assert.deepEqual(state.permanentlyOpenPageIds, []);
+          assert.notEqual(state.revision, oldRevision);
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT 1 FROM collection_permanent_pages WHERE page_id='page-a'",
+              )
+            ).rowCount,
+            0,
+          );
+          const last = (
+            await pool.query(
+              'SELECT action,old_values,new_values FROM collection_schedule_audit ORDER BY id DESC LIMIT 1',
+            )
+          ).rows[0];
+          assert.equal(last.action, 'remove_permanent_page');
+          assert.deepEqual(last.old_values.permanentlyOpenPageIds, ['page-a']);
+          assert.deepEqual(last.new_values.permanentlyOpenPageIds, []);
+          const restore = await write('PUT', path + '/permanent-pages', {
+            expectedRevision: state.revision,
+            pageIds: ['page-a'],
+          });
+          assert.equal(restore.statusCode, 422);
+          await pool.query("UPDATE pages SET active=true WHERE id='page-a'");
+          assert.deepEqual(
+            (await scheduling.state()).permanentlyOpenPageIds,
+            [],
+          );
+        },
+      );
     } finally {
       await app.close();
       await pool.end();

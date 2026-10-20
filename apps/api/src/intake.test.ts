@@ -1,9 +1,14 @@
+import {
+  botRequest,
+  memoryProofFiles,
+  screenshotRecord,
+} from './tests/screenshot.js';
 /** Strict bot-only API boundary and normalization tests without live Discord. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from './app.js';
 import { readConfig, type BotConfig } from './config.js';
-import { claimHash, validCollectionDate, validProofUrl } from './intake.js';
+import { claimHash, validCollectionDate } from './intake.js';
 import { resolveMatch, searchMatches, type MatchItem } from './matching.js';
 import {
   ApiError,
@@ -45,7 +50,7 @@ const example: BotSubmissionInput = {
   actorDiscordId,
   rawItemText: 'dragon axe',
   collectorName: 'Collector',
-  proofUrl: 'https://imgur.com/a/record',
+
   hardcore: false,
 };
 
@@ -83,7 +88,12 @@ function fixture() {
       return { created: true, receipt };
     },
   } as unknown as BackendStore;
-  const app = createApp(undefined, undefined, { store, bot, logger: false });
+  const app = createApp(undefined, undefined, {
+    store,
+    bot,
+    proofs: memoryProofFiles(),
+    logger: false,
+  });
   return { app, receipts, calls: () => calls };
 }
 
@@ -99,28 +109,6 @@ test('exact aliases and canonical IDs resolve; ambiguous and fuzzy inputs remain
   assert.equal(searchMatches(rows, '', 2).length, 2);
 });
 
-test('proof URLs permit only actual HTTPS Imgur/Gyazo hosts and nonempty paths', () => {
-  for (const proof of [
-    'https://imgur.com/a/hello',
-    'https://i.imgur.com/hello.png',
-    'https://gyazo.com/hello',
-    'https://i.gyazo.com/hello.png',
-  ])
-    assert.equal(validProofUrl(proof), true, proof);
-  for (const proof of [
-    'http://imgur.com/hello',
-    'https://imgur.com.evil.test/hello',
-    'https://evil.test/imgur.com/hello',
-    'https://foo.imgur.com/hello',
-    'https://user@imgur.com/hello',
-    'https://imgur.com:8443/hello',
-    'https://imgur.com/',
-    'https://gyazo.com/hello\n',
-    'https://gyazo.com',
-    'javascript:alert(1)',
-  ])
-    assert.equal(validProofUrl(proof), false, proof);
-});
 test('date checks reject impossible, future and malformed calendar days', () => {
   assert.equal(validCollectionDate('2026-02-28', '2026-10-08'), true);
   assert.equal(validCollectionDate('2026-02-30', '2026-10-08'), false);
@@ -129,17 +117,23 @@ test('date checks reject impossible, future and malformed calendar days', () => 
   assert.equal(validCollectionDate('2024-02-29', '2026-10-08'), true);
 });
 test('hardcore and every immutable claim field enter the idempotency fingerprint', () => {
-  const standard = claimHash(example);
-  assert.equal(claimHash({ ...example, hardcore: false }), standard);
+  const standard = claimHash({ ...example, image: screenshotRecord() });
+  assert.equal(
+    claimHash({ ...example, hardcore: false, image: screenshotRecord() }),
+    standard,
+  );
   for (const change of [
     { hardcore: true },
     { collectorName: 'Someone else' },
     { itemId: 42 },
     { rawItemText: 'Dragon axe' },
-    { proofUrl: 'https://gyazo.com/other' },
+    { image: { ...screenshotRecord(), sha256: 'b'.repeat(64) } },
     { actorDiscordId: '999999999999999999' },
   ])
-    assert.notEqual(claimHash({ ...example, ...change }), standard);
+    assert.notEqual(
+      claimHash({ ...example, image: screenshotRecord(), ...change }),
+      standard,
+    );
 });
 test('bot routes are disabled without both credentials, and config refuses partial or weak settings', async () => {
   const noBot = createApp();
@@ -202,13 +196,10 @@ test('bot token is required for search/write; it cannot access admin routes', as
 });
 test('intake enforces guild, proof, actor, fields and exact retry semantics', async () => {
   const { app, calls, receipts } = fixture();
-  const submit = (payload: unknown, auth: Record<string, string> = headers) =>
-    app.inject({
-      method: 'POST',
-      url: '/api/v1/bot/submissions',
-      headers: auth,
-      payload: payload as object,
-    });
+  const submit = async (
+    payload: unknown,
+    auth: Record<string, string> = headers,
+  ) => app.inject(await botRequest(payload, auth));
   try {
     assert.equal((await submit(example, {})).statusCode, 401);
     for (const payload of [

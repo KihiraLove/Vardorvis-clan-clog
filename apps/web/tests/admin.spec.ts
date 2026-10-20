@@ -8,10 +8,10 @@ import type { AdminCatalog, SubmissionDetail } from '../src/admin-model.ts';
 
 const editor = (page: Page) => page.locator('.submission-editor');
 const proofCheck = (page: Page) =>
-  editor(page).getByLabel(/^I checked the linked proof/);
+  editor(page).getByLabel(/^I checked the screenshot/);
 const review = (page: Page, collector: string) =>
   page.getByRole('button', { name: new RegExp('^Review ' + collector + ' ·') });
-const itemIcon = resolve('public/skills/sailing.png');
+const itemIcon = resolve('public/skills/sailing.webp');
 async function closeReviewIfOpen(page: Page) {
   if (await page.getByRole('dialog', { name: 'Submission review' }).count())
     await page
@@ -25,7 +25,7 @@ test('collected-item filtering sits between manual entry and the queue and survi
   await mockApi(page);
   await page.goto('/admin/submissions');
   const filter = page.getByRole('switch', {
-    name: 'Filter out duplicates',
+    name: 'Filter out regular duplicates',
     exact: true,
   });
   await expect(filter).toBeEnabled();
@@ -82,6 +82,11 @@ async function mockAdmin(page: Page) {
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    if (path === state.detail.submission.screenshotPath)
+      return route.fulfill({
+        path: resolve('public/skills/sailing.webp'),
+        contentType: 'image/webp',
+      });
     if (path === '/api/v1/settings')
       return route.fulfill({
         json: {
@@ -135,6 +140,68 @@ async function mockAdmin(page: Page) {
   });
   return state;
 }
+
+test('unmatched RuneLite review displays submitted provenance before and after canonical resolution', async ({
+  page,
+}) => {
+  const state = await mockAdmin(page);
+  Object.assign(state.detail.submission, {
+    source: 'runelite',
+    itemId: null,
+    rawItemText: 'Unlisted rare variant',
+    gameItemId: 987654,
+    hardcore: false,
+    proofUrl: '',
+    chatMessage: 'Valuable drop: Unlisted rare variant',
+  });
+  await page.goto('/admin/submissions');
+  const card = page.locator('.submission-card');
+  await expect(card).toContainText('Unlisted rare variant');
+  await expect(card).toContainText('Unmatched · Game item ID 987654');
+  await expect(card.locator('.submission-card__icon-fallback')).toBeVisible();
+  await review(page, state.detail.submission.collectorName).click();
+  await expect(
+    editor(page).getByText('Submitted item name', { exact: true }),
+  ).toBeVisible();
+  await expect(editor(page).getByText('987654', { exact: true })).toBeVisible();
+  await expect(
+    editor(page).getByText('Unlisted rare variant', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor(page).getByText('Unmatched', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor(page).getByRole('button', {
+      name: 'Approve submission',
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: test.info().outputPath('unmatched-review-desktop.png'),
+  });
+  await page.getByRole('button', { name: 'Close review', exact: true }).click();
+  state.detail.submission.itemId = state.catalog.items[0]!.id;
+  state.detail.submission.version++;
+  await page
+    .getByRole('button', { name: 'Refresh submissions', exact: true })
+    .click();
+  await expect(card).toContainText(state.catalog.items[0]!.name);
+  await review(page, state.detail.submission.collectorName).click();
+  await expect(editor(page).getByText('987654', { exact: true })).toBeVisible();
+  await expect(
+    editor(page).getByText('Unlisted rare variant', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor(page).getByText('Unmatched', { exact: true }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    editor(page).getByText('987654', { exact: true }),
+  ).toBeInViewport();
+  await page.screenshot({
+    path: test.info().outputPath('matched-review-mobile.png'),
+  });
+});
 
 test('review filters reuse the authorized catalog until an explicit refresh', async ({
   page,
@@ -216,10 +283,22 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   ).toHaveValue('Matched collector');
   await expect(page.getByText('Page 1', { exact: true })).toBeVisible();
   await proofCheck(page).check();
-  const link = editor(page).getByRole('link', { name: /^Open proof on / });
+  const link = editor(page).getByRole('link', { name: /View screenshot/ });
+  await expect(link).toHaveAttribute(
+    'href',
+    /^\/api\/v1\/admin\/submission-images\/[a-f0-9-]+\.webp$/,
+  );
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(link).toHaveAttribute('referrerpolicy', 'no-referrer');
+  await expect
+    .poll(() =>
+      link
+        .getByRole('img', { name: 'Submission screenshot', exact: true })
+        .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  await expect(editor(page).locator('a[href^="https://"]')).toHaveCount(0);
   await capture(page, 'admin-review-desktop.png');
   await editor(page)
     .getByRole('button', { name: 'Approve submission', exact: true })
@@ -244,9 +323,12 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     })
     .hover();
-  await expect(page.getByRole('tooltip')).toContainText(
-    'Collected by Matched collector on 04/10/26 on hardcore worlds',
-  );
+  await expect(page.getByRole('tooltip')).toHaveClass(/item-menu--hardcore/);
+  await expect(
+    page
+      .getByRole('tooltip')
+      .getByText('Collected by Matched collector on 04/10/26', { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Duke Sucellus', exact: true })
     .click();
@@ -256,8 +338,8 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
       exact: true,
     }),
   ).toBeVisible();
-  await page.goBack();
-  if (page.url().includes('/admin/catalog'))
+  await page.getByRole('link', { name: 'Admin panel', exact: true }).click();
+  if (!page.url().includes('/admin/submissions'))
     await page.getByRole('link', { name: 'Submissions', exact: true }).click();
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
   await review(page, 'Matched collector').click();
@@ -284,7 +366,7 @@ test('paged unmatched review saves a specific shared item, approves hardcore cre
   expect(pageErrors).toEqual([]);
 });
 
-test('approved corrections require a reason and move the single credit into a free normal slot', async ({
+test('approved collection flags require a reason and move the single credit into a free normal slot', async ({
   page,
 }) => {
   await mockApi(page);
@@ -299,14 +381,14 @@ test('approved corrections require a reason and move the single credit into a fr
   ).toBeDisabled();
   await expect(
     editor(page).getByText(
-      'Enter an audit reason before changing an approved credit.',
+      'Enter an audit reason before saving collection flags.',
     ),
   ).toBeVisible();
   await editor(page)
     .getByLabel('Review reason')
     .fill('Proof was from ordinary worlds');
   await editor(page)
-    .getByRole('button', { name: 'Save corrections', exact: true })
+    .getByRole('button', { name: 'Save collection flags', exact: true })
     .click();
   await expect(
     editor(page).getByLabel('Collected on hardcore worlds', { exact: true }),
@@ -612,6 +694,7 @@ test('unsafe proof cannot approve but an unmatched or malformed claim can be rej
   const state = await mockAdmin(page);
   state.detail.submission.itemId = null;
   state.detail.submission.proofUrl = 'javascript:alert(1)';
+  state.detail.submission.screenshotPath = null;
   let calls = 0;
   await page.route(
     '**/api/v1/admin/submissions/sample-hardcore/reject',
@@ -676,7 +759,7 @@ test('invalid icons do not upload; an uncertain create retries identical payload
     return route.fulfill({
       json: {
         assetId: 'staged-icon',
-        iconPath: '/skills/sailing.png',
+        iconPath: '/skills/sailing.webp',
         expiresAt: '2099-01-01T00:00:00Z',
       },
     });
@@ -689,7 +772,7 @@ test('invalid icons do not upload; an uncertain create retries identical payload
     const item = {
       id: 50001,
       name: 'New live drop',
-      iconPath: '/skills/sailing.png',
+      iconPath: '/skills/sailing.webp',
       origin: 'manual' as const,
       overrides: ['name', 'icon', 'pages'] as ('name' | 'icon' | 'pages')[],
     };
@@ -813,6 +896,7 @@ test('logout clears reviews and also denies the XP import form in the same SPA s
 test('staff can add a manual credit without a Discord claim', async ({
   page,
 }) => {
+  await page.clock.install({ time: new Date('2026-10-20T12:00:00Z') });
   await mockApi(page);
   await page.goto('/admin');
   await page.getByRole('button', { name: 'Add manual submission' }).click();
@@ -852,7 +936,7 @@ test('staff can add a manual credit without a Discord claim', async ({
     '',
   );
   await expect(form.getByLabel('Collection date', { exact: true })).toHaveValue(
-    '',
+    '2026-10-20',
   );
 });
 
@@ -919,6 +1003,9 @@ test('manual entry reports duplicate item and world rather than a stale-version 
   await mockApi(page);
   await page.goto('/admin');
   const add = page.getByRole('button', { name: 'Add manual submission' });
+  await page
+    .getByRole('switch', { name: 'Filter out regular duplicates', exact: true })
+    .click();
   await add.click();
   await page.getByLabel('Search catalog items').fill('Virtus mask');
   const catalog = await adminFixtures();
@@ -947,9 +1034,8 @@ test('manual entry reports duplicate item and world rather than a stale-version 
     .fill('Second collector');
   await page.getByRole('button', { name: 'Create manual submission' }).click();
   await expect(page.getByRole('alert')).toContainText(
-    'Virtus mask is already collected in ordinary worlds.',
+    'Filter out regular duplicates is on',
   );
-  await expect(page.getByRole('alert')).toContainText('Revoke or edit');
 });
 
 test('ADMIN-01 live HTTP view shows claim date provenance and permits verified proofless manual review', async ({
@@ -959,6 +1045,7 @@ test('ADMIN-01 live HTTP view shows claim date provenance and permits verified p
   state.detail.submission = {
     ...state.detail.submission,
     source: 'manual',
+    screenshotPath: null,
     status: 'pending',
     proofUrl: '',
     dateSource: 'admin',
@@ -1032,10 +1119,11 @@ test('ADMIN-01 occupied-credit conflict retains the precise reason and reloads f
   ).toBeDisabled();
 });
 
-test('mobile Imgur proof remains reviewable and can be approved', async ({
+test('mobile screenshot proof can be approved while historical external links stay hidden', async ({
   page,
 }) => {
   const state = await mockAdmin(page);
+  await page.setViewportSize({ width: 320, height: 850 });
   state.detail.submission.proofUrl = 'https://m.imgur.com/a/evidence';
   await page.route(
     '**/api/v1/admin/submissions/sample-hardcore/approve',
@@ -1052,7 +1140,7 @@ test('mobile Imgur proof remains reviewable and can be approved', async ({
   await review(page, 'KihiraVD').click();
   await expect(
     editor(page).locator('a[href="https://m.imgur.com/a/evidence"]'),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(proofCheck(page)).toBeEnabled();
   await proofCheck(page).check();
   await editor(page)

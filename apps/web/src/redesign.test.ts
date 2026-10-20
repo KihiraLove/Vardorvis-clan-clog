@@ -39,8 +39,15 @@ test('hardcore release flag defaults off, is versioned, preserves credits and re
     parseSettings({ revision: 'one', hardcoreEnabled: 'false' }),
   );
 });
-test('duplicate approval and moving an approved credit into an occupied mode are rejected', async () => {
+test('regular duplicate filtering rejects approval and moving a credit into an occupied mode', async () => {
   const client = new MemoryAdminClient();
+  const filters = (await client.queue('pending', undefined, signal())).filters!;
+  await client.saveSubmissionFilters(
+    true,
+    filters.revision,
+    'preview',
+    signal(),
+  );
   const first = await client.decide(
     'sample-ordinary',
     1,

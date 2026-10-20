@@ -11,6 +11,16 @@ for (const width of [1100, 390])
     await expect(
       page.getByRole('heading', { name: 'Discord bot', exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText(
+        'Connect your own Discord application. Changes take effect automatically within a few seconds.',
+      ),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        'Invite the bot to your server with the bot and applications.commands permissions, then register /cc-clog. Save changes before registering.',
+      ),
+    ).toHaveCount(0);
     await page
       .getByLabel('Application ID', { exact: true })
       .fill('123456789012345678');
@@ -35,6 +45,9 @@ for (const width of [1100, 390])
     await expect(page.getByLabel('Bot token', { exact: true })).toHaveValue('');
     await expect(
       page.getByText('A bot token is stored. Its value is never displayed.'),
+    ).toHaveCount(0);
+    await expect(
+      page.getByLabel('Remove stored token when saving'),
     ).toBeVisible();
     await page
       .getByRole('button', { name: 'Register for test server' })
@@ -46,6 +59,27 @@ for (const width of [1100, 390])
     await expect(
       page.getByRole('switch', { name: 'Enable Discord bot' }),
     ).toBeChecked();
+    await expect(page.getByLabel('Bot token', { exact: true })).toHaveValue('');
+    await page
+      .getByLabel('Server ID', { exact: true })
+      .fill('423456789012345678');
+    await page
+      .getByLabel('Bot token', { exact: true })
+      .fill('test_replacement_token_private_123456789');
+    await expect(
+      page.getByRole('button', { name: 'Register for main server' }),
+    ).toBeDisabled();
+    await page
+      .getByRole('button', { name: 'Discard changes', exact: true })
+      .click();
+    await expect(page.getByLabel('Server ID', { exact: true })).toHaveValue(
+      '223456789012345678',
+    );
+    await expect(page.getByLabel('Bot token', { exact: true })).toHaveValue('');
+    await page
+      .getByLabel('Bot token', { exact: true })
+      .fill('test_replacement_token_private_123456789');
+    await page.getByRole('button', { name: 'Save Discord settings' }).click();
     await expect(page.getByLabel('Bot token', { exact: true })).toHaveValue('');
     await page.getByLabel('Remove stored token when saving').check();
     await expect(

@@ -85,7 +85,13 @@ test('finished activity results discard zeros, preserve integer precision and re
     request(source),
   );
   assert.deepEqual(snapshot.results?.participants, [
-    { playerId: 1, displayName: 'Winner', gained: '9007199254740993' },
+    {
+      playerId: 1,
+      displayName: 'Winner',
+      gained: '9007199254740993',
+      rank: 1,
+      deltas: [{ metric: 'vardorvis', gained: '9007199254740993' }],
+    },
   ]);
   for (const gained of [null, -1, 1.1, Number.MAX_SAFE_INTEGER + 1])
     await assert.rejects(
@@ -127,15 +133,12 @@ test('all supported single skills are inferred from metadata and preserve exact 
     assert.equal(snapshot.results?.participants[0]?.gained, '9007199254740993');
   }
 });
-test('unsupported computed, mixed, aggregate-overlap and weighted activity scopes fail explicitly', async () => {
+test('unknown metrics, mixed WOM types and invalid weights fail explicitly', async () => {
   for (const metrics of [
-    ['ehp'],
-    ['ehb'],
     ['unknown_metric'],
     ['attack', 'vardorvis'],
-    ['overall', 'attack'],
     ['total', 'ehp'],
-    ['vardorvis', 'zulrah'],
+    ['vardorvis', 'clue_scrolls_all'],
   ])
     await assert.rejects(
       fetchCompetition(
@@ -148,7 +151,7 @@ test('unsupported computed, mixed, aggregate-overlap and weighted activity scope
       ),
       { status: 422 },
     );
-  for (const weight of [0, -1, 0.5, 2, '1'])
+  for (const weight of [0, -1, null, {}, 'not-a-weight'])
     await assert.rejects(
       fetchCompetition(
         'https://wiseoldman.net/competitions/123',
@@ -216,6 +219,16 @@ test('multi-skill results keep individual contributions and omit players whose r
   const source = fixture('overall', now - 2000, now);
   const skills = ['attack', 'fishing'];
   source.metrics = skills.map((metric) => ({ metric }));
+  source.participations = source.participations.map((p, i) => ({
+    ...p,
+    deltas: [
+      ...skills.map((metric) => ({
+        metric,
+        values: { gained: i === 0 ? '10' : '0' },
+      })),
+      { metric: 'total', values: { gained: i === 0 ? '20' : '0' } },
+    ],
+  }));
   const details = {
     ...source,
     participations: source.participations.map((p, i) => ({
@@ -271,6 +284,242 @@ test('page aliases respect current shared pages and ambiguous metrics require st
   assert.equal(
     mappedPages('clue_scrolls_all').includes('master_treasure_trails'),
     true,
+  );
+});
+
+test('multi-boss, multi-activity and computed competitions retain every delta and WOM combined score', async () => {
+  for (const [metrics, values] of [
+    [
+      ['vardorvis', 'zulrah'],
+      ['10', '20', '30'],
+    ],
+    [
+      ['clue_scrolls_hard', 'clue_scrolls_elite'],
+      ['3', '5', '8'],
+    ],
+    [
+      ['ehp', 'ehb'],
+      ['1.25', '2.5', '3.75'],
+    ],
+  ] as const) {
+    const source = {
+      ...fixture('vardorvis', now - 2000, now),
+      metrics: metrics.map((metric) => ({ metric, weight: 1 })),
+      participantCount: 1,
+      participations: [
+        {
+          playerId: 1,
+          player: { displayName: 'Winner' },
+          deltas: [...metrics, 'total'].map((metric, i) => ({
+            metric,
+            values: { gained: values[i] },
+          })),
+        },
+      ],
+    };
+    const result = await fetchCompetition(
+      'https://wiseoldman.net/competitions/123',
+      now,
+      request(source),
+    );
+    assert.equal(result.results?.participants[0]?.gained, values[2]);
+    assert.equal(result.results?.participants[0]?.deltas?.length, 3);
+    assert.equal(result.results?.xp, undefined);
+    assert.deepEqual(
+      result.competition.metricDefinitions?.map((d) => d.weight),
+      ['1', '1'],
+    );
+    for (const deltas of [
+      source.participations[0]!.deltas.slice(0, 2),
+      [
+        source.participations[0]!.deltas[0],
+        source.participations[0]!.deltas[0],
+        source.participations[0]!.deltas[2],
+      ],
+    ])
+      await assert.rejects(
+        fetchCompetition(
+          'https://wiseoldman.net/competitions/123',
+          now,
+          request({
+            ...source,
+            participations: [{ ...source.participations[0], deltas }],
+          }),
+        ),
+        { status: 422 },
+      );
+  }
+});
+
+for (const metric of ['ehp', 'ehb'] as const) {
+  test(`standalone ${metric.toUpperCase()} accepts decimal numbers/strings without skill XP or breakdown fetches`, async () => {
+    for (const [gained, expected] of [
+      [0.125, '0.125'],
+      [1e-7, '0.0000001'],
+      [
+        '9007199254740993.123456789012345678',
+        '9007199254740993.123456789012345678',
+      ],
+    ] as const) {
+      const source = {
+        ...fixture(metric, now - 2000, now),
+        participantCount: 1,
+        participations: [
+          {
+            playerId: 7,
+            player: { displayName: 'Efficient player' },
+            deltas: [{ metric, values: { gained } }],
+          },
+        ],
+      };
+      let calls = 0;
+      const result = await fetchCompetition(
+        'https://wiseoldman.net/competitions/123',
+        now,
+        async () => {
+          calls++;
+          return Response.json(source);
+        },
+      );
+      assert.equal(calls, 1);
+      assert.deepEqual(result.skills, []);
+      assert.equal(result.results?.xp, undefined);
+      assert.deepEqual(result.results?.participants, [
+        {
+          playerId: 7,
+          displayName: 'Efficient player',
+          gained: expected,
+          rank: 1,
+          deltas: [{ metric, gained: expected }],
+        },
+      ]);
+      assert.deepEqual(result.competition.metricDefinitions, [
+        { metric, weight: '1' },
+      ]);
+      for (const startsAt of [now - 1000, now + 1000]) {
+        const live = await fetchCompetition(
+          'https://wiseoldman.net/competitions/123',
+          now,
+          request({
+            ...source,
+            startsAt: new Date(startsAt).toISOString(),
+            endsAt: new Date(now + 2000).toISOString(),
+            participantCount: 999,
+            participations: [{ malformed: true }],
+          }),
+        );
+        assert.equal(live.results, undefined);
+        assert.equal(JSON.stringify(live).includes('malformed'), false);
+      }
+    }
+  });
+}
+
+test('weighted skill standings use WOM scores while the tracker receives only raw skill XP', async () => {
+  const source = {
+    ...fixture('attack', now - 2000, now),
+    metrics: [
+      { metric: 'attack', weight: 0.25 },
+      { metric: 'fishing', weight: 2 },
+    ],
+    participations: [
+      {
+        playerId: 2,
+        player: { displayName: 'Weighted winner' },
+        deltas: [
+          { metric: 'attack', values: { gained: 0 } },
+          { metric: 'fishing', values: { gained: 20 } },
+          { metric: 'total', values: { gained: 40 } },
+        ],
+      },
+      {
+        playerId: 1,
+        player: { displayName: 'Most XP' },
+        deltas: [
+          { metric: 'attack', values: { gained: 100 } },
+          { metric: 'fishing', values: { gained: 0 } },
+          { metric: 'total', values: { gained: 25 } },
+        ],
+      },
+    ],
+  };
+  const result = await fetchCompetition(
+    'https://wiseoldman.net/competitions/123',
+    now,
+    request(source),
+  );
+  assert.deepEqual(result.results?.xp?.event.gains, {
+    attack: '100',
+    fishing: '20',
+  });
+  assert.equal(result.results?.participants[0]?.displayName, 'Weighted winner');
+  assert.equal(result.results?.participants[0]?.gained, '40');
+  assert.equal(result.competition.metricDefinitions?.[0]?.weight, '0.25');
+  const changed = await fetchCompetition(
+    'https://wiseoldman.net/competitions/123',
+    now,
+    request({
+      ...source,
+      metrics: [
+        { metric: 'attack', weight: 0.5 },
+        { metric: 'fishing', weight: 2 },
+      ],
+    }),
+  );
+  assert.notEqual(
+    changed.results?.xp?.sourceHash,
+    result.results?.xp?.sourceHash,
+  );
+  assert.deepEqual(
+    changed.results?.xp?.event.gains,
+    result.results?.xp?.event.gains,
+  );
+});
+
+test('overall plus a skill retains the combined score but expands raw XP only once', async () => {
+  const source = {
+    ...fixture('overall', now - 2000, now),
+    metrics: [{ metric: 'overall' }, { metric: 'attack' }],
+    participantCount: 1,
+    participations: [
+      {
+        playerId: 1,
+        player: { displayName: 'Winner' },
+        deltas: [
+          { metric: 'overall', values: { gained: 100 } },
+          { metric: 'attack', values: { gained: 10 } },
+          { metric: 'total', values: { gained: 110 } },
+        ],
+      },
+    ],
+  };
+  const breakdown = {
+    ...source,
+    participations: [
+      {
+        ...source.participations[0],
+        deltas: skillIds.map((metric) => ({
+          metric,
+          values: {
+            gained: metric === 'attack' ? 10 : metric === 'mining' ? 90 : 0,
+          },
+        })),
+      },
+    ],
+  };
+  const result = await fetchCompetition(
+    'https://wiseoldman.net/competitions/123',
+    now,
+    async (url) =>
+      Response.json(String(url).includes('?') ? breakdown : source),
+  );
+  assert.equal(result.results?.participants[0]?.gained, '110');
+  assert.equal(
+    Object.values(result.results!.xp!.event.gains).reduce(
+      (n, v) => n + BigInt(v!),
+      0n,
+    ),
+    100n,
   );
 });
 test('podium ranks exact integers, uses stable ID ties and fills only actual positive places', () => {

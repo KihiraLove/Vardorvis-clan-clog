@@ -70,7 +70,7 @@ test(
     const old = new Date(Date.now() - 72 * 3600000);
     async function file(
       kind: 'icons' | 'branding' | 'proofs',
-      suffix = '.png',
+      suffix = '.webp',
       id = randomUUID(),
       aged = true,
     ) {
@@ -145,17 +145,17 @@ test(
               }),
             ],
           );
-          const fresh = await file('icons', '.png', randomUUID(), false);
+          const fresh = await file('icons', '.webp', randomUUID(), false);
           const orphan = await file('icons');
           const abandonedLogo = await file('branding', '.webp');
-          const temp = await file('proofs', '.png.tmp');
+          const temp = await file('proofs', '.webp.tmp');
           await writeFile(
             join(directories.proofs, '.clan-api-key.secret'),
             'encryption-root',
           );
           await symlink(
             orphan.path,
-            join(directories.icons, randomUUID() + '.png'),
+            join(directories.icons, randomUUID() + '.webp'),
           );
           const before = await Promise.all(
             Object.values(directories).map((path) => readdir(path)),
@@ -356,7 +356,7 @@ test(
           );
           await assert.rejects(
             runAssetMaintenance(worker, directories, options),
-            /migration 016/,
+            /asset write barriers/,
           );
           assert.equal(await readFile(keep.path, 'utf8'), 'fixture');
           await worker.query(

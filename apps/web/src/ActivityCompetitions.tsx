@@ -8,6 +8,7 @@ import {
 } from './schedule-time.ts';
 import { usePublicPolling } from './use-public-polling.ts';
 import { useActivityClock } from './activity-clock.ts';
+import { CompetitionMetrics } from './CompetitionMetrics.tsx';
 const empty: WomCompetition[] = [];
 type Row = {
   competition: WomCompetition;
@@ -29,6 +30,7 @@ const ActivityRow = memo(function ActivityRow({
       <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
         {c.title} ↗
       </a>
+      <CompetitionMetrics competition={c} />
       <small>
         Start:{' '}
         <time dateTime={c.startsAt} title={row.startUtc}>

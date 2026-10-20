@@ -1,5 +1,5 @@
 /** Runtime composition: validated auth config, durable store and graceful shutdown. */
-import { checkBotReadiness } from './readiness.js';
+import { readBotConnectionState } from './readiness.js';
 import { databaseUrl } from '@clog/database/dist/secrets.js';
 import { SecretInputError } from '@clog/domain/server-secrets';
 import pg from 'pg';
@@ -12,6 +12,7 @@ import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { adminBootstrapRequiredMessage } from './types.js';
 import { PgStore } from './store.js';
+import { PgAccessControlStore } from './access-control.js';
 import { PgCatalogStore } from './catalog-store.js';
 import { IconStorage } from './icon-storage.js';
 import { PgXpStore } from './xp-store.js';
@@ -134,10 +135,11 @@ async function main() {
         waiting: pool?.waitingCount ?? 0,
       }),
       store,
-      checkBotReady:
+      accessControl: pool ? new PgAccessControlStore(pool) : undefined,
+      readBotConnectionState:
         process.env.BOT_SETTINGS_MODE !== 'disabled' &&
         (managedBot || process.env.BOT_ENABLED === 'true')
-          ? checkBotReadiness
+          ? readBotConnectionState
           : undefined,
       discordSettings,
       botConfiguration,
