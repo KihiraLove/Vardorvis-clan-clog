@@ -23,6 +23,17 @@ returns 200 without probing the bot. Website readiness is independent.
 | RuneLite            | `POST /runelite/submissions` multipart intake                                       |
 | Discord             | `/bot` routes using the configured service credential                               |
 
+Unknown competition metrics return HTTP 422 with code `UNKNOWN_WOM_METRICS`
+and a `resolution` containing bounded source metadata, unknown keys, active
+page choices, an expiring actor-bound `resolutionToken` and a `metrics-N` revision.
+`POST /admin/competitions/metrics` accepts `{ resolutionToken, expectedRevision,
+definitions }` and a UUID `Idempotency-Key`. Each definition contains `metric`,
+`name`, `type` (`BOSS`, `ACTIVITY`, `COMPUTED` or `SKILL`), `pageIds`, and a supported
+`skill` only for SKILL. The receipt returns `revision` and `savedMetrics`.
+Saving definitions creates no competition or schedule; request a fresh preview
+before Apply. Custom semantics are included in saved `metricDefinitions` so
+public/admin validation uses the same frozen definition.
+
 Staff writes require a verified session, Origin, CSRF token and current expected
 revision. Reusing an already consumed idempotency key with different data conflicts.
 Successful replay returns the saved receipt. Auth failures are 401/403; stale

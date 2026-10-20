@@ -4,12 +4,14 @@ import {
   competitionScope,
   womBossMetrics,
   womActivityMetrics,
+  type CompetitionMetricRegistry,
 } from '@clog/domain';
 import { getWom, parseCompetitionUrl, parseWomSnapshot } from './wom.js';
 import type { CompetitionSnapshot } from './competition-types.js';
 import {
   womCompetitionMetadata,
   womCompetitionStandings,
+  womCompetitionDiscovery,
 } from './wom-competition-data.js';
 
 // Boss/activity mappings are independent from computed competition scoring.
@@ -103,15 +105,30 @@ export async function fetchCompetition(
   now: number,
   request: typeof fetch = fetch,
   cancellation: AbortSignal = AbortSignal.timeout(6500),
+  resolveMetrics?: () => Promise<CompetitionMetricRegistry>,
 ): Promise<CompetitionSnapshot> {
   const { id } = parseCompetitionUrl(input);
   const base = 'https://api.wiseoldman.net/v2/competitions/' + id;
   const source = await getWom(base, request, cancellation);
-  const competition = womCompetitionMetadata(source, id);
-  const { skills } = competitionScope(competition.metrics);
+  const discovery = womCompetitionDiscovery(source, id);
+  const registry =
+    discovery.unknownMetrics.length && resolveMetrics
+      ? await resolveMetrics()
+      : undefined;
+  const competition = womCompetitionMetadata(source, id, registry?.definitions);
+  const { skills } = competitionScope(
+    competition.metrics,
+    competition.metricDefinitions,
+  );
   const lifecycle = competitionLifecycle(competition, now);
+  const metadata = {
+    competition,
+    skills,
+    lifecycle,
+    ...(registry ? { metricRevision: registry.revision } : {}),
+  };
   // Running responses can contain live results; metadata imports never retain them.
-  if (lifecycle !== 'finished') return { competition, skills, lifecycle };
+  if (lifecycle !== 'finished') return metadata;
   if (competition.kind === 'SKILL') {
     const query = new URLSearchParams();
     if (skills.length > 1)
@@ -120,18 +137,14 @@ export async function fetchCompetition(
       skills.length > 1
         ? await getWom(base + '?' + query.toString(), request, cancellation)
         : undefined;
-    const xp = parseWomSnapshot(source, breakdown, id);
+    const xp = parseWomSnapshot(source, breakdown, id, registry?.definitions);
     return {
-      competition,
-      skills,
-      lifecycle,
+      ...metadata,
       results: { xp, participants: xp.competition!.standings! },
     };
   }
   return {
-    competition,
-    skills,
-    lifecycle,
+    ...metadata,
     results: { participants: womCompetitionStandings(source, competition) },
   };
 }

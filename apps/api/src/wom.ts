@@ -1,6 +1,10 @@
 /** Fetch only the fixed official WOM API and reject incomplete, unsafe source rows. */
 import { createHash } from 'node:crypto';
-import { competitionScope } from '@clog/domain';
+import {
+  competitionScope,
+  type CompetitionMetric,
+  type CustomCompetitionMetric,
+} from '@clog/domain';
 import { ApiError } from './types.js';
 import {
   womCompetitionMetadata,
@@ -72,9 +76,12 @@ function metricNames(value: unknown): string[] {
     );
   return names as string[];
 }
-export function strictScope(names: string[]): Skill[] {
+export function strictScope(
+  names: string[],
+  definitions: readonly CompetitionMetric[] = [],
+): Skill[] {
   try {
-    const scope = competitionScope(names);
+    const scope = competitionScope(names, definitions);
     if (scope.kind === 'SKILL') return scope.skills;
   } catch (error) {
     throw new ApiError(422, (error as Error).message);
@@ -118,9 +125,14 @@ export function parseWomSnapshot(
   original: unknown,
   breakdown: unknown | undefined,
   expectedId: number,
+  definitions: readonly CustomCompetitionMetric[] = [],
 ): XpSnapshot {
   const source = metadata(original, expectedId);
-  const scope = strictScope(metricNames(source.metrics));
+  const competition = womCompetitionMetadata(source, expectedId, definitions);
+  const scope = strictScope(
+    metricNames(source.metrics),
+    competition.metricDefinitions,
+  );
   const details = scope.length === 1 ? source : metadata(breakdown, expectedId);
   if (
     details.id !== source.id ||
@@ -161,17 +173,29 @@ export function parseWomSnapshot(
     const gains: Gains = {};
     const metrics = new Set<string>();
     for (const d of p.deltas) {
+      const target =
+        record(d) && typeof d.metric === 'string'
+          ? ((scope.length === 1
+              ? definitions.find((m) => m.metric === d.metric)?.skill
+              : undefined) ?? d.metric)
+          : undefined;
       if (
         !record(d) ||
         typeof d.metric !== 'string' ||
         !record(d.values) ||
-        metrics.has(d.metric) ||
-        (d.metric !== 'total' && !scope.includes(d.metric as Skill))
+        metrics.has(String(target)) ||
+        (d.metric !== 'total' &&
+          (!scope.includes(target as Skill) ||
+            (scope.length === 1 &&
+              competition.metricDefinitions?.some(
+                (m) => m.definition?.type === 'SKILL',
+              ) &&
+              !competition.metrics.includes(d.metric))))
       )
         throw new ApiError(422, 'Unexpected WOM delta metric.');
-      metrics.add(d.metric);
+      metrics.add(String(target));
       if (d.metric !== 'total')
-        gains[d.metric as Skill] = decimal(d.values.gained);
+        gains[target as Skill] = decimal(d.values.gained);
     }
     if (!scope.every((skill) => Object.hasOwn(gains, skill)))
       throw new ApiError(
@@ -202,7 +226,6 @@ export function parseWomSnapshot(
     skills: scope,
     participants,
   };
-  const competition = womCompetitionMetadata(source, expectedId);
   competition.standings = womCompetitionStandings(source, competition);
   const sourceHash = createHash('sha256')
     .update(JSON.stringify({ ...canonical, competition }))

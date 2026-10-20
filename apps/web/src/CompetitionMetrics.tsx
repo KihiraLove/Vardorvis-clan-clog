@@ -17,7 +17,7 @@ export function CompetitionMetrics({
       {competitionDefinitions(competition)
         .map(
           (d) =>
-            competitionMetricName(d.metric) +
+            (d.definition?.name ?? competitionMetricName(d.metric)) +
             (d.weight === '1' ? '' : ' × ' + formatCompetitionAmount(d.weight)),
         )
         .join(' · ')}

@@ -13,8 +13,10 @@ import type {
   CompetitionSnapshot,
 } from './competition-types.js';
 import type { WomCompetition } from '@clog/domain';
+import type { CompetitionMetricService } from './competition-metric-store.js';
 
 export interface CompetitionService {
+  metricRegistry?: CompetitionMetricService;
   clock(): Promise<number>;
   activities(): Promise<{ serverNow: string; competitions: WomCompetition[] }>;
   activitySnapshot?(): Promise<{

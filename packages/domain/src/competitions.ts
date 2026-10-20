@@ -1,6 +1,6 @@
 import { isSkill, skillIds, type Skill } from './skills.js';
 import {
-  womMetricType,
+  competitionMetricType,
   type CompetitionMetric,
   type CompetitionStanding,
 } from './competition-metrics.js';
@@ -14,7 +14,10 @@ export interface CompetitionPreviewInput {
   kind?: CompetitionKind;
 }
 /** Classify scope independently of result availability or supported activity data. */
-export function competitionScope(metrics: readonly string[]): {
+export function competitionScope(
+  metrics: readonly string[],
+  definitions: readonly CompetitionMetric[] = [],
+): {
   kind: CompetitionKind;
   skills: Skill[];
 } {
@@ -24,20 +27,38 @@ export function competitionScope(metrics: readonly string[]): {
     new Set(metrics).size !== metrics.length
   )
     throw new Error('Invalid or duplicate WOM metric scope.');
-  const aggregate = (metric: string) =>
-    metric === 'overall' || metric === 'total';
-  if (
-    (metrics.every((metric) => isSkill(metric) || metric === 'overall') &&
-      metrics.includes('overall')) ||
-    (metrics.length === 1 && aggregate(metrics[0]!))
-  )
-    return { kind: 'SKILL', skills: [...skillIds] };
-  if (metrics.every(isSkill))
+  const types = new Set(
+    metrics.map((metric) => competitionMetricType(metric, definitions)),
+  );
+  if (types.size === 1 && types.has('SKILL')) {
+    if (metrics.includes('total') && metrics.length > 1)
+      throw new Error('Mixed aggregate total scopes are unsupported.');
+    const aggregate =
+      metrics.includes('overall') ||
+      (metrics.length === 1 && metrics[0] === 'total');
+    const targets = metrics
+      .filter(
+        (metric) => metric !== 'overall' && !(aggregate && metric === 'total'),
+      )
+      .map(
+        (metric) =>
+          definitions.find((d) => d.metric === metric)?.definition?.skill ??
+          metric,
+      );
+    if (
+      targets.some((skill) => !isSkill(skill)) ||
+      new Set(targets).size !== targets.length
+    )
+      throw new Error(
+        'Custom XP metrics use unsupported or duplicate skill targets.',
+      );
     return {
       kind: 'SKILL',
-      skills: skillIds.filter((skill) => metrics.includes(skill)),
+      skills: aggregate
+        ? [...skillIds]
+        : skillIds.filter((skill) => targets.includes(skill)),
     };
-  const types = new Set(metrics.map(womMetricType));
+  }
   if (types.has(undefined))
     throw new Error('Unknown WOM metrics are unsupported.');
   if (types.size !== 1 || types.has('SKILL'))
