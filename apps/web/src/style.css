@@ -403,13 +403,9 @@ main {
     0 1px #000;
   pointer-events: none;
 }
-.item-slot--hardcore {
-  border: 2px solid #bd2926;
-  box-shadow: 0 0 0 1px #3d0b0a;
-}
+.item-slot--hardcore,
 .item-slot--event {
-  border: 2px solid #e7bd52;
-  box-shadow: 0 0 0 1px #6b4d16;
+  border: 2px solid transparent;
 }
 .item-slot:hover {
   background: #ffffff0a;
@@ -2078,11 +2074,10 @@ main {
 .item-slot img {
   image-rendering: auto;
 }
-.item-slot--hardcore {
-  border-color: transparent;
-  box-shadow: none;
-}
 /* Alpha dilation minus the original silhouette gives a contour, never a slot-sized box. */
+.item-slot--event img {
+  filter: url('#event-outline');
+}
 .item-slot--hardcore img {
   filter: url('#hardcore-outline');
 }

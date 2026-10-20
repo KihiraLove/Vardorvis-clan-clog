@@ -1,6 +1,72 @@
 import { expect, test } from './test.ts';
 import { mockApi } from './mock-api.ts';
 
+test('manual submissions restore today after each success and keep the chosen date after failure', async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date('2026-10-20T12:00:00Z') });
+  const { admin } = await mockApi(page);
+  let fail = true;
+  const submitted: { collectedOn: string; approve: boolean }[] = [];
+  await page.route('**/api/v1/admin/submissions', (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    if (fail) {
+      fail = false;
+      return route.fulfill({
+        status: 422,
+        json: { message: 'Choose another item.' },
+      });
+    }
+    submitted.push(route.request().postDataJSON());
+    return route.fallback();
+  });
+  await page.goto('/admin/submissions');
+  await page
+    .getByRole('button', { name: 'Add manual submission', exact: true })
+    .click();
+  const form = page
+    .locator('form')
+    .filter({ has: page.locator('.manual-submission-columns') });
+  const date = form.getByLabel('Collection date', { exact: true });
+  const collector = form.getByLabel('Collector name', { exact: true });
+  const item = form.getByLabel('Canonical item', { exact: true });
+  const submit = form.getByRole('button', {
+    name: 'Create manual submission',
+    exact: true,
+  });
+  await expect(date).toHaveValue('2026-10-20');
+  await collector.fill('First date reset');
+  await item.selectOption({ index: 1 });
+  await date.fill('2026-01-01');
+  await submit.click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(date).toHaveValue('2026-01-01');
+  await expect(collector).toHaveValue('First date reset');
+  await submit.click();
+  await expect(collector).toHaveValue('');
+  await expect(item).toHaveValue('');
+  await expect(date).toHaveValue('2026-10-20');
+  await collector.fill('Second date reset');
+  await item.selectOption({ index: 1 });
+  await form.getByLabel('Approve immediately', { exact: true }).uncheck();
+  await page.clock.setFixedTime(new Date('2026-10-21T12:00:00Z'));
+  await submit.click();
+  await expect(collector).toHaveValue('');
+  await expect(date).toHaveValue('2026-10-21');
+  expect(
+    submitted.map(({ collectedOn, approve }) => ({ collectedOn, approve })),
+  ).toEqual([
+    { collectedOn: '2026-01-01', approve: true },
+    { collectedOn: '2026-10-20', approve: false },
+  ]);
+  const rows = (
+    await admin.queue('pending', undefined, new AbortController().signal)
+  ).submissions;
+  expect(
+    rows.find((row) => row.collectorName === 'Second date reset')?.collectedOn,
+  ).toBe('2026-10-20');
+});
+
 for (const width of [1440, 390]) {
   test(`manual and scheduling controls sit below their text at ${width}px`, async ({
     page,

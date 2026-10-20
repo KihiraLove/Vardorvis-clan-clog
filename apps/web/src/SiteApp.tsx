@@ -232,33 +232,41 @@ export function SiteApp({
         style={{ position: 'absolute' }}
       >
         <defs>
-          <filter
-            id="hardcore-outline"
-            x="-20%"
-            y="-20%"
-            width="140%"
-            height="140%"
-            colorInterpolationFilters="sRGB"
-          >
-            <feMorphology
-              in="SourceAlpha"
-              operator="dilate"
-              radius="0.65"
-              result="expanded"
-            />
-            <feComposite
-              in="expanded"
-              in2="SourceAlpha"
-              operator="out"
-              result="edge"
-            />
-            <feFlood floodColor="#ff2929" />
-            <feComposite in2="edge" operator="in" result="red-edge" />
-            <feMerge>
-              <feMergeNode in="red-edge" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          {(
+            [
+              ['hardcore-outline', '#ff2929'],
+              ['event-outline', '#e7bd52'],
+            ] as const
+          ).map(([id, color]) => (
+            <filter
+              key={id}
+              id={id}
+              x="-20%"
+              y="-20%"
+              width="140%"
+              height="140%"
+              colorInterpolationFilters="sRGB"
+            >
+              <feMorphology
+                in="SourceAlpha"
+                operator="dilate"
+                radius="0.65"
+                result="expanded"
+              />
+              <feComposite
+                in="expanded"
+                in2="SourceAlpha"
+                operator="out"
+                result="edge"
+              />
+              <feFlood floodColor={color} />
+              <feComposite in2="edge" operator="in" result="colored-edge" />
+              <feMerge>
+                <feMergeNode in="colored-edge" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          ))}
         </defs>
       </svg>
       <a

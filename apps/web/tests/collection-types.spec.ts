@@ -104,6 +104,9 @@ test('Event gold outline and event-first history coexist with complete oldest-fi
     name: /^Virtus mask: collected, \d+ obtains$/,
   });
   await expect(slot).toHaveClass(/item-slot--event/);
+  await expect(slot).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+  await expect(slot).toHaveCSS('box-shadow', 'none');
+  await expect(slot.locator('img')).toHaveCSS('filter', /event-outline/);
   await slot.focus();
   const menu = page.getByRole('tooltip');
   await expect(menu).toBeVisible();
@@ -144,6 +147,7 @@ test('Event gold outline and event-first history coexist with complete oldest-fi
     exact: true,
   });
   await expect(hc).not.toHaveClass(/item-slot--event/);
+  await expect(hc.locator('img')).toHaveCSS('filter', /hardcore-outline/);
   await hc.click();
   await expect(menu).toContainText('HC collector');
   await expect(menu.locator('.item-menu__event')).toHaveCount(0);

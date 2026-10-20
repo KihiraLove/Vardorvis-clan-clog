@@ -117,7 +117,7 @@ export function ManualSubmissionForm({
       setSearch('');
       setItemId('');
       setCollectorName('');
-      setCollectedOn('');
+      setCollectedOn(new Date().toISOString().slice(0, 10));
       setHardcore(false);
       setCollectionType('regular');
       setScreenshot(undefined);

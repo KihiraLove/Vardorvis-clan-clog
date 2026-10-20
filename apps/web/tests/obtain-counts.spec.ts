@@ -236,7 +236,9 @@ for (const width of [1440, 320]) {
         expect(overlay.y + overlay.height).toBeLessThan(
           bounds.y + bounds.height / 2,
         );
-        await expect(slot).toHaveCSS('border-top-color', 'rgb(231, 189, 82)');
+        await expect(slot).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+        await expect(slot).toHaveCSS('box-shadow', 'none');
+        await expect(slot.locator('img')).toHaveCSS('filter', /event-outline/);
       }
       await expect(page.locator('.page-heading p')).toHaveText('Obtained: 3/4');
       const two = slots.nth(2);
