@@ -1,5 +1,5 @@
 /** No API response fixtures: real TLS/cookies → production Nginx/API → disposable PG. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test as base, type Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
@@ -10,6 +10,39 @@ const origin = 'https://clog.example.com';
 const password = 'ci-only-test-admin-password'; // Set by review-smoke in this disposable stack only.
 const editor = (page: Page) => page.locator('.submission-editor');
 const execute = promisify(execFile);
+const test = base.extend<{ claimCleanup: Set<string> }>({
+  claimCleanup: async ({ page }, use) => {
+    const claims = new Set<string>();
+    try {
+      await use(claims);
+    } finally {
+      // Fixture teardown also runs after assertion failures and test timeouts.
+      // Revoke through the API so later scenarios retain an empty-credit baseline.
+      for (const id of claims) {
+        const detail = await page.request.get(
+          `/api/v1/admin/submissions/${id}`,
+        );
+        expect(detail.status()).toBe(200);
+        const { submission } = await detail.json();
+        if (submission.status !== 'approved') continue;
+        const session = await page.request.get('/api/v1/auth/session');
+        expect(session.status()).toBe(200);
+        const { csrfToken } = await session.json();
+        const revoked = await page.request.post(
+          `/api/v1/admin/submissions/${id}/revoke`,
+          {
+            headers: { Origin: origin, 'X-CSRF-Token': csrfToken },
+            data: {
+              expectedVersion: submission.version,
+              reason: 'Browser acceptance cleanup after interrupted review',
+            },
+          },
+        );
+        expect(revoked.status()).toBe(200);
+      }
+    }
+  },
+});
 const queryInstallation = `
 import pg from 'pg';
 import {databaseUrl} from '@clog/database/dist/secrets.js';
@@ -281,6 +314,7 @@ test('real login, PNG claim, independent note/correction, canonical public credi
   context,
   browser,
   browserName,
+  claimCleanup,
 }) => {
   await owner(page);
   const cookie = (await context.cookies()).find(
@@ -348,6 +382,7 @@ test('real login, PNG claim, independent note/correction, canonical public credi
   const response = await created;
   expect(response.status()).toBe(201);
   const claim = await response.json();
+  claimCleanup.add(claim.id);
   await page
     .getByRole('button', { name: new RegExp(`^Review ${collector} ·`, 'u') })
     .click();
@@ -455,7 +490,10 @@ test('real login, PNG claim, independent note/correction, canonical public credi
       .getByRole('button', { name: 'Vardorvis', exact: true })
       .click();
     await expect(
-      publicPage.getByRole('heading', { name: /Collection Log - 1\/1717/u }),
+      publicPage.getByRole('heading', {
+        name: `Collection Log - 1/${catalog.items.length}`,
+        exact: true,
+      }),
     ).toBeVisible();
     await capture(publicPage, 'real-public-desktop.png');
     await publicPage.setViewportSize({ width: 320, height: 850 });
@@ -487,6 +525,7 @@ test('real login, PNG claim, independent note/correction, canonical public credi
         exact: true,
       }),
     ).toBeVisible();
+    claimCleanup.delete(claim.id);
     await publicPage.reload();
     await expect(
       publicPage.getByRole('button', {

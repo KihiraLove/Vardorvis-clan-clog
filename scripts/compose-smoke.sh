@@ -51,7 +51,20 @@ test "$(docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -
 curl --fail --retry 5 --retry-delay 2 http://app:8080/healthz
 curl --fail http://app:8080/api/v1/status
 curl --fail --output /tmp/catalog.json http://app:8080/api/v1/catalog
-jq -e '(.items | length) == 1717 and (.pages | length) == 124' /tmp/catalog.json
+# Catalog updates extend the immutable baseline; compare with the installed catalog.
+catalog_counts="$(docker compose exec -T --user 999 clan-clog psql -h /run/clog/postgres -v ON_ERROR_STOP=1 -U clog -d clog -Atc "
+  SELECT json_build_object(
+    'items', (SELECT count(*) FROM items WHERE active),
+    'pages', (SELECT count(*) FROM pages WHERE active),
+    'updates', (SELECT COALESCE(json_agg(id ORDER BY id), '[]'::json) FROM catalog_update_batches WHERE NOT review_required)
+  )
+")"
+jq -e --argjson expected "$catalog_counts" --slurpfile baseline catalog/snapshot.json --slurpfile updates catalog/updates/index.json '
+  (.items | length) == $expected.items and (.pages | length) == $expected.pages and
+  $expected.items >= ($baseline[0].items | length) and
+  $expected.pages >= ($baseline[0].pages | length) and
+  $expected.updates == ($updates[0].batches | sort)
+' /tmp/catalog.json
 jq -e '
   ([.pages[] | select(.id=="hard_treasure_trails_rare") | .itemIds | length] == [24]) and
   ([.pages[] | select(.id=="elite_treasure_trails_rare") | .itemIds | length] == [39]) and
