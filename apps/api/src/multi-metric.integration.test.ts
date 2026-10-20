@@ -102,7 +102,11 @@ test(
           (
             await pool.query('SELECT name FROM schema_migrations ORDER BY name')
           ).rows.map((r) => r.name),
-          ['001_baseline.sql', '002_custom_competition_metrics.sql'],
+          [
+            '001_baseline.sql',
+            '002_custom_competition_metrics.sql',
+            '003_catalog_updates.sql',
+          ],
         );
         const publicRows = await imports.activities();
         assert.equal(publicRows.competitions.length, 1);

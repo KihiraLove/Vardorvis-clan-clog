@@ -3,6 +3,7 @@ export * from './competitions.js';
 export * from './skills.js';
 export * from './collection-types.js';
 export * from './submission-help.js';
+export type * from './catalog-updates.js';
 export interface CatalogItem {
   id: number;
   name: string;

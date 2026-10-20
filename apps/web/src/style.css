@@ -2989,3 +2989,66 @@ html:has(.unknown-metric-dialog[open]) {
 .permanent-page-list button {
   flex-shrink: 0;
 }
+
+.catalog-update-dialog {
+  width: min(62rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  color: #e3d5b8;
+  background: #29271e;
+  border: 1px solid #756747;
+}
+.catalog-update-dialog::backdrop {
+  background: #000b;
+}
+.catalog-update-heading {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.catalog-update-heading h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.catalog-update-heading button {
+  flex: 0 0 auto;
+}
+.catalog-update-notice {
+  margin: 12px 0;
+}
+.catalog-update-dialog p,
+.catalog-update-dialog h3 {
+  overflow-wrap: anywhere;
+}
+.catalog-update-proposal {
+  border-top: 1px solid #756747;
+  padding: 16px 0;
+}
+.catalog-update-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.catalog-update-images figure {
+  margin: 0;
+  min-width: 80px;
+}
+.catalog-update-dialog .admin-actions button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.catalog-update-images img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+html:has(.catalog-update-dialog[open]) {
+  overflow: hidden;
+}

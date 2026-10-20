@@ -35,7 +35,7 @@ FROM dependencies AS build
 COPY . .
 ARG RELEASE_REVISION=working-tree
 ARG RELEASE_EVIDENCE=local-acceptance
-RUN npm run build:runtime && npm run catalog:check
+RUN npm run build:runtime && npm run catalog:check && npm run catalog:updates:check
 RUN node scripts/package-runtime.mjs /opt/clog-runtime
 RUN RELEASE_REVISION="$RELEASE_REVISION" RELEASE_EVIDENCE="$RELEASE_EVIDENCE" node scripts/release-bundle.mjs /opt/clog-release
 
@@ -59,6 +59,10 @@ COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_m
 COPY --from=production-dependencies --chown=node:node /opt/clog-runtime/ ./
 COPY --from=build --chown=node:node /app/packages/database/migrations ./packages/database/migrations
 COPY --from=build --chown=node:node /app/catalog/snapshot.json /app/catalog/snapshot.sha256 /app/catalog/clue-taxonomy.json ./catalog/
+COPY --from=build --chown=node:node /app/catalog/assets.json ./catalog/
+COPY --from=build --chown=node:node /app/catalog/legacy-assets.sha256 ./catalog/
+COPY --from=build --chown=node:node /app/catalog/updates ./catalog/updates
+COPY --from=build --chown=node:node /app/apps/web/public/catalog/items ./catalog/legacy-images
 LABEL org.opencontainers.image.title="Clan Collection Log"
 RUN mkdir -p /data/catalog-icons /data/submission-images && chown node:node /data/catalog-icons /data/submission-images
 

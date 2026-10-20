@@ -18,6 +18,7 @@ import type { Branding } from './branding.ts';
 import { AdminSettings } from './AdminSettings.tsx';
 import { AdminQueue } from './AdminQueue.tsx';
 import { AdminCatalogPage } from './AdminCatalogPage.tsx';
+import { CatalogUpdateNotice } from './CatalogUpdateNotice.tsx';
 import { AccountSettings } from './AccountSettings.tsx';
 import { AdminAccounts } from './AdminAccounts.tsx';
 import { RuneLiteReviewSettings } from './RuneLiteReviewSettings.tsx';
@@ -278,6 +279,16 @@ export function AdminPage({
             </div>
           </aside>
         )}
+        {session?.role === 'admin' &&
+          !session.mustChangePassword &&
+          client.catalogUpdateClient && (
+            <CatalogUpdateNotice
+              key={session.username}
+              client={client}
+              session={session}
+              onAccessLost={accessLost}
+            />
+          )}
         {session &&
           !session.mustChangePassword &&
           routes.ready?.path === path &&

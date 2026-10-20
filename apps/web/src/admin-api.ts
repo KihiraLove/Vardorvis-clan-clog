@@ -118,6 +118,9 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async catalogUpdateClient() {
+    return import('./catalog-update-api.ts');
+  }
   async accessControl(signal: AbortSignal) {
     return parseAccessControl(
       await this.json('/api/v1/admin/access-control', signal),

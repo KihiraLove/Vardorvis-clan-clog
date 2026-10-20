@@ -28,3 +28,10 @@ assets or imply endorsement by Jagex. Preserve source/license files when replaci
 art. New assets should be local, necessary, and include attribution and hashes
 where the existing manifest requires them. Build-time catalog checks catch missing
 or altered pinned assets. Outdated review screenshots are not shipped.
+
+New catalog artwork uses the [release update manifest](catalog-import.md#release-updates).
+The original asset manifest and bytes stay pinned; a new image gets a new hash.
+The installer retains selected legacy and supplied images in PostgreSQL, served
+at immutable hash URLs. Replacing a hosted item's image requires the administrator's
+review unless it is a newly inserted item. Retaining a custom icon does not delete
+its uploaded bytes, and normal database backups include the retained bundled bytes.

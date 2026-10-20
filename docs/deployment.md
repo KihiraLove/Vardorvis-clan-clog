@@ -49,6 +49,13 @@ Use your selected service name in place of `clan-clog`. Accounts and credentials
 remain in the volume; updates never reset the administrator.
 Startup applies pending, checksummed migrations automatically. Released migrations
 are immutable; new versions add forward-only migrations and preserve existing data.
+Catalog releases use forward migrations plus validated immutable content batches.
+Bootstrap and the installation supervisor install safe missing entries and queue
+optional fixes for the first administrator login; conflicts do not silently merge
+items or block unrelated content. Keep normal database and uploaded-asset backups:
+the database also contains update decisions, receipts, bindings and retained
+bundled WebP bytes. See [catalog updates](catalog-import.md#release-updates).
+
 After a schema upgrade, an older image may be incompatible. Restore the coordinated
 backup to roll back both the database and image; do not delete migration history.
 

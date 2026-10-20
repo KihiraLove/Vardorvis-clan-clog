@@ -73,6 +73,16 @@ export async function mockApi(
       if (asset) return await route.fulfill(asset);
       let result: unknown;
       if (path === '/api/v1/auth/session') result = await session();
+      else if (path === '/api/v1/admin/catalog-updates')
+        result = {
+          revision: '0'.repeat(64),
+          catalogRevision: 'catalog-1',
+          autoOpen: false,
+          releases: [],
+          proposals: [],
+          conflicts: [],
+          currentImages: [],
+        };
       else if (path === '/api/v1/admin/access-control')
         result =
           method === 'GET'

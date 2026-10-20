@@ -157,6 +157,7 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  catalogUpdateClient?(): Promise<typeof import('./catalog-update-api.ts')>;
   accessControl(
     signal: AbortSignal,
   ): Promise<import('@clog/domain').AccessControlSettings>;

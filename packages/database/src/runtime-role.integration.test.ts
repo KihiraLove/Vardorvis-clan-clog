@@ -13,11 +13,11 @@ for (const [privileges, names] of [
   ['', 'schema_migrations catalog_taxonomy_updates'],
   [
     'SELECT',
-    'asset_retirements lifecycle_archive_audit catalog_versions item_aliases collection_credits item_collection_state',
+    'asset_retirements lifecycle_archive_audit catalog_versions catalog_update_batches catalog_update_images item_aliases collection_credits item_collection_state',
   ],
   [
     'SELECT INSERT',
-    'audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history competition_metric_resolutions competition_metric_audit custom_competition_metrics discord_settings_audit manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit staff_page_access_audit submission_images xp_import_history',
+    'catalog_update_bindings catalog_update_decisions catalog_update_receipts catalog_update_audit audit_events catalog_audit catalog_page_requests catalog_section_requests catalog_requests clan_api_key_audit clan_branding_audit clan_logo_assets collection_schedule_audit competition_import_history competition_metric_resolutions competition_metric_audit custom_competition_metrics discord_settings_audit manual_submission_requests runelite_settings_audit runelite_submission_requests runelite_drop_events submission_filter_audit site_settings_audit staff_account_audit staff_page_access_audit submission_images xp_import_history',
   ],
   [
     'SELECT UPDATE',
@@ -25,7 +25,7 @@ for (const [privileges, names] of [
   ],
   [
     'SELECT INSERT UPDATE',
-    'catalog_assets catalog_sections clan_api_keys competition_previews discord_settings items pages staff_accounts submissions wom_competitions xp_events xp_previews',
+    'catalog_update_prompts catalog_assets catalog_sections clan_api_keys competition_previews discord_settings items pages staff_accounts submissions wom_competitions xp_events xp_previews',
   ],
   [
     'SELECT INSERT DELETE',

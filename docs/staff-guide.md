@@ -81,6 +81,32 @@ screenshot. Select the correct canonical item and **Save corrections**, then
 review and approve separately. Notes and rejection do not require a match.
 Catalog items and game-ID aliases are managed separately in **Items catalog**.
 
+## Catalog update review
+
+The first administrator sign-in after a catalog update opens **Catalog update
+available** over the current page. **Review catalog update** reopens it from any
+admin page. Moderators do not receive this installation-level tool.
+
+Clearly missing supplied content is installed automatically and listed under
+**Installed content**. Existing local items keep their local identity, history and
+values. Choose **Apply this change**, **Keep current value**, or **Review later**
+independently for names, game IDs, pages, associations and supplied images, then
+click **Apply selected changes**. Bulk buttons select only their named category.
+An image can be adopted while retaining the local name, IDs or page choices.
+Identical images are shown as already current. Removing an extra local association
+is optional: it may be an intentional shared-page placement. An ID fix replaces
+the displayed list; keep current and use the item inspector if some valid local
+variants need to be retained separately.
+
+**Review later**, Escape and close apply no proposed changes; additions already
+installed are retained. Prompt state and saved decisions persist across devices
+and restarts. Conflicting name/ID evidence or retired entries are never silently
+merged/reactivated. Resolve active conflicting entries in Items catalog and use
+**Rescan missing content**; retired entries remain blocked for explicit owner
+resolution. Reload a stale review before choosing again. If a request cannot be
+confirmed, retry the same choices to recover its receipt. Corrections do not move
+credits, rewrite earlier intake evidence, reopen schedules or recalculate XP.
+
 ## Scheduling and competitions
 
 Every page accepts submissions. With scheduling enabled, a normal-world drop is

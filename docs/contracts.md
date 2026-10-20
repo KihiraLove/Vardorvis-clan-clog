@@ -34,6 +34,14 @@ Saving definitions creates no competition or schedule; request a fresh preview
 before Apply. Custom semantics are included in saved `metricDefinitions` so
 public/admin validation uses the same frozen definition.
 
+Catalog update review uses administrator-only `GET /admin/catalog-updates`,
+`POST /admin/catalog-updates/seen`, `/rescan` and `/apply`. Seen/rescan accept a
+bundle-set `revision`; apply accepts `{ revision, catalogRevision, apply, keep }`
+with server-generated proposal hashes. Apply/rescan require UUID idempotency keys.
+Every write reauthorizes the administrator and checks Origin/CSRF. Stale catalog
+reviews conflict; exact apply retries return their original receipt. Public
+`GET /catalog/update-images/<sha256>.webp` serves verified immutable WebP bytes.
+
 Staff writes require a verified session, Origin, CSRF token and current expected
 revision. Reusing an already consumed idempotency key with different data conflicts.
 Successful replay returns the saved receipt. Auth failures are 401/403; stale
