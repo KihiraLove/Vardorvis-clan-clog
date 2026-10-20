@@ -3,7 +3,7 @@ import { mockApi } from './mock-api.ts';
 import { adminFixtures } from './admin-fixtures.ts';
 const signal = () => new AbortController().signal;
 
-test('colour box and RGBA channels save independently, reject invalid drafts and discard changes', async ({
+test('preview swatch and HEX input save independently, reject invalid drafts and discard changes', async ({
   page,
 }) => {
   const { admin } = await mockApi(page);
@@ -12,13 +12,28 @@ test('colour box and RGBA channels save independently, reject invalid drafts and
     name: 'Event collection highlight',
     exact: true,
   });
-  await expect(picker.getByLabel('Colour box', { exact: true })).toHaveValue(
-    '#e7bd52',
+  await expect(
+    picker.getByLabel('Choose highlight colour', { exact: true }),
+  ).toHaveValue('#e7bd52');
+  await picker
+    .getByLabel('Choose highlight colour', { exact: true })
+    .fill('#12abef');
+  await expect(picker.getByLabel('HEX', { exact: true })).toHaveValue(
+    '#12abef',
   );
-  await picker.getByLabel('Colour box', { exact: true }).fill('#12abef');
-  await expect(picker.getByLabel('Red', { exact: true })).toHaveValue('18');
-  await expect(picker.getByLabel('Green', { exact: true })).toHaveValue('171');
-  await expect(picker.getByLabel('Blue', { exact: true })).toHaveValue('239');
+  await expect(picker.locator('input[type="color"]')).toHaveCount(1);
+  await expect(picker.getByLabel(/^(Red|Green|Blue)$/)).toHaveCount(0);
+  const swatch = picker.locator('.highlight-picker__preview');
+  await swatch.scrollIntoViewIfNeeded();
+  expect(
+    await swatch.evaluate((node) => {
+      const r = node.getBoundingClientRect();
+      return (
+        document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) ===
+        node.querySelector('input[type="color"]')
+      );
+    }),
+  ).toBe(true);
   await picker.getByLabel('Alpha (%)', { exact: true }).fill('37.5');
   await expect(picker.locator('.highlight-picker__preview span')).toHaveCSS(
     'background-color',
@@ -28,9 +43,9 @@ test('colour box and RGBA channels save independently, reject invalid drafts and
     name: 'Save site settings',
     exact: true,
   });
-  await picker.getByLabel('Red', { exact: true }).fill('256');
+  await picker.getByLabel('HEX', { exact: true }).fill('#12zz00');
   await expect(save).toBeDisabled();
-  await picker.getByLabel('Red', { exact: true }).fill('0');
+  await picker.getByLabel('HEX', { exact: true }).fill('00ABEF');
   await save.click();
   await expect(
     page.getByText('Site settings saved.', { exact: true }),
@@ -56,18 +71,20 @@ test('colour box and RGBA channels save independently, reject invalid drafts and
     name: 'Hardcore collection highlight',
     exact: true,
   });
-  await expect(hc.getByLabel('Colour box', { exact: true })).toHaveValue(
-    '#ff2929',
-  );
-  await hc.getByLabel('Colour box', { exact: true }).fill('#44cc22');
+  await expect(
+    hc.getByLabel('Choose highlight colour', { exact: true }),
+  ).toHaveValue('#ff2929');
+  await hc
+    .getByLabel('Choose highlight colour', { exact: true })
+    .fill('#44cc22');
   await hc.getByLabel('Alpha (%)', { exact: true }).fill('0');
   // The independent release switch must preserve the colour draft.
   await page
     .getByRole('switch', { name: 'Enable hardcore worlds', exact: true })
     .click();
-  await expect(hc.getByLabel('Colour box', { exact: true })).toHaveValue(
-    '#44cc22',
-  );
+  await expect(
+    hc.getByLabel('Choose highlight colour', { exact: true }),
+  ).toHaveValue('#44cc22');
   await page
     .getByRole('button', { name: 'Save hardcore settings', exact: true })
     .click();
@@ -77,9 +94,9 @@ test('colour box and RGBA channels save independently, reject invalid drafts and
   await page.reload();
   await expect(hc.getByLabel('Alpha (%)', { exact: true })).toHaveValue('0');
   await page.getByRole('link', { name: 'Site settings', exact: true }).click();
-  await expect(picker.getByLabel('Colour box', { exact: true })).toHaveValue(
-    '#00abef',
-  );
+  await expect(
+    picker.getByLabel('Choose highlight colour', { exact: true }),
+  ).toHaveValue('#00abef');
   expect((await admin.settings(signal())).hardcoreHighlight).toEqual({
     red: 68,
     green: 204,
@@ -107,7 +124,7 @@ test('stale colour save reloads current values once and permitted moderators see
     name: 'Event collection highlight',
     exact: true,
   });
-  await picker.getByLabel('Red', { exact: true }).fill('25');
+  await picker.getByLabel('HEX', { exact: true }).fill('#19bd52');
   const current = await admin.settings(signal());
   await admin.saveSettings(
     false,
@@ -131,7 +148,9 @@ test('stale colour save reloads current values once and permitted moderators see
   await expect(page.getByRole('alert')).toContainText(
     'The latest data is loaded',
   );
-  await expect(picker.getByLabel('Red', { exact: true })).toHaveValue('80');
+  await expect(picker.getByLabel('HEX', { exact: true })).toHaveValue(
+    '#505a64',
+  );
   expect(writes).toBe(1);
   const fixture = await adminFixtures();
   await page.route('**/api/v1/auth/session', (r) =>
@@ -144,7 +163,9 @@ test('stale colour save reloads current values once and permitted moderators see
     }),
   );
   await page.reload();
-  await expect(picker.getByLabel('Colour box', { exact: true })).toBeDisabled();
+  await expect(
+    picker.getByLabel('Choose highlight colour', { exact: true }),
+  ).toBeDisabled();
   await expect(picker.getByLabel('Alpha (%)', { exact: true })).toBeDisabled();
   await page
     .getByRole('link', { name: 'Hardcore worlds', exact: true })
@@ -155,7 +176,7 @@ test('stale colour save reloads current values once and permitted moderators see
         name: 'Hardcore collection highlight',
         exact: true,
       })
-      .getByLabel('Red', { exact: true }),
+      .getByLabel('HEX', { exact: true }),
   ).toBeDisabled();
 });
 

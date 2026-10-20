@@ -4,29 +4,35 @@ import {
   type HighlightColour,
 } from '@clog/domain';
 
-export type HighlightDraft = Record<keyof HighlightColour, string>;
+export interface HighlightDraft {
+  hex: string;
+  alpha: string;
+}
 export const highlightDraft = (value: HighlightColour): HighlightDraft => ({
-  red: String(value.red),
-  green: String(value.green),
-  blue: String(value.blue),
+  hex:
+    '#' +
+    [value.red, value.green, value.blue]
+      .map((channel) => channel.toString(16).padStart(2, '0'))
+      .join(''),
   alpha: String(Number((value.alpha * 100).toFixed(8))),
 });
 export function draftHighlight(
   value: HighlightDraft,
 ): HighlightColour | undefined {
-  if (Object.values(value).some((channel) => !channel.trim())) return;
+  if (!/^#?[a-f0-9]{6}$/iu.test(value.hex) || !value.alpha.trim()) return;
+  const hex = value.hex.replace(/^#/u, '');
   try {
     return parseHighlightColour({
-      red: Number(value.red),
-      green: Number(value.green),
-      blue: Number(value.blue),
+      red: parseInt(hex.slice(0, 2), 16),
+      green: parseInt(hex.slice(2, 4), 16),
+      blue: parseInt(hex.slice(4, 6), 16),
       alpha: Number(value.alpha) / 100,
     });
   } catch {
     return;
   }
 }
-/** The native colour box chooses RGB; numeric channels also control transparency. */
+/** The transparency swatch opens the native RGB picker; HEX and alpha stay editable. */
 export function HighlightPicker({
   title,
   value,
@@ -39,73 +45,67 @@ export function HighlightPicker({
   disabled: boolean;
 }) {
   const colour = draftHighlight(value);
-  const hex =
-    '#' +
-    (['red', 'green', 'blue'] as const)
-      .map((key) =>
-        Math.round(Math.max(0, Math.min(255, Number(value[key]) || 0)))
-          .toString(16)
-          .padStart(2, '0'),
-      )
-      .join('');
+  const hexValid = /^#?[a-f0-9]{6}$/iu.test(value.hex);
+  const hex = hexValid
+    ? '#' + value.hex.replace(/^#/u, '').toLowerCase()
+    : '#000000';
   return (
     <fieldset className="highlight-picker" disabled={disabled}>
       <legend>{title}</legend>
       <div className="highlight-picker__controls">
         <label>
-          Colour box
-          <input
-            type="color"
-            value={hex}
-            onChange={(event) => {
-              const hex = event.target.value;
-              onChange({
-                ...value,
-                red: String(parseInt(hex.slice(1, 3), 16)),
-                green: String(parseInt(hex.slice(3, 5), 16)),
-                blue: String(parseInt(hex.slice(5, 7), 16)),
-              });
-            }}
-          />
-        </label>
-        <div
-          className="highlight-picker__preview"
-          aria-label="Highlight preview"
-        >
-          <span
-            style={{
-              backgroundColor: colour ? highlightCss(colour) : 'transparent',
-            }}
-          />
-        </div>
-        {(
-          [
-            ['red', 'Red'],
-            ['green', 'Green'],
-            ['blue', 'Blue'],
-            ['alpha', 'Alpha (%)'],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key}>
-            {label}
+          Colour
+          <span className="highlight-picker__preview">
+            <span
+              style={{
+                backgroundColor: colour ? highlightCss(colour) : 'transparent',
+              }}
+            />
             <input
-              required
-              type="number"
-              min="0"
-              max={key === 'alpha' ? 100 : 255}
-              step={key === 'alpha' ? 'any' : 1}
-              value={value[key]}
+              type="color"
+              aria-label="Choose highlight colour"
+              value={hex}
               onChange={(event) =>
-                onChange({ ...value, [key]: event.target.value })
+                onChange({ ...value, hex: event.target.value })
               }
             />
-          </label>
-        ))}
+          </span>
+        </label>
+        <label>
+          HEX
+          <input
+            required
+            type="text"
+            className="highlight-picker__hex"
+            placeholder="#RRGGBB"
+            maxLength={7}
+            pattern="#?[a-fA-F0-9]{6}"
+            spellCheck={false}
+            autoCapitalize="off"
+            aria-invalid={!hexValid || undefined}
+            value={value.hex}
+            onChange={(event) =>
+              onChange({ ...value, hex: event.target.value })
+            }
+          />
+        </label>
+        <label>
+          Alpha (%)
+          <input
+            required
+            type="number"
+            min="0"
+            max={100}
+            step="any"
+            value={value.alpha}
+            onChange={(event) =>
+              onChange({ ...value, alpha: event.target.value })
+            }
+          />
+        </label>
       </div>
       {!colour && (
-        <p role="alert">
-          Use whole RGB values from 0 to 255 and Alpha from 0 to 100%.
-        </p>
+        <p role="alert">Use a six-digit HEX colour and Alpha from 0 to 100%.</p>
       )}
     </fieldset>
   );

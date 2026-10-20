@@ -24,8 +24,8 @@ switching to hardcore from XP opens that log. Page links use `?page=<page-id>`;
 
 In **Site settings**, **Event collection highlight** changes the Event item outline
 and hover-menu highlight. **Hardcore worlds** has its own **Hardcore collection
-highlight**. Choose a colour from the box or enter Red/Green/Blue values (0–255)
-and Alpha (0–100% opacity), then save the settings. Alpha affects the highlight
+highlight**. Click the preview swatch to choose a colour, or enter a six-digit HEX
+value (with or without `#`). Set Alpha (0–100% opacity), then save the settings. Alpha affects the highlight
 only; 0% hides it without hiding the item or collection history.
 
 ## Submissions
