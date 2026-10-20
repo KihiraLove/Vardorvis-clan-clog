@@ -46,7 +46,7 @@ await Promise.all(
           const response = await fetch(url, {
             headers: {
               'User-Agent':
-                'ClanCollectionLogCatalog/1.0.0-SNAPSHOT (https://github.com/KihiraLove)',
+                'ClanCollectionLogCatalog/1.0.0 (https://github.com/KihiraLove)',
             },
             signal: AbortSignal.timeout(30_000),
           });

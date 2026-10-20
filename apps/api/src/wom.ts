@@ -259,7 +259,7 @@ export async function getWom(
         signal,
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'ClanCollectionLog/1.0.0-SNAPSHOT',
+          'User-Agent': 'ClanCollectionLog/1.0.0',
         },
       }),
       signal,
