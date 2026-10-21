@@ -120,6 +120,71 @@ for (const hardcore of [false, true]) {
   }
 }
 
+for (const hardcore of [false, true]) {
+  test(`settings conflict loads current fields and retains the pending logo without replaying settings: hardcore=${hardcore}`, async ({
+    page,
+  }) => {
+    const { admin } = await mockApi(page);
+    let settingsWrites = 0,
+      logoWrites = 0;
+    await page.route('**/api/v1/admin/settings', async (route) => {
+      if (route.request().method() !== 'GET') settingsWrites++;
+      await route.fallback();
+    });
+    await page.route(
+      '**/api/v1/admin/branding' + (hardcore ? '/hardcore' : '') + '/logo',
+      async (route) => {
+        logoWrites++;
+        await route.fallback();
+      },
+    );
+    await page.goto('/admin/settings' + (hardcore ? '/hardcore' : ''));
+    const name = page.getByLabel('Displayed clan name', { exact: true });
+    await name.fill('Local unsaved name');
+    const buffer = await sharp({
+      create: { width: 8, height: 8, channels: 4, background: '#123456' },
+    })
+      .webp()
+      .toBuffer();
+    await page.getByLabel('Logo image', { exact: true }).setInputFiles({
+      name: 'logo.webp',
+      mimeType: 'image/webp',
+      buffer,
+    });
+    const signal = new AbortController().signal;
+    const current = await admin.settings(signal);
+    const latestName = 'Saved by another administrator';
+    await admin.saveSettings(
+      current.hardcoreEnabled,
+      current.revision,
+      'test-admin',
+      signal,
+      hardcore ? undefined : latestName,
+      undefined,
+      hardcore ? { ...current.hardcore!, clanName: latestName } : undefined,
+    );
+    const submit = page.getByRole('button', {
+      name: hardcore ? 'Save hardcore settings' : 'Save site settings',
+      exact: true,
+    });
+    await submit.click();
+    await expect(page.getByRole('alert')).toContainText(
+      'The latest data is loaded',
+    );
+    await expect(name).toHaveValue(latestName);
+    const preview = page.getByAltText('Current clan logo');
+    await expect(preview).toHaveAttribute('src', /^blob:/);
+    expect(settingsWrites).toBe(1);
+    expect(logoWrites).toBe(0);
+    await submit.click();
+    await expect(preview).toHaveAttribute('src', /^\/api\/v1\/branding\//);
+    expect(settingsWrites).toBe(1);
+    expect(logoWrites).toBe(1);
+    await page.reload();
+    await expect(name).toHaveValue(latestName);
+  });
+}
+
 test('Activity competitions show a compact range, hide metrics/timezone copy, and wrap after the hyphen', async ({
   page,
 }) => {

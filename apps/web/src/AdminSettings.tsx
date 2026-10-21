@@ -246,7 +246,7 @@ export function AdminSettings({
               async (signal) => {
                 const value = await client.settings(signal);
                 if (!signal.aborted) {
-                  setSaved(value);
+                  apply(value);
                   onSaved?.(value);
                 }
               },
