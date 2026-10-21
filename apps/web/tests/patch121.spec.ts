@@ -1,6 +1,11 @@
 import { expect, test } from './test.ts';
 import { mockApi } from './mock-api.ts';
 import sharp from 'sharp';
+import { readFileSync } from 'node:fs';
+
+const appVersion = JSON.parse(
+  readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+).version as string;
 
 test.use({ timezoneId: 'Europe/Copenhagen' });
 
@@ -229,7 +234,7 @@ test('Activity competitions show a compact range, hide metrics/timezone copy, an
   );
   await expect(start).toHaveText(/ -$/);
   await expect(page.locator('.footer-catalog')).toContainText(
-    'App version 1.0.3',
+    `App version ${appVersion}`,
   );
   await expect(page.locator('.footer-catalog a').last()).toHaveText(
     'OSRS Wiki',
