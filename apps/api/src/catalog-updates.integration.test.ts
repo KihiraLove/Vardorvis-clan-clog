@@ -42,17 +42,20 @@ test(
         connectionString: process.env.TEST_DATABASE_URL!,
       });
       await root.connect();
-      const schema = 'archive_content_' + randomUUID().replaceAll('-', '');
-      await root.query('CREATE SCHEMA ' + schema);
+      // Catalog bootstrap holds database-wide advisory locks while importing
+      // the complete bundle. Keep it out of other files' timed intake fixtures.
+      const database = 'archive_content_' + randomUUID().replaceAll('-', '');
+      await root.query('CREATE DATABASE ' + database);
       const url = new URL(process.env.TEST_DATABASE_URL!);
-      url.searchParams.set('options', '-c search_path=' + schema);
+      url.pathname = '/' + database;
+      url.searchParams.delete('options');
       const client = new pg.Client({ connectionString: url.href }),
         pool = new pg.Pool({ connectionString: url.href });
       await client.connect();
       t.after(async () => {
         await client.end();
         await pool.end();
-        await root.query('DROP SCHEMA ' + schema + ' CASCADE');
+        await root.query('DROP DATABASE ' + database);
         await root.end();
       });
       await migrate(url.href);

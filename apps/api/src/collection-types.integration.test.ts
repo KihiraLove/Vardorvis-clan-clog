@@ -19,18 +19,21 @@ test(
   'Regular/Event classification and credit rules are durable and transactional',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    const connectionString = process.env.TEST_DATABASE_URL!;
-    const schema = 'collection_types_' + randomUUID().replaceAll('-', '');
-    const root = new pg.Pool({ connectionString });
-    await root.query('CREATE SCHEMA ' + schema);
+    // A separate schema cannot isolate database-wide catalog/request locks.
+    // Keep the real five-second observer window independent of other files.
+    const url = new URL(process.env.TEST_DATABASE_URL!);
+    const database = 'collection_types_' + randomUUID().replaceAll('-', '');
+    const root = new pg.Pool({ connectionString: url.href });
+    await root.query('CREATE DATABASE ' + database);
+    url.pathname = '/' + database;
+    url.searchParams.delete('options');
     const pool = new pg.Pool({
-      connectionString,
-      options: '-c search_path=' + schema,
+      connectionString: url.href,
     });
     const directory = await mkdtemp(join(tmpdir(), 'clog-types-'));
     t.after(async () => {
       await pool.end();
-      await root.query('DROP SCHEMA ' + schema + ' CASCADE');
+      await root.query('DROP DATABASE ' + database);
       await root.end();
       await rm(directory, { recursive: true, force: true });
     });

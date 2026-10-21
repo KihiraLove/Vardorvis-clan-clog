@@ -19,13 +19,16 @@ test(
     skip: !process.env.TEST_DATABASE_URL,
   },
   async () => {
-    const schema = 'intake_test_' + randomUUID().replaceAll('-', '');
-    const connectionString = process.env.TEST_DATABASE_URL!;
-    const root = new pg.Pool({ connectionString });
-    await root.query('CREATE SCHEMA ' + schema);
+    // Retries must contend with each other, not fixed request IDs or catalog
+    // advisory locks held by other test files in the same database.
+    const database = 'intake_test_' + randomUUID().replaceAll('-', '');
+    const url = new URL(process.env.TEST_DATABASE_URL!);
+    const root = new pg.Pool({ connectionString: url.href });
+    await root.query('CREATE DATABASE ' + database);
+    url.pathname = '/' + database;
+    url.searchParams.delete('options');
     const pool = new pg.Pool({
-      connectionString,
-      options: '-c search_path=' + schema,
+      connectionString: url.href,
       statement_timeout: 5000,
       max: 8,
     });
@@ -225,7 +228,7 @@ test(
     } finally {
       await app.close();
       await pool.end();
-      await root.query('DROP SCHEMA ' + schema + ' CASCADE');
+      await root.query('DROP DATABASE ' + database);
       await root.end();
     }
   },
