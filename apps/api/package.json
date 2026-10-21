@@ -1,6 +1,6 @@
 {
   "name": "@clog/api",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,9 +12,9 @@
     "build:runtime": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.runtime.json"
   },
   "dependencies": {
-    "@clog/bot": "1.0.0",
-    "@clog/database": "1.0.0",
-    "@clog/domain": "1.0.0",
+    "@clog/bot": "1.0.3",
+    "@clog/database": "1.0.3",
+    "@clog/domain": "1.0.3",
     "@fastify/multipart": "^10.1.2",
     "fastify": "^5.6.1",
     "pg": "^8.16.3",
