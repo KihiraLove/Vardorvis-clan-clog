@@ -424,6 +424,15 @@ test('manual item creation shares one identity, keyboard and drag order affect o
   await mockApi(page);
   await page.goto('/admin/catalog');
   await page.getByRole('button', { name: '+ Add item', exact: true }).click();
+  // A creation receipt arrives before the catalog refresh; hold that read back.
+  let releaseRefresh!: () => void;
+  const refreshGate = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  await page.route('**/api/v1/admin/catalog', async (route) => {
+    await refreshGate;
+    await route.fallback();
+  });
   await page.getByRole('button', { name: 'Add new item', exact: true }).click();
   await page
     .getByLabel('Item icon (required)', { exact: true })
@@ -438,7 +447,16 @@ test('manual item creation shares one identity, keyboard and drag order affect o
     'created.',
   );
   const rows = page.locator('.catalog-item');
-  const id = Number(await rows.last().getAttribute('data-item-id'));
+  const added = rows.filter({
+    has: page.getByRole('button', {
+      name: 'Reorder item New clan drop',
+      exact: true,
+    }),
+  });
+  await expect(added).toHaveCount(0);
+  releaseRefresh();
+  await expect(added).toHaveCount(1);
+  const id = Number(await added.getAttribute('data-item-id'));
   await page
     .getByRole('button', { name: 'Duke Sucellus', exact: true })
     .click();
@@ -453,8 +471,10 @@ test('manual item creation shares one identity, keyboard and drag order affect o
     .getByRole('button', { name: 'Add New clan drop to page', exact: true })
     .click();
   await page.getByRole('button', { name: 'Vardorvis', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Vardorvis', exact: true }),
+  ).toBeVisible();
   const count = await rows.count();
-  const added = page.locator('.catalog-item[data-item-id="' + id + '"]');
   for (let i = count - 1; i > 0; i--) {
     await added
       .getByRole('button', { name: 'Reorder item New clan drop', exact: true })
