@@ -387,6 +387,11 @@ test(
     assert.ok(
       review.proposals.some((p) => p.kind === 'addGameId' && p.localId === '7'),
     );
+    const idChange = review.proposals.find(
+      (p) => p.kind === 'addGameId' && p.localId === '7',
+    )!;
+    assert.equal(idChange.beforeLabel, 'Archive relic');
+    assert.equal(idChange.afterLabel, 'Archive relic');
     assert.ok(
       review.proposals.some((p) => p.kind === 'name' && p.localId === '8'),
     );

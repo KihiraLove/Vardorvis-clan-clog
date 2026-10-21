@@ -1,42 +1,17 @@
 /** Administrator review of pending release changes, grouped by repair. */
 import { useEffect, useRef, useState } from 'react';
-import type {
-  CatalogUpdateReview,
-  CatalogUpdateSelection,
-  CatalogUpdateProposal,
-} from '@clog/domain';
+import type { CatalogUpdateReview, CatalogUpdateSelection } from '@clog/domain';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminDraft } from './admin-route-data.ts';
 import {
   groupedCatalogReview,
+  catalogProblemRows,
   selectedCatalogProposals,
   type CatalogUpdateGroup,
 } from './catalog-update-groups.ts';
 
-function problem(p: CatalogUpdateProposal) {
-  switch (p.kind) {
-    case 'createPage':
-      return `${p.label}: page is missing.`;
-    case 'createItem':
-      return `${p.label}: item is missing (game IDs ${p.after}).`;
-    case 'addGameId':
-      return `${p.label}: missing game ID ${p.after}.`;
-    case 'removeGameId':
-      return `${p.label}: remove local game ID ${p.before}.`;
-    case 'addLink':
-      return `${p.label}: missing relationship to ${p.afterLabel ?? p.after}.`;
-    case 'removeLink':
-      return `${p.label}: remove relationship to ${p.beforeLabel ?? p.before}.`;
-    case 'adopt':
-      return `${p.label}: confirm the matching existing ${p.before === 'Unlinked local page' ? 'page' : 'item'}.`;
-    case 'pageCategory':
-      return `${p.label}: page section ${p.before} → ${p.after}.`;
-    default:
-      return `${p.label}: ${p.before || 'Missing'} → ${p.after || 'Remove'}.`;
-  }
-}
 export function CatalogUpdateNotice({
   client,
   session,
@@ -343,8 +318,8 @@ export function CatalogUpdateNotice({
                       <td>
                         <h3>{group.title}</h3>
                         <ul>
-                          {group.proposals
-                            .filter(
+                          {catalogProblemRows(
+                            group.proposals.filter(
                               (p) =>
                                 !(
                                   ['adoptPage', 'createPage'].includes(
@@ -354,10 +329,11 @@ export function CatalogUpdateNotice({
                                     (m) => m.entityKey === p.entityKey,
                                   )
                                 ),
-                            )
-                            .map((p) => (
-                              <li key={p.id}>{problem(p)}</li>
-                            ))}
+                            ),
+                            review,
+                          ).map((row) => (
+                            <li key={row.id}>{row.text}</li>
+                          ))}
                         </ul>
                         {group.conflicts.map((c) => (
                           <p key={c.kind + c.entityKey}>

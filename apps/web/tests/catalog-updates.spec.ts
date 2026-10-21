@@ -164,8 +164,12 @@ test('grouped review shows the seven requested groups and applies only checked g
         localId: kind,
         label: 'New archive content',
         before: kind === 'pageName' ? 'Local page' : '',
-        after: 'Supplied content',
+        after: kind === 'createItem' ? '34719' : 'Supplied content',
       });
+    const pageName = data.proposals.find((p) => p.kind === 'pageName')!;
+    pageName.label = 'The Fractured Archive';
+    pageName.before = 'The Fractured Archives';
+    pageName.after = 'The Fractured Archive';
   });
   await expect(dialog.getByRole('columnheader')).toHaveText([
     'Detected problem',
@@ -181,6 +185,15 @@ test('grouped review shows the seven requested groups and applies only checked g
     'Incorrect item-page relationships',
   ]);
   await expect(dialog.getByRole('button')).toHaveText(['Save', 'Cancel']);
+  await expect(dialog.getByRole('listitem')).toHaveText([
+    'The Fractured Archives → The Fractured Archive',
+    'Missing → New archive content',
+    'Missing → New archive content ID 34719',
+    'Local name → Archive relic',
+    'Local name ID 99999 → Archive relic ID 50001',
+    'None → Archive relic / archive',
+    'Archive relic / custom-page → None',
+  ]);
   await page.screenshot({
     path: test.info().outputPath('catalog-groups-desktop.png'),
     fullPage: true,
@@ -208,6 +221,19 @@ test('page candidate selection is explicit and group-level ID repairs include on
   page,
 }) => {
   const { dialog, state } = await install(page, false, (data) => {
+    for (const p of data.proposals) {
+      p.label = 'Rondache';
+      if (p.kind === 'name') {
+        p.before = 'Rondace';
+        p.after = 'Rondache';
+      }
+      if (p.kind === 'addGameId' || p.kind === 'removeGameId') {
+        p.beforeLabel = 'Rondace';
+        p.afterLabel = 'Rondache';
+        if (p.kind === 'addGameId') p.after = '34719';
+        else p.before = '1';
+      }
+    }
     data.pageMatches = [
       {
         entityKey: 'archive',
@@ -249,6 +275,12 @@ test('page candidate selection is explicit and group-level ID repairs include on
   await dialog
     .getByRole('checkbox', { name: 'Fix Missing pages', exact: true })
     .check();
+  const ids = dialog.getByRole('row').filter({
+    has: page.getByRole('heading', { name: 'Incorrect item ids', exact: true }),
+  });
+  await expect(ids.getByRole('listitem')).toHaveText([
+    'Rondace ID 1 → Rondache ID 34719',
+  ]);
   await expect(
     dialog.getByRole('button', { name: 'Save', exact: true }),
   ).toBeDisabled();

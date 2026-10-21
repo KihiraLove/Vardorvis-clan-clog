@@ -334,6 +334,14 @@ async function review(
       proposals.push({
         ...p,
         id,
+        ...(['addGameId', 'removeGameId', 'gameIds'].includes(p.kind)
+          ? {
+              beforeLabel:
+                catalog.items.find((item) => String(item.id) === p.localId)
+                  ?.name ?? p.label,
+              afterLabel: p.label,
+            }
+          : {}),
         ...(p.kind === 'addLink'
           ? {
               afterLabel:
