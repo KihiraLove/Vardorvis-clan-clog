@@ -34,6 +34,7 @@ export function CatalogUpdateNotice({
   const dialog = useRef<HTMLDialogElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const restore = useRef<HTMLElement | null>(null);
+  const focusAfterClose = useRef(false);
   const autoPrompt = useRef('');
   const operation = useRef<AbortController | undefined>(undefined);
   const retry = useRef({ payload: '', key: '' });
@@ -140,9 +141,14 @@ export function CatalogUpdateNotice({
         button.current ?? document.querySelector<HTMLElement>('a[href="/"]')
       )?.focus();
   };
+  useEffect(() => {
+    if (open || busy || !focusAfterClose.current) return;
+    focusAfterClose.current = false;
+    restoreFocus();
+  }, [open, busy, review]);
   const finishClose = () => {
+    focusAfterClose.current = true;
     setOpen(false);
-    requestAnimationFrame(restoreFocus);
   };
   const cancel = () => {
     if (!busy && !uncertain) {
@@ -195,7 +201,6 @@ export function CatalogUpdateNotice({
       reset();
       finishClose();
       await load(controller.signal);
-      requestAnimationFrame(restoreFocus);
       window.dispatchEvent(new Event('catalog-updated'));
     } catch (failure) {
       const status =

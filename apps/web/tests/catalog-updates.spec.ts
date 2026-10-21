@@ -292,6 +292,8 @@ test('page candidate selection is explicit and group-level ID repairs include on
     .getByRole('checkbox', { name: 'Fix Incorrect item ids', exact: true })
     .check();
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.saves).toHaveLength(1);
   expect(state.saves[0]!.body.apply).toEqual(
     ['2', '6', '8'].map((n) => n.repeat(64)),
   );
@@ -352,9 +354,12 @@ test('icons-only reviews omit all empty problem groups and disappear after Save'
   await expect(
     page.getByRole('button', { name: /Review catalog update/ }),
   ).toHaveCount(0);
-  expect(
-    await page.evaluate(() => document.activeElement !== document.body),
-  ).toBe(true);
+  await expect(
+    page.getByRole('link', {
+      name: 'Clan name clan collection log',
+      exact: true,
+    }),
+  ).toBeFocused();
 });
 
 test('an uncertain Save freezes choices and retries the exact payload and receipt key', async ({
