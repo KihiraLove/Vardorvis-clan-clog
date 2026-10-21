@@ -27,8 +27,10 @@ Compile changed domain/database/API sources first. Use the owner connection for
 these two maintenance commands; the restricted runtime role cannot install release
 batches. Starting Vite or the direct API watcher alone does not run catalog import.
 Production startup performs this refresh automatically. Existing installations
-offer the first administrator an update review; fresh installs include the content
-without an upgrade prompt. Running tests does not refresh a development database.
+stage missing pages/items for review; the first administrator is prompted when
+changes remain. Check the corresponding Fix? groups and Save to create them.
+Fresh installs include the content without an upgrade prompt. Running tests does
+not refresh a development database.
 
 ## Focused checks
 

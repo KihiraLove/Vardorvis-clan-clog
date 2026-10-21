@@ -3,7 +3,6 @@ import type pg from 'pg';
 import { transaction } from './transaction.js';
 import {
   parseCollectionScheduleInput,
-  parsePermanentPageIds,
   scheduleIdPattern,
   type CollectionScheduleInput,
   type SchedulingState,
@@ -11,12 +10,6 @@ import {
 import { ApiError } from './types.js';
 export interface SchedulingStore {
   state(): Promise<SchedulingState>;
-  setPermanentPages(
-    pageIds: string[],
-    revision: string,
-    actorId: string,
-    actorName: string,
-  ): Promise<SchedulingState>;
   setEnabled(
     enabled: boolean,
     revision: string,
@@ -74,17 +67,10 @@ export async function readState(
   ).rows;
   if (schedules.length > 500)
     throw new ApiError(503, 'Scheduling exceeds supported limits.');
-  const permanentPages = (
-    await client.query<{ page_id: string }>(
-      'SELECT pp.page_id FROM collection_permanent_pages pp JOIN pages p ON p.id=pp.page_id AND p.active ORDER BY pp.page_id LIMIT 2001',
-    )
-  ).rows;
-  if (permanentPages.length > 2000)
-    throw new ApiError(503, 'Permanently open pages exceed supported limits.');
   return {
     enabled: row.enabled,
     revision: 'schedules-' + row.version,
-    permanentlyOpenPageIds: permanentPages.map((p) => p.page_id),
+    permanentlyOpenPageIds: [],
     schedules: schedules.map((s) => ({
       ...s,
       startsAt: s.startsAt.toISOString(),
@@ -118,38 +104,6 @@ async function recordChange(
   );
   return after;
 }
-/** Catalog retirement takes this gate before item/page locks, matching intake and saves. */
-export async function removePermanentPage(
-  client: pg.PoolClient,
-  pageId: string,
-  actorId: string,
-) {
-  await client.query(
-    'SELECT singleton FROM collection_scheduling WHERE singleton=true FOR UPDATE',
-  );
-  if (
-    !(
-      await client.query(
-        'SELECT 1 FROM collection_permanent_pages WHERE page_id=$1',
-        [pageId],
-      )
-    ).rowCount
-  )
-    return;
-  const before = await readState(client);
-  const removed = await client.query(
-    'DELETE FROM collection_permanent_pages WHERE page_id=$1',
-    [pageId],
-  );
-  if (removed.rowCount)
-    await recordChange(
-      client,
-      before,
-      actorId,
-      actorId,
-      'remove_permanent_page',
-    );
-}
 export class PgSchedulingStore implements SchedulingStore {
   constructor(private readonly pool: pg.Pool) {}
   async state() {
@@ -179,41 +133,6 @@ export class PgSchedulingStore implements SchedulingStore {
       await change(client, before);
       return recordChange(client, before, actorId, actorName, action);
     });
-  }
-  setPermanentPages(
-    pageIds: string[],
-    revision: string,
-    actorId: string,
-    actorName: string,
-  ) {
-    let ids: string[];
-    try {
-      ids = parsePermanentPageIds(pageIds);
-    } catch (error) {
-      throw new ApiError(
-        422,
-        error instanceof Error ? error.message : 'Invalid pages.',
-      );
-    }
-    return this.mutate(
-      revision,
-      actorId,
-      actorName,
-      'set_permanent_pages',
-      async (client) => {
-        const pages = await client.query(
-          'SELECT id FROM pages WHERE id=ANY($1::text[]) AND active ORDER BY id FOR SHARE',
-          [ids],
-        );
-        if (pages.rowCount !== ids.length)
-          throw new ApiError(422, 'Choose active collection log pages.');
-        await client.query('DELETE FROM collection_permanent_pages');
-        await client.query(
-          'INSERT INTO collection_permanent_pages(page_id) SELECT unnest($1::text[])',
-          [ids],
-        );
-      },
-    );
   }
   setEnabled(
     enabled: boolean,

@@ -12,7 +12,6 @@ import {
 } from '@clog/domain';
 import {
   parseSchedulingState,
-  parsePermanentPageIds,
   parseCollectionScheduleInput,
   closedCollectionPageMessage,
   type CollectionScheduleInput,
@@ -279,27 +278,6 @@ export class LiveAdminClient implements AdminClient {
     );
     if (result.revision === expectedRevision || result.enabled !== enabled)
       throw new Error('Unexpected scheduling receipt.');
-    return result;
-  }
-  async setPermanentPages(
-    pageIds: string[],
-    expectedRevision: string,
-    csrf: string,
-    signal: AbortSignal,
-  ) {
-    const ids = parsePermanentPageIds(pageIds);
-    const result = parseSchedulingState(
-      await this.json(
-        '/api/v1/admin/schedules/permanent-pages',
-        signal,
-        this.write(csrf, { pageIds: ids, expectedRevision }, 'PUT'),
-      ),
-    );
-    if (
-      result.revision === expectedRevision ||
-      JSON.stringify(result.permanentlyOpenPageIds) !== JSON.stringify(ids)
-    )
-      throw new Error('Unexpected permanent pages receipt.');
     return result;
   }
   async saveSchedule(

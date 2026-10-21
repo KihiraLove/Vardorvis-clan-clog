@@ -248,10 +248,10 @@ entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
 Older clients can omit this field to preserve the existing key requirement.
 
 Scheduling classifies collection type and never closes intake. An active timed
-normal-world page qualifies a drop as `collectionType: "event"`, excluding pages
-selected permanently open. Closed/unscheduled pages, disabled scheduling,
-permanent pages and all hardcore claims use `"regular"`. A shared item qualifies
-if another associated nonpermanent page has an active timed window. Start is
+normal-world page qualifies a drop as `collectionType: "event"`. Unscheduled pages,
+disabled scheduling and all hardcore claims use `"regular"`. Legacy permanently-open
+settings no longer override new intake. A shared item qualifies when any associated
+page has an active timed window. Start is
 inclusive and end exclusive, using one server receipt time in UTC. Unmatched
 normal claims can have `collectionType: null` while waiting for a canonical match.
 Frozen evidence determines their type on resolution; staff can make an audited

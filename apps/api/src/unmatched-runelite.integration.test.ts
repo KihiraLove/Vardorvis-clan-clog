@@ -293,12 +293,17 @@ test(
         assert.equal(saved.receivedAt, original.submittedAt);
         assert.equal(saved.revision, 'schedules-7');
         assert.equal(saved.enabled, true);
-        assert.deepEqual(saved.permanentlyOpenPageIds, ['permanent']);
+        assert.deepEqual(saved.permanentlyOpenPageIds, []);
         assert.deepEqual(saved.eventPages, [
           {
             scheduleId: '00000000-0000-4000-8000-000000000001',
             pageId: 'event',
             itemIds: [42],
+          },
+          {
+            scheduleId: '00000000-0000-4000-8000-000000000001',
+            pageId: 'permanent',
+            itemIds: [44],
           },
         ]);
         await pool.query(

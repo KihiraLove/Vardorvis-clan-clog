@@ -49,6 +49,7 @@ export function parseCatalogUpdateReview(value: unknown): CatalogUpdateReview {
         'adopt',
         'adoptPage',
         'createPage',
+        'createItem',
       ].includes(String(p.kind)) ||
       typeof p.before !== 'string' ||
       typeof p.after !== 'string'
@@ -62,6 +63,11 @@ export function parseCatalogUpdateReview(value: unknown): CatalogUpdateReview {
       label: text(p.label),
       before: p.before,
       after: p.after,
+      ...(p.pageKey === undefined ? {} : { pageKey: text(p.pageKey) }),
+      ...(p.beforeLabel === undefined
+        ? {}
+        : { beforeLabel: text(p.beforeLabel) }),
+      ...(p.afterLabel === undefined ? {} : { afterLabel: text(p.afterLabel) }),
     };
     if (result.kind === 'image') {
       path(result.before);

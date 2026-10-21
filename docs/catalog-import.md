@@ -58,26 +58,27 @@ append a new batch to change supplied values. Include all preceding batches so
 installations can skip releases. Fresh installations install all batches without
 an upgrade prompt.
 
-Startup serializes with other catalog writers, adds unambiguous missing content,
-and records source-to-local mappings and an update summary. Matching local game
-IDs and unique exact names prevent common manual-entry duplicates. Names alone
-can suggest identity review but never merge credit. Ambiguous, contradictory or
-retired entries remain pending. Existing fields and page arrangements are reviewed
-by the administrator; unrelated custom content remains local. A changed legacy
-snapshot uses the same review workflow instead of failing the old import guard.
+Startup validates and registers release metadata and image bytes under the catalog
+writer lock. Existing installations receive proposals for missing pages/items;
+they are created only after the administrator selects the corresponding groups
+and saves. A persistent bootstrap marker distinguishes an existing installation
+from a fresh install whose baseline/release setup was interrupted. Already-installed
+content and collection history are never removed by this change.
 
-Page discovery also compares supplied items with verified local item identities.
-A manual page with a different name/key and matching items is offered for explicit
-adoption; partial/shared/extra membership is shown as evidence. A possible match
-defers automatic page creation. Review can adopt one active candidate or explicitly
-create a separate supplied page; retired candidates require resolution first.
-Adoption preserves the local page key, membership, ordering and schedule references.
-WOM page suggestions resolve the saved source key to the adopted local key.
+Matching local game IDs and unique names prevent manual-entry duplicates. Names
+alone suggest identity review; they never merge credit. Page discovery compares
+verified item identities and displays matching/missing/extra membership as evidence.
+An administrator can adopt one active candidate or explicitly create a separate
+page. Adoption preserves local keys, ordering, memberships and schedule references;
+WOM suggestions follow those saved mappings. Ambiguous or retired identities remain
+blocked for explicit resolution.
 
-Game-ID corrections are individual additions/removals. Extra local IDs remain
-unless explicitly removed, so valid local variants can be retained while repairing
-wrong IDs. Whole-list decisions from the initial reviewer retain their meaning
-for equivalent corrections, and old request receipts still replay unchanged.
+The grouped reviewer keeps name, ID, membership and icon choices separate. The ID
+group applies each listed addition/removal; it never steals another item's ID.
+Unchecked groups remain pending. Earlier explicit keep decisions and exact request
+receipts retain their original meaning. New item creation requires a selected
+relationship to a resolved page; unchecked dependencies cause the save to fail
+atomically with an explanation.
 
 The original `catalog/assets.json` is pinned by `catalog/legacy-assets.sha256`.
 Do not change the pin or replace/remove those images: publish new artwork through
@@ -87,9 +88,7 @@ keeps retained images available after later upgrades and in normal database
 backup/restore; uploaded custom assets retain their existing storage lifecycle.
 Use new batches for new items/images rather than regenerating the legacy baseline.
 
-The first administrator login or restored session after a catalog update opens
-the review. See [staff tools](staff-guide.md) for selection and deferral. Restarting
-or **Rescan missing content** retries safe additions after identity conflicts have
-been resolved. Exact retries do not duplicate items or reviewed changes. Optional
-fixes are never silently applied on restart, and declined identical proposals
-remain declined in later batches.
+The first administrator login or restored session opens a review only when fixes
+remain. See [staff tools](staff-guide.md) for the grouped table, icons and Save/Cancel.
+Restarting or rescanning can refresh discovery but cannot apply pending additions.
+Exact save retries do not duplicate items, pages or reviewed corrections.

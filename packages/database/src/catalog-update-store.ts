@@ -245,10 +245,12 @@ export async function installCatalogUpdate(
         throw new Error(
           'A shipped catalog update is immutable. Publish a new batch ID.',
         );
-      const added = await addMissingCatalogEntries(
-        client,
-        effective(await batches(client)),
-      );
+      const added = fresh
+        ? await addMissingCatalogEntries(
+            client,
+            effective(await batches(client)),
+          )
+        : { addedItems: [], addedPages: [] };
       if (added.addedItems.length || added.addedPages.length)
         await audit(client, 'catalog-upgrade', hash, {
           rescan: true,
@@ -274,7 +276,9 @@ export async function installCatalogUpdate(
           'INSERT INTO catalog_update_images(sha256,bytes,width,height) VALUES($1,$2,$3,$4) ON CONFLICT(sha256) DO NOTHING',
           [image.sha256, image.bytes, image.width, image.height],
         );
-    const summary = await addMissingCatalogEntries(client, merged);
+    const summary = fresh
+      ? await addMissingCatalogEntries(client, merged)
+      : { addedItems: [], addedPages: [] };
     await client.query(
       'INSERT INTO catalog_update_batches(id,sequence,hash,manifest,summary,review_required) SELECT $1,COALESCE(max(sequence),0)+1,$2,$3,$4,$5 FROM catalog_update_batches',
       [batch.id, hash, JSON.stringify(batch), JSON.stringify(summary), !fresh],
@@ -314,14 +318,37 @@ async function review(
     gameIdReviews: NonNullable<CatalogUpdateReview['gameIdReviews']> = [];
   const propose = (p: Omit<CatalogUpdateProposal, 'id'>) => {
     if (p.before === p.after) return;
-    const id = updateHash({
+    const identity = {
       kind: p.kind,
       entityKey: p.entityKey,
       localId: p.localId,
       before: p.before,
       after: p.after,
-    });
-    if (!decisions.has(id)) proposals.push({ ...p, id });
+    };
+    const legacyId = updateHash(identity);
+    const id =
+      p.kind === 'addLink'
+        ? updateHash({ ...identity, pageKey: p.pageKey })
+        : legacyId;
+    if (!decisions.has(id) && !decisions.has(legacyId))
+      proposals.push({
+        ...p,
+        id,
+        ...(p.kind === 'addLink'
+          ? {
+              afterLabel:
+                merged.pages.find((page) => page.key === p.pageKey)?.name ??
+                p.after,
+            }
+          : {}),
+        ...(p.kind === 'removeLink'
+          ? {
+              beforeLabel:
+                catalog.pages.find((page) => page.id === p.before)?.name ??
+                p.before,
+            }
+          : {}),
+      });
   };
   const requiredItems = new Set(
       rows
@@ -383,12 +410,13 @@ async function review(
       continue;
     }
     if (m.localId === null) {
-      conflicts.push({
+      propose({
         entityKey: page.key,
-        kind: 'page',
+        kind: 'createPage',
+        localId: page.key,
         label: page.name,
-        reason: 'The page is missing. Run catalog upgrade processing again.',
-        candidates: [],
+        before: '',
+        after: page.key,
       });
       continue;
     }
@@ -422,14 +450,26 @@ async function review(
       continue;
     }
     if (m.localId === null) {
-      conflicts.push({
+      propose({
         entityKey: item.key,
-        kind: 'item',
+        kind: 'createItem',
+        localId: item.key,
         label: item.name,
-        reason:
-          'A required page is unresolved. Resolve the page and rerun catalog upgrade processing.',
-        candidates: [],
+        before: '',
+        after: item.gameItemIds.join(', '),
       });
+      for (const key of item.pageKeys) {
+        const page = matches.find((p) => p.kind === 'page' && p.key === key)!;
+        propose({
+          entityKey: item.key,
+          localId: item.key,
+          label: item.name,
+          kind: 'addLink',
+          before: '',
+          pageKey: key,
+          after: page.localId ?? key,
+        });
+      }
       continue;
     }
     const local = catalog.items.find((i) => String(i.id) === m.localId)!;
@@ -495,6 +535,23 @@ async function review(
         before: local.iconPath ?? '',
         after: path,
       });
+    for (const key of item.pageKeys) {
+      const page = matches.find((p) => p.kind === 'page' && p.key === key)!;
+      if (
+        !page.conflict &&
+        !page.candidate &&
+        !catalog.pages.some(
+          (p) => p.id === page.localId && p.itemIds.includes(local.id),
+        )
+      )
+        propose({
+          ...common,
+          kind: 'addLink',
+          before: '',
+          pageKey: key,
+          after: page.localId ?? key,
+        });
+    }
     if (
       item.pageKeys.some((key) => {
         const page = matches.find((m) => m.kind === 'page' && m.key === key)!;
@@ -502,13 +559,6 @@ async function review(
       })
     )
       continue;
-    for (const pageKey of item.pageKeys) {
-      const pm = matches.find((p) => p.kind === 'page' && p.key === pageKey)!;
-      if (pm.conflict || pm.localId === null || pm.candidate) continue;
-      const page = catalog.pages.find((p) => p.id === pm.localId)!;
-      if (!page.itemIds.includes(local.id))
-        propose({ ...common, kind: 'addLink', before: '', after: page.id });
-    }
     const expected = new Set(
       item.pageKeys.map(
         (k) => matches.find((p) => p.kind === 'page' && p.key === k)?.localId,
@@ -543,7 +593,8 @@ async function review(
         )
       ).rows[0].version,
     autoOpen:
-      rows.some((r) => r.review_required) && prompt?.revision !== revision,
+      (proposals.length > 0 || conflicts.length > 0) &&
+      prompt?.revision !== revision,
     releases: [
       ...rows
         .filter((r) => r.review_required)
@@ -616,10 +667,11 @@ export class PgCatalogUpdates {
           409,
           'A newer catalog update is available. Reload the review.',
         );
-      const summary = await addMissingCatalogEntries(
-        c,
-        effective(await batches(c)),
-      );
+      // Rescanning must never bypass the administrator's selected creation groups.
+      const summary = {
+        addedItems: [] as string[],
+        addedPages: [] as string[],
+      };
       await audit(c, actor, revision, { rescan: true, ...summary });
       await c.query(
         'INSERT INTO catalog_update_receipts(actor_id,request_key,payload_hash,result) VALUES($1,$2,$3,$4)',
@@ -753,9 +805,11 @@ export class PgCatalogUpdates {
       const priority = (p: CatalogUpdateProposal) =>
         ['adoptPage', 'createPage', 'adopt'].includes(p.kind)
           ? 0
-          : p.kind === 'addGameId'
+          : p.kind === 'createItem'
             ? 1
-            : 2;
+            : p.kind === 'addGameId'
+              ? 2
+              : 3;
       for (const p of selected.sort((a, b) => priority(a) - priority(b))) {
         const isPage =
           p.kind === 'pageName' ||
@@ -764,6 +818,9 @@ export class PgCatalogUpdates {
           p.kind === 'createPage' ||
           (p.kind === 'adopt' && p.before === 'Unlinked local page');
         const kind = isPage ? 'page' : 'item';
+        const match = matches.find(
+          (m) => m.kind === kind && m.key === p.entityKey,
+        )!;
         if (p.kind === 'createPage') {
           const page = merged.pages.find((p2) => p2.key === p.entityKey)!;
           if (
@@ -791,15 +848,72 @@ export class PgCatalogUpdates {
             [page.key, page.name, page.category],
           );
         }
-        const match = matches.find(
-          (m) => m.kind === kind && m.key === p.entityKey,
-        )!;
+        if (p.kind === 'createItem') {
+          const item = merged.items.find((i) => i.key === p.entityKey)!;
+          if (
+            !selected.some(
+              (link) => link.kind === 'addLink' && link.entityKey === item.key,
+            )
+          )
+            throw new CatalogUpdateError(
+              422,
+              'Select Missing item-page relationships when adding items.',
+            );
+          if (
+            (await c.query('SELECT count(*)::int AS n FROM items')).rows[0].n >=
+            10000
+          )
+            throw new CatalogUpdateError(
+              422,
+              'Catalog item capacity exceeded.',
+            );
+          const image = (
+            await c.query(
+              'SELECT bytes,width,height FROM catalog_update_images WHERE sha256=$1',
+              [item.image.sha256],
+            )
+          ).rows[0];
+          if (!image)
+            throw new CatalogUpdateError(503, 'Supplied image is unavailable.');
+          await validateUpdateImage(image.bytes, item.image);
+          let id: number;
+          do {
+            id = (
+              await c.query(
+                "SELECT nextval('canonical_item_id_seq')::int AS id",
+              )
+            ).rows[0].id;
+          } while (
+            (await c.query('SELECT 1 FROM items WHERE id=$1', [id])).rowCount
+          );
+          await c.query(
+            'INSERT INTO items(id,name,icon_path) VALUES($1,$2,$3)',
+            [id, item.name, suppliedImagePath(item.image.sha256)],
+          );
+          await c.query(
+            'INSERT INTO game_item_ids(game_item_id,item_id) SELECT unnest($1::int[]),$2',
+            [item.gameItemIds, id],
+          );
+          match.localId = String(id);
+        }
+        if (['adopt', 'adoptPage', 'createPage'].includes(p.kind)) {
+          match.localId = p.localId;
+          match.candidate = false;
+          delete match.conflict;
+          delete match.pageChoices;
+        }
+        const localId = match.localId;
+        if (localId === null)
+          throw new CatalogUpdateError(
+            422,
+            'Select Missing items before fixing their relationships.',
+          );
         if (!(
           p.kind === 'image' &&
           match.candidate &&
           !adoptions.has('item:' + p.entityKey)
         ))
-          await bind(c, kind, p.entityKey, p.localId);
+          await bind(c, kind, p.entityKey, localId);
         if (p.kind === 'name')
           await c.query(
             "UPDATE items SET name=$2,overrides=ARRAY(SELECT DISTINCT unnest(overrides||ARRAY['name'])) WHERE id=$1",
@@ -886,23 +1000,33 @@ export class PgCatalogUpdates {
           );
         }
         if (p.kind === 'addLink') {
-          const pageKey = merged.items
-            .find((i) => i.key === p.entityKey)!
-            .pageKeys.find((k) =>
-              matches.some(
-                (m) =>
-                  m.kind === 'page' && m.key === k && m.localId === p.after,
-              ),
-            );
+          const pageKey =
+            p.pageKey ??
+            merged.items
+              .find((i) => i.key === p.entityKey)!
+              .pageKeys.find((k) =>
+                matches.some(
+                  (m) =>
+                    m.kind === 'page' && m.key === k && m.localId === p.after,
+                ),
+              );
           if (!pageKey)
             throw new CatalogUpdateError(
               409,
               'The supplied page mapping changed.',
             );
-          await bind(c, 'page', pageKey, p.after);
+          const target = matches.find(
+            (m) => m.kind === 'page' && m.key === pageKey,
+          )!;
+          if (target.localId === null || target.candidate || target.conflict)
+            throw new CatalogUpdateError(
+              422,
+              'Select Missing pages and resolve page identities before fixing their relationships.',
+            );
+          await bind(c, 'page', pageKey, target.localId);
           await c.query(
             "INSERT INTO page_items(page_id,item_id,slot,origin) SELECT $1,$2,COALESCE(max(slot),-1)+1,'manual' FROM page_items WHERE page_id=$1",
-            [p.after, p.localId],
+            [target.localId, localId],
           );
         }
         if (p.kind === 'removeLink')
@@ -913,9 +1037,9 @@ export class PgCatalogUpdates {
         if (p.kind === 'addLink' || p.kind === 'removeLink')
           await c.query(
             "UPDATE items SET overrides=ARRAY(SELECT DISTINCT unnest(overrides||ARRAY['pages'])) WHERE id=$1",
-            [p.localId],
+            [localId],
           );
-        changes.push(p);
+        changes.push({ ...p, resolvedLocalId: localId });
       }
       if (
         (await c.query('SELECT count(*)::int AS n FROM page_items')).rows[0].n >

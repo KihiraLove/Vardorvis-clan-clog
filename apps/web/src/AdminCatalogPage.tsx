@@ -60,6 +60,7 @@ export function AdminCatalogPage({
     if (!signal.aborted) {
       setCatalog(next);
       setReadError(undefined);
+      window.dispatchEvent(new Event('catalog-review-refresh'));
     }
     return next;
   };

@@ -146,7 +146,7 @@ test(
       async () => {
         for (const [id, type] of [
           [1, 'event'],
-          [2, 'regular'],
+          [2, 'event'],
           [3, 'regular'],
           [4, 'event'],
           [5, 'regular'],
@@ -176,7 +176,7 @@ test(
       },
     );
     await t.test(
-      'UTC windows include start, exclude end and ignore permanent-page overlap',
+      'UTC windows include start, exclude end and include retired permanent-page settings without exemptions',
       async () => {
         await pool.query(
           "INSERT INTO collection_log_schedules(id,title,starts_at,ends_at) VALUES('00000000-0000-4000-8000-000000000002','Boundary','2020-01-01T12:00:00Z','2020-01-01T13:00:00Z'); INSERT INTO collection_log_schedule_pages(schedule_id,page_id) VALUES('00000000-0000-4000-8000-000000000002','closed'),('00000000-0000-4000-8000-000000000002','permanent')",
@@ -202,7 +202,7 @@ test(
           );
           assert.deepEqual(
             start.eventPages.map((p) => p.pageId),
-            ['closed'],
+            ['closed', 'permanent'],
           );
           assert.equal(
             (

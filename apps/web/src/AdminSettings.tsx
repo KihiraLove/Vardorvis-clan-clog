@@ -251,7 +251,9 @@ export function AdminSettings({
               ] as const
             ).map(([key, label]) => (
               <label key={key}>
-                {label}
+                {hardcore && key === 'xpTitle'
+                  ? 'XP section title (section is disabled until WOM adds support)'
+                  : label}
                 <input
                   required
                   maxLength={160}

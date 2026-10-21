@@ -26,6 +26,7 @@ test('release bundle binds exact infrastructure and migration bytes without copy
       '001_baseline.sql',
       '002_custom_competition_metrics.sql',
       '003_catalog_updates.sql',
+      '004_catalog_bootstrap_state.sql',
     ],
   );
   assert.deepEqual(

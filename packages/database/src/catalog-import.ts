@@ -136,6 +136,14 @@ export async function importBundledCatalog(
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   try {
+    // Serialize owner bootstrap runs; individual catalog transactions retain
+    // their writer lock without holding it throughout asset preparation.
+    await client.query('SELECT pg_advisory_lock(74261006)');
+    const fresh = !(
+      await client.query(
+        'SELECT complete FROM catalog_bootstrap_state WHERE singleton',
+      )
+    ).rows[0]!.complete;
     const prior = (
       await client.query(
         'SELECT id FROM catalog_versions WHERE source_url=$1',
@@ -159,11 +167,14 @@ export async function importBundledCatalog(
           client,
           batch,
           release.updates.images,
-          prior.length === 0,
+          fresh,
         )) === 'installed' &&
         result === 'unchanged'
       )
         result = 'updated';
+    await client.query(
+      'UPDATE catalog_bootstrap_state SET complete=true WHERE singleton',
+    );
     return result;
   } finally {
     await client.end();

@@ -177,7 +177,10 @@ test('hardcore appearance can be configured while disabled and switches independ
     .getByLabel('Collection log caption', { exact: true })
     .fill('Hardcore drops');
   await page
-    .getByLabel('XP section title', { exact: true })
+    .getByLabel(
+      'XP section title (section is disabled until WOM adds support)',
+      { exact: true },
+    )
     .fill('Hardcore training');
   await page
     .getByLabel('Logo image')

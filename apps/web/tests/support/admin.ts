@@ -27,7 +27,6 @@ import {
   type RuneLiteSettings,
   type RuneLiteSettingsUpdate,
   parseCollectionScheduleInput,
-  parsePermanentPageIds,
   type SchedulingState,
   type CollectionScheduleInput,
 } from '@clog/domain';
@@ -189,20 +188,6 @@ export class MemoryAdminClient implements AdminClient {
   ) {
     this.checkScheduleRevision(revision, signal);
     this.schedulingState.enabled = enabled;
-    this.nextScheduleRevision();
-    return this.scheduling(signal);
-  }
-  async setPermanentPages(
-    pageIds: string[],
-    revision: string,
-    _csrf: string,
-    signal: AbortSignal,
-  ) {
-    this.checkScheduleRevision(revision, signal);
-    const ids = parsePermanentPageIds(pageIds);
-    if (ids.some((id) => !this.data.pages.some((p) => p.id === id)))
-      throw new AdminRequestError(422);
-    this.schedulingState.permanentlyOpenPageIds = ids;
     this.nextScheduleRevision();
     return this.scheduling(signal);
   }

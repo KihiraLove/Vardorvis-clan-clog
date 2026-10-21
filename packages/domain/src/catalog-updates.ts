@@ -31,12 +31,16 @@ export interface CatalogUpdateProposal {
     | 'removeLink'
     | 'adoptPage'
     | 'createPage'
+    | 'createItem'
     | 'adopt';
   entityKey: string;
   localId: string;
   label: string;
   before: string;
   after: string;
+  pageKey?: string;
+  beforeLabel?: string;
+  afterLabel?: string;
 }
 export interface CatalogUpdateConflict {
   entityKey: string;

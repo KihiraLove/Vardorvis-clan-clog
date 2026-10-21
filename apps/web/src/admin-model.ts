@@ -236,12 +236,6 @@ export interface AdminClient {
     signal: AbortSignal,
     id?: string,
   ): Promise<import('@clog/domain').SchedulingState>;
-  setPermanentPages(
-    pageIds: string[],
-    revision: string,
-    csrf: string,
-    signal: AbortSignal,
-  ): Promise<import('@clog/domain').SchedulingState>;
   deleteSchedule(
     id: string,
     revision: string,

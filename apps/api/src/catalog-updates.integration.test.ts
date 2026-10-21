@@ -36,7 +36,8 @@ test(
   { skip },
   async (t) => {
     const baseline = await readBundledSnapshot();
-    for (const fresh of [true, false]) {
+    for (const mode of ['fresh', 'interrupted', 'existing']) {
+      const fresh = mode !== 'existing';
       const root = new pg.Client({
         connectionString: process.env.TEST_DATABASE_URL!,
       });
@@ -55,8 +56,10 @@ test(
         await root.end();
       });
       await migrate(url.href);
+      if (mode === 'interrupted') await importCatalog(client, baseline);
       if (!fresh) {
         await importCatalog(client, baseline);
+        await client.query('UPDATE catalog_bootstrap_state SET complete=true');
         await client.query(
           "INSERT INTO items(id,name,icon_path,origin) VALUES(9000000,'Orion','/catalog/items/1249.webp','manual'); INSERT INTO game_item_ids(game_item_id,item_id) VALUES(34646,9000000); INSERT INTO pages(id,name,category,sort_order) VALUES('our-archive','Our raid loot','raids',10); INSERT INTO page_items(page_id,item_id,slot) VALUES('our-archive',9000000,0); INSERT INTO submissions(id,source,raw_item_text,item_id,collector_name,collected_on,date_source,proof_url,status,reviewed_by,reviewed_at) VALUES('00000000-0000-4000-8000-000000000099','manual','Orion',9000000,'Original collector','2026-10-20','admin','','approved','owner',now())",
         );
@@ -104,6 +107,16 @@ test(
             .rows[0].name,
           'Our raid loot',
         );
+      }
+      if (!fresh) {
+        await store.apply('owner', randomUUID(), {
+          revision: review.revision,
+          catalogRevision: review.catalogRevision,
+          apply: review.proposals
+            .filter((p) => ['createItem', 'addLink'].includes(p.kind))
+            .map((p) => p.id),
+          keep: [],
+        });
       }
       const page = fresh ? 'the_fractured_archive' : 'our-archive';
       assert.equal(
@@ -190,6 +203,7 @@ async function fixture(t: TestContext) {
   for (const file of [
     '001_baseline.sql',
     '002_custom_competition_metrics.sql',
+    '003_catalog_updates.sql',
   ]) {
     const sql = await readFile(
       new URL('../../../packages/database/migrations/' + file, import.meta.url),
@@ -220,7 +234,7 @@ async function fixture(t: TestContext) {
   assert.equal(
     (await client.query('SELECT count(*)::int AS n FROM schema_migrations'))
       .rows[0].n,
-    3,
+    4,
   );
   const supplied = await image('#f0c000'),
     old = await image('#ff0000');
@@ -259,7 +273,7 @@ test(
   'catalog upgrade inserts missing content once, uses exact manual identities and preserves credited data',
   { skip },
   async (t) => {
-    const { client, pool, store, supplied, batch } = await fixture(t);
+    const { client, pool, store, supplied, batch, choose } = await fixture(t);
     const second = await pool.connect();
     try {
       const outcomes = await Promise.all([
@@ -272,7 +286,29 @@ test(
     }
     let review = await store.preview('owner');
     assert.equal(review.autoOpen, true);
-    assert.deepEqual(review.releases[0]!.addedItems, ['Archive relic']);
+    assert.deepEqual(review.releases[0]!.addedItems, []);
+    assert.equal(
+      (await client.query('SELECT count(*)::int AS n FROM items')).rows[0].n,
+      1,
+    );
+    await store.rescan('owner', review.revision, randomUUID());
+    await installCatalogUpdate(client, batch, [supplied]);
+    assert.equal(
+      (await client.query('SELECT count(*)::int AS n FROM items')).rows[0].n,
+      1,
+    );
+    await assert.rejects(
+      choose(review, (p) => p.kind === 'createItem' || p.kind === 'createPage'),
+      { status: 422 },
+    );
+    assert.equal(
+      (await client.query('SELECT count(*)::int AS n FROM items')).rows[0].n,
+      1,
+    );
+    await choose(review, (p) =>
+      ['createPage', 'createItem', 'addLink'].includes(p.kind),
+    );
+    review = await store.preview('owner');
     assert.equal(review.proposals.length, 0);
     assert.equal(review.currentImages[0]!.identical, true);
     assert.deepEqual(await store.image(supplied.sha256), supplied.bytes);
@@ -292,7 +328,7 @@ test(
       (await new PgCatalogUpdates(pool).preview('owner')).autoOpen,
       false,
     );
-    assert.equal((await store.preview('another-admin')).autoOpen, true);
+    assert.equal((await store.preview('another-admin')).autoOpen, false);
     await assert.rejects(
       installCatalogUpdate(
         client,
@@ -523,7 +559,7 @@ test(
     );
     await installCatalogUpdate(client, batch, [supplied]);
     let review = await store.preview('owner');
-    assert.equal(review.conflicts.length, 3);
+    assert.equal(review.conflicts.length, 2);
     assert.equal(
       (await client.query('SELECT count(*)::int AS n FROM items')).rows[0].n,
       4,
@@ -534,7 +570,8 @@ test(
     );
     review = await store.preview('owner');
     const added = await store.rescan('owner', review.revision, randomUUID());
-    assert.deepEqual(added.addedItems, ['New treasure']);
+    assert.deepEqual(added.addedItems, []);
+    await choose(review, (p) => ['createItem', 'addLink'].includes(p.kind));
     assert.equal(
       (
         await client.query(
@@ -602,7 +639,8 @@ test(
       ),
     );
     const result = await store.rescan('owner', review.revision, randomUUID());
-    assert.deepEqual(result.addedItems, ['Missing treasure']);
+    assert.deepEqual(result.addedItems, []);
+    await choose(review, (p) => ['createItem', 'addLink'].includes(p.kind));
     assert.deepEqual(
       (await client.query("SELECT name FROM pages WHERE id='our-loot'")).rows,
       [{ name: 'Our raid loot' }],
@@ -924,5 +962,53 @@ test(
       await root.query('DROP DATABASE ' + database);
       await root.end();
     }
+  },
+);
+
+test(
+  'relationship repairs distinguish source keys from local IDs and retain legacy keep decisions',
+  { skip },
+  async (t) => {
+    const { client, store, supplied, batch, choose } = await fixture(t);
+    await client.query(
+      "INSERT INTO items(id,name) VALUES(7,'Archive relic'); INSERT INTO game_item_ids(game_item_id,item_id) VALUES(50001,7); INSERT INTO pages(id,name,category,sort_order) VALUES('local-page','One','other',1),('other-page','Two','other',2); INSERT INTO catalog_update_bindings(kind,source_key,local_id) VALUES('page','source-one','local-page'),('page','local-page','other-page')",
+    );
+    batch.pages = [
+      { key: 'source-one', name: 'One', category: 'other' },
+      { key: 'local-page', name: 'Two', category: 'other' },
+    ];
+    batch.items[0]!.pageKeys = ['local-page', 'source-one'];
+    await installCatalogUpdate(client, batch, [supplied]);
+    const review = await store.preview('owner');
+    assert.equal(
+      review.proposals.filter((p) => p.kind === 'addLink').length,
+      2,
+    );
+    await choose(
+      review,
+      (p) => p.kind === 'addLink' && p.pageKey === 'source-one',
+    );
+    assert.deepEqual(
+      (await client.query('SELECT page_id FROM page_items WHERE item_id=7'))
+        .rows,
+      [{ page_id: 'local-page' }],
+    );
+    const legacy = updateHash({
+      kind: 'addLink',
+      entityKey: 'relic',
+      localId: '7',
+      before: '',
+      after: 'other-page',
+    });
+    await client.query(
+      "INSERT INTO catalog_update_decisions(proposal_hash,actor_id,decision) VALUES($1,'owner','kept')",
+      [legacy],
+    );
+    assert.equal(
+      (await store.preview('owner')).proposals.some(
+        (p) => p.kind === 'addLink',
+      ),
+      false,
+    );
   },
 );

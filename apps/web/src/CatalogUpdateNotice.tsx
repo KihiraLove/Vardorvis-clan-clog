@@ -1,36 +1,42 @@
-/** One durable update prompt, with an always-available way to revisit the review. */
+/** Administrator review of pending release changes, grouped by repair. */
 import { useEffect, useRef, useState } from 'react';
 import type {
   CatalogUpdateReview,
-  CatalogUpdateProposal,
   CatalogUpdateSelection,
+  CatalogUpdateProposal,
 } from '@clog/domain';
 import type { AdminClient } from './admin-model.ts';
 import type { AdminSession } from './xp-model.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import { useAdminDraft } from './admin-route-data.ts';
+import {
+  groupedCatalogReview,
+  selectedCatalogProposals,
+  type CatalogUpdateGroup,
+} from './catalog-update-groups.ts';
 
-const labels: Record<CatalogUpdateProposal['kind'], string> = {
-  name: 'Item name',
-  gameIds: 'Game item IDs',
-  addGameId: 'Add game item ID',
-  removeGameId: 'Remove local game item ID',
-  image: 'Supplied image',
-  pageName: 'Page name',
-  pageCategory: 'Page section',
-  addLink: 'Add to page',
-  removeLink: 'Remove local page association',
-  adopt: 'Confirm local identity',
-  adoptPage: 'Adopt existing page',
-  createPage: 'Create separate supplied page',
-};
-const proposalLabel = (p: CatalogUpdateProposal) =>
-  labels[p.kind] +
-  (p.kind === 'addGameId'
-    ? ' ' + p.after
-    : p.kind === 'removeGameId'
-      ? ' ' + p.before
-      : '');
+function problem(p: CatalogUpdateProposal) {
+  switch (p.kind) {
+    case 'createPage':
+      return `${p.label}: page is missing.`;
+    case 'createItem':
+      return `${p.label}: item is missing (game IDs ${p.after}).`;
+    case 'addGameId':
+      return `${p.label}: missing game ID ${p.after}.`;
+    case 'removeGameId':
+      return `${p.label}: remove local game ID ${p.before}.`;
+    case 'addLink':
+      return `${p.label}: missing relationship to ${p.afterLabel ?? p.after}.`;
+    case 'removeLink':
+      return `${p.label}: remove relationship to ${p.beforeLabel ?? p.before}.`;
+    case 'adopt':
+      return `${p.label}: confirm the matching existing ${p.before === 'Unlinked local page' ? 'page' : 'item'}.`;
+    case 'pageCategory':
+      return `${p.label}: page section ${p.before} → ${p.after}.`;
+    default:
+      return `${p.label}: ${p.before || 'Missing'} → ${p.after || 'Remove'}.`;
+  }
+}
 export function CatalogUpdateNotice({
   client,
   session,
@@ -40,26 +46,34 @@ export function CatalogUpdateNotice({
   session: AdminSession;
   onAccessLost: () => void;
 }) {
-  const [review, setReview] = useState<CatalogUpdateReview>(),
-    [error, setError] = useState<string>(),
-    [message, setMessage] = useState<string>(),
-    [open, setOpen] = useState(false),
-    [busy, setBusy] = useState(false),
-    [search, setSearch] = useState('');
-  const [choices, setChoices] = useState<Record<string, 'apply' | 'keep'>>({});
-  useAdminDraft(false, busy);
-  const dialog = useRef<HTMLDialogElement>(null),
-    op = useRef<AbortController | undefined>(undefined),
-    button = useRef<HTMLButtonElement>(null),
-    restore = useRef<HTMLElement | null>(null),
-    autoPrompt = useRef(''),
-    retry = useRef({ payload: '', key: '' });
-  const fail = (error: unknown) => {
-    if (classifyAccessFailure(error) === 'expired') onAccessLost();
+  const [review, setReview] = useState<CatalogUpdateReview>();
+  const [error, setError] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [uncertain, setUncertain] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [groups, setGroups] = useState<Set<CatalogUpdateGroup>>(new Set());
+  const [icons, setIcons] = useState(false);
+  const [identities, setIdentities] = useState<Record<string, string>>({});
+  const dialog = useRef<HTMLDialogElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const restore = useRef<HTMLElement | null>(null);
+  const autoPrompt = useRef('');
+  const operation = useRef<AbortController | undefined>(undefined);
+  const retry = useRef({ payload: '', key: '' });
+  useAdminDraft(false, busy || uncertain);
+  const reset = () => {
+    setGroups(new Set());
+    setIcons(false);
+    setIdentities({});
+  };
+  const fail = (failure: unknown) => {
+    if (classifyAccessFailure(failure) === 'expired') onAccessLost();
     else
       setError(
-        error instanceof Error
-          ? error.message
+        failure instanceof Error
+          ? failure.message
           : 'Catalog update review could not be loaded.',
       );
   };
@@ -73,36 +87,58 @@ export function CatalogUpdateNotice({
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    op.current = controller;
     const timer = setTimeout(() => controller.abort(), 15000);
+    setLoading(true);
     void load(controller.signal)
+      .then(() => {
+        if (active) {
+          reset();
+          setError(undefined);
+        }
+      })
       .catch((e) => {
         if (!active) return;
         if (controller.signal.aborted)
           setError('Catalog update review timed out. Retry catalog updates.');
         else fail(e);
       })
-      .finally(() => clearTimeout(timer));
+      .finally(() => {
+        clearTimeout(timer);
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
-      clearTimeout(timer);
       controller.abort();
-      op.current?.abort();
+      clearTimeout(timer);
     };
-  }, [client, session.username]); // The component is mounted only for the administrator.
+  }, [client, session.username, refresh]);
   useEffect(() => {
-    if (review?.autoOpen && autoPrompt.current !== review.revision) {
+    const update = () => {
+      if (!busy && !uncertain) setRefresh((n) => n + 1);
+    };
+    window.addEventListener('catalog-updated', update);
+    window.addEventListener('catalog-review-refresh', update);
+    return () => {
+      window.removeEventListener('catalog-updated', update);
+      window.removeEventListener('catalog-review-refresh', update);
+    };
+  }, [busy, uncertain]);
+  useEffect(() => () => operation.current?.abort(), []);
+  const pending =
+    !!review && !!(review.proposals.length || review.conflicts.length);
+  useEffect(() => {
+    if (pending && review?.autoOpen && autoPrompt.current !== review.revision) {
       autoPrompt.current = review.revision;
       restore.current = document.activeElement as HTMLElement;
       setOpen(true);
     }
-  }, [review]);
+  }, [review, pending]);
   useEffect(() => {
     if (!open || !review) return;
     const element = dialog.current;
     element?.showModal();
-    const controller = new AbortController(),
-      timer = setTimeout(() => controller.abort(), 10000);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
     void client.catalogUpdateClient!()
       .then((api) =>
         api.catalogUpdateSeen(
@@ -117,118 +153,141 @@ export function CatalogUpdateNotice({
       .finally(() => clearTimeout(timer));
     return () => {
       element?.close();
+      controller.abort();
+      clearTimeout(timer);
     };
   }, [open, review?.revision]);
-  const close = () => {
-    if (busy) return;
-    setOpen(false);
-    requestAnimationFrame(() => {
-      if (restore.current?.isConnected && restore.current !== document.body)
-        restore.current.focus();
-      else button.current?.focus();
-    });
+  const restoreFocus = () => {
+    if (restore.current?.isConnected && restore.current !== document.body)
+      restore.current.focus();
+    else
+      (
+        button.current ?? document.querySelector<HTMLElement>('a[href="/"]')
+      )?.focus();
   };
-  const execute = async (mode: 'save' | 'reload' | 'rescan') => {
-    if (busy) return;
+  const finishClose = () => {
+    setOpen(false);
+    requestAnimationFrame(restoreFocus);
+  };
+  const cancel = () => {
+    if (!busy && !uncertain) {
+      reset();
+      finishClose();
+    }
+  };
+  const apply = review
+    ? selectedCatalogProposals(review, groups, icons, identities)
+    : [];
+  const missingIdentity = !!review?.pageMatches?.some(
+    (m) =>
+      groups.has('pages') &&
+      review.proposals.some(
+        (p) =>
+          p.entityKey === m.entityKey &&
+          ['adoptPage', 'createPage'].includes(p.kind),
+      ) &&
+      !identities[m.entityKey],
+  );
+  const save = async () => {
+    if (!review || busy || !apply.length || missingIdentity) return;
     const controller = new AbortController();
-    op.current = controller;
+    operation.current = controller;
     const timer = setTimeout(() => controller.abort(), 15000);
+    const selection: CatalogUpdateSelection = {
+      revision: review.revision,
+      catalogRevision: review.catalogRevision,
+      apply,
+      keep: [],
+    };
+    const payload = JSON.stringify(selection);
+    if (retry.current.payload !== payload)
+      retry.current = { payload, key: crypto.randomUUID() };
     setBusy(true);
     setError(undefined);
-    setMessage(undefined);
+    let saved = false;
     try {
-      if (mode === 'save' && review) {
-        const selection: CatalogUpdateSelection = {
-          revision: review.revision,
-          catalogRevision: review.catalogRevision,
-          apply: Object.keys(choices)
-            .filter((k) => choices[k] === 'apply')
-            .sort(),
-          keep: Object.keys(choices)
-            .filter((k) => choices[k] === 'keep')
-            .sort(),
-        };
-        const payload = JSON.stringify(selection);
-        if (retry.current.payload !== payload)
-          retry.current = { payload, key: crypto.randomUUID() };
-        const receipt = await (
-          await client.catalogUpdateClient!()
-        ).applyCatalogUpdate(
-          selection,
-          retry.current.key,
-          session.csrfToken,
-          controller.signal,
-        );
-        retry.current = { payload: '', key: '' };
-        setChoices({});
-        setMessage(
-          receipt.applied + ' changes applied; ' + receipt.kept + ' kept.',
-        );
-        window.dispatchEvent(new Event('catalog-updated'));
-      }
-      if (mode === 'rescan' && review) {
-        const payload =
-          'rescan:' + review.revision + ':' + review.catalogRevision;
-        if (retry.current.payload !== payload)
-          retry.current = { payload, key: crypto.randomUUID() };
-        const result = await (
-          await client.catalogUpdateClient!()
-        ).rescanCatalogUpdate(
-          review.revision,
-          retry.current.key,
-          session.csrfToken,
-          controller.signal,
-        );
-        retry.current = { payload: '', key: '' };
-        setMessage(
-          result.addedItems.length +
-            ' missing items and ' +
-            result.addedPages.length +
-            ' missing pages added.',
-        );
-        window.dispatchEvent(new Event('catalog-updated'));
-      }
+      await (
+        await client.catalogUpdateClient!()
+      ).applyCatalogUpdate(
+        selection,
+        retry.current.key,
+        session.csrfToken,
+        controller.signal,
+      );
+      saved = true;
+      retry.current = { payload: '', key: '' };
+      setUncertain(false);
+      reset();
+      finishClose();
       await load(controller.signal);
-      if (mode !== 'save') setChoices({});
-    } catch (e) {
-      if (controller.signal.aborted)
+      requestAnimationFrame(restoreFocus);
+      window.dispatchEvent(new Event('catalog-updated'));
+    } catch (failure) {
+      const status =
+        failure instanceof Error && 'status' in failure
+          ? failure.status
+          : undefined;
+      if (saved) {
         setError(
-          'Request could not be confirmed. Retry the same choices to recover the saved receipt.',
+          'Changes saved, but the updated review could not be loaded. Retry catalog updates.',
         );
-      else fail(e);
+      } else if (status === 409) {
+        retry.current = { payload: '', key: '' };
+        setUncertain(false);
+        reset();
+        try {
+          await load(controller.signal);
+        } catch {
+          setLoading(true);
+          setError(
+            'The catalog changed, but refreshing failed. Cancel and retry catalog updates.',
+          );
+          return;
+        }
+        setError(
+          'The catalog changed. Review the refreshed problems and choose your fixes again.',
+        );
+      } else if (
+        status === 401 ||
+        status === 403 ||
+        status === 422 ||
+        status === 400
+      ) {
+        setUncertain(false);
+        fail(failure);
+      } else {
+        setUncertain(true);
+        setError(
+          'Save could not be confirmed. Click Save to retry the same choices and recover its receipt.',
+        );
+      }
     } finally {
       clearTimeout(timer);
       setBusy(false);
     }
   };
-  const visible =
-    review?.proposals.filter((p) =>
-      (p.label + ' ' + labels[p.kind] + ' ' + p.before + ' ' + p.after)
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-    ) ?? [];
-  if (!open && !error && !review?.releases.length) return null;
+  if (!pending && !error && !open) return null;
   return (
     <section className="catalog-update-notice" aria-label="Catalog updates">
-      {review?.releases.length ? (
+      {pending && (
         <button
-          className="site-button"
           ref={button}
+          className="site-button"
           onClick={() => {
             restore.current = document.activeElement as HTMLElement;
             setOpen(true);
           }}
         >
           Review catalog update (
-          {review.proposals.length + review.conflicts.length})
+          {review!.proposals.length + review!.conflicts.length})
         </button>
-      ) : null}
+      )}
       {error && !open && (
         <p role="alert">
           {error}{' '}
           <button
             className="site-button"
-            onClick={() => void execute('reload')}
+            onClick={() => setRefresh((n) => n + 1)}
           >
             Retry catalog updates
           </button>
@@ -241,7 +300,7 @@ export function CatalogUpdateNotice({
           aria-labelledby="catalog-update-title"
           onCancel={(e) => {
             e.preventDefault();
-            close();
+            cancel();
           }}
           onKeyDown={(e) => {
             if (e.key !== 'Tab') return;
@@ -261,257 +320,154 @@ export function CatalogUpdateNotice({
             }
           }}
         >
-          <div className="catalog-update-heading">
-            <h2 id="catalog-update-title">Catalog update available</h2>
+          <h2 id="catalog-update-title">Catalog update available</h2>
+          <p>
+            Choose the groups to fix. Unchecked groups keep their current values
+            and remain available for later review.
+          </p>
+          <fieldset
+            className="admin-fieldset"
+            disabled={busy || loading || uncertain}
+          >
+            {groupedCatalogReview(review).length > 0 && (
+              <table className="catalog-update-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Detected problem</th>
+                    <th scope="col">Fix?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedCatalogReview(review).map((group) => (
+                    <tr key={group.key}>
+                      <td>
+                        <h3>{group.title}</h3>
+                        <ul>
+                          {group.proposals
+                            .filter(
+                              (p) =>
+                                !(
+                                  ['adoptPage', 'createPage'].includes(
+                                    p.kind,
+                                  ) &&
+                                  review.pageMatches?.some(
+                                    (m) => m.entityKey === p.entityKey,
+                                  )
+                                ),
+                            )
+                            .map((p) => (
+                              <li key={p.id}>{problem(p)}</li>
+                            ))}
+                        </ul>
+                        {group.conflicts.map((c) => (
+                          <p key={c.kind + c.entityKey}>
+                            <strong>{c.label}</strong>: {c.reason}{' '}
+                            {c.candidates
+                              .map((p) => `${p.name} (#${p.id})`)
+                              .join(', ')}
+                          </p>
+                        ))}
+                        {group.key === 'pages' &&
+                          review.pageMatches?.map((m) => (
+                            <div key={m.entityKey}>
+                              <label>
+                                Page identity for {m.label}
+                                <select
+                                  value={identities[m.entityKey] ?? ''}
+                                  onChange={(e) =>
+                                    setIdentities((old) => ({
+                                      ...old,
+                                      [m.entityKey]: e.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">
+                                    Choose an existing page or a separate page
+                                  </option>
+                                  {review.proposals
+                                    .filter(
+                                      (p) =>
+                                        p.entityKey === m.entityKey &&
+                                        ['adoptPage', 'createPage'].includes(
+                                          p.kind,
+                                        ),
+                                    )
+                                    .map((p) => (
+                                      <option value={p.id} key={p.id}>
+                                        {p.kind === 'createPage'
+                                          ? 'Create separate page: ' + m.label
+                                          : 'Adopt ' + p.label}
+                                      </option>
+                                    ))}
+                                </select>
+                              </label>
+                              {m.candidates.map((p) => (
+                                <p key={p.id}>
+                                  {p.name} ({p.id}, {p.category})
+                                  {!p.active && ' — retired'}. Matching items:{' '}
+                                  {p.matchedItems.join(', ') || 'None'}.
+                                  Missing: {p.missingItems.join(', ') || 'None'}
+                                  . Extra: {p.extraItems.join(', ') || 'None'}.
+                                </p>
+                              ))}
+                            </div>
+                          ))}
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={'Fix ' + group.title}
+                          checked={groups.has(group.key)}
+                          disabled={!group.proposals.length}
+                          onChange={(e) =>
+                            setGroups((old) => {
+                              const next = new Set(old);
+                              if (e.target.checked) next.add(group.key);
+                              else next.delete(group.key);
+                              return next;
+                            })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {review.proposals.some((p) => p.kind === 'image') && (
+              <label className="admin-checkbox catalog-update-icons">
+                <input
+                  type="checkbox"
+                  checked={icons}
+                  onChange={(e) => setIcons(e.target.checked)}
+                />
+                Use project supplied item icons (recommended)
+              </label>
+            )}
+          </fieldset>
+          {!pending && <p>No catalog corrections are pending.</p>}
+          {missingIdentity && (
+            <p role="status">
+              Choose the page identity before saving Missing pages.
+            </p>
+          )}
+          {error && <p role="alert">{error}</p>}
+          <div className="admin-actions">
             <button
               className="site-button"
-              aria-label="Review later and close"
-              disabled={busy}
-              onClick={close}
+              disabled={busy || loading || !apply.length || missingIdentity}
+              onClick={() => void save()}
             >
-              ×
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              className="site-button"
+              disabled={busy || uncertain}
+              onClick={cancel}
+            >
+              Cancel
             </button>
           </div>
-          <p>
-            Missing content was added where identities were unambiguous.
-            Existing entries keep their current values until you select a change
-            below. Local IDs and collection history stay attached.
-          </p>
-          <details>
-            <summary>Installed content</summary>
-            {review.releases.map((r) => (
-              <div key={r.id}>
-                <h3>{r.title}</h3>
-                <p>
-                  Added items: {r.addedItems.join(', ') || 'None'}. Added pages:{' '}
-                  {r.addedPages.join(', ') || 'None'}.
-                </p>
-              </div>
-            ))}
-          </details>
-          {review.conflicts.length > 0 && (
-            <section aria-label="Identity conflicts">
-              <h3>Identity review</h3>
-              <p>
-                Review page candidates below. Other conflicting entries can be
-                corrected in Items catalog, then rescanned.
-              </p>
-              {review.conflicts.map((c) => (
-                <p key={c.kind + ':' + c.entityKey}>
-                  <strong>{c.label}</strong>: {c.reason}{' '}
-                  {c.candidates
-                    .map((v) => v.name + ' (#' + v.id + ')')
-                    .join(', ')}
-                </p>
-              ))}
-            </section>
-          )}
-          {review.pageMatches?.map((match) => (
-            <section
-              key={match.entityKey}
-              aria-label={'Page candidates for ' + match.label}
-            >
-              <h3>Existing pages for {match.label}</h3>
-              <p>
-                Choose one existing page to adopt, or explicitly create a
-                separate page. Adoption keeps its local key and existing
-                memberships.
-              </p>
-              {match.candidates.map((p) => (
-                <article key={p.id} className="catalog-update-proposal">
-                  <h4>
-                    {p.name} ({p.id})
-                  </h4>
-                  <p>
-                    Section: {p.category}.{' '}
-                    {p.active
-                      ? 'Active'
-                      : 'Retired — resolve in Items catalog first'}
-                  </p>
-                  <p>Matching items: {p.matchedItems.join(', ') || 'None'}</p>
-                  <p>
-                    Missing supplied items:{' '}
-                    {p.missingItems.join(', ') || 'None'}
-                  </p>
-                  <p>Extra local items: {p.extraItems.join(', ') || 'None'}</p>
-                </article>
-              ))}
-            </section>
-          ))}
-          {review.gameIdReviews
-            ?.filter((r) => r.localIds.join(',') !== r.suppliedIds.join(','))
-            .map((r) => (
-              <details key={r.entityKey}>
-                <summary>{r.label} — review game item IDs</summary>
-                <p>
-                  Current IDs, retained unless you select a removal:{' '}
-                  {r.localIds.join(', ') || 'None'}
-                </p>
-                <p>Supplied IDs: {r.suppliedIds.join(', ')}</p>
-                <p>
-                  Extra local IDs may be valid variants. Keep them unless you
-                  identify an incorrect mapping.
-                </p>
-              </details>
-            ))}
-          <label className="admin-field-label">
-            Search changes
-            <input
-              className="admin-input"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-          <fieldset className="admin-fieldset" disabled={busy}>
-            <div className="admin-actions" aria-label="Bulk choices">
-              {(
-                [
-                  'name',
-                  'gameIds',
-                  'addGameId',
-                  'removeGameId',
-                  'image',
-                  'pageName',
-                  'pageCategory',
-                  'addLink',
-                  'removeLink',
-                  'adopt',
-                ] as const
-              )
-                .filter((k) => visible.some((p) => p.kind === k))
-                .map((kind) => (
-                  <button
-                    className="site-button"
-                    type="button"
-                    key={kind}
-                    onClick={() =>
-                      setChoices((old) => ({
-                        ...old,
-                        ...Object.fromEntries(
-                          visible
-                            .filter((p) => p.kind === kind)
-                            .map((p) => [p.id, 'apply']),
-                        ),
-                      }))
-                    }
-                  >
-                    Select {labels[kind].toLowerCase()} changes
-                  </button>
-                ))}
-            </div>
-            <p className="admin-note">
-              Extra local page associations may be intentional. Remove only the
-              associations you want to change. Game IDs are added and removed
-              individually; unselected local variants are retained.
-            </p>
-            {visible.map((p) => (
-              <article className="catalog-update-proposal" key={p.id}>
-                <h3>
-                  {p.label} — {proposalLabel(p)}
-                </h3>
-                <p className="admin-note">
-                  Local entry {p.localId}; supplied key {p.entityKey}
-                </p>
-                {p.kind === 'image' ? (
-                  <div className="catalog-update-images">
-                    <figure>
-                      {p.before ? (
-                        <img src={p.before} alt={'Current ' + p.label} />
-                      ) : (
-                        <span>No current image</span>
-                      )}
-                      <figcaption>Current</figcaption>
-                    </figure>
-                    <figure>
-                      <img src={p.after} alt={'Supplied ' + p.label} />
-                      <figcaption>Supplied</figcaption>
-                    </figure>
-                  </div>
-                ) : (
-                  <p>
-                    Current: {p.before || 'Not associated'}
-                    <br />
-                    Supplied: {p.after || 'Remove this association'}
-                  </p>
-                )}
-                <label className="admin-field-label">
-                  Decision for {p.label}: {proposalLabel(p)}
-                  <select
-                    className="admin-input"
-                    value={choices[p.id] ?? ''}
-                    onChange={(e) =>
-                      setChoices((old) => {
-                        const next = { ...old };
-                        if (
-                          e.target.value === 'apply' &&
-                          ['adoptPage', 'createPage'].includes(p.kind)
-                        )
-                          for (const other of review.proposals.filter(
-                            (other) =>
-                              other.entityKey === p.entityKey &&
-                              ['adoptPage', 'createPage'].includes(other.kind),
-                          ))
-                            if (other.id !== p.id && next[other.id] === 'apply')
-                              delete next[other.id];
-                        if (e.target.value)
-                          next[p.id] = e.target.value as 'apply' | 'keep';
-                        else delete next[p.id];
-                        return next;
-                      })
-                    }
-                  >
-                    <option value="">Review later</option>
-                    <option value="apply">Apply this change</option>
-                    <option value="keep">Keep current value</option>
-                  </select>
-                </label>
-              </article>
-            ))}
-            {review.currentImages.some((i) => i.identical) && (
-              <details>
-                <summary>Already using supplied images</summary>
-                {review.currentImages
-                  .filter((i) => i.identical)
-                  .map((i) => (
-                    <p key={i.name}>{i.name} — already using supplied image</p>
-                  ))}
-              </details>
-            )}
-            {!review.proposals.length && !review.conflicts.length && (
-              <p>No catalog corrections are pending.</p>
-            )}
-            {message && <p role="status">{message}</p>}
-            {error && (
-              <p className="admin-error" role="alert">
-                {error}
-              </p>
-            )}
-            <div className="admin-actions">
-              <button
-                className="site-button"
-                disabled={!Object.keys(choices).length}
-                onClick={() => void execute('save')}
-              >
-                {busy ? 'Saving…' : 'Apply selected changes'}
-              </button>
-              <button
-                className="site-button"
-                onClick={() => void execute('reload')}
-              >
-                Reload review
-              </button>
-              <button
-                className="site-button"
-                onClick={() => void execute('rescan')}
-              >
-                Rescan missing content
-              </button>
-              <button className="site-button" onClick={close}>
-                Review later
-              </button>
-            </div>
-          </fieldset>
         </dialog>
       )}
     </section>

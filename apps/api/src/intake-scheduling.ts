@@ -13,14 +13,6 @@ export async function intakeScheduling(
       'SELECT version FROM collection_scheduling WHERE singleton',
     )
   ).rows[0]!;
-  const permanent =
-    hardcore || !enabled
-      ? []
-      : (
-          await client.query<{ page_id: string }>(
-            'SELECT pp.page_id FROM collection_permanent_pages pp JOIN pages p ON p.id=pp.page_id AND p.active ORDER BY pp.page_id',
-          )
-        ).rows.map((p) => p.page_id);
   const eventPages =
     hardcore || !enabled
       ? []
@@ -34,7 +26,6 @@ export async function intakeScheduling(
               'FROM collection_log_schedules s JOIN collection_log_schedule_pages sp ON sp.schedule_id=s.id ' +
               'JOIN pages p ON p.id=sp.page_id AND p.active JOIN page_items pi ON pi.page_id=p.id JOIN items i ON i.id=pi.item_id AND i.active ' +
               'WHERE s.archived_at IS NULL AND s.starts_at<=$1 AND $1<s.ends_at ' +
-              'AND NOT EXISTS(SELECT 1 FROM collection_permanent_pages pp WHERE pp.page_id=p.id) ' +
               'GROUP BY s.id,p.id ORDER BY s.id,p.id',
             [receivedAt],
           )
@@ -43,7 +34,7 @@ export async function intakeScheduling(
     receivedAt: receivedAt.toISOString(),
     enabled: enabled && !hardcore,
     revision: 'schedules-' + state.version,
-    permanentlyOpenPageIds: permanent,
+    permanentlyOpenPageIds: [],
     eventPages,
   };
 }

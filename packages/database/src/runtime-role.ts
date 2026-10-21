@@ -36,6 +36,7 @@ const tablePolicy: Readonly<Record<string, readonly TablePrivilege[]>> = {
   catalog_update_prompts: edit,
   catalog_update_receipts: append,
   catalog_update_audit: append,
+  catalog_bootstrap_state: [],
   clan_api_key_audit: append,
   clan_api_keys: edit,
   clan_branding: update,

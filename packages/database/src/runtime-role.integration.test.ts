@@ -10,7 +10,7 @@ import { PgDiscordSettingsStore } from './discord-settings.js';
 // Independent contract: never calculate the expected privileges from the implementation.
 const operations = new Map<string, string[]>();
 for (const [privileges, names] of [
-  ['', 'schema_migrations catalog_taxonomy_updates'],
+  ['', 'schema_migrations catalog_taxonomy_updates catalog_bootstrap_state'],
   [
     'SELECT',
     'asset_retirements lifecycle_archive_audit catalog_versions catalog_update_batches catalog_update_images item_aliases collection_credits item_collection_state',

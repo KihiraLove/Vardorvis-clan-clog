@@ -4,7 +4,6 @@ import type pg from 'pg';
 import { transaction } from './transaction.js';
 import { ApiError } from './types.js';
 import { iconPath, type IconRecord } from './icon-storage.js';
-import { removePermanentPage } from './scheduling-store.js';
 export interface AdminItem {
   id: number;
   name: string;
@@ -253,7 +252,6 @@ export class PgCatalogStore {
     actor: string,
   ) {
     return this.transaction(true, async (client) => {
-      await removePermanentPage(client, id, actor);
       if ((await this.revision(client)) !== revision)
         throw new ApiError(
           409,
