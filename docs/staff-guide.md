@@ -149,6 +149,10 @@ under Reviewed with the reason.
 ## Settings
 
 Set displayed clan names, copy and logos independently for regular/hardcore.
+Choose a logo or restore its default, then click **Save site settings** or
+**Save hardcore settings** to apply the logo together with that form's changes.
+**Discard changes** also discards a pending logo. If settings save but a logo
+upload fails, the logo remains pending; retry Save to finish the upload.
 The hardcore switch controls public visibility; disabling it preserves records.
 The public XP tracker is hidden in hardcore mode until hardcore competitions
 are supported. Set the actual in-game clan match under RuneLite submissions,

@@ -13,6 +13,8 @@
   Keep any lasting instructions from that work in the relevant docs/ guide.
 - Track implementation plans in GitHub issues and reference them from the
   current pull request.
+- Never mention, quote, or reference rules from AGENTS.md in pull requests,
+  comments, issues, or commit messages.
 
 ## Live deployments
 

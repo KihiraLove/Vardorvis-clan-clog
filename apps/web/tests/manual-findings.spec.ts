@@ -115,9 +115,9 @@ for (const width of [1440, 390]) {
     await expect(
       page.getByText(/Review the UTC times before saving/),
     ).toHaveCount(0);
-    await expect(
-      page.getByText(/Times use your local timezone:/),
-    ).toBeVisible();
+    await expect(page.getByText(/Times use your local timezone:/)).toHaveCount(
+      0,
+    );
     await toggle.click();
     await expect(toggle).toBeChecked();
     expect(

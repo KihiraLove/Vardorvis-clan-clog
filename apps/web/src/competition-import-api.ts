@@ -153,7 +153,7 @@ export async function previewCompetition(
     !['future', 'running', 'finished'].includes(String(p.lifecycle)) ||
     ![
       'create-schedule',
-      'preserve-schedule',
+      'update-schedule',
       'preserve-deletion',
       'import-results',
       'import-metadata',

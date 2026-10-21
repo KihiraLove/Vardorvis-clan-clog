@@ -1,6 +1,6 @@
 {
   "name": "@clog/database",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "pg": "^8.16.3",
-    "@clog/domain": "1.0.0",
+    "@clog/domain": "*",
     "sharp": "^0.35.5"
   },
   "devDependencies": {

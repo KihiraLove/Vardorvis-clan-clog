@@ -285,8 +285,8 @@ export function CompetitionImport({
               ? 'Import competition metadata only. No pages will be opened and no XP will be added.'
               : preview.action === 'import-results'
                 ? 'Import finished results. No opening window will be created.'
-                : preview.action === 'preserve-schedule'
-                  ? 'Preserve the existing linked schedule.'
+                : preview.action === 'update-schedule'
+                  ? 'Update the linked schedule to the imported dates and add new metric pages.'
                   : preview.action === 'preserve-deletion'
                     ? 'Keep the linked window closed.'
                     : preview.lifecycle === 'running'
@@ -294,13 +294,6 @@ export function CompetitionImport({
                       : 'Create an opening window for the WOM start and end times.'}
           </p>
           <CompetitionMetrics competition={preview.competition} />
-          {preview.scheduleStartsAt && (
-            <p>
-              Opening start: {localScheduleLabel(preview.scheduleStartsAt)}
-              <br />
-              <small>{utcScheduleLabel(preview.scheduleStartsAt)}</small>
-            </p>
-          )}
           {preview.competition.kind === 'ACTIVITY' &&
             preview.action === 'create-schedule' && (
               <>
@@ -361,7 +354,7 @@ export function CompetitionImport({
               </>
             )}
           {preview.competition.kind === 'ACTIVITY' &&
-            preview.action === 'preserve-schedule' && (
+            preview.action === 'update-schedule' && (
               <p>
                 Pages:{' '}
                 {preview.pageIds

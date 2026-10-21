@@ -69,7 +69,7 @@ export type CompetitionLifecycle = 'future' | 'running' | 'finished';
 export type CompetitionImportAction =
   | 'import-metadata'
   | 'create-schedule'
-  | 'preserve-schedule'
+  | 'update-schedule'
   | 'preserve-deletion'
   | 'import-results';
 export function competitionImportAction(
@@ -83,7 +83,7 @@ export function competitionImportAction(
   if (!opensPages) return 'import-metadata';
   return scheduleCreated
     ? scheduleExists
-      ? 'preserve-schedule'
+      ? 'update-schedule'
       : 'preserve-deletion'
     : 'create-schedule';
 }

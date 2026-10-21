@@ -810,10 +810,21 @@ test('slow real reads preserve keyboard navigation; catalog geometry and both pr
       buffer,
     });
     await page
-      .getByRole('button', { name: 'Save clan logo', exact: true })
+      .getByRole('button', {
+        name:
+          link === 'Site settings'
+            ? 'Save site settings'
+            : 'Save hardcore settings',
+        exact: true,
+      })
       .click();
     await expect(
-      page.getByText('Clan logo and website icon saved.', { exact: true }),
+      page.getByText(
+        link === 'Site settings'
+          ? 'Site settings saved.'
+          : 'Hardcore worlds settings saved.',
+        { exact: true },
+      ),
     ).toBeVisible();
     const branding = await (await page.request.get(path)).json();
     const image = page.getByAltText('Current clan logo');
@@ -832,8 +843,26 @@ test('slow real reads preserve keyboard navigation; catalog geometry and both pr
     await page
       .getByRole('button', { name: 'Restore default logo', exact: true })
       .click();
+    await page
+      .getByRole('button', {
+        name:
+          link === 'Site settings'
+            ? 'Save site settings'
+            : 'Save hardcore settings',
+        exact: true,
+      })
+      .click();
+    await expect(page.getByAltText('Current clan logo')).toHaveAttribute(
+      'src',
+      '/brand/clan-logo.webp',
+    );
     await expect(
-      page.getByText('Default clan logo restored.', { exact: true }),
+      page.getByText(
+        link === 'Site settings'
+          ? 'Site settings saved.'
+          : 'Hardcore worlds settings saved.',
+        { exact: true },
+      ),
     ).toBeVisible();
   }
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();

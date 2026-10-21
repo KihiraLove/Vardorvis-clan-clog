@@ -28,7 +28,7 @@ test('workspace versions, internal dependencies and lockfile describe the same r
         manifest.dependencies ?? {},
       ))
         if (dependency.startsWith('@clog/'))
-          assert.equal(range, root.version, location + ': ' + dependency);
+          assert.equal(range, '*', location + ': ' + dependency);
     }
   }
 });

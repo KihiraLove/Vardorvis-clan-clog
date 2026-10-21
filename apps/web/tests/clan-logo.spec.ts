@@ -27,11 +27,9 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
       .getByLabel('Logo image', { exact: true })
       .setInputFiles({ name, mimeType, buffer });
     await page
-      .getByRole('button', { name: 'Save clan logo', exact: true })
+      .getByRole('button', { name: 'Save site settings', exact: true })
       .click();
-    await expect(
-      page.getByText('Clan logo and website icon saved.'),
-    ).toBeVisible();
+    await expect(page.getByText('Site settings saved.')).toBeVisible();
     await expect(logo).toHaveAttribute('src', /\/api\/v1\/branding\//);
     const paths = await page.evaluate(() => ({
       logo: document.querySelector<HTMLImageElement>('.clan-logo')!.src,
@@ -65,6 +63,9 @@ test('admin uploads GIF and animated WebP logos, updates the website icon and re
     .locator('.clan-logo-settings')
     .screenshot({ path: test.info().outputPath('clan-logo-controls.png') });
   await page.getByRole('button', { name: 'Restore default logo' }).click();
+  await page
+    .getByRole('button', { name: 'Save site settings', exact: true })
+    .click();
   await expect(logo).toHaveAttribute('src', '/brand/clan-logo.webp');
   expect(await page.locator('link[rel="icon"]').getAttribute('href')).toBe(
     '/favicon.webp',

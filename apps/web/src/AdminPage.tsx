@@ -72,7 +72,6 @@ export function AdminPage({
   client,
   path,
   onNavigate,
-  clanName,
   onSettingsSaved,
   onBrandingSaved,
   competitionClient,
@@ -224,7 +223,6 @@ export function AdminPage({
       <div className="admin-page">
         <div className="admin-heading">
           <div>
-            <p className="xp-eyebrow">{clanName} clan</p>
             <h1>Clan administration</h1>
           </div>
           {session && (

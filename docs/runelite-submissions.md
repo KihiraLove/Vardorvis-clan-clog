@@ -177,7 +177,7 @@ recorded with the authenticated admin's audit entry. Existing clients can omit
 `clanName` on writes to preserve the saved name. Moderators cannot change it.
 
 On **RuneLite submissions** (`/admin/runelite`), administrators and moderators
-can view and copy the **Current shared API key**. Only the administrator can
+can view and copy the shared API key. Only the administrator can
 click **Generate new key** or enter a replacement key of at least 8 characters.
 **Save API key settings** saves the key;
 generating only fills the draft until it is saved.

@@ -35,7 +35,8 @@ test('admin configures overlapping page schedules in local time, reviews UTC, ed
   await expect(enabled).not.toBeChecked();
   await expect(
     page.getByText('Europe/Copenhagen', { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.locator('.schedule-utc')).toHaveCount(0);
   const title = page.getByLabel('Schedule name', { exact: true });
   const start = page.getByLabel('Start date and time (local)', { exact: true });
   const end = page.getByLabel('End date and time (local)', { exact: true });

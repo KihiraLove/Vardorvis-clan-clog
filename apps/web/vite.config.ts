@@ -4,7 +4,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+const appVersion = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+).version as string;
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   server: { proxy: { '/api': 'http://127.0.0.1:3000' } },
   plugins: [
     {

@@ -3,7 +3,8 @@
 In **Scheduling and Competitions**, paste a canonical WOM competition link,
 preview it, inspect the changes and apply. Administrators and moderators can
 import. WOM's metrics determine SKILL or ACTIVITY; a saved identity cannot
-silently change kind or supported scope.
+silently change kind or remove saved metrics. Added compatible metrics are merged
+when the same competition is imported again.
 
 | Kind and state                 | Saved result                    | Page window              |
 | ------------------------------ | ------------------------------- | ------------------------ |
@@ -15,8 +16,11 @@ silently change kind or supported scope.
 The DB clock sets boundaries. Imports never turn on scheduling. Boss/activity pages
 are suggested from the union of all selected metrics, without duplicates; inspect
 or correct them before applying. Computed competitions do not require page windows.
-Ambiguous metrics require explicit pages. Re-importing preserves existing
-staff-edited windows and deliberate deletions. Hardcore pages stay fully open.
+Ambiguous metrics require explicit pages. Re-importing updates the original linked
+window to WOM's current start and end, including its original start when already
+running. It retains the schedule's title and selected pages and adds mapped pages
+for newly added metrics. Deleted or archived windows stay closed. Hardcore pages
+stay fully open.
 
 Imports support multiple skills, bosses, activities and computed EHP/EHB metrics,
 including metric weights. WOM requires every selected metric to share a type;
@@ -75,7 +79,7 @@ Preview tokens expire, bind staff and revisions, and need refreshing if a
 metadata-only event finishes before apply. Request-key replay retains the saved
 receipt even after expiry. Review the preview again after a conflict.
 
-The public collection log (`/`) shows stored activity scope/metadata; the XP
+The public collection log (`/`) shows activity titles, local time ranges and source links; the XP
 tracker (`/xp`) shows skill XP and podiums. Full activity standings and metric
 breakdowns are available in the staff preview.
 It never queries WOM directly. XP is hidden in hardcore mode. Up to 2,000 current
