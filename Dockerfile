@@ -7,6 +7,7 @@ COPY apps/bot/package.json ./apps/bot/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/domain/package.json ./packages/domain/package.json
 COPY packages/database/package.json ./packages/database/package.json
+COPY scripts/sync-version.mjs ./scripts/sync-version.mjs
 RUN npm ci --no-audit --no-fund
 
 # Cached local/CI tooling; never copied into the production image.

@@ -165,10 +165,10 @@ function requireScope(
   const old = prior.kind === 'SKILL' ? prior.skills : prior.metrics;
   const next =
     prior.kind === 'SKILL' ? snapshot.skills : snapshot.competition.metrics;
-  if (JSON.stringify([...old].sort()) !== JSON.stringify([...next].sort()))
+  if (old.some((metric) => !next.includes(metric)))
     throw new ApiError(
       422,
-      'WOM metric scope changed; manual reconciliation is required.',
+      'Removing saved WOM metrics requires manual reconciliation.',
     );
   if (prior.resultsImportedAt && snapshot.lifecycle !== 'finished')
     throw new ApiError(
@@ -326,10 +326,27 @@ export class ImportReconciliation {
       const linked = schedules.schedules.find(
         (s) => s.id === prior?.scheduleId,
       );
-      const selected =
-        metadataOnly || lifecycle === 'finished'
-          ? []
-          : (linked?.pageIds ?? pageIds ?? proposed);
+      const addedPages = prior
+        ? competitionDefinitions(snapshot.competition)
+            .filter((d) => !prior.metrics.includes(d.metric))
+            .flatMap(
+              (d) =>
+                d.definition?.pageIds ??
+                mappedPages(d.metric).map(
+                  (key) =>
+                    pageBindings.find((b) => b.source_key === key)?.local_id ??
+                    key,
+                ),
+            )
+            .filter((id) => pages.some((p) => p.id === id))
+        : [];
+      const selected = metadataOnly
+        ? []
+        : linked
+          ? [...new Set([...linked.pageIds, ...addedPages])].sort()
+          : lifecycle === 'finished'
+            ? []
+            : (pageIds ?? proposed);
       if (
         selected.length > 200 ||
         new Set(selected).size !== selected.length ||
@@ -421,10 +438,6 @@ export class ImportReconciliation {
         warnings.push(
           'Some mapped pages are unavailable. Review the active page selections before applying.',
         );
-      if (action === 'preserve-schedule')
-        warnings.push(
-          'The existing linked schedule and staff edits will be preserved. Edit its window in Scheduling.',
-        );
       if (action === 'preserve-deletion' && !prior?.scheduleArchived)
         warnings.push(
           'The linked schedule was deleted by staff. Importing again will preserve that deletion. Create a manual schedule to reopen pages.',
@@ -461,10 +474,11 @@ export class ImportReconciliation {
         scheduleStartsAt:
           metadataOnly || lifecycle === 'finished'
             ? null
-            : (linked?.startsAt ??
-              (lifecycle === 'running'
+            : linked
+              ? snapshot.competition.startsAt
+              : lifecycle === 'running'
                 ? now.toISOString()
-                : snapshot.competition.startsAt)),
+                : snapshot.competition.startsAt,
         participants:
           snapshot.results?.xp?.participants ??
           snapshot.results?.participants ??
@@ -667,6 +681,26 @@ export class ImportReconciliation {
         competitionUsesPages(c.metrics, c.metricDefinitions),
       );
       const createSchedule = action === 'create-schedule';
+      const linked = schedules.schedules.find((s) => s.id === scheduleId);
+      const updateSchedule =
+        !!linked && competitionUsesPages(c.metrics, c.metricDefinitions);
+      const addedPages = linked
+        ? row.page_ids.filter((id) => !linked.pageIds.includes(id))
+        : [];
+      const scheduleChanged =
+        createSchedule ||
+        (updateSchedule &&
+          (linked.startsAt !== c.startsAt ||
+            linked.endsAt !== c.endsAt ||
+            addedPages.length > 0));
+      if (updateSchedule && addedPages.length) {
+        const pages = await client.query(
+          'SELECT id FROM pages WHERE id=ANY($1::text[]) AND active ORDER BY id FOR SHARE',
+          [addedPages],
+        );
+        if (pages.rowCount !== addedPages.length)
+          throw new ApiError(409, 'Mapped pages changed. Preview again.');
+      }
       if (createSchedule) {
         if (!row.page_ids.length || row.page_ids.length > 200)
           throw new ApiError(
@@ -695,6 +729,19 @@ export class ImportReconciliation {
           'INSERT INTO collection_log_schedule_pages(schedule_id,page_id) SELECT $1,unnest($2::text[])',
           [scheduleId, row.page_ids],
         );
+      }
+      if (updateSchedule && scheduleChanged) {
+        await client.query(
+          'UPDATE collection_log_schedules SET starts_at=$2,ends_at=$3 WHERE id=$1 AND archived_at IS NULL',
+          [scheduleId, c.startsAt, c.endsAt],
+        );
+        if (addedPages.length)
+          await client.query(
+            'INSERT INTO collection_log_schedule_pages(schedule_id,page_id) SELECT $1,unnest($2::text[]) ON CONFLICT DO NOTHING',
+            [scheduleId, addedPages],
+          );
+      }
+      if (scheduleChanged) {
         const version = (
           await client.query<{ version: number }>(
             'UPDATE collection_scheduling SET version=version+1 WHERE singleton=true RETURNING version',
@@ -702,10 +749,11 @@ export class ImportReconciliation {
         ).rows[0]!.version;
         const after = await readState(client);
         await client.query(
-          "INSERT INTO collection_schedule_audit(actor_id,actor_name,action,version,old_values,new_values) VALUES($1,$2,'create',$3,$4,$5)",
+          'INSERT INTO collection_schedule_audit(actor_id,actor_name,action,version,old_values,new_values) VALUES($1,$2,$3,$4,$5,$6)',
           [
             actor,
             actorName,
+            createSchedule ? 'create' : 'edit',
             version,
             JSON.stringify(schedules),
             JSON.stringify(after),
@@ -720,7 +768,7 @@ export class ImportReconciliation {
           results: snapshot.results,
         });
       const changed =
-        !prior || prior.sourceHash !== sourceHash || createSchedule;
+        !prior || prior.sourceHash !== sourceHash || scheduleChanged;
       const xp = snapshot.results?.xp;
       const events = xp ? await xpEvents(client) : [];
       if (xp)
@@ -742,7 +790,7 @@ export class ImportReconciliation {
         );
       if (changed) {
         await client.query(
-          'INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at,schedule_id,schedule_created,results_imported_at,activity_results,source_hash,metric_definitions,competition_results) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(competition_id) DO UPDATE SET title=EXCLUDED.title,source_url=EXCLUDED.source_url,metrics=EXCLUDED.metrics,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,schedule_id=EXCLUDED.schedule_id,schedule_created=EXCLUDED.schedule_created,results_imported_at=EXCLUDED.results_imported_at,activity_results=EXCLUDED.activity_results,source_hash=EXCLUDED.source_hash,metric_definitions=EXCLUDED.metric_definitions,competition_results=EXCLUDED.competition_results',
+          'INSERT INTO wom_competitions(competition_id,kind,title,source_url,metrics,skills,starts_at,ends_at,schedule_id,schedule_created,results_imported_at,activity_results,source_hash,metric_definitions,competition_results) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(competition_id) DO UPDATE SET title=EXCLUDED.title,source_url=EXCLUDED.source_url,metrics=EXCLUDED.metrics,skills=EXCLUDED.skills,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,schedule_id=EXCLUDED.schedule_id,schedule_created=EXCLUDED.schedule_created,results_imported_at=EXCLUDED.results_imported_at,activity_results=EXCLUDED.activity_results,source_hash=EXCLUDED.source_hash,metric_definitions=EXCLUDED.metric_definitions,competition_results=EXCLUDED.competition_results',
           [
             c.id,
             c.kind,

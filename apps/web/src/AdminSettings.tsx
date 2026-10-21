@@ -1,6 +1,6 @@
 /** Independent mode appearance, with shared revision-checked administrator writes. */
 import { useEffect, useState } from 'react';
-import { ClanLogoSettings } from './ClanLogoSettings.tsx';
+import { ClanLogoSettings, useClanLogoDraft } from './ClanLogoSettings.tsx';
 import type { Branding } from './branding.ts';
 import { classifyAccessFailure } from './admin-session.ts';
 import type { AdminClient } from './admin-model.ts';
@@ -66,11 +66,18 @@ export function AdminSettings({
   const releaseAction = useAdminAction(onAccessLost);
   const busy = action.busy || releaseAction.busy;
   const editable = session.role === 'admin';
+  const logo = useClanLogoDraft(
+    client,
+    onAccessLost,
+    onBrandingSaved,
+    session.csrfToken,
+    hardcore,
+  );
   const savedAppearance = hardcore ? saved?.hardcore : saved;
   const helpBytes = new TextEncoder().encode(help).length;
   const helpInvalid =
     !hardcore && (helpBytes > submissionHelpMaxBytes || help.includes('\0'));
-  const dirty =
+  const settingsDirty =
     !!saved &&
     (enabled !== saved.hardcoreEnabled ||
       JSON.stringify(highlight) !==
@@ -80,6 +87,7 @@ export function AdminSettings({
         JSON.stringify(savedAppearance?.copy ?? defaultSiteCopy) ||
       (!hardcore &&
         help !== (saved.howToSubmitMarkdown ?? defaultSubmissionHelp)));
+  const dirty = settingsDirty || logo.dirty;
   useAdminDraft(dirty, busy);
   const apply = (value: SiteSettings) => {
     const appearance = hardcore ? value.hardcore : value;
@@ -173,13 +181,6 @@ export function AdminSettings({
       <section className="admin-panel">
         <h2>{hardcore ? 'Hardcore worlds settings' : 'Site settings'}</h2>
         {!editable && <p>Only the administrator can change these settings.</p>}
-        <ClanLogoSettings
-          client={client}
-          session={session}
-          onAccessLost={onAccessLost}
-          onSaved={onBrandingSaved}
-          hardcore={hardcore}
-        />
         {readError && (
           <p role="alert">
             {readError}{' '}
@@ -193,27 +194,48 @@ export function AdminSettings({
           aria-busy={!saved && !readError}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!saved || !editable || helpInvalid || !colour) return;
+            if (
+              !saved ||
+              !editable ||
+              helpInvalid ||
+              !colour ||
+              logo.error ||
+              !logo.saved
+            )
+              return;
             void action.execute(
               async (signal) => {
-                const value = await client.saveSettings(
-                  enabled,
-                  saved.revision,
-                  session.csrfToken,
-                  signal,
-                  hardcore ? undefined : clanName.trim(),
-                  hardcore ? undefined : parseSiteCopy(copy),
-                  hardcore
-                    ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
-                    : undefined,
-                  hardcore ? undefined : parseSubmissionHelp(help),
-                  hardcore
-                    ? { hardcoreHighlight: colour }
-                    : { eventHighlight: colour },
-                );
+                if (settingsDirty) {
+                  const value = await client.saveSettings(
+                    enabled,
+                    saved.revision,
+                    session.csrfToken,
+                    signal,
+                    hardcore ? undefined : clanName.trim(),
+                    hardcore ? undefined : parseSiteCopy(copy),
+                    hardcore
+                      ? { clanName: clanName.trim(), copy: parseSiteCopy(copy) }
+                      : undefined,
+                    hardcore ? undefined : parseSubmissionHelp(help),
+                    hardcore
+                      ? { hardcoreHighlight: colour }
+                      : { eventHighlight: colour },
+                  );
+                  if (!signal.aborted) {
+                    apply(value);
+                    onSaved?.(value);
+                  }
+                }
+                try {
+                  await logo.save(signal);
+                } catch (failure) {
+                  if (settingsDirty && !signal.aborted)
+                    action.setMessage(
+                      'Site settings saved. Logo changes remain unsaved; retry Save to finish.',
+                    );
+                  throw failure;
+                }
                 if (!signal.aborted) {
-                  apply(value);
-                  onSaved?.(value);
                   action.setMessage(
                     hardcore
                       ? 'Hardcore worlds settings saved.'
@@ -224,13 +246,14 @@ export function AdminSettings({
               async (signal) => {
                 const value = await client.settings(signal);
                 if (!signal.aborted) {
-                  apply(value);
+                  setSaved(value);
                   onSaved?.(value);
                 }
               },
             );
           }}
         >
+          <ClanLogoSettings draft={logo} disabled={busy || !editable} />
           <label>
             Displayed clan name
             <input
@@ -324,6 +347,8 @@ export function AdminSettings({
             disabled={
               !editable ||
               !dirty ||
+              !!logo.error ||
+              !logo.saved ||
               helpInvalid ||
               !colour ||
               busy ||
@@ -340,6 +365,7 @@ export function AdminSettings({
             disabled={!dirty || busy || !saved || !editable}
             onClick={() => {
               if (saved) apply(saved);
+              logo.discard();
               action.setError(undefined);
               action.setMessage(undefined);
             }}

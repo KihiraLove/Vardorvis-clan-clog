@@ -64,9 +64,9 @@ export function ClanApiKeySettings({
           save();
         }}
       >
-        <label htmlFor="clan-api-key-value">Current shared API key</label>
         <textarea
           id="clan-api-key-value"
+          aria-label="Current shared API key"
           className="clan-api-key-value"
           value={key}
           readOnly={!editable}

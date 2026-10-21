@@ -32,6 +32,18 @@ changes remain. Check the corresponding Fix? groups and Save to create them.
 Fresh installs include the content without an upgrade prompt. Running tests does
 not refresh a development database.
 
+## Application version
+
+The root `package.json` version is the only maintained release version. From the
+repository root, run `npm run version:bump -- 1.0.4` to update it and synchronize
+the workspace manifests and lockfile. This command does not create a Git tag or
+publish a release. Internal workspace dependencies use `*` and resolve locally.
+
+After editing the root version directly, run `npm run version:sync`. Installation
+and root builds also synchronize derived metadata. `npm run version:check` checks
+for drift without writing files. Published release tags must match the root
+version with a `v` prefix. The footer uses the same root version.
+
 ## Focused checks
 
 Run checks for the behavior/files you changed. Examples:

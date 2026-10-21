@@ -1,7 +1,7 @@
 # Clan Collection Log
 
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-72A5F2?logo=kofi&logoColor=white)](https://ko-fi.com/kihiralove)
-[![Downloads](https://img.shields.io/github/downloads/KihiraLove/clan-clog/total)](https://github.com/KihiraLove/clan-clog/releases)
+[![GHCR pulls](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2FKihiraLove%2Fclan-clog&query=%24.downloadCount&label=GHCR%20pulls&logo=docker)](https://github.com/users/KihiraLove/packages/container/package/clan-clog)
 [![CI](https://img.shields.io/github/actions/workflow/status/KihiraLove/clan-clog/ci.yml?label=CI)](https://github.com/KihiraLove/clan-clog/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/KihiraLove/clan-clog?include_prereleases&sort=date&label=version)](https://github.com/KihiraLove/clan-clog/releases)
 

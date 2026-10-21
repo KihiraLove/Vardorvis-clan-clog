@@ -264,14 +264,17 @@ export class MemoryCompetitionClient implements CompetitionClient {
           'Scheduling changed. Preview again.',
         );
     }
-    if (p.action === 'create-schedule') {
+    if (p.action === 'create-schedule' || p.action === 'update-schedule') {
       if (!p.pageIds.length) throw new Error('Choose at least one page.');
       if (this.scheduleClient) {
+        const prior = (
+          await this.scheduleClient.scheduling(signal)
+        ).schedules.find((s) => s.id === this.schedules.get(p.competition.id));
         const state = await this.scheduleClient.saveSchedule(
           {
-            title: p.competition.title,
+            title: prior?.title ?? p.competition.title,
             startsAt:
-              lifecycle === 'running'
+              !prior && lifecycle === 'running'
                 ? new Date().toISOString()
                 : p.competition.startsAt,
             endsAt: p.competition.endsAt,
@@ -280,6 +283,7 @@ export class MemoryCompetitionClient implements CompetitionClient {
           p.scheduleRevision,
           csrf,
           signal,
+          prior?.id,
         );
         const saved = state.schedules.find(
           (s) =>

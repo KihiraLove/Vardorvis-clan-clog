@@ -63,7 +63,6 @@ export function AdminScheduling({
     if (removing && !deleteDialog.current?.open)
       deleteDialog.current?.showModal();
   }, [removing]);
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const reset = () => {
     setEditingId(undefined);
     setTitle('');
@@ -122,7 +121,7 @@ export function AdminScheduling({
     try {
       return utcScheduleLabel(localScheduleToUtc(local));
     } catch {
-      return 'Choose a valid local date and time.';
+      return null;
     }
   };
   const edit = (schedule: CollectionSchedule) => {
@@ -188,13 +187,6 @@ export function AdminScheduling({
             administrator can change this.
           </p>
         )}
-        {state?.enabled && (
-          <p className="admin-note">
-            Timed windows mark eligible normal-world drops as Event collections.
-            Other drops are Regular collections. Every page accepts submissions;
-            Hardcore collections are always Regular.
-          </p>
-        )}
       </section>
       <section className="admin-panel scheduling-panel">
         <h2>Schedule management</h2>
@@ -204,9 +196,6 @@ export function AdminScheduling({
           onAccessLost={onAccessLost}
           onApplied={() => setRefresh((n) => n + 1)}
         />
-        <p>
-          Times use your local timezone: <strong>{timezone}</strong>.
-        </p>
         <form
           aria-busy={!state && !error}
           onSubmit={(event) => {
@@ -261,10 +250,11 @@ export function AdminScheduling({
                   value={startLocal}
                   onChange={(event) => setStartLocal(event.target.value)}
                 />
-                <span className="schedule-utc" aria-live="polite">
-                  Start UTC:{' '}
-                  {startLocal ? previewUtc(startLocal) : 'Choose a start time.'}
-                </span>
+                {previewUtc(startLocal) && (
+                  <span className="schedule-utc" aria-live="polite">
+                    Start UTC: {previewUtc(startLocal)}
+                  </span>
+                )}
               </div>
             </div>
             <div className="schedule-datetime-field">
@@ -278,10 +268,11 @@ export function AdminScheduling({
                   value={endLocal}
                   onChange={(event) => setEndLocal(event.target.value)}
                 />
-                <span className="schedule-utc" aria-live="polite">
-                  End UTC:{' '}
-                  {endLocal ? previewUtc(endLocal) : 'Choose an end time.'}
-                </span>
+                {previewUtc(endLocal) && (
+                  <span className="schedule-utc" aria-live="polite">
+                    End UTC: {previewUtc(endLocal)}
+                  </span>
+                )}
               </div>
             </div>
             <label htmlFor="schedule-pages-search">
@@ -335,10 +326,7 @@ export function AdminScheduling({
                   ))}
               </div>
             </fieldset>
-            <p className="admin-note">
-              {pageIds.length} pages selected. All selected pages share this
-              window.
-            </p>
+            <p className="admin-note">{pageIds.length} pages selected.</p>
             <div className="admin-actions">
               <button
                 className="site-button"

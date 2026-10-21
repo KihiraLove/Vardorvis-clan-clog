@@ -495,9 +495,10 @@ export function SiteApp({
             Catalog data:{' '}
             <a href="https://templeosrs.com/api_doc.php">TempleOSRS</a> and{' '}
             <a href="https://oldschool.runescape.wiki/w/Module:Collection_log/data.json?oldid=15347607">
-              OSRS Wiki contributors
+              OSRS Wiki
             </a>
-            .
+            <br />
+            App version {__APP_VERSION__}
           </p>
         </footer>
       </div>

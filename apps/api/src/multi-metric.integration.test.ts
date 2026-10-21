@@ -124,7 +124,7 @@ test(
       },
     );
     await pool.query(
-      "INSERT INTO pages(id,category,name,sort_order) VALUES('vardorvis','bosses','Vardorvis',0),('zulrah','bosses','Zulrah',1),('shared_treasure_trail_rewards','clues','Shared clues',0),('hard_treasure_trails','clues','Hard clues',1),('elite_treasure_trails','clues','Elite clues',2)",
+      "INSERT INTO pages(id,category,name,sort_order) VALUES('vardorvis','bosses','Vardorvis',0),('zulrah','bosses','Zulrah',1),('the_whisperer','bosses','The Whisperer',2),('shared_treasure_trail_rewards','clues','Shared clues',0),('hard_treasure_trails','clues','Hard clues',1),('elite_treasure_trails','clues','Elite clues',2)",
     );
 
     await t.test(
@@ -158,13 +158,70 @@ test(
           saved.id,
         );
         const again = await imports.preview(s, 'staff');
-        assert.equal(again.action, 'preserve-schedule');
+        assert.equal(again.action, 'update-schedule');
         assert.deepEqual(again.pageIds, ['zulrah']);
         await apply(again);
         state = await schedules.state();
         assert.equal(state.schedules[0]?.title, 'Staff edit');
+        const expanded = await snapshot(
+          8100,
+          [
+            { metric: 'vardorvis', weight: '0.5' },
+            { metric: 'zulrah', weight: '2' },
+            { metric: 'the_whisperer', weight: '1' },
+          ],
+          [],
+          true,
+        );
+        expanded.competition.startsAt = new Date(now + 3 * day).toISOString();
+        expanded.competition.endsAt = new Date(now + 4 * day).toISOString();
+        const refresh = await imports.preview(expanded, 'staff');
+        assert.equal(refresh.action, 'update-schedule');
+        assert.deepEqual(refresh.pageIds, ['the_whisperer', 'zulrah']);
+        const updated = await apply(refresh);
+        assert.equal(updated.scheduleId, saved.id);
+        state = await schedules.state();
+        assert.equal(state.schedules.length, 1);
+        assert.deepEqual(state.schedules[0], {
+          ...saved,
+          title: 'Staff edit',
+          startsAt: expanded.competition.startsAt,
+          endsAt: expanded.competition.endsAt,
+          pageIds: ['the_whisperer', 'zulrah'],
+        });
+        assert.equal(
+          (await apply(await imports.preview(expanded, 'staff'))).outcome,
+          'unchanged',
+        );
+        assert.equal((await schedules.state()).revision, state.revision);
+        const metadata = (
+          await pool.query(
+            'SELECT metrics FROM wom_competitions WHERE competition_id=8100',
+          )
+        ).rows[0];
+        assert.deepEqual(metadata.metrics, [
+          'vardorvis',
+          'zulrah',
+          'the_whisperer',
+        ]);
+        await assert.rejects(imports.preview(s, 'staff'), { status: 422 });
+        const stale = await imports.preview(expanded, 'staff');
+        await schedules.save(
+          {
+            title: 'New staff title',
+            startsAt: expanded.competition.startsAt,
+            endsAt: expanded.competition.endsAt,
+            pageIds: ['the_whisperer', 'zulrah'],
+          },
+          state.revision,
+          'staff',
+          'Staff',
+          saved.id,
+        );
+        await assert.rejects(apply(stale), { status: 409 });
+        state = await schedules.state();
         await schedules.remove(saved.id, state.revision, 'staff', 'Staff');
-        const deleted = await imports.preview(s, 'staff');
+        const deleted = await imports.preview(expanded, 'staff');
         assert.equal(deleted.action, 'preserve-deletion');
         await apply(deleted);
         assert.equal((await schedules.state()).schedules.length, 0);
@@ -380,6 +437,87 @@ test(
             (s) => s.id === adoptedReceipt.scheduleId,
           )!.pageIds,
           ['manual-archive'],
+        );
+        await pool.query(
+          "UPDATE collection_log_schedules SET starts_at=now()-interval '3 days',ends_at=now()-interval '1 day',archived_at=now() WHERE id=$1",
+          [adoptedReceipt.scheduleId],
+        );
+        const archivedBefore = (
+          await pool.query(
+            'SELECT starts_at,ends_at,archived_at FROM collection_log_schedules WHERE id=$1',
+            [adoptedReceipt.scheduleId],
+          )
+        ).rows[0];
+        const shifted = await snapshot(8114, metrics, [], true);
+        shifted.competition.endsAt = new Date(now + 5 * day).toISOString();
+        const archivedPreview = await imports.preview(shifted, 'staff');
+        assert.equal(archivedPreview.action, 'preserve-deletion');
+        await apply(archivedPreview);
+        assert.deepEqual(
+          (
+            await pool.query(
+              'SELECT starts_at,ends_at,archived_at FROM collection_log_schedules WHERE id=$1',
+              [adoptedReceipt.scheduleId],
+            )
+          ).rows[0],
+          archivedBefore,
+        );
+        assert.ok(
+          !(await schedules.state()).schedules.some(
+            (s) => s.id === adoptedReceipt.scheduleId,
+          ),
+        );
+      },
+    );
+    await t.test(
+      'reimported skill competitions add metrics without duplicating existing XP',
+      async () => {
+        const original = await snapshot(
+          8199,
+          [{ metric: 'attack', weight: '1' }],
+          [{ id: 999, name: 'New skills', gains: { attack: '10' } }],
+        );
+        await apply(await imports.preview(original, 'staff'));
+        const before = await xp.tracker();
+        const expanded = await snapshot(
+          8199,
+          [
+            { metric: 'attack', weight: '1' },
+            { metric: 'fishing', weight: '1' },
+          ],
+          [
+            {
+              id: 999,
+              name: 'New skills',
+              gains: { attack: '10', fishing: '20', total: '30' },
+            },
+          ],
+        );
+        await apply(await imports.preview(expanded, 'staff'));
+        const after = await xp.tracker();
+        assert.equal(after.totals.attack, before.totals.attack);
+        assert.equal(
+          BigInt(after.totals.fishing),
+          BigInt(before.totals.fishing) + 20n,
+        );
+        const saved = (
+          await pool.query(
+            'SELECT metrics,skills FROM wom_competitions WHERE competition_id=8199',
+          )
+        ).rows[0];
+        assert.deepEqual(saved.metrics, ['attack', 'fishing']);
+        assert.deepEqual(saved.skills, ['attack', 'fishing']);
+        assert.equal(
+          (await apply(await imports.preview(expanded, 'staff'))).outcome,
+          'unchanged',
+        );
+        assert.equal(
+          (
+            await pool.query(
+              'SELECT count(*)::int AS count FROM xp_events WHERE competition_id=8199',
+            )
+          ).rows[0].count,
+          1,
         );
       },
     );

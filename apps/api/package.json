@@ -12,9 +12,9 @@
     "build:runtime": "node ../../scripts/clean-dist.mjs && tsc -p tsconfig.runtime.json"
   },
   "dependencies": {
-    "@clog/bot": "1.0.3",
-    "@clog/database": "1.0.3",
-    "@clog/domain": "1.0.3",
+    "@clog/bot": "*",
+    "@clog/database": "*",
+    "@clog/domain": "*",
     "@fastify/multipart": "^10.1.2",
     "fastify": "^5.6.1",
     "pg": "^8.16.3",

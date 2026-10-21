@@ -189,11 +189,9 @@ for (const width of [1100, 320]) {
       .getByLabel('Logo image', { exact: true })
       .setInputFiles({ name: 'animated.webp', mimeType: 'image/webp', buffer });
     await page
-      .getByRole('button', { name: 'Save clan logo', exact: true })
+      .getByRole('button', { name: 'Save site settings', exact: true })
       .click();
-    await expect(
-      page.getByText('Clan logo and website icon saved.'),
-    ).toBeVisible();
+    await expect(page.getByText('Site settings saved.')).toBeVisible();
     const logo = page.locator('.clan-logo').first();
     await expect(logo).toHaveAttribute('src', /\/api\/v1\/branding\//u);
     await expect

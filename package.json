@@ -10,6 +10,13 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "version:bump": "npm version --no-git-tag-version",
+    "version:sync": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check",
+    "version": "node scripts/sync-version.mjs",
+    "preinstall": "node scripts/sync-version.mjs",
+    "prebuild": "node scripts/sync-version.mjs",
+    "prebuild:runtime": "node scripts/sync-version.mjs",
     "build": "npm run build -w @clog/domain && npm run build -w @clog/database && npm run build -w @clog/bot && npm run build -w @clog/api && npm run build -w @clog/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint apps packages --max-warnings 0",

@@ -1,14 +1,10 @@
 import { memo, useCallback, useMemo } from 'react';
 import { competitionLifecycle, type WomCompetition } from '@clog/domain';
 import type { CompetitionClient } from './competition-api.ts';
-import {
-  localScheduleLabel,
-  utcScheduleLabel,
-  scheduleTimezone,
-} from './schedule-time.ts';
+import { utcScheduleLabel } from './schedule-time.ts';
+import { activityRange } from './activity-range.ts';
 import { usePublicPolling } from './use-public-polling.ts';
 import { useActivityClock } from './activity-clock.ts';
-import { CompetitionMetrics } from './CompetitionMetrics.tsx';
 const empty: WomCompetition[] = [];
 type Row = {
   competition: WomCompetition;
@@ -30,14 +26,13 @@ const ActivityRow = memo(function ActivityRow({
       <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
         {c.title} ↗
       </a>
-      <CompetitionMetrics competition={c} />
-      <small>
-        Start:{' '}
-        <time dateTime={c.startsAt} title={row.startUtc}>
-          {row.start}
-        </time>
-        <br />
-        End:{' '}
+      <small className="activity-range">
+        <span>
+          <time dateTime={c.startsAt} title={row.startUtc}>
+            {row.start}
+          </time>
+          {' -'}
+        </span>{' '}
         <time dateTime={c.endsAt} title={row.endUtc}>
           {row.end}
         </time>
@@ -72,8 +67,7 @@ export function ActivityCompetitions({
     () =>
       competitions.map((competition) => ({
         competition,
-        start: localScheduleLabel(competition.startsAt),
-        end: localScheduleLabel(competition.endsAt),
+        ...activityRange(competition.startsAt, competition.endsAt),
         startUtc: utcScheduleLabel(competition.startsAt),
         endUtc: utcScheduleLabel(competition.endsAt),
       })),
@@ -87,7 +81,6 @@ export function ActivityCompetitions({
   return (
     <aside className="activity-competitions" aria-label="Activity competitions">
       <h2>Activity competitions</h2>
-      <p className="activity-timezone">Times: {scheduleTimezone}</p>
       {error && (
         <p role="alert">
           {error} <button onClick={retry}>Retry competitions</button>

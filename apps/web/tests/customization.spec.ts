@@ -186,18 +186,12 @@ test('hardcore appearance can be configured while disabled and switches independ
     .getByLabel('Logo image')
     .setInputFiles(await pngFile(resolve('public/skills/sailing.webp')));
   await page
-    .getByRole('button', { name: 'Save clan logo', exact: true })
-    .click();
-  await expect(
-    page.getByText('Clan logo and website icon saved.'),
-  ).toBeVisible();
-  const hcLogo = await page
-    .getByAltText('Current clan logo')
-    .getAttribute('src');
-  await page
     .getByRole('button', { name: 'Save hardcore settings', exact: true })
     .click();
   await expect(page.getByText('Hardcore worlds settings saved.')).toBeVisible();
+  const hcLogo = await page
+    .getByAltText('Current clan logo')
+    .getAttribute('src');
   await page.locator('header a.clan-brand').click();
   await expect(page.locator('.clan-name')).toHaveText('Clan name');
   await expect(page.locator('header .clan-logo')).toHaveAttribute(

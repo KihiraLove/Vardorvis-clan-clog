@@ -247,7 +247,7 @@ test(
         window.id,
       );
       p = await preview(running);
-      assert.equal(p.action, 'preserve-schedule');
+      assert.equal(p.action, 'update-schedule');
       assert.deepEqual(p.pageIds, ['other']);
       await apply(p);
       assert.equal(
@@ -255,6 +255,11 @@ test(
           ?.title,
         'Staff edited',
       );
+      const refreshedWindow = (await scheduling.state()).schedules.find(
+        (s) => s.id === window.id,
+      )!;
+      assert.equal(refreshedWindow.startsAt, running.competition.startsAt);
+      assert.equal(refreshedWindow.endsAt, running.competition.endsAt);
       state = await scheduling.state();
       await scheduling.remove(window.id, state.revision, 'actor', 'Staff');
       p = await preview(running);

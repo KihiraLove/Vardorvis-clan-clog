@@ -2781,6 +2781,14 @@ html:has(.unknown-metric-dialog[open]) {
 .activity-competition--finished small {
   color: #ff9898;
 }
+.activity-competition .activity-range {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.35em;
+}
+.activity-range > * {
+  white-space: nowrap;
+}
 .activity-competition--running small {
   color: #a4e5a4;
 }

@@ -252,7 +252,9 @@ test('activity list orders by source end, shows local start/end status colors an
     await expect(item.locator('small')).toHaveCSS('color', color!);
     await expect(item.locator('time')).toHaveCount(2);
     for (const time of await item.locator('time').all())
-      await expect(time).toHaveText(/^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2} \S+$/);
+      await expect(time).toHaveText(
+        /^\d{2}\/[A-Z][a-z]{2}(?:\/\d{2})? \d{2}:\d{2}(?: [+-]\d{2}:\d{2})?$/,
+      );
     await expect(item.locator('a')).toHaveAttribute('target', '_blank');
     await expect(item.locator('a')).toHaveAttribute(
       'rel',
