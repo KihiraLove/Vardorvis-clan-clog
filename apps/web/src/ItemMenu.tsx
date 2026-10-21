@@ -125,7 +125,7 @@ export function ItemMenu({
         <>
           {!!eventCredits.length && (
             <div className="item-menu__event">
-              <strong>Event collection</strong>
+              <strong>First event collection</strong>
               {eventCredits.map((credit) => (
                 <p key={credit.submissionId}>{creditLine(credit)}</p>
               ))}

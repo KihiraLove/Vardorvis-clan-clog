@@ -17,6 +17,7 @@ export async function loadingFixtures(page: Page) {
     '/api/v1/catalog': log.catalog,
     '/api/v1/collections': log.collections,
     '/api/v1/admin/catalog': f.catalog,
+    '/api/v1/admin/catalog-updates': f.catalogUpdates,
     '/api/v1/admin/submissions': f.pending,
     '/api/v1/admin/settings': client.publicSettings(),
     '/api/v1/admin/branding': defaultBranding,

@@ -109,7 +109,7 @@ test('schedule validation rejects normalized invalid dates, reversed windows and
   assert.throws(() => parseSchedulingState({ ...state, enabled: 'false' }));
 });
 
-test('permanent pages are independent from timed windows and validate bounded distinct page IDs', () => {
+test('legacy permanent selections cannot open pages and old payloads remain readable', () => {
   const state = {
     enabled: true,
     schedules: [schedule],
@@ -120,8 +120,8 @@ test('permanent pages are independent from timed windows and validate bounded di
     '2026-10-12T11:00:00.000Z',
     '2026-10-12T13:00:00.000Z',
   ]) {
-    assert.equal(scheduledItemOpen(state, ['page-b'], now), true);
-    assert.equal(scheduledItemOpen(state, ['other', 'page-b'], now), true);
+    assert.equal(scheduledItemOpen(state, ['page-b'], now), false);
+    assert.equal(scheduledItemOpen(state, ['other', 'page-b'], now), false);
     assert.equal(scheduledItemOpen(state, ['unrelated'], now), false);
   }
   assert.deepEqual(parsePermanentPageIds(['page-b', 'page-a']), [

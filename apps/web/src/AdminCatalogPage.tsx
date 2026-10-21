@@ -21,6 +21,11 @@ export function AdminCatalogPage({
   const [loading, setLoading] = useState(!initial),
     [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {
+    const refresh = () => setRefreshKey((n) => n + 1);
+    window.addEventListener('catalog-updated', refresh);
+    return () => window.removeEventListener('catalog-updated', refresh);
+  }, []);
+  useEffect(() => {
     if (initial && refreshKey === 0) return;
     let active = true;
     const controller = new AbortController(),
@@ -55,6 +60,7 @@ export function AdminCatalogPage({
     if (!signal.aborted) {
       setCatalog(next);
       setReadError(undefined);
+      window.dispatchEvent(new Event('catalog-review-refresh'));
     }
     return next;
   };

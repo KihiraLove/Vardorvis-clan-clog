@@ -10,6 +10,71 @@ const json = (data: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+test('manual, correction and decision receipts accept only an explained Event-to-Regular fallback', async () => {
+  const fixture = await adminFixtures();
+  const row = {
+    ...fixture.detail.submission,
+    hardcore: false,
+    source: 'manual' as const,
+    status: 'approved' as const,
+    version: fixture.detail.submission.version + 1,
+    collectionType: 'regular' as const,
+    collectionReason: 'event_credit_already_obtained',
+  };
+  const fields = {
+    itemId: row.itemId!,
+    collectorName: row.collectorName,
+    collectedOn: row.collectedOn,
+    hardcore: false,
+    collectionType: 'event' as const,
+    approve: true,
+    reason: 'Verified',
+  };
+  let receipt = row;
+  const client = new LiveAdminClient(
+    async (_url, options) =>
+      new Response(JSON.stringify(receipt), {
+        status:
+          options?.method === 'POST' &&
+          new Headers(options.headers).has('Idempotency-Key')
+            ? 201
+            : 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+  );
+  const operations = [
+    () => client.addManual(fields, crypto.randomUUID(), 'csrf', signal()),
+    () => client.edit(row.id, row.version - 1, fields, 'csrf', signal()),
+    () =>
+      client.decide(
+        row.id,
+        row.version - 1,
+        'approve',
+        '',
+        'csrf',
+        signal(),
+        fields,
+      ),
+    () =>
+      client.saveCollectionFlags(
+        row.id,
+        row.version - 1,
+        fields,
+        'Verified',
+        'csrf',
+        signal(),
+      ),
+  ];
+  for (const operation of operations) {
+    assert.equal((await operation()).collectionType, 'regular');
+    receipt = { ...row, collectionReason: 'staff_correction' };
+    await assert.rejects(operation, /Unexpected .*receipt/);
+    receipt = { ...row, hardcore: true };
+    await assert.rejects(operation, /Unexpected .*receipt/);
+    receipt = row;
+  }
+});
+
 test('highlight settings send revision and CSRF, accept reordered channels and reject malformed or mismatched receipts', async () => {
   const eventHighlight = { alpha: 0.375, blue: 128, green: 255, red: 0 };
   let receipt: unknown = {

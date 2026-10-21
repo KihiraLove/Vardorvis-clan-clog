@@ -12,6 +12,10 @@ import { checkReadiness } from './readiness.js';
 import { createHash, randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import { catalogRoutes } from './catalog-routes.js';
+import {
+  catalogUpdateRoutes,
+  type CatalogUpdateService,
+} from './catalog-update-routes.js';
 import type {
   ApplicationStore,
   CatalogService,
@@ -68,6 +72,7 @@ interface Options {
       >)
     | undefined;
   catalog?: CatalogService | undefined;
+  catalogUpdates?: CatalogUpdateService | undefined;
   icons?: IconFiles | undefined;
   store?: ApplicationStore | undefined;
   auth?: AuthConfig | undefined;
@@ -414,6 +419,8 @@ export function createApp(
     );
   if (options.catalog && options.icons)
     catalogRoutes(app, options.catalog, options.icons, requireAdmin);
+  if (options.catalogUpdates)
+    catalogUpdateRoutes(app, options.catalogUpdates, requireAdmin);
   app.get<{ Querystring: { q?: string } }>(
     '/api/v1/catalog/search',
     {

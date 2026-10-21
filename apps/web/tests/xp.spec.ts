@@ -251,7 +251,7 @@ test('direct admin imports require access, review corrections and send CSRF plus
   ).toHaveCount(0);
   await expect(
     page.getByRole('heading', {
-      name: 'Scheduling and Competitions',
+      name: 'Track Event collections during scheduled windows',
       exact: true,
     }),
   ).toBeVisible();

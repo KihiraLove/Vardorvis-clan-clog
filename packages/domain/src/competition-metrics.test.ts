@@ -6,7 +6,30 @@ import {
   formatCompetitionAmount,
   parseCompetitionDefinitions,
   competitionUnit,
+  womMetricType,
+  competitionUsesPages,
 } from './competition-metrics.js';
+import { competitionScope } from './competitions.js';
+
+test('The Fractured Archive is an Activity competition with raid kill units and page scheduling', () => {
+  assert.equal(womMetricType('the_fractured_archive'), 'BOSS');
+  for (const metrics of [
+    ['the_fractured_archive'],
+    ['the_fractured_archive', 'tombs_of_amascut'],
+  ]) {
+    assert.deepEqual(competitionScope(metrics), {
+      kind: 'ACTIVITY',
+      skills: [],
+    });
+    assert.equal(competitionUnit({ metrics }), 'Kills');
+    assert.equal(competitionUsesPages(metrics), true);
+  }
+  assert.throws(
+    () => competitionScope(['the_fractured_archive', 'attack']),
+    /Mixed/,
+  );
+  assert.throws(() => competitionScope(['unknown_raid']), /Unknown/);
+});
 
 test('scores preserve decimal precision, scientific numeric input and very large string counters', () => {
   assert.equal(competitionAmount(0.0000001), '0.0000001');

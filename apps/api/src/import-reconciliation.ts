@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { transaction } from './transaction.js';
 import { ProjectionCache, projection } from './projection-cache.js';
+import { PgCompetitionMetricStore } from './competition-metric-store.js';
 import {
   competitionImportAction,
   competitionLifecycle,
@@ -55,7 +56,10 @@ export function legacyCompetition(snapshot: XpSnapshot): CompetitionSnapshot {
 function requireSnapshot(snapshot: CompetitionSnapshot) {
   let scope: ReturnType<typeof competitionScope>;
   try {
-    scope = competitionScope(snapshot.competition.metrics);
+    scope = competitionScope(
+      snapshot.competition.metrics,
+      snapshot.competition.metricDefinitions,
+    );
   } catch (error) {
     throw new ApiError(422, (error as Error).message);
   }
@@ -82,6 +86,21 @@ function requireSnapshot(snapshot: CompetitionSnapshot) {
     throw new ApiError(422, 'Finished SKILL imports require exact XP results.');
 }
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
+async function requireMetricRevision(
+  client: pg.PoolClient,
+  snapshot: CompetitionSnapshot,
+  lock = false,
+) {
+  if (snapshot.metricRevision === undefined) return;
+  const state = (
+    await client.query<{ version: string }>(
+      'SELECT version::text FROM competition_metric_state WHERE singleton' +
+        (lock ? ' FOR SHARE' : ''),
+    )
+  ).rows[0];
+  if (!state || snapshot.metricRevision !== 'metrics-' + state.version)
+    throw new ApiError(409, 'Metric definitions changed. Preview again.');
+}
 type Stored = WomCompetition & {
   skills: string[];
   scheduleId: string | null;
@@ -118,6 +137,21 @@ function requireScope(
   snapshot: CompetitionSnapshot,
 ) {
   if (!prior) return;
+  for (const metric of competitionDefinitions(prior)) {
+    if (
+      metric.definition &&
+      JSON.stringify(metric.definition) !==
+        JSON.stringify(
+          competitionDefinitions(snapshot.competition).find(
+            (d) => d.metric === metric.metric,
+          )?.definition,
+        )
+    )
+      throw new ApiError(
+        409,
+        'Saved metric semantics changed. This competition retains its original definition.',
+      );
+  }
   if (prior.archivedAt)
     throw new ApiError(
       409,
@@ -152,10 +186,13 @@ async function xpEvents(client: pg.PoolClient): Promise<XpEvent[]> {
   return rows;
 }
 export class ImportReconciliation {
+  readonly metricRegistry: PgCompetitionMetricStore;
   private readonly activityCache = new ProjectionCache<{
     competitions: WomCompetition[];
   }>();
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(private readonly pool: pg.Pool) {
+    this.metricRegistry = new PgCompetitionMetricStore(pool);
+  }
   async clock(): Promise<number> {
     return (
       await this.pool.query<{ now: Date }>('SELECT clock_timestamp() AS now')
@@ -211,6 +248,7 @@ export class ImportReconciliation {
   ): Promise<CompetitionPreview> {
     const token = randomBytes(32).toString('base64url');
     return transaction(this.pool, 'preview', async (client) => {
+      await requireMetricRevision(client, snapshot);
       requireSnapshot(snapshot);
       const now = (
         await client.query<{ now: Date }>('SELECT clock_timestamp() AS now')
@@ -235,7 +273,10 @@ export class ImportReconciliation {
           'Competition time state changed. Preview again.',
         );
       snapshot = { ...snapshot, lifecycle };
-      const metadataOnly = !competitionUsesPages(snapshot.competition.metrics);
+      const metadataOnly = !competitionUsesPages(
+        snapshot.competition.metrics,
+        snapshot.competition.metricDefinitions,
+      );
       if (metadataOnly && pageIds?.length)
         throw new ApiError(
           422,
@@ -264,9 +305,24 @@ export class ImportReconciliation {
               'SELECT id,name FROM pages WHERE active ORDER BY category,sort_order,id',
             )
           ).rows;
-      const proposed = [
-        ...new Set(snapshot.competition.metrics.flatMap(mappedPages)),
-      ].filter((id) => pages.some((p) => p.id === id));
+      const pageBindings = metadataOnly
+        ? []
+        : (
+            await client.query<{ source_key: string; local_id: string }>(
+              "SELECT source_key,local_id FROM catalog_update_bindings WHERE kind='page'",
+            )
+          ).rows;
+      const mapped = competitionDefinitions(snapshot.competition).flatMap(
+        (d) =>
+          d.definition?.pageIds ??
+          mappedPages(d.metric).map(
+            (key) =>
+              pageBindings.find((b) => b.source_key === key)?.local_id ?? key,
+          ),
+      );
+      const proposed = [...new Set(mapped)].filter((id) =>
+        pages.some((p) => p.id === id),
+      );
       const linked = schedules.schedules.find(
         (s) => s.id === prior?.scheduleId,
       );
@@ -361,11 +417,7 @@ export class ImportReconciliation {
             ? 'The previously linked staff schedule is preserved. This import will not edit or open pages; manage that schedule in Scheduling.'
             : 'The previously linked schedule was deleted. This import will not recreate it.',
         );
-      if (
-        snapshot.competition.metrics
-          .flatMap(mappedPages)
-          .some((id) => !pages.some((p) => p.id === id))
-      )
+      if (mapped.some((id) => !pages.some((p) => p.id === id)))
         warnings.push(
           'Some mapped pages are unavailable. Review the active page selections before applying.',
         );
@@ -579,8 +631,12 @@ export class ImportReconciliation {
         );
       const snapshot = row.snapshot,
         c = snapshot.competition;
+      await requireMetricRevision(client, snapshot, true);
       requireSnapshot(snapshot);
-      if (!competitionUsesPages(c.metrics) && row.page_ids.length)
+      if (
+        !competitionUsesPages(c.metrics, c.metricDefinitions) &&
+        row.page_ids.length
+      )
         throw new ApiError(
           409,
           'Competition page-opening behavior changed. Preview again to import without opening pages.',
@@ -608,7 +664,7 @@ export class ImportReconciliation {
         lifecycle,
         prior?.scheduleCreated,
         schedules.schedules.some((s) => s.id === scheduleId),
-        competitionUsesPages(c.metrics),
+        competitionUsesPages(c.metrics, c.metricDefinitions),
       );
       const createSchedule = action === 'create-schedule';
       if (createSchedule) {

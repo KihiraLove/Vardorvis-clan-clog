@@ -4,6 +4,12 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
 import {
+  freezeBundledImages,
+  installSnapshotRefresh,
+  prepareCatalogRelease,
+} from './catalog-update-install.js';
+import { installCatalogUpdate } from './catalog-update-store.js';
+import {
   snapshotId,
   validateSnapshot,
   type CatalogSnapshot,
@@ -43,7 +49,7 @@ export async function importCatalog(
       [snapshot.source.url],
     );
     if (prior.rows.length) {
-      if (prior.rows.length !== 1 || prior.rows[0]!.id !== id)
+      if (!prior.rows.some((row) => row.id === id))
         throw new Error(
           'A different catalog is already imported; use a reviewed refresh workflow',
         );
@@ -124,12 +130,52 @@ export async function importCatalog(
 
 export async function importBundledCatalog(
   databaseUrl: string,
-): Promise<'imported' | 'unchanged'> {
+): Promise<'imported' | 'unchanged' | 'updated'> {
   const snapshot = await readBundledSnapshot();
+  const release = await prepareCatalogRelease(snapshot);
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   try {
-    return await importCatalog(client, snapshot);
+    // Serialize owner bootstrap runs; individual catalog transactions retain
+    // their writer lock without holding it throughout asset preparation.
+    await client.query('SELECT pg_advisory_lock(74261006)');
+    const fresh = !(
+      await client.query(
+        'SELECT complete FROM catalog_bootstrap_state WHERE singleton',
+      )
+    ).rows[0]!.complete;
+    const prior = (
+      await client.query(
+        'SELECT id FROM catalog_versions WHERE source_url=$1',
+        [snapshot.source.url],
+      )
+    ).rows;
+    const hash = snapshotId(snapshot);
+    let result: 'imported' | 'unchanged' | 'updated';
+    if (prior.length && !prior.some((r) => r.id === hash)) {
+      await installSnapshotRefresh(client, snapshot, release.images, hash);
+      await client.query(
+        'INSERT INTO catalog_versions(id,source_url,source_revision) VALUES($1,$2,$3) ON CONFLICT(id) DO NOTHING',
+        [hash, snapshot.source.url, snapshot.source.revision],
+      );
+      result = 'updated';
+    } else result = await importCatalog(client, snapshot);
+    await freezeBundledImages(client, release.images);
+    for (const batch of release.updates.batches)
+      if (
+        (await installCatalogUpdate(
+          client,
+          batch,
+          release.updates.images,
+          fresh,
+        )) === 'installed' &&
+        result === 'unchanged'
+      )
+        result = 'updated';
+    await client.query(
+      'UPDATE catalog_bootstrap_state SET complete=true WHERE singleton',
+    );
+    return result;
   } finally {
     await client.end();
   }

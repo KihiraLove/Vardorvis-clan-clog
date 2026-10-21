@@ -212,8 +212,11 @@ nonbreaking spaces and ordinary spaces. The list supports up to 200 names, one
 per line. Neither whitelisting nor auto allow bypasses clan/key, catalog or PNG
 validation. Auto approvals grant collection credit immediately and append an
 audit attributed to **RuneLite auto review**. If an approved Event credit already
-exists for the canonical item, another Event claim remains pending
-with an audit explaining why approval was deferred. Replays retain their
+exists for the canonical item and **Filter out regular duplicates** is off,
+another Event-eligible obtain is recorded as Regular and follows the usual
+automatic review policy. Its original scheduling evidence and fallback reason
+are retained. With the filter on, another Event claim remains pending with an
+audit explaining why approval was deferred. Replays retain their
 original pending/approved/rejected receipt after policy, filter or whitelist
 changes. With **Filter out regular duplicates** enabled, a new Regular claim for
 an item with an approved Regular credit in that mode creates a rejected submission.
@@ -245,10 +248,10 @@ entire write. The receipt includes `clanKeyRequirement: { enabled, revision }`.
 Older clients can omit this field to preserve the existing key requirement.
 
 Scheduling classifies collection type and never closes intake. An active timed
-normal-world page qualifies a drop as `collectionType: "event"`, excluding pages
-selected permanently open. Closed/unscheduled pages, disabled scheduling,
-permanent pages and all hardcore claims use `"regular"`. A shared item qualifies
-if another associated nonpermanent page has an active timed window. Start is
+normal-world page qualifies a drop as `collectionType: "event"`. Unscheduled pages,
+disabled scheduling and all hardcore claims use `"regular"`. Legacy permanently-open
+settings no longer override new intake. A shared item qualifies when any associated
+page has an active timed window. Start is
 inclusive and end exclusive, using one server receipt time in UTC. Unmatched
 normal claims can have `collectionType: null` while waiting for a canonical match.
 Frozen evidence determines their type on resolution; staff can make an audited

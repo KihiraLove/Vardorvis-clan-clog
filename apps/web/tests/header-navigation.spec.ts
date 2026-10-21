@@ -134,46 +134,26 @@ for (const width of [1440, 740, 580, 390, 320]) {
   );
 }
 
-test('Main site protects unsaved administration changes on cancellation and discards only with confirmation', async ({
+test('Main site preserves a schedule draft when leaving is cancelled', async ({
   page,
 }) => {
-  const { admin } = await mockApi(page);
+  await mockApi(page);
   await page.goto('/admin/schedules');
-  const panel = page.getByRole('region', {
-    name: 'Permanently open pages',
-    exact: true,
+  const draft = page.getByLabel('Schedule name', { exact: true });
+  await draft.fill('Unsaved schedule');
+  page.once('dialog', async (d) => {
+    expect(d.message()).toContain('Discard unsaved changes');
+    await d.dismiss();
   });
-  const chosen = panel.getByRole('checkbox').first();
-  await chosen.check();
-  const home = page.getByRole('link', { name: 'Main site', exact: true });
-  page.once('dialog', async (dialog) => {
-    expect(dialog.message()).toBe(
-      'Discard unsaved changes and leave this page?',
-    );
-    await dialog.dismiss();
+  await page.getByRole('link', { name: 'Main site', exact: true }).click();
+  await expect(draft).toHaveValue('Unsaved schedule');
+  page.once('dialog', async (d) => {
+    await d.accept();
   });
-  await home.click();
-  await expect(page).toHaveURL(/\/admin\/schedules$/);
-  await expect(chosen).toBeChecked();
-  await expect(home).toBeFocused();
-  page.once('dialog', async (dialog) => {
-    expect(dialog.message()).toBe(
-      'Discard unsaved changes and leave this page?',
-    );
-    await dialog.accept();
-  });
-  await home.press('Enter');
+  await page.getByRole('link', { name: 'Main site', exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
-  expect(
-    (await admin.scheduling(new AbortController().signal))
-      .permanentlyOpenPageIds,
-  ).toEqual([]);
-  await page.goBack();
-  await expect(page).toHaveURL(/\/admin\/schedules$/);
-  await expect(chosen).not.toBeChecked();
 });
-
-test('Main site waits for a pending staff save without cancelling or replaying the write', async ({
+test('Main site waits for a pending scheduling save without cancelling the write', async ({
   page,
 }) => {
   await mockApi(page);
@@ -182,35 +162,23 @@ test('Main site waits for a pending staff save without cancelling or replaying t
     release = resolve;
   });
   let writes = 0;
-  await page.route(
-    '**/api/v1/admin/schedules/permanent-pages',
-    async (route) => {
-      writes++;
-      await held;
-      await route.fallback();
-    },
-  );
+  await page.route('**/api/v1/admin/schedules/settings', async (route) => {
+    writes++;
+    await held;
+    await route.fallback();
+  });
   try {
     await page.goto('/admin/schedules');
-    const panel = page.getByRole('region', {
-      name: 'Permanently open pages',
-      exact: true,
-    });
-    await panel.getByRole('checkbox').first().check();
-    await panel
-      .getByRole('button', { name: 'Save changes', exact: true })
+    await page
+      .getByRole('switch', { name: 'Collection log scheduling' })
       .click();
     await expect.poll(() => writes).toBe(1);
     await page.getByRole('link', { name: 'Main site', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText(
       'Wait for the current staff operation',
     );
-    await expect(page).toHaveURL(/\/admin\/schedules$/);
-    await expect(panel.getByRole('checkbox').first()).toBeChecked();
     release();
-    await expect(page.getByRole('status')).toContainText(
-      'Permanently open pages saved.',
-    );
+    await expect(page.getByRole('status')).toContainText('Scheduling enabled.');
     await page.getByRole('link', { name: 'Main site', exact: true }).click();
     await expect(page).toHaveURL(/\/$/);
     expect(writes).toBe(1);

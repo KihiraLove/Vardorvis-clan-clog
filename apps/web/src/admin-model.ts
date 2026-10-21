@@ -157,6 +157,7 @@ export function parseStaffAccount(input: unknown): StaffAccount {
   };
 }
 export interface AdminClient {
+  catalogUpdateClient?(): Promise<typeof import('./catalog-update-api.ts')>;
   accessControl(
     signal: AbortSignal,
   ): Promise<import('@clog/domain').AccessControlSettings>;
@@ -234,12 +235,6 @@ export interface AdminClient {
     csrf: string,
     signal: AbortSignal,
     id?: string,
-  ): Promise<import('@clog/domain').SchedulingState>;
-  setPermanentPages(
-    pageIds: string[],
-    revision: string,
-    csrf: string,
-    signal: AbortSignal,
   ): Promise<import('@clog/domain').SchedulingState>;
   deleteSchedule(
     id: string,

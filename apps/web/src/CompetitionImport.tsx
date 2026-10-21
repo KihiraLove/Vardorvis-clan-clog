@@ -1,3 +1,4 @@
+import { UnknownMetricRequestError } from './competition-import-api.ts';
 import { useEffect, useRef, useState } from 'react';
 import { classifyAccessFailure } from './admin-session.ts';
 import {
@@ -8,7 +9,13 @@ import {
 import { exactXp, signedXp, skillName, type AdminSession } from './xp-model.ts';
 import { localScheduleLabel, utcScheduleLabel } from './schedule-time.ts';
 import { useAdminDraft } from './admin-route-data.ts';
-import { competitionUnit, formatCompetitionAmount } from '@clog/domain';
+import {
+  competitionUnit,
+  formatCompetitionAmount,
+  type CompetitionMetricResolution,
+  type CustomCompetitionMetric,
+} from '@clog/domain';
+import { UnknownMetricDialog } from './UnknownMetricDialog.tsx';
 import {
   CompetitionMetrics,
   CompetitionBreakdown,
@@ -25,6 +32,8 @@ export function CompetitionImport({
   onAccessLost: () => void;
 }) {
   const [url, setUrl] = useState('');
+  const previewButton = useRef<HTMLButtonElement>(null);
+  const [resolution, setResolution] = useState<CompetitionMetricResolution>();
   const [preview, setPreview] = useState<CompetitionImportPreview>(),
     [pages, setPages] = useState<string[]>();
   const [busy, setBusy] = useState(false),
@@ -47,7 +56,7 @@ export function CompetitionImport({
     !!preview &&
     JSON.stringify(pages?.slice().sort()) !==
       JSON.stringify(preview.pageIds.slice().sort());
-  useAdminDraft(!!preview || dirty, busy);
+  useAdminDraft(!!preview || !!resolution || dirty, busy);
   const execute = async (apply: boolean) => {
     if (busy) return;
     const controller = new AbortController();
@@ -90,6 +99,14 @@ export function CompetitionImport({
         key.current = crypto.randomUUID();
       }
     } catch (e) {
+      if (
+        e instanceof UnknownMetricRequestError &&
+        !controller.signal.aborted
+      ) {
+        setPreview(undefined);
+        setResolution(e.resolution);
+        return;
+      }
       if (controller.signal.aborted) {
         setError(
           'Request timed out. Retry Apply to check the committed result safely.',
@@ -124,9 +141,85 @@ export function CompetitionImport({
       if (operation.current === controller) setBusy(false);
     }
   };
+  const saveMetrics = async (
+    definitions: CustomCompetitionMetric[],
+    requestKey: string,
+  ) => {
+    if (!resolution || busy || !client.saveMetrics) return;
+    const controller = new AbortController();
+    operation.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    setBusy(true);
+    setError(undefined);
+    let saved = false;
+    try {
+      await client.saveMetrics(
+        resolution,
+        definitions,
+        requestKey,
+        session.csrfToken,
+        controller.signal,
+      );
+      saved = true;
+      setResolution(undefined);
+      setMessage(
+        'Metric definitions saved. Review the competition before applying.',
+      );
+      const p = await client.preview(
+        url,
+        session.csrfToken,
+        controller.signal,
+        pages,
+      );
+      if (controller.signal.aborted) return;
+      setPreview(p);
+      setPages(p.pageIds);
+      setAck(false);
+      key.current = crypto.randomUUID();
+    } catch (failure) {
+      if (classifyAccessFailure(failure) === 'expired') {
+        setResolution(undefined);
+        onAccessLost();
+        return;
+      }
+      if (failure instanceof UnknownMetricRequestError)
+        setResolution(failure.resolution);
+      else if (classifyAccessFailure(failure) === 'denied')
+        setError('Your account is not allowed to save competition metrics.');
+      else
+        setError(
+          saved
+            ? 'Metric definitions were saved, but the competition preview could not be completed. Retry Preview competition.'
+            : failure instanceof CompetitionRequestError
+              ? failure.message
+              : 'Could not confirm the metric save. Retry the same choices to recover its receipt.',
+        );
+    } finally {
+      clearTimeout(timeout);
+      if (operation.current === controller) setBusy(false);
+      if (saved) requestAnimationFrame(() => previewButton.current?.focus());
+    }
+  };
   const correction = preview?.changes.some((c) => BigInt(c.change) < 0n);
   return (
     <section className="competition-import">
+      {resolution && (
+        <UnknownMetricDialog
+          key={resolution.resolutionToken}
+          resolution={resolution}
+          busy={busy}
+          error={error}
+          onSave={saveMetrics}
+          onDiscard={() => {
+            setResolution(undefined);
+            setPreview(undefined);
+            setPages(undefined);
+            setError(undefined);
+            setMessage('Import discarded.');
+            requestAnimationFrame(() => previewButton.current?.focus());
+          }}
+        />
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -149,7 +242,7 @@ export function CompetitionImport({
               }}
             />
           </label>
-          <button className="site-button" disabled={!url}>
+          <button ref={previewButton} className="site-button" disabled={!url}>
             {busy ? 'Please wait…' : 'Preview competition'}
           </button>
         </fieldset>

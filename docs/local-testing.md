@@ -14,6 +14,24 @@ Vite proxies `/api` to `127.0.0.1:3000`. The frontend always uses the API;
 there is no demo fallback. Browser fixtures live under `apps/web/tests/support`
 and cannot enter production bundles. See [configuration](environment.md).
 
+After pulling a catalog update, stop the API watcher and refresh the local database
+with its owner credentials. For an owner-configured local `.env`:
+
+```bash
+node --env-file=.env packages/database/dist/migrate.js
+node --env-file=.env packages/database/dist/catalog-import.js
+npm run dev:api
+```
+
+Compile changed domain/database/API sources first. Use the owner connection for
+these two maintenance commands; the restricted runtime role cannot install release
+batches. Starting Vite or the direct API watcher alone does not run catalog import.
+Production startup performs this refresh automatically. Existing installations
+stage missing pages/items for review; the first administrator is prompted when
+changes remain. Check the corresponding Fix? groups and Save to create them.
+Fresh installs include the content without an upgrade prompt. Running tests does
+not refresh a development database.
+
 ## Focused checks
 
 Run checks for the behavior/files you changed. Examples:
@@ -85,3 +103,23 @@ that run's namespace. Avoid global Docker prune on a shared machine.
 Hosted CI runs manually or on a published Release. Publishing waits for complete
 acceptance. Local evidence does not replace checking your own HTTPS host,
 Discord guild, supported devices and off-host recovery before launch.
+
+## Focused catalog upgrade smoke
+
+`scripts/catalog-update-smoke.mjs` is an opt-in check for a freshly started,
+disposable production container. It requires no submissions or installed content
+updates and uses only temporary credentials/data. Never run it on a hosted clan's
+installation. Copy it into the test container, then run:
+
+```bash
+docker cp scripts/catalog-update-smoke.mjs <disposable-container>:/tmp/catalog-update-smoke.mjs
+docker exec -e CATALOG_UPDATE_SMOKE_TEST=1 <disposable-container> node /tmp/catalog-update-smoke.mjs
+```
+
+The container needs its normal HTTPS `PUBLIC_ORIGIN`. The check uses real
+login/password change, CSRF/Origin validation, runtime-role catalog corrections,
+idempotent replay, retained local identity/credit, and a temporary PostgreSQL
+dump/restore of images, prompt state and receipts. It removes the restored
+database/dump; remove the disposable installation afterward. The script is not
+included in production runtime images. This focused check does not replace full
+release acceptance.

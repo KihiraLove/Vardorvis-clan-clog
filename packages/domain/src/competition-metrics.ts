@@ -1,5 +1,5 @@
 /** Reviewed WOM metric groups; keep synchronized with WOM's official Metric enum. */
-import { isSkill } from './skills.js';
+import { isSkill, type Skill } from './skills.js';
 import type { WomCompetition } from './competitions.js';
 
 export const womBossMetrics = [
@@ -55,6 +55,7 @@ export const womBossMetrics = [
   'tempoross',
   'the_gauntlet',
   'the_corrupted_gauntlet',
+  'the_fractured_archive',
   'the_hueycoatl',
   'the_leviathan',
   'the_royal_titans',
@@ -108,6 +109,77 @@ export interface CompetitionMetric {
   /** Canonical decimal strings preserve weights without floating-point arithmetic. */
   weight: string;
   createdAt?: string;
+  /** Frozen installation-defined semantics; never inferred again from a later registry. */
+  definition?: CustomCompetitionMetric;
+}
+export interface CustomCompetitionMetric {
+  metric: string;
+  name: string;
+  type: 'BOSS' | 'ACTIVITY' | 'COMPUTED' | 'SKILL';
+  pageIds: string[];
+  skill?: Skill;
+}
+export interface CompetitionMetricRegistry {
+  revision: string;
+  definitions: CustomCompetitionMetric[];
+}
+export interface CompetitionMetricDiscovery {
+  id: number;
+  title: string;
+  sourceUrl: string;
+  metrics: CompetitionMetric[];
+  startsAt: string;
+  endsAt: string;
+  unknownMetrics: string[];
+}
+export interface CompetitionMetricResolution extends CompetitionMetricDiscovery {
+  resolutionToken: string;
+  revision: string;
+  expiresAt: string;
+  pages: { id: string; name: string }[];
+}
+export function parseCustomCompetitionMetric(
+  value: unknown,
+): CustomCompetitionMetric {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Invalid metric definition.');
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.metric !== 'string' ||
+    !/^[a-z][a-z0-9_]{0,79}$/u.test(row.metric) ||
+    typeof row.name !== 'string' ||
+    !row.name.trim() ||
+    row.name.trim().length > 120 ||
+    row.name.includes('\0') ||
+    !['BOSS', 'ACTIVITY', 'COMPUTED', 'SKILL'].includes(String(row.type)) ||
+    !Array.isArray(row.pageIds) ||
+    row.pageIds.length > 200 ||
+    row.pageIds.some(
+      (id) => typeof id !== 'string' || !id || id.length > 100,
+    ) ||
+    new Set(row.pageIds).size !== row.pageIds.length ||
+    (row.type === 'SKILL' ? !isSkill(row.skill) : row.skill !== undefined) ||
+    (['SKILL', 'COMPUTED'].includes(String(row.type)) && row.pageIds.length > 0)
+  )
+    throw new Error(
+      'Choose a valid metric type, name, active pages and supported XP skill.',
+    );
+  return {
+    metric: row.metric,
+    name: row.name.trim(),
+    type: row.type as CustomCompetitionMetric['type'],
+    pageIds: [...(row.pageIds as string[])].sort(),
+    ...(row.type === 'SKILL' ? { skill: row.skill as Skill } : {}),
+  };
+}
+export function competitionMetricType(
+  metric: string,
+  definitions: readonly CompetitionMetric[] = [],
+) {
+  return (
+    definitions.find((d) => d.metric === metric)?.definition?.type ??
+    womMetricType(metric)
+  );
 }
 export interface CompetitionStanding {
   playerId: number;
@@ -213,6 +285,16 @@ export function parseCompetitionDefinitions(
     return {
       metric: metrics[index]!,
       weight,
+      ...(row.definition === undefined
+        ? {}
+        : {
+            definition: (() => {
+              const definition = parseCustomCompetitionMetric(row.definition);
+              if (definition.metric !== row.metric)
+                throw new Error('Metric definition key does not match scope.');
+              return definition;
+            })(),
+          }),
       ...(row.createdAt === undefined
         ? {}
         : { createdAt: row.createdAt as string }),
@@ -223,7 +305,11 @@ export function competitionUnit(
   c: Pick<WomCompetition, 'metrics' | 'metricDefinitions'>,
 ): string {
   if (competitionDefinitions(c).some((d) => d.weight !== '1')) return 'Score';
-  const types = new Set(c.metrics.map(womMetricType));
+  const types = new Set(
+    c.metrics.map((metric) =>
+      competitionMetricType(metric, c.metricDefinitions),
+    ),
+  );
   if (types.size === 1 && types.has('SKILL'))
     return c.metrics.includes('overall') && c.metrics.length > 1
       ? 'Score'
@@ -232,9 +318,14 @@ export function competitionUnit(
   if (types.size === 1 && types.has('COMPUTED')) return 'Hours';
   return 'Score';
 }
-export function competitionUsesPages(metrics: readonly string[]): boolean {
+export function competitionUsesPages(
+  metrics: readonly string[],
+  definitions: readonly CompetitionMetric[] = [],
+): boolean {
   return metrics.some((metric) =>
-    ['BOSS', 'ACTIVITY'].includes(womMetricType(metric) ?? ''),
+    ['BOSS', 'ACTIVITY'].includes(
+      competitionMetricType(metric, definitions) ?? '',
+    ),
   );
 }
 export function rankedCompetitionStandings(
@@ -253,6 +344,7 @@ export function rankedCompetitionStandings(
 export function parseCompetitionStandings(
   value: unknown,
   metrics: readonly string[],
+  definitions: readonly CompetitionMetric[] = [],
 ): CompetitionStanding[] {
   if (!Array.isArray(value) || value.length > 10000)
     throw new Error('Invalid competition standings.');
@@ -298,12 +390,16 @@ export function parseCompetitionStandings(
                 gained: competitionAmount(
                   d.gained,
                   d.metric !== 'total' &&
-                    womMetricType(d.metric) !== 'COMPUTED',
+                    competitionMetricType(d.metric, definitions) !== 'COMPUTED',
                 ),
               };
             });
           })();
-    const gained = competitionAmount(row.gained);
+    const gained = competitionAmount(
+      row.gained,
+      metrics.length === 1 &&
+        competitionMetricType(metrics[0]!, definitions) !== 'COMPUTED',
+    );
     if (
       deltas &&
       deltas.find(

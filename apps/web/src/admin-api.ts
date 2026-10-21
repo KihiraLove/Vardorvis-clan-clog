@@ -5,13 +5,13 @@ import {
   parseHighlightColour,
   parseStaffPages,
   type StaffPage,
+  type CollectionType,
   parseDiscordSettings,
   parseDiscordFields,
   type DiscordSettingsUpdate,
 } from '@clog/domain';
 import {
   parseSchedulingState,
-  parsePermanentPageIds,
   parseCollectionScheduleInput,
   closedCollectionPageMessage,
   type CollectionScheduleInput,
@@ -53,7 +53,24 @@ import {
   type CreatePage,
   type QueueView,
   type StagedIcon,
+  type Submission,
 } from './admin-model.ts';
+
+function collectionTypeMatches(
+  result: Submission,
+  requested: CollectionType | undefined,
+  allowFallback = true,
+) {
+  return (
+    requested === undefined ||
+    result.collectionType === requested ||
+    (allowFallback &&
+      requested === 'event' &&
+      result.collectionType === 'regular' &&
+      !result.hardcore &&
+      result.collectionReason === 'event_credit_already_obtained')
+  );
+}
 
 export class AdminRequestError extends Error {
   readonly status: number;
@@ -100,6 +117,9 @@ export class AdminRequestError extends Error {
   }
 }
 export class LiveAdminClient implements AdminClient {
+  async catalogUpdateClient() {
+    return import('./catalog-update-api.ts');
+  }
   async accessControl(signal: AbortSignal) {
     return parseAccessControl(
       await this.json('/api/v1/admin/access-control', signal),
@@ -258,27 +278,6 @@ export class LiveAdminClient implements AdminClient {
     );
     if (result.revision === expectedRevision || result.enabled !== enabled)
       throw new Error('Unexpected scheduling receipt.');
-    return result;
-  }
-  async setPermanentPages(
-    pageIds: string[],
-    expectedRevision: string,
-    csrf: string,
-    signal: AbortSignal,
-  ) {
-    const ids = parsePermanentPageIds(pageIds);
-    const result = parseSchedulingState(
-      await this.json(
-        '/api/v1/admin/schedules/permanent-pages',
-        signal,
-        this.write(csrf, { pageIds: ids, expectedRevision }, 'PUT'),
-      ),
-    );
-    if (
-      result.revision === expectedRevision ||
-      JSON.stringify(result.permanentlyOpenPageIds) !== JSON.stringify(ids)
-    )
-      throw new Error('Unexpected permanent pages receipt.');
     return result;
   }
   async saveSchedule(
@@ -676,8 +675,7 @@ export class LiveAdminClient implements AdminClient {
       (screenshot && !safeScreenshotPath(result.screenshotPath)) ||
       result.itemId !== fields.itemId ||
       result.hardcore !== fields.hardcore ||
-      (fields.collectionType !== undefined &&
-        result.collectionType !== fields.collectionType) ||
+      !collectionTypeMatches(result, fields.collectionType) ||
       result.status !== (fields.approve ? 'approved' : 'pending')
     )
       throw new Error('Unexpected manual submission receipt.');
@@ -995,8 +993,7 @@ export class LiveAdminClient implements AdminClient {
     if (
       result.id !== id ||
       result.version <= version ||
-      (fields.collectionType !== undefined &&
-        result.collectionType !== fields.collectionType)
+      !collectionTypeMatches(result, fields.collectionType)
     )
       throw new Error('Unexpected correction receipt.');
     return result;
@@ -1048,8 +1045,11 @@ export class LiveAdminClient implements AdminClient {
       result.version <= version ||
       (flags !== undefined &&
         (result.hardcore !== flags.hardcore ||
-          (flags.collectionType !== undefined &&
-            result.collectionType !== flags.collectionType))) ||
+          !collectionTypeMatches(
+            result,
+            flags.collectionType,
+            action === 'approve',
+          ))) ||
       result.status !==
         (
           {
@@ -1082,8 +1082,7 @@ export class LiveAdminClient implements AdminClient {
       result.version <= version ||
       result.status !== 'approved' ||
       result.hardcore !== flags.hardcore ||
-      (flags.collectionType !== undefined &&
-        result.collectionType !== flags.collectionType)
+      !collectionTypeMatches(result, flags.collectionType)
     )
       throw new Error('Unexpected collection flags receipt.');
     return result;

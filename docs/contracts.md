@@ -10,18 +10,40 @@ See route modules under [apps/api/src](../apps/api/src) for complete wire schema
 both the gateway and intake API. Non-ready enabled states return 503; disabled
 returns 200 without probing the bot. Website readiness is independent.
 
-| Area                | Main routes                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| Public log          | `GET /catalog`, `GET /collections`                                                  |
-| Public settings     | `GET /settings`, `GET /branding`, `GET /branding/hardcore`                          |
-| Public competitions | `GET /competitions/activities`, `GET /xp/tracker`                                   |
-| Staff session       | `POST /auth/login`, `GET /auth/session`, `POST /auth/logout`                        |
-| Staff review        | `GET /admin/submissions` and per-submission correction/note/decision/audit routes   |
-| Catalog             | Section/page/item routes under `/admin/catalog`                                     |
-| Scheduling          | `/admin/schedules`, `/admin/schedules/settings`, `/admin/schedules/permanent-pages` |
-| Imports             | `POST /admin/competitions/preview`, `POST /admin/competitions/imports`              |
-| RuneLite            | `POST /runelite/submissions` multipart intake                                       |
-| Discord             | `/bot` routes using the configured service credential                               |
+| Area                | Main routes                                                                       |
+| ------------------- | --------------------------------------------------------------------------------- |
+| Public log          | `GET /catalog`, `GET /collections`                                                |
+| Public settings     | `GET /settings`, `GET /branding`, `GET /branding/hardcore`                        |
+| Public competitions | `GET /competitions/activities`, `GET /xp/tracker`                                 |
+| Staff session       | `POST /auth/login`, `GET /auth/session`, `POST /auth/logout`                      |
+| Staff review        | `GET /admin/submissions` and per-submission correction/note/decision/audit routes |
+| Catalog             | Section/page/item routes under `/admin/catalog`                                   |
+| Scheduling          | `/admin/schedules`, `/admin/schedules/settings`                                   |
+| Imports             | `POST /admin/competitions/preview`, `POST /admin/competitions/imports`            |
+| RuneLite            | `POST /runelite/submissions` multipart intake                                     |
+| Discord             | `/bot` routes using the configured service credential                             |
+
+Unknown competition metrics return HTTP 422 with code `UNKNOWN_WOM_METRICS`
+and a `resolution` containing bounded source metadata, unknown keys, active
+page choices, an expiring actor-bound `resolutionToken` and a `metrics-N` revision.
+`POST /admin/competitions/metrics` accepts `{ resolutionToken, expectedRevision,
+definitions }` and a UUID `Idempotency-Key`. Each definition contains `metric`,
+`name`, `type` (`BOSS`, `ACTIVITY`, `COMPUTED` or `SKILL`), `pageIds`, and a supported
+`skill` only for SKILL. The receipt returns `revision` and `savedMetrics`.
+Saving definitions creates no competition or schedule; request a fresh preview
+before Apply. Custom semantics are included in saved `metricDefinitions` so
+public/admin validation uses the same frozen definition.
+
+Catalog update review uses administrator-only `GET /admin/catalog-updates`,
+`POST /admin/catalog-updates/seen`, `/rescan` and `/apply`. Seen/rescan accept a
+bundle-set `revision`; apply accepts `{ revision, catalogRevision, apply, keep }`
+with server-generated proposal hashes. Proposals include explicit `createPage` and
+`createItem` operations. Existing-install startup and rescan never create catalog
+content; apply creates only selected entries and relationships, checking their
+dependencies atomically. Fresh bootstrap is separate. Apply/rescan require UUID idempotency keys.
+Every write reauthorizes the administrator and checks Origin/CSRF. Stale catalog
+reviews conflict; exact apply retries return their original receipt. Public
+`GET /catalog/update-images/<sha256>.webp` serves verified immutable WebP bytes.
 
 Staff writes require a verified session, Origin, CSRF token and current expected
 revision. Reusing an already consumed idempotency key with different data conflicts.
@@ -72,14 +94,12 @@ are similarly bounded. Approval requires saved proof acknowledgement and a match
 canonical item; reasons are required for rejection, revocation and approved-credit
 corrections. Notes are independently versioned staff comments.
 
-Scheduling reads include `permanentlyOpenPageIds`, independently from timed windows.
-`PUT /admin/schedules/permanent-pages` replaces the selection using `pageIds` (up to
-2,000 distinct active pages; an empty array clears it) and `expectedRevision`.
-Selections, windows and the scheduling switch share a revision and audit history.
-The Scheduling page permission allows selection edits; enabling/disabling scheduling
-remains administrator-only. Scheduling classifies collection type; every page
-accepts intake. Timed nonpermanent normal-world pages qualify Event collections;
-permanent pages, disabled scheduling and hardcore produce Regular collections.
+Scheduling reads retain an empty `permanentlyOpenPageIds` compatibility field.
+The permanent-page editing endpoint has been removed; retained historical settings
+do not affect new intake. Scheduling classifies collection type and never closes
+submission intake. Associated timed normal-world pages qualify Event collections;
+unscheduled drops, disabled scheduling and Hardcore produce Regular collections.
+Historical claims continue to use their original frozen evidence.
 
 Valid RuneLite intake returns 201 with a durable submission receipt, including
 automatic rejection by regular-duplicate or world-review policy. Structural,

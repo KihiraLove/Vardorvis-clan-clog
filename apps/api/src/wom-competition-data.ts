@@ -4,6 +4,10 @@ import {
   parseCompetitionDefinitions,
   parseCompetitionStandings,
   rankedCompetitionStandings,
+  womMetricType,
+  competitionMetricType,
+  type CustomCompetitionMetric,
+  type CompetitionMetricDiscovery,
   type WomCompetition,
   type CompetitionStanding,
 } from '@clog/domain';
@@ -17,10 +21,15 @@ export const womInstant = (value: unknown): value is string =>
   Number.isFinite(Date.parse(value)) &&
   new Date(value).toISOString().slice(0, 10) === value.slice(0, 10);
 
-export function womCompetitionMetadata(
+export class UnknownCompetitionMetrics extends ApiError {
+  constructor(readonly discovery: CompetitionMetricDiscovery) {
+    super(422, 'Unknown competition metrics need a saved definition.');
+  }
+}
+export function womCompetitionDiscovery(
   source: unknown,
   id: number,
-): WomCompetition {
+): CompetitionMetricDiscovery {
   if (
     !womObject(source) ||
     source.id !== id ||
@@ -31,23 +40,88 @@ export function womCompetitionMetadata(
     !womInstant(source.endsAt) ||
     Date.parse(source.endsAt) <= Date.parse(source.startsAt) ||
     !Array.isArray(source.metrics) ||
-    !source.metrics.length
+    !source.metrics.length ||
+    source.metrics.length > 64
   )
     throw new ApiError(422, 'Incomplete WOM competition metadata.');
   const metrics = source.metrics.map((m: unknown) =>
     womObject(m) && typeof m.metric === 'string' ? m.metric : '',
   );
+  if (
+    metrics.some((metric) => !/^[a-z][a-z0-9_]{0,79}$/u.test(metric)) ||
+    new Set(metrics).size !== metrics.length
+  )
+    throw new ApiError(422, 'Invalid or duplicate WOM metric scope.');
   try {
-    const scope = competitionScope(metrics);
+    return {
+      id,
+      title: source.title.trim(),
+      sourceUrl: 'https://wiseoldman.net/competitions/' + id,
+      // Upstream cannot supply our installation's custom type/XP/page definitions.
+      metrics: parseCompetitionDefinitions(
+        source.metrics.map((m) => {
+          const row = m as Record<string, unknown>;
+          return {
+            metric: row.metric,
+            weight: row.weight,
+            createdAt: row.createdAt,
+          };
+        }),
+        metrics,
+      ),
+      startsAt: new Date(source.startsAt).toISOString(),
+      endsAt: new Date(source.endsAt).toISOString(),
+      unknownMetrics: metrics.filter((metric) => !womMetricType(metric)),
+    };
+  } catch (error) {
+    throw new ApiError(422, (error as Error).message);
+  }
+}
+
+export function womCompetitionMetadata(
+  source: unknown,
+  id: number,
+  saved: readonly CustomCompetitionMetric[] = [],
+): WomCompetition {
+  const discovery = womCompetitionDiscovery(source, id);
+  const definitions = discovery.metrics.map((d) => {
+    const definition =
+      !womMetricType(d.metric) && saved.find((m) => m.metric === d.metric);
+    return { ...d, ...(definition ? { definition } : {}) };
+  });
+  const unknownMetrics = definitions
+    .filter((d) => !competitionMetricType(d.metric, definitions))
+    .map((d) => d.metric);
+  // An unresolved metric cannot make an already incompatible known scope valid.
+  const known = definitions.filter((d) =>
+    competitionMetricType(d.metric, definitions),
+  );
+  if (known.length) {
+    try {
+      competitionScope(
+        known.map((d) => d.metric),
+        definitions,
+      );
+    } catch (error) {
+      throw new ApiError(422, (error as Error).message);
+    }
+  }
+  if (unknownMetrics.length)
+    throw new UnknownCompetitionMetrics({ ...discovery, unknownMetrics });
+  try {
+    const scope = competitionScope(
+      definitions.map((d) => d.metric),
+      definitions,
+    );
     return {
       id,
       kind: scope.kind,
-      title: source.title.trim(),
-      sourceUrl: 'https://wiseoldman.net/competitions/' + id,
-      metrics,
-      metricDefinitions: parseCompetitionDefinitions(source.metrics, metrics),
-      startsAt: new Date(source.startsAt).toISOString(),
-      endsAt: new Date(source.endsAt).toISOString(),
+      title: discovery.title,
+      sourceUrl: discovery.sourceUrl,
+      startsAt: discovery.startsAt,
+      endsAt: discovery.endsAt,
+      metrics: definitions.map((d) => d.metric),
+      metricDefinitions: definitions,
     };
   } catch (error) {
     throw new ApiError(422, (error as Error).message);
@@ -91,7 +165,11 @@ export function womCompetitionStandings(
     });
     // Validate every participant and metric before excluding zero-score entries.
     return rankedCompetitionStandings(
-      parseCompetitionStandings(rows, competition.metrics),
+      parseCompetitionStandings(
+        rows,
+        competition.metrics,
+        competition.metricDefinitions,
+      ),
     );
   } catch (error) {
     throw new ApiError(422, (error as Error).message);

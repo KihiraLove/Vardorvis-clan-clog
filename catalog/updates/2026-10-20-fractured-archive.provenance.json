@@ -1,0 +1,311 @@
+{
+  "batchId": "2026-10-20-fractured-archive",
+  "retrievedAt": "2026-10-20T19:18:25.128Z",
+  "sources": [
+    {
+      "url": "https://templeosrs.com/api/collection-log/categories.php",
+      "sha256": "c760a998709e8f57400668d2be5f19a69c38e62b071daad5c88071ec02a5b4cf"
+    },
+    {
+      "url": "https://templeosrs.com/api/collection-log/items.php",
+      "sha256": "adec2682a0977de5a5024912cf75b4cc227f0b64689ad05b3e6c241c1830829e"
+    },
+    {
+      "url": "https://oldschool.runescape.wiki/api.php?action=query&prop=revisions&titles=Module%3ACollection_log%2Fdata.json&rvprop=ids%7Ctimestamp%7Ccontent&rvslots=main&format=json&formatversion=2",
+      "sha256": "94c46d0d22d6ed95a79a75a01cfffaf06141c70e1733b4a3a244ceacf54bb0c0",
+      "permalink": "https://oldschool.runescape.wiki/w/Module:Collection_log/data.json?oldid=15377615",
+      "revision": 15377615,
+      "contentSha256": "a948fdf94478107a21526738170491c1a391c169f1cec5ac678c19d34ad02e4a"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/runelite/runelite/009555a90d87db6ba4aaab5d653217b9797bcef6/runelite-api/src/main/java/net/runelite/api/gameval/ItemID.java",
+      "sha256": "786b1d32bba32d0e9fabcc535433b942cf32122fb2f0584258b836176865fa4e"
+    }
+  ],
+  "variantSources": [
+    {
+      "title": "Obligator",
+      "revision": 15377836,
+      "url": "https://oldschool.runescape.wiki/w/Obligator?oldid=15377836"
+    },
+    {
+      "title": "Zorya's tome",
+      "revision": 15377546,
+      "url": "https://oldschool.runescape.wiki/w/Zorya's_tome?oldid=15377546"
+    },
+    {
+      "title": "Archivist's folio",
+      "revision": 15377668,
+      "url": "https://oldschool.runescape.wiki/w/Archivist's_folio?oldid=15377668"
+    },
+    {
+      "title": "Orion",
+      "revision": 15377564,
+      "url": "https://oldschool.runescape.wiki/w/Orion?oldid=15377564"
+    }
+  ],
+  "coverage": {
+    "items": 17,
+    "gameItemIds": 21,
+    "pageMemberships": 18
+  },
+  "artwork": [
+    {
+      "gameItemId": 34646,
+      "name": "Orion",
+      "url": "https://oldschool.runescape.wiki/images/Orion.png?4d4d5",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Orion.png",
+      "sourceSha1": "3a34fe628051078665d6a6f22c9116d143186b19",
+      "wikiReportedSha1": "c51334786f5640491cbc04637fa92d50be302813",
+      "wikiReportedSize": 994,
+      "sourceSize": 697,
+      "sourceSha256": "b88c63173ccdf1ffa279fea13e329202bffdf01741095e1bafbe82c4fd544aca",
+      "sourceTimestamp": "2026-10-20T12:07:55Z",
+      "sha256": "5c2b559f1c10aa6f981534e32f93737a1352f3174dc2a5a704ec0810ebb77eef",
+      "width": 20,
+      "height": 31
+    },
+    {
+      "gameItemId": 34717,
+      "name": "Obligator (uncharged)",
+      "url": "https://oldschool.runescape.wiki/images/Obligator_%28uncharged%29.png?95aba",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Obligator_(uncharged).png",
+      "sourceSha1": "0b276a5d683ff1474a3aa638bb00c44e46ec9595",
+      "wikiReportedSha1": "74711ae2976f4616c640447b0b77c249839e533d",
+      "wikiReportedSize": 1227,
+      "sourceSize": 613,
+      "sourceSha256": "40005c1cfe95a6c515821a52ba584d907f9d2c627ad6cfdf4484785db962d7e5",
+      "sourceTimestamp": "2026-10-20T11:51:56Z",
+      "sha256": "0f3812aafa0745e45e229478b7840612782dedafcf7fef4a45c8e28dbfd7663b",
+      "width": 29,
+      "height": 30
+    },
+    {
+      "gameItemId": 34681,
+      "name": "Ascension crossbows",
+      "url": "https://oldschool.runescape.wiki/images/Ascension_crossbows.png?566b2",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Ascension_crossbows.png",
+      "sourceSha1": "5767674daf04f307b147fbbec990d862eb9bbc11",
+      "wikiReportedSha1": "ec7a031f521b4c3226b119a09a3bf9f916f203b9",
+      "wikiReportedSize": 889,
+      "sourceSize": 567,
+      "sourceSha256": "e907cf1cb73ee32d0ce14cfc3f14f9800f0ea662ff398822cb578100a614300c",
+      "sourceTimestamp": "2026-10-20T11:46:27Z",
+      "sha256": "a26eb2556f1c3739a5a807fc1a4dc923ebfe4bbea034853b9a53d4878f1960a1",
+      "width": 28,
+      "height": 26
+    },
+    {
+      "gameItemId": 34727,
+      "name": "Zorya's tome (uncharged)",
+      "url": "https://oldschool.runescape.wiki/images/Zorya%27s_tome_%28uncharged%29.png?95aba",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Zorya%27s_tome_(uncharged).png",
+      "sourceSha1": "e566167bada9f2e87bd760dd49ac513f32c2b209",
+      "wikiReportedSha1": "bd366d2cb88a4a4b2fa7aace661657b959f55704",
+      "wikiReportedSize": 1084,
+      "sourceSize": 570,
+      "sourceSha256": "d870365a3f7cdae3a390ea1a1cf28b160b628867b2675d3d16ccba124d8011b4",
+      "sourceTimestamp": "2026-10-20T11:51:56Z",
+      "sha256": "62bac5a33c67bc682f3fdc38eae0d1fce7cf732c2ae0101dabb7b4b208bb5312",
+      "width": 30,
+      "height": 23
+    },
+    {
+      "gameItemId": 34719,
+      "name": "Rondache",
+      "url": "https://oldschool.runescape.wiki/images/Rondache.png?95aba",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Rondache.png",
+      "sourceSha1": "14488ef9ffa66cd8b4133fc65b3782e6fe43b726",
+      "wikiReportedSha1": "147fa0cce37e6d96c0ec62702ef71a0fc91f889b",
+      "wikiReportedSize": 1764,
+      "sourceSize": 1173,
+      "sourceSha256": "6f307fcf39367c90d34e4704616c9df813657ed231d4a16383499fc57b089abc",
+      "sourceTimestamp": "2026-10-20T11:51:56Z",
+      "sha256": "bea11b2010f9de7f31b2ba18da7b90219c4063f244b3e9def2f9ff926637311f",
+      "width": 29,
+      "height": 29
+    },
+    {
+      "gameItemId": 34679,
+      "name": "Horn of Bran",
+      "url": "https://oldschool.runescape.wiki/images/Horn_of_Bran.png?27d4a",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Horn_of_Bran.png",
+      "sourceSha1": "20dd2ee4f66ef4b8323e7ac9bcb634179e071614",
+      "wikiReportedSha1": "a0400a51078f8741373213a9356bd5acc1bed5c3",
+      "wikiReportedSize": 873,
+      "sourceSize": 551,
+      "sourceSha256": "b07e81b9707f9e8e926e4e5c1063b1cd7fa06adfa1cd34da224c78e8a832c064",
+      "sourceTimestamp": "2026-10-20T11:42:43Z",
+      "sha256": "2fb31523dd7bd48c824827a1fd602163d38db137b5b165894183c74a7b76c758",
+      "width": 27,
+      "height": 30
+    },
+    {
+      "gameItemId": 34675,
+      "name": "Fragment of whispering wind",
+      "url": "https://oldschool.runescape.wiki/images/Fragment_of_whispering_wind.png?0361e",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Fragment_of_whispering_wind.png",
+      "sourceSha1": "6c26a7e5f81a97854ee14ecc6b7d5005ff85fee1",
+      "wikiReportedSha1": "4ddfd57054516cb562aaa1eca3836f9eafc52cfd",
+      "wikiReportedSize": 942,
+      "sourceSize": 467,
+      "sourceSha256": "585a569b085e6e04c208a67fb0eebf98c27a7f7dfd0a6da0548bbbef75462ced",
+      "sourceTimestamp": "2026-10-20T11:45:56Z",
+      "sha256": "0b8e7bd0fc59f4d557d8a8c3ce4d0cb663e3634e4bd173743c619167fe7d9e04",
+      "width": 29,
+      "height": 30
+    },
+    {
+      "gameItemId": 34677,
+      "name": "Fragment of burning fire",
+      "url": "https://oldschool.runescape.wiki/images/Fragment_of_burning_fire.png?0361e",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Fragment_of_burning_fire.png",
+      "sourceSha1": "04657130a90ac269b357ecfbcb881a1d36d4ae60",
+      "wikiReportedSha1": "545deca3e5a1922672e7057965fb70d9743b706b",
+      "wikiReportedSize": 904,
+      "sourceSize": 454,
+      "sourceSha256": "26dabdc63f58e7ffc55484184cfa99356d2af38d62ca9ee150ab5f9b93ef3cdb",
+      "sourceTimestamp": "2026-10-20T11:45:56Z",
+      "sha256": "e858b0acbc9a886fabe03f18132aeb89bbd7b95f18f37e3bfb90d0d9e2e3fb8d",
+      "width": 29,
+      "height": 30
+    },
+    {
+      "gameItemId": 34673,
+      "name": "Fragment of deep water",
+      "url": "https://oldschool.runescape.wiki/images/Fragment_of_deep_water.png?0361e",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Fragment_of_deep_water.png",
+      "sourceSha1": "09e9059ba4c4c68163a97ce16043f4d4d15b3e41",
+      "wikiReportedSha1": "28763fcb66e2bb3b4876c102a8549c930b43ad90",
+      "wikiReportedSize": 890,
+      "sourceSize": 480,
+      "sourceSha256": "dde06c1afadff2597aa178c114a6474b1a85280f74ba4f7be811666a7a8f23c0",
+      "sourceTimestamp": "2026-10-20T11:45:56Z",
+      "sha256": "6d7dd29e59b7d2c30e567540deec6a23cec69ffd864bf537ebb1b12d89a03930",
+      "width": 29,
+      "height": 30
+    },
+    {
+      "gameItemId": 34671,
+      "name": "Fragment of living earth",
+      "url": "https://oldschool.runescape.wiki/images/Fragment_of_living_earth.png?0361e",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Fragment_of_living_earth.png",
+      "sourceSha1": "bbb20187241bd844b1fe77f08914f62284b01b9e",
+      "wikiReportedSha1": "1aa720cb471a8793baac2f217e8a634fac02ad68",
+      "wikiReportedSize": 886,
+      "sourceSize": 410,
+      "sourceSha256": "2e2ab63c8cc54f7b21d303f873eba9c9d206eccc9d0203a017bbd9ed07563997",
+      "sourceTimestamp": "2026-10-20T11:45:56Z",
+      "sha256": "89b467a69cf125513466bc5798fbff4f3ff832b32abca8080ed726c0fcacfe76",
+      "width": 29,
+      "height": 30
+    },
+    {
+      "gameItemId": 34669,
+      "name": "Ascension shards",
+      "url": "https://oldschool.runescape.wiki/images/Ascension_shards.png?d16f8",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Ascension_shards.png",
+      "sourceSha1": "eb5e5b5ea69cc6b7ebfec847a196dd41dc77ccf5",
+      "wikiReportedSha1": "cd849b3e74fac9aab491cc02cff9402b6a67294e",
+      "wikiReportedSize": 787,
+      "sourceSize": 391,
+      "sourceSha256": "47228dcfe07125628156e84f90364dcc516666cbc42cb076f94f12ba40f86eef",
+      "sourceTimestamp": "2026-10-20T11:45:45Z",
+      "sha256": "5f015009311ed3a028babd8e548f0e5e7ce1adbf653619ac4be3154919716150",
+      "width": 27,
+      "height": 31
+    },
+    {
+      "gameItemId": 34722,
+      "name": "Archivist's folio (inert)",
+      "url": "https://oldschool.runescape.wiki/images/Archivist%27s_folio_%28inert%29.png?95aba",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Archivist%27s_folio_(inert).png",
+      "sourceSha1": "e2f9a578fe42125414a87d44cd6ae01fe31b11b0",
+      "wikiReportedSha1": "10608b8742781309f4aa7740f10a0a810ac71cd5",
+      "wikiReportedSize": 1296,
+      "sourceSize": 586,
+      "sourceSha256": "a5212171a5955afb91511eca35f4441736261190a5d2565fe0bc0ee57088b394",
+      "sourceTimestamp": "2026-10-20T11:51:56Z",
+      "sha256": "aa23d03db5d00d12f179cfe61cc99fe9b8a9c621c2c1232bace14fcb8b9e6c46",
+      "width": 29,
+      "height": 30
+    },
+    {
+      "gameItemId": 34659,
+      "name": "Living record (tier 1)",
+      "url": "https://oldschool.runescape.wiki/images/Living_record_%28tier_1%29.png?d3136",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Living_record_(tier_1).png",
+      "sourceSha1": "631e778f67c9e9620a34929ad9514c5c51f0cc11",
+      "wikiReportedSha1": "94938bbf1ce62e739ec0b94a4acff5d2631b51b4",
+      "wikiReportedSize": 735,
+      "sourceSize": 467,
+      "sourceSha256": "57a2f308015c88072641b2bffff2cae4b03b55865251b6e9c456dc6e69968d2a",
+      "sourceTimestamp": "2026-10-20T11:43:50Z",
+      "sha256": "f02bae059946c19868ff3b1aa7955cdf996280a084fc49732f24e66b6febceab",
+      "width": 23,
+      "height": 26
+    },
+    {
+      "gameItemId": 34661,
+      "name": "Living record (tier 2)",
+      "url": "https://oldschool.runescape.wiki/images/Living_record_%28tier_2%29.png?d3136",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Living_record_(tier_2).png",
+      "sourceSha1": "b55af74c751dc67f8c39c3621eeb2190964c4758",
+      "wikiReportedSha1": "5eb93fbd5b459a31a5be4bb0a8a2d44f4e0db3ca",
+      "wikiReportedSize": 736,
+      "sourceSize": 482,
+      "sourceSha256": "264896050430839825865f6563a5070e2b3ed1a65f8d5294ce30546fac2d1d59",
+      "sourceTimestamp": "2026-10-20T11:43:50Z",
+      "sha256": "f3561e782755ca8fa29d63f5f6600a95c27c8202f27bef051f03c7816e453beb",
+      "width": 23,
+      "height": 26
+    },
+    {
+      "gameItemId": 34663,
+      "name": "Living record (tier 3)",
+      "url": "https://oldschool.runescape.wiki/images/Living_record_%28tier_3%29.png?d3136",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Living_record_(tier_3).png",
+      "sourceSha1": "a50d7db580dfa6b247b52347bfd1d052cbf2054f",
+      "wikiReportedSha1": "e130bd2fa92f4926fb236a6a474bde58f91aab07",
+      "wikiReportedSize": 901,
+      "sourceSize": 540,
+      "sourceSha256": "a5931f22f555c7267651b3941fdbc7d61a5d069f27a6a2ed628bc1189e5aab08",
+      "sourceTimestamp": "2026-10-20T11:43:50Z",
+      "sha256": "62892b6b0be74e0acefc7993565dd0ce4a514a037f370580d9e7a93d9aa2c55c",
+      "width": 28,
+      "height": 30
+    },
+    {
+      "gameItemId": 34665,
+      "name": "Living record (tier 4)",
+      "url": "https://oldschool.runescape.wiki/images/Living_record_%28tier_4%29.png?d3136",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Living_record_(tier_4).png",
+      "sourceSha1": "0eb6fbf9ad18bbf029ccf5a9579c8080fbfd133c",
+      "wikiReportedSha1": "c3dae92fdc05b0db399bdaf5f8357f7f5511dd72",
+      "wikiReportedSize": 983,
+      "sourceSize": 600,
+      "sourceSha256": "ee75b4ab56c16f70c5f2926936f1d88526f32ab0c2955d84231acbb10b4bcd56",
+      "sourceTimestamp": "2026-10-20T11:43:50Z",
+      "sha256": "f1aa52e5c039af33b514bd92e606e5003f8fe3ba05f6f21934da6e7640500ffa",
+      "width": 28,
+      "height": 31
+    },
+    {
+      "gameItemId": 34667,
+      "name": "Living record (tier 5)",
+      "url": "https://oldschool.runescape.wiki/images/Living_record_%28tier_5%29.png?d3136",
+      "descriptionUrl": "https://oldschool.runescape.wiki/w/File:Living_record_(tier_5).png",
+      "sourceSha1": "9f069d6469b0ee3e146e7f92c9071f96f11e5843",
+      "wikiReportedSha1": "78238083c47412825366cf123804728ca427bdea",
+      "wikiReportedSize": 1080,
+      "sourceSize": 665,
+      "sourceSha256": "bd452c8c02b69bd0506445cb698d9e47b446f7f3f1b86a002b272cc99fcf693c",
+      "sourceTimestamp": "2026-10-20T11:43:50Z",
+      "sha256": "0913fd965cb4b71f69bd7c8b31a6a41c0d09db695a5f6c098d15a09e0121cc7d",
+      "width": 28,
+      "height": 32
+    }
+  ],
+  "transformation": "Native PNG dimensions and transparency retained; Wiki native dimensions verified; two identical downloads pinned by delivered SHA-256; lossless WebP conversion. Wiki-reported upload hashes/sizes are recorded separately because delivered PNG bytes differ. Item IDs exclude noted and placeholder forms. Only currently documented active Orion forms are aliases; commented unreleased pet morphs are excluded.",
+  "attribution": "Game names and artwork are copyright Jagex Ltd. Artwork retrieved from the Old School RuneScape Wiki; source description URLs and exact byte hashes are recorded per item. RuneLite ID metadata is pinned to its source revision."
+}

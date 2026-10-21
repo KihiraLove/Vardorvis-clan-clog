@@ -369,17 +369,51 @@ test(
             write(r.id, 'approve', { expectedVersion: 1, flags: event }),
           ),
         );
-        assert.deepEqual(outcomes.map((r) => r.statusCode).sort(), [200, 409]);
+        assert.deepEqual(
+          outcomes.map((r) => r.statusCode),
+          [200, 200],
+        );
+        const approved = await Promise.all(competitors.map((r) => saved(r.id)));
+        assert.deepEqual(approved.map((r) => r.collectionType).sort(), [
+          'event',
+          'regular',
+        ]);
+        const eventHolder = approved.find((r) => r.collectionType === 'event')!;
+        assert.equal(
+          approved.find((r) => r.collectionType === 'regular')!
+            .collectionReason,
+          'event_credit_already_obtained',
+        );
         const regularCredit = await create(9, true);
+        const moved = await write(regularCredit.id, 'flags', {
+          expectedVersion: 1,
+          flags: event,
+          reason: 'Move type',
+        });
+        assert.equal(moved.statusCode, 200, moved.body);
+        assert.equal(moved.json().collectionType, 'regular');
+        assert.equal(
+          moved.json().collectionReason,
+          'event_credit_already_obtained',
+        );
+        assert.deepEqual(await saved(eventHolder.id), eventHolder);
+        await pool.query(
+          'UPDATE submission_filter_settings SET filter_collected=true',
+        );
+        const undecided = await create(9);
         assert.equal(
           (
-            await write(regularCredit.id, 'flags', {
+            await write(undecided.id, 'approve', {
               expectedVersion: 1,
               flags: event,
-              reason: 'Move type',
             })
           ).statusCode,
           409,
+        );
+        assert.equal((await saved(undecided.id)).version, 1);
+        assert.equal((await review.detail(undecided.id))!.audit.length, 1);
+        await pool.query(
+          'UPDATE submission_filter_settings SET filter_collected=false',
         );
         const concurrent = await create(10);
         const decisions = await Promise.all(
@@ -397,7 +431,7 @@ test(
           assert.equal(
             (
               await write(regularCredit.id, 'flags', {
-                expectedVersion: 1,
+                expectedVersion: 2,
                 flags: hardcore,
                 reason: 'Rollback',
               })
@@ -405,8 +439,6 @@ test(
             503,
           );
           assert.deepEqual(await saved(regularCredit.id), before);
-          const undecided =
-            competitors[outcomes.findIndex((r) => r.statusCode === 409)]!;
           assert.equal(
             (
               await write(undecided.id, 'approve', {

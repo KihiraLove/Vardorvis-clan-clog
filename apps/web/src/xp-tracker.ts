@@ -88,8 +88,10 @@ export function parseTracker(value: unknown): XpTracker {
       competition &&
       (competition.id !== id ||
         competition.kind !== 'SKILL' ||
-        JSON.stringify(competitionScope(competition.metrics).skills) !==
-          JSON.stringify(ids))
+        JSON.stringify(
+          competitionScope(competition.metrics, competition.metricDefinitions)
+            .skills,
+        ) !== JSON.stringify(ids))
     )
       throw new Error(
         'XP competition metadata does not match its identity and skill scope.',

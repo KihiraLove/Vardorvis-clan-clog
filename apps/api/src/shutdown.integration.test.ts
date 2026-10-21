@@ -31,14 +31,17 @@ for (const phase of ['query', 'commit'] as const)
       ' drains the durable receipt before closing the production API pool',
     { skip: !process.env.TEST_DATABASE_URL, timeout: 30000 },
     async () => {
-      const schema = 'shutdown_' + randomUUID().replaceAll('-', ''),
-        appName = 'clog_shutdown_' + schema;
+      const database = 'shutdown_' + randomUUID().replaceAll('-', ''),
+        appName = 'clog_shutdown_' + database;
       const root = new pg.Pool({
         connectionString: process.env.TEST_DATABASE_URL!,
       });
-      await root.query('CREATE SCHEMA ' + schema);
+      // Isolate the deliberate query/COMMIT stalls from other fixtures'
+      // database-wide advisory locks and fixed Discord interaction IDs.
+      await root.query('CREATE DATABASE ' + database);
       const url = new URL(process.env.TEST_DATABASE_URL!);
-      url.searchParams.set('options', '-c search_path=' + schema);
+      url.pathname = '/' + database;
+      url.searchParams.delete('options');
       url.searchParams.set('application_name', appName);
       const directory = await mkdtemp(join(tmpdir(), 'clog-shutdown-proof-'));
       const pool = new pg.Pool({ connectionString: url.toString() });
@@ -111,7 +114,13 @@ for (const phase of ['query', 'commit'] as const)
         );
         await until(async () => {
           try {
-            return (await fetch(base + '/healthz')).ok;
+            // The upload needs a fresh connection, not an idle health socket
+            // that can expire while a busy runner prepares the request.
+            return (
+              await fetch(base + '/healthz', {
+                headers: { connection: 'close' },
+              })
+            ).ok;
           } catch {
             return false;
           }
@@ -186,7 +195,7 @@ for (const phase of ['query', 'commit'] as const)
           );
         }
         await pool.end();
-        await root.query('DROP SCHEMA ' + schema + ' CASCADE');
+        await root.query('DROP DATABASE ' + database);
         await root.end();
         await rm(directory, { recursive: true, force: true });
       }

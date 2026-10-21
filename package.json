@@ -28,6 +28,7 @@
     "catalog:import": "node packages/database/dist/catalog-import.js",
     "catalog:correct-clues": "node packages/database/dist/clue-taxonomy.js",
     "catalog:assets": "node scripts/catalog-assets.mjs",
+    "catalog:updates:check": "node packages/database/dist/catalog-update-check.js",
     "build:runtime": "npm run build:runtime -w @clog/domain && npm run build:runtime -w @clog/database && npm run build:runtime -w @clog/bot && npm run build:runtime -w @clog/api && npm run build -w @clog/web"
   },
   "devDependencies": {

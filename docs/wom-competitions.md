@@ -24,6 +24,35 @@ unknown metrics and mixed types are rejected. Overall expands into the 24 canoni
 skills without counting raw XP twice, including when a skill is also selected.
 Live participant data is discarded for metadata-only imports.
 
+**The Fractured Archive** uses WOM's `the_fractured_archive` metric and imports
+as ACTIVITY with kill-count results. An active catalog page with that ID is
+suggested automatically. If your catalog predates the raid, create its page/items
+in **Items catalog** and select the page explicitly in the competition preview.
+Finished results can be imported without a matching catalog page.
+
+## Unknown metrics
+
+An unfamiliar WOM metric opens **Unknown competition metric** over the import
+page. Choose a type for each unfamiliar metric and optionally set its display
+name. Activity presets cover boss/raid kills, counters and computed hours.
+Skill metrics require an existing supported XP skill; use them only for actual
+gained XP. Page mappings use active catalog pages and never create items or pages.
+
+**Save metric and continue** remembers the definitions for future imports and
+returns to the normal preview. Review the pages and click **Apply import** to
+save the competition. The explicitly saved definitions remain available if you
+cancel afterward. If the preview fails after saving, retry **Preview competition**;
+if a save cannot be confirmed, retry the same choices to recover its receipt.
+
+**Discard import**, the close button and Escape leave the unresolved import
+without saving its definitions. Staff with Scheduling and Competitions write
+access can save definitions. Built-in metrics cannot be overwritten. Multiple
+metrics must have compatible WOM types; scores/hours never become skill XP.
+Saved competitions retain their original definitions. Prompts expire after ten
+minutes; reload the preview after an expiry or conflicting save.
+
+## Results and refreshes
+
 Standalone **EHP** and **EHB** competitions use the same preview/apply flow.
 Future/running imports store metadata; finished imports retain decimal hours and
 WOM's ranked results. They create no skill-XP contribution or page window and

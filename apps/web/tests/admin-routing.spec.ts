@@ -17,6 +17,7 @@ async function routedAdmin(page: Page) {
     '/api/v1/admin/branding': defaultBranding,
     '/api/v1/admin/branding/hardcore': defaultBranding,
     '/api/v1/admin/catalog': f.catalog,
+    '/api/v1/admin/catalog-updates': f.catalogUpdates,
     '/api/v1/admin/submissions': f.pending,
     '/api/v1/admin/schedules': await client.scheduling(signal),
     '/api/v1/admin/clan-api-key': await client.clanApiKey(signal),

@@ -129,7 +129,6 @@ export function scheduledItemOpen(
 ): boolean {
   return (
     !state.enabled ||
-    state.permanentlyOpenPageIds?.some((id) => pageIds.includes(id)) ||
     state.schedules.some(
       (schedule) =>
         schedule.startsAt <= now &&

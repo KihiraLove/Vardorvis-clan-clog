@@ -9,6 +9,7 @@ export interface CompetitionSnapshot {
   competition: WomCompetition;
   skills: Skill[];
   lifecycle: CompetitionLifecycle;
+  metricRevision?: string;
   // Only finished competitions may have results. Never retain the raw WOM response.
   results?: {
     participants: CompetitionStanding[];

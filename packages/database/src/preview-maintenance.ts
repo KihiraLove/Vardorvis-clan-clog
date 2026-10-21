@@ -3,7 +3,11 @@ import { databaseUrl as readDatabaseUrl } from './secrets.js';
 import pg from 'pg';
 
 const advisoryKey = 74261079;
-const targets = ['xp_previews', 'competition_previews'] as const;
+const targets = [
+  'xp_previews',
+  'competition_previews',
+  'competition_metric_resolutions',
+] as const;
 type Target = (typeof targets)[number];
 
 export interface PreviewMaintenanceOptions {

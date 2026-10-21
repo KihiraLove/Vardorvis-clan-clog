@@ -57,6 +57,15 @@ the same world mode when on. When off, Regular collections can repeat, including
 the same collector. Re-enabling it preserves existing history. Staff approval and
 corrections enforce the same rules. Revoke a credit to remove that entry only.
 
+With the regular duplicate filter off, a later Event-eligible obtain becomes
+Regular when that item already has an approved Event collection, even while the
+schedule is still open. It follows the usual review/automatic approval policy.
+The original Event credit stays intact; the later obtain appears in Regular
+history and adds to the obtain total. Review details explain this fallback.
+Approval checks again if another claim acquired the Event credit after intake.
+Ordinary edits and later Event revocation do not promote a saved fallback to Event;
+staff can explicitly request saved intake timing or change collection flags.
+
 ## Catalog
 
 Sections contain pages, and pages can share canonical items. Moving or removing
@@ -72,19 +81,58 @@ screenshot. Select the correct canonical item and **Save corrections**, then
 review and approve separately. Notes and rejection do not require a match.
 Catalog items and game-ID aliases are managed separately in **Items catalog**.
 
+## Catalog update review
+
+The first administrator sign-in or restored session after an update opens the
+review when there are pending problems. **Review catalog update** appears on admin
+pages only while problems or supplied-icon replacements remain. Moderators do not
+receive this tool. Release history and identical images do not trigger a review.
+
+The table has **Detected problem** and **Fix?** columns. Non-empty groups appear in
+this order: **Page name mismatches**, **Missing pages**, **Missing items**,
+**Incorrect item names**, **Incorrect item ids**, **Missing item-page relationships**,
+and **Incorrect item-page relationships**. Each group lists the affected entries
+and proposed changes; its checkbox selects all listed fixes. Unchecked groups
+stay unchanged and available for later review. ID repairs add/remove the listed
+IDs rather than overwriting all mappings. Leave the group unchecked and use Items
+catalog if you need to retain some listed local variants or relationships.
+
+On existing installations, missing pages/items wait for their groups to be checked
+and **Save** to succeed. Startup, login and rescanning never add them automatically.
+New items also need their missing page relationships selected, and missing target
+pages must be created/adopted in the same save or beforehand. Fresh installations
+still receive the complete bundled catalog automatically, including after an
+interrupted first startup. Previously installed content remains intact.
+
+For a manually created page with a different name/key, review the matching, missing
+and extra item evidence in the problem cell. Choose one existing page to adopt or
+create a separate page. Adoption keeps its local identity, memberships and schedule
+references. Conflicting or retired identities require explicit resolution; the
+review never silently merges them or transfers another item's game ID.
+
+**Use project supplied item icons (recommended)** appears below the table only
+when existing icons can change. It is independent of the other groups. Newly
+created supplied items use their bundled icon as part of creation.
+
+**Save** applies selected fixes and closes the dialog. **Cancel** or Escape discards
+the draft without an apply request. Saved keep decisions from earlier versions
+remain honored. On an uncertain save, use **Save** again to recover the exact
+receipt; choices stay fixed until that outcome is confirmed. A stale review loads
+fresh differences and requires selecting again. Corrections preserve collector
+history and earlier intake evidence; they do not reopen schedules or recalculate XP.
+
 ## Scheduling and competitions
 
-Every page accepts submissions. With scheduling enabled, a normal-world drop is
-an **Event collection** when at least one associated active page has a timed
-window covering its server receipt time and is not permanently open. Otherwise
-it is **Regular collection**. Starts are inclusive and ends exclusive, in UTC.
-The date picker accepts local time and shows UTC alongside.
+Every page accepts submissions. The first panel, **Track Event collections during
+scheduled windows**, contains the administrator-only On/Off switch. Its settings
+navigation button remains **Scheduling and Competitions**. With scheduling enabled,
+a normal-world drop is Event when an associated active page has a timed window
+covering its server receipt time; otherwise it is Regular. Starts are inclusive
+and ends exclusive, in UTC. The date picker shows local time and UTC together.
 
-**Permanently open pages** always produce Regular collections, including when a
-window overlaps. Another timed page can still qualify a shared item for Event.
-Search/select pages and click **Save changes**; **Discard changes** restores saved
-selections. Only the administrator changes the global scheduling switch.
-Disabled scheduling and all hardcore claims are Regular.
+Permanently open pages have been retired. Older selections no longer override new
+intake, while existing claims and their frozen evidence remain unchanged. Disabled
+scheduling and Hardcore claims remain Regular.
 
 Intake saves timing and page membership. Later schedule/catalog changes cannot
 reclassify a claim. Unmatched claims resolve from that saved evidence when staff

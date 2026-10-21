@@ -21,6 +21,7 @@ import { intakeScheduling } from './intake-scheduling.js';
 import {
   readSubmissionFilters,
   requireUncollected,
+  resolveCollectionCredit,
 } from './submission-filters.js';
 import {
   ApiError,
@@ -373,10 +374,11 @@ export class PgStore implements BackendStore {
         input.hardcore,
         submittedAt,
       );
-      const classification = classifyCollection(
-        evidence,
+      const classification = await resolveCollectionCredit(
+        client,
         itemId,
         input.hardcore,
+        classifyCollection(evidence, itemId, input.hardcore),
       );
       const filters = await readSubmissionFilters(client, true);
       await requireUncollected(

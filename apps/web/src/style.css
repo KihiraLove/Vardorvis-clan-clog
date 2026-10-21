@@ -2504,6 +2504,54 @@ main {
 .schedule-delete-confirm::backdrop {
   background: #0009;
 }
+.unknown-metric-dialog {
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  color: #e3d5b8;
+  background: #29271e;
+  border: 1px solid #756747;
+}
+.unknown-metric-dialog::backdrop {
+  background: #000b;
+}
+.unknown-metric-dialog .admin-section-heading {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.unknown-metric-dialog .admin-section-heading h3 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.unknown-metric-dialog .admin-section-heading button {
+  flex: 0 0 auto;
+}
+html:has(.unknown-metric-dialog[open]) {
+  overflow: hidden;
+}
+.metric-definition-fields {
+  border-top: 1px solid #756747;
+  padding-top: 16px;
+}
+.metric-definition-fields legend {
+  overflow-wrap: anywhere;
+}
+.metric-page-choices {
+  max-height: 12rem;
+  overflow: auto;
+}
+.unknown-metric-dialog .admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .schedule-utc {
   color: #b9ab8f;
   font-size: 0.9em;
@@ -2924,20 +2972,80 @@ main {
   gap: 1rem;
   padding: 0.5rem 0;
 }
-.permanent-page-list {
-  list-style: none;
-  padding: 0;
+
+.catalog-update-dialog {
+  width: min(62rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  color: #e3d5b8;
+  background: #29271e;
+  border: 1px solid #756747;
 }
-.permanent-page-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+.catalog-update-dialog::backdrop {
+  background: #000b;
 }
-.permanent-page-list span {
+.catalog-update-notice {
+  margin: 12px 0;
+}
+.catalog-update-dialog p,
+.catalog-update-dialog h3 {
   overflow-wrap: anywhere;
 }
-.permanent-page-list button {
-  flex-shrink: 0;
+.catalog-update-dialog .admin-actions button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+html:has(.catalog-update-dialog[open]) {
+  overflow: hidden;
+}
+.catalog-update-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.catalog-update-table th,
+.catalog-update-table td {
+  border-bottom: 1px solid #756747;
+  padding: 12px 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.catalog-update-table th:last-child,
+.catalog-update-table td:last-child {
+  width: 3.5rem;
+  text-align: center;
+}
+.catalog-update-table h3 {
+  margin-top: 0;
+}
+.catalog-update-table ul {
+  padding-left: 18px;
+}
+.catalog-update-table input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+.catalog-update-table select {
+  width: 100%;
+  min-width: 0;
+}
+.catalog-update-icons {
+  margin: 20px 0;
+}
+@media (max-width: 480px) {
+  .catalog-update-dialog {
+    padding: 14px;
+  }
+  .catalog-update-table th,
+  .catalog-update-table td {
+    padding: 10px 4px;
+  }
+  .catalog-update-table th:last-child,
+  .catalog-update-table td:last-child {
+    width: 2.5rem;
+  }
 }

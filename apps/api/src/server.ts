@@ -14,6 +14,7 @@ import { adminBootstrapRequiredMessage } from './types.js';
 import { PgStore } from './store.js';
 import { PgAccessControlStore } from './access-control.js';
 import { PgCatalogStore } from './catalog-store.js';
+import { PgCatalogUpdates } from '@clog/database/dist/catalog-update-store.js';
 import { IconStorage } from './icon-storage.js';
 import { PgXpStore } from './xp-store.js';
 import { ProofStorage } from './proof-storage.js';
@@ -144,6 +145,7 @@ async function main() {
       discordSettings,
       botConfiguration,
       catalog,
+      catalogUpdates: pool ? new PgCatalogUpdates(pool) : undefined,
       icons,
       logos,
       branding: pool ? new PgBrandingStore(pool) : undefined,

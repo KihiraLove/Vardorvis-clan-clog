@@ -5,6 +5,7 @@ import type { CompetitionService } from './route-services.js';
 import { fetchCompetition } from './competition-wom.js';
 import { PreviewWork } from './preview-work.js';
 import { matchesEtag } from './projection-cache.js';
+import { UnknownCompetitionMetrics } from './wom-competition-data.js';
 type Authorize = (
   request: FastifyRequest,
   write?: boolean,
@@ -70,12 +71,32 @@ export function competitionRoutes(
       const actor = await staff(r, true),
         service = available();
       return previews.run(r, reply, actor.id, async (signal) => {
-        const snapshot = await fetchSource(
-          r.body.competitionUrl,
-          await service.clock(),
-          fetch,
-          signal,
-        );
+        let snapshot;
+        try {
+          snapshot = await fetchSource(
+            r.body.competitionUrl,
+            await service.clock(),
+            fetch,
+            signal,
+            service.metricRegistry
+              ? () => service.metricRegistry!.list()
+              : undefined,
+          );
+        } catch (error) {
+          if (
+            !(error instanceof UnknownCompetitionMetrics) ||
+            !service.metricRegistry
+          )
+            throw error;
+          signal.throwIfAborted();
+          const resolution = await service.metricRegistry.challenge(
+            error.discovery,
+            actor.id,
+          );
+          return reply
+            .code(422)
+            .send({ code: 'UNKNOWN_WOM_METRICS', resolution });
+        }
         signal.throwIfAborted();
         if (
           r.body.kind !== undefined &&
@@ -89,6 +110,61 @@ export function competitionRoutes(
           );
         return service.preview(snapshot, actor.id, r.body.pageIds);
       });
+    },
+  );
+  app.post<{
+    Body: {
+      resolutionToken: string;
+      expectedRevision: string;
+      definitions: unknown[];
+    };
+  }>(
+    '/api/v1/admin/competitions/metrics',
+    {
+      onRequest: async (r) => {
+        await staff(r, true);
+      },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['resolutionToken', 'expectedRevision', 'definitions'],
+          properties: {
+            resolutionToken: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' },
+            expectedRevision: {
+              type: 'string',
+              pattern: '^metrics-[1-9][0-9]*$',
+              maxLength: 40,
+            },
+            definitions: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 64,
+              items: { type: 'object' },
+            },
+          },
+        },
+      },
+    },
+    async (r) => {
+      const actor = await staff(r, true);
+      const registry = available().metricRegistry;
+      if (!registry) throw new ApiError(503, 'Metric definitions unavailable.');
+      const key = r.headers['idempotency-key'];
+      if (
+        typeof key !== 'string' ||
+        !/^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/iu.test(
+          key,
+        )
+      )
+        throw new ApiError(400, 'A UUID Idempotency-Key is required.');
+      return registry.save(
+        r.body.resolutionToken,
+        r.body.expectedRevision,
+        r.body.definitions,
+        key,
+        actor.id,
+      );
     },
   );
   app.post<{

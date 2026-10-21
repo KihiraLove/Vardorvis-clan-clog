@@ -55,7 +55,11 @@ test(
       const worker = await connection();
       const reader = await connection();
       const second = await connection();
-      for (const table of ['xp_previews', 'competition_previews']) {
+      for (const table of [
+        'xp_previews',
+        'competition_previews',
+        'competition_metric_resolutions',
+      ]) {
         await worker.query(
           'CREATE TABLE ' +
             table +
