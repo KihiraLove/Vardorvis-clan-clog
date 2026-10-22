@@ -66,6 +66,9 @@ docker compose -f compose.yaml -f compose.dev.yaml logs clan-clog
 The example origin is http://127.0.0.1:8088 for local use. The build is named
 `clan-clog:dev`; the same first-login flow applies.
 
+## Test your submissions API
+We have a [browser tool](https://github.com/KihiraLove/cc-clog-submitter) to test your submissions API.
+
 ## Repository map
 
 | Path                                    | Contents                                      |
